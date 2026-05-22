@@ -3,12 +3,13 @@
 import { useMemo, useState } from 'react';
 import { Lock, RefreshCw, X } from 'lucide-react';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
+import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
+import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { useFleetData } from '@/context/FleetDataContext';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | 'PENDING_UT' | 'APPROVED_UT' | AbsenceTypeAbbreviation | '';
 type YearOption = 2025 | 2026 | 2027;
 type WorkTimeMode = 'inklusive Arbeitszeiten' | 'exklusive Arbeitszeiten';
-type PlannerSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
 
 interface Driver {
   id: string;
@@ -20,6 +21,17 @@ interface Driver {
 interface CalendarEntry {
   status: CalendarStatus;
   notes: string;
+  source?: TooltipSource;
+  sourceDate?: string;
+  requestId?: string;
+  assignmentId?: string;
+}
+
+interface HoveredStatusCell {
+  year: YearOption;
+  monthIndex: number;
+  day: number;
+  entry: CalendarEntry;
 }
 
 interface DriverCalendarData {
@@ -50,6 +62,12 @@ interface SelectedDay {
 }
 
 interface PendingAbsenceSelection {
+  year: YearOption;
+  monthIndex: number;
+  day: number;
+}
+
+interface SelectedEmptyCell {
   year: YearOption;
   monthIndex: number;
   day: number;
@@ -161,10 +179,11 @@ function setStatusRange(
   endDay: number,
   status: Exclude<CalendarStatus, ''>,
   notes: string,
+  metadata?: Pick<CalendarEntry, 'source' | 'sourceDate' | 'requestId' | 'assignmentId'>,
 ) {
   for (let day = startDay; day <= endDay; day += 1) {
     target[monthIndex] ??= {};
-    target[monthIndex][day] = { status, notes };
+    target[monthIndex][day] = { status, notes, ...metadata };
   }
 }
 
@@ -182,6 +201,27 @@ function buildDriverYear(seed: 'A' | 'B' | 'C', year: YearOption) {
     setStatusRange(months, 7, 21, 21, 'PENDING_UT', 'Requested bridge day.');
     setStatusRange(months, 9, 3, 3, 'FT', 'German Unity Day.');
     setStatusRange(months, 11, 24, 26, 'FT', 'Christmas days.');
+
+    if (year === 2025) {
+      setStatusRange(months, 6, 25, 25, 'UT', 'Urlaubsantrag genehmigt.', {
+        source: 'request',
+        sourceDate: '2024-12-02',
+        requestId: 'REQ-2024-1202',
+      });
+    }
+
+    if (year === 2026) {
+      setStatusRange(months, 4, 20, 20, 'KT', 'Krankmeldung eingegangen.', {
+        source: 'request',
+        sourceDate: '2026-05-20',
+        requestId: 'REQ-2026-0520',
+      });
+      setStatusRange(months, 4, 21, 21, 'AT', 'Einsatzbestatigung vorhanden.', {
+        source: 'assignment',
+        sourceDate: '2026-05-21',
+        assignmentId: 'ASSIGN-2026-0521',
+      });
+    }
   }
 
   if (seed === 'B') {
@@ -321,6 +361,14 @@ function getStatusLabel(status: CalendarStatus) {
   }
 }
 
+function getTooltipStatusCode(status: CalendarStatus): string {
+  if (status === 'PENDING_UT' || status === 'APPROVED_UT') {
+    return 'UT';
+  }
+
+  return status;
+}
+
 function getInitials(name: string) {
   return name
     .split(' ')
@@ -340,15 +388,17 @@ function isWeekend(year: number, monthIndex: number, day: number) {
 }
 
 export function Jahreskalender() {
-  const { getCalendarStatusEntry } = useFleetData();
+  const { getCalendarStatusEntry, getAssignmentById } = useFleetData();
   const [calendarState, setCalendarState] = useState<DriverCalendarData[]>(driverCalendars);
   const [selectedDriverId, setSelectedDriverId] = useState<string>('ozdemir-hakan');
   const [selectedYear, setSelectedYear] = useState<YearOption>(2026);
   const [workTimeMode, setWorkTimeMode] = useState<WorkTimeMode>('inklusive Arbeitszeiten');
-  const [activeSubtab] = useState<PlannerSubtab>('jahreskalender');
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
   const [pendingAbsenceSelection, setPendingAbsenceSelection] = useState<PendingAbsenceSelection | null>(null);
   const [selectedAbsenceTypeId, setSelectedAbsenceTypeId] = useState<string | null>(null);
+  const [hoveredStatusCell, setHoveredStatusCell] = useState<HoveredStatusCell | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectedEmptyCell, setSelectedEmptyCell] = useState<SelectedEmptyCell | null>(null);
 
   const selectedDriver = useMemo(() => {
     return drivers.find((driver) => driver.id === selectedDriverId) ?? drivers[0];
@@ -357,6 +407,11 @@ export function Jahreskalender() {
   const selectedCalendar = useMemo(() => {
     return calendarState.find((calendar) => calendar.driverId === selectedDriverId)?.years[selectedYear] ?? {};
   }, [calendarState, selectedDriverId, selectedYear]);
+
+  const selectedAssignment = useMemo(() => {
+    if (!selectedDay?.entry.assignmentId) return null;
+    return getAssignmentById(selectedDay.entry.assignmentId) ?? null;
+  }, [getAssignmentById, selectedDay]);
 
   const getMergedEntry = useMemo(() => {
     return (monthIndex: number, day: number): CalendarEntry => {
@@ -367,7 +422,13 @@ export function Jahreskalender() {
           status: shared.status as CalendarStatus,
           notes: shared.source === 'request'
             ? `Automatisch aus Request ${shared.requestId ?? ''} aktualisiert.`
+            : shared.source === 'assignment'
+            ? `Automatisch aus Einsatz ${shared.assignmentId ?? ''} aktualisiert.`
             : 'Automatisch aus gemeinsamer Planung aktualisiert.',
+          source: shared.source,
+          sourceDate: dateKey,
+          requestId: shared.requestId,
+          assignmentId: shared.assignmentId,
         };
       }
 
@@ -388,6 +449,76 @@ export function Jahreskalender() {
     { label: '- genehmigt', current: formatDays(vacationOverview.currentPeriod.approved), next: formatDays(vacationOverview.nextPeriod.approved) },
     { label: 'Resturlaub', current: formatDays(vacationOverview.currentPeriod.remaining), next: formatDays(vacationOverview.nextPeriod.remaining) },
   ];
+
+  const closeContextMenu = () => {
+    setContextMenuPosition(null);
+    setSelectedEmptyCell(null);
+  };
+
+  const openContextMenu = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    payload: SelectedEmptyCell,
+  ) => {
+    event.preventDefault();
+    setSelectedDay(null);
+    setPendingAbsenceSelection(null);
+    setSelectedAbsenceTypeId(null);
+    setSelectedEmptyCell(payload);
+    setContextMenuPosition({ x: event.clientX + 8, y: event.clientY + 8 });
+  };
+
+  const applyManualStatus = (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
+    const sourceDate = `${target.year}-${String(target.monthIndex + 1).padStart(2, '0')}-${String(target.day).padStart(2, '0')}`;
+
+    setCalendarState((current) =>
+      current.map((calendar) => {
+        if (calendar.driverId !== selectedDriverId) return calendar;
+        return {
+          ...calendar,
+          years: {
+            ...calendar.years,
+            [target.year]: {
+              ...calendar.years[target.year],
+              [target.monthIndex]: {
+                ...(calendar.years[target.year]?.[target.monthIndex] ?? {}),
+                [target.day]: {
+                  status,
+                  notes: 'Manuell eingetragen.',
+                  source: 'manual',
+                  sourceDate,
+                },
+              },
+            },
+          },
+        };
+      }),
+    );
+  };
+
+  const handleContextMenuAction = (action: CalendarCellContextMenuAction) => {
+    if (!selectedEmptyCell) return;
+
+    if (action === 'urlaub') {
+      applyManualStatus(selectedEmptyCell, 'UT');
+      closeContextMenu();
+      return;
+    }
+
+    if (action === 'krank') {
+      applyManualStatus(selectedEmptyCell, 'KT');
+      closeContextMenu();
+      return;
+    }
+
+    if (absenceTypes.length > 0) {
+      setPendingAbsenceSelection(selectedEmptyCell);
+      setSelectedAbsenceTypeId(null);
+    } else {
+      applyManualStatus(selectedEmptyCell, 'SA');
+    }
+
+    closeContextMenu();
+  };
 
   return (
     <div className="space-y-5">
@@ -472,25 +603,6 @@ export function Jahreskalender() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={`rounded-md border px-3 py-2 text-sm font-medium ${
-            activeSubtab === 'jahreskalender'
-              ? 'border-blue-700 bg-blue-700 text-white'
-              : 'border-slate-300 bg-white text-slate-700'
-          }`}
-        >
-          Jahreskalender
-        </button>
-        <button type="button" className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-500">
-          Abteilungskalender
-        </button>
-        <button type="button" className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-500">
-          Antragsverwaltung
-        </button>
-      </div>
-
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <h3 className="text-sm font-semibold text-slate-900">Jahreskalender</h3>
@@ -555,22 +667,45 @@ export function Jahreskalender() {
                       <button
                         key={`${monthLabel}-${day}`}
                         type="button"
+                        onMouseEnter={() => {
+                          if (!entry.status) return;
+                          setHoveredStatusCell({ year: selectedYear, monthIndex, day, entry });
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredStatusCell((current) => {
+                            if (!current) return null;
+                            if (current.year !== selectedYear || current.monthIndex !== monthIndex || current.day !== day) {
+                              return current;
+                            }
+                            return null;
+                          });
+                        }}
+                        onContextMenu={(event) => {
+                          if (entry.status) return;
+                          openContextMenu(event, { year: selectedYear, monthIndex, day });
+                        }}
                         onClick={() => {
                           if (entry.status) {
+                            closeContextMenu();
                             setSelectedDay({ year: selectedYear, monthIndex, day, entry });
                             setPendingAbsenceSelection(null);
                             return;
                           }
 
                           setSelectedDay(null);
-                          setPendingAbsenceSelection({ year: selectedYear, monthIndex, day });
+                          setPendingAbsenceSelection(null);
                           setSelectedAbsenceTypeId(null);
+                        }}
+                        onMouseDown={(event) => {
+                          if (entry.status) return;
+                          if (event.button !== 0) return;
+                          openContextMenu(event, { year: selectedYear, monthIndex, day });
                         }}
                         className={`border-l border-slate-200 px-1 py-1.5 transition-colors hover:bg-blue-50 ${
                           weekend ? 'bg-slate-100/70' : 'bg-white'
                         } ${isSelected ? 'bg-amber-50' : ''}`}
                       >
-                        <div className="flex min-h-[44px] flex-col items-center justify-center rounded-sm text-[11px] font-semibold">
+                        <div className="relative flex min-h-[44px] flex-col items-center justify-center rounded-sm text-[11px] font-semibold">
                           <span className={entry.status ? statusTextClasses[entry.status as Exclude<CalendarStatus, ''>] : 'text-slate-300'}>
                             {getStatusLabel(entry.status)}
                           </span>
@@ -579,6 +714,17 @@ export function Jahreskalender() {
                               entry.status ? statusAccentClasses[entry.status as Exclude<CalendarStatus, ''>] : 'bg-slate-200'
                             }`}
                           />
+                          {entry.status &&
+                            hoveredStatusCell?.year === selectedYear &&
+                            hoveredStatusCell?.monthIndex === monthIndex &&
+                            hoveredStatusCell?.day === day && (
+                              <CalendarStatusTooltip
+                                date={new Date(selectedYear, monthIndex, day)}
+                                status={getTooltipStatusCode(entry.status)}
+                                source={entry.source}
+                                sourceDate={entry.sourceDate}
+                              />
+                            )}
                         </div>
                       </button>
                     );
@@ -649,9 +795,47 @@ export function Jahreskalender() {
                 <p className="text-xs uppercase tracking-wide text-slate-500">Notes</p>
                 <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">{selectedDay.entry.notes}</p>
               </div>
+
+              {selectedAssignment && (
+                <>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Assignment source</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.source}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Vehicle</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.vehicle || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Company</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.company || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Cargo</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.cargoName || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Pickup</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.pickupAddress || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Delivery</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.deliveryAddress || '-'}</p>
+                  </div>
+                </>
+              )}
             </div>
           </aside>
         </>
+      )}
+
+      {contextMenuPosition && selectedEmptyCell && (
+        <CalendarCellContextMenu
+          x={contextMenuPosition.x}
+          y={contextMenuPosition.y}
+          onClose={closeContextMenu}
+          onSelect={handleContextMenuAction}
+        />
       )}
 
       <AbsenceTypeModal
@@ -682,6 +866,8 @@ export function Jahreskalender() {
                       [pendingAbsenceSelection.day]: {
                         status: selectedAbsenceType.abkuerzung,
                         notes: `${selectedAbsenceType.bezeichnung} wurde lokal zugewiesen.`,
+                        source: 'manual',
+                        sourceDate: `${pendingAbsenceSelection.year}-${String(pendingAbsenceSelection.monthIndex + 1).padStart(2, '0')}-${String(pendingAbsenceSelection.day).padStart(2, '0')}`,
                       },
                     },
                   },

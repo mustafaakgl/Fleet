@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { vehiclesApi } from '@/lib/api';
 import type { Vehicle } from '@/lib/types';
 import { filterMockVehicles } from '@/lib/mock-data';
@@ -23,16 +25,12 @@ export default function VehiclesPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(() => {
+    const rawStatus = searchParams.get('status') || '';
+    return rawStatus === 'in_use' ? 'active' : rawStatus;
+  });
   const [loading, setLoading] = useState(true);
   const limit = 20;
-
-  useEffect(() => {
-    const rawStatus = searchParams.get('status') || '';
-    const mappedStatus = rawStatus === 'in_use' ? 'active' : rawStatus;
-    setStatus(mappedStatus);
-    setPage(1);
-  }, [searchParams]);
 
   const fetchVehicles = useCallback(async () => {
     setLoading(true);
@@ -105,10 +103,47 @@ export default function VehiclesPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={`vehicle-skeleton-${index}`} className="grid grid-cols-6 gap-3">
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+              </div>
+            ))}
+          </div>
         ) : vehicles.length === 0 ? (
-          <div className="text-center py-16 text-gray-500"><Truck className="w-10 h-10 mx-auto mb-3 opacity-30" /><p>No vehicles found</p></div>
+          <div className="p-4">
+            <EmptyState
+              icon={Truck}
+              title="No vehicles found"
+              subtitle="No vehicles match current filters."
+              actionLabel="Clear filters"
+              onAction={() => {
+                setSearch('');
+                setStatus('');
+                setPage(1);
+              }}
+            />
+          </div>
         ) : (
+          <>
+          <div className="space-y-3 p-3 md:hidden">
+            {vehicles.map((v) => (
+              <div key={`vehicle-card-${v.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="font-semibold text-slate-900">{v.plate_number}</p>
+                <p className="text-xs text-slate-600">{v.brand} {v.model}</p>
+                <p className="text-xs text-slate-600">Status: {v.status.replace('_', ' ')}</p>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={`/vehicles/${v.id}`}>View</Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -139,6 +174,8 @@ export default function VehiclesPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </Card>
 

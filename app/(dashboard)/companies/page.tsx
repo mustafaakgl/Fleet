@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getCompanies, getCompanyAssignments, getCompanyCurrentStats } from '@/lib/companies';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export default function CompaniesPage() {
   const { t } = useTranslation();
@@ -19,6 +20,36 @@ export default function CompaniesPage() {
       </div>
 
       <Card>
+        {companies.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              icon={Building2}
+              title="No companies found"
+              subtitle="No companies are available yet."
+            />
+          </div>
+        ) : (
+        <>
+        <div className="space-y-3 p-3 md:hidden">
+          {companies.map((company) => {
+            const stats = getCompanyCurrentStats(company.id);
+            const activeAssignments = getCompanyAssignments(company.id).filter(
+              (row) => row.status === 'in_progress' || row.status === 'planned',
+            ).length;
+            return (
+              <div key={`company-card-${company.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="font-semibold text-slate-900">{company.name}</p>
+                <p className="text-xs text-slate-600">{company.contactPerson || '-'}</p>
+                <p className="text-xs text-slate-600">{activeAssignments} Active Assignments</p>
+                <p className="text-xs text-slate-600">Drivers: {stats.currentDrivers} · Vehicles: {stats.currentVehicles}</p>
+                <Link href={`/companies/${company.id}`} className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline">
+                  {t('common.view')}
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -58,6 +89,9 @@ export default function CompaniesPage() {
             })}
           </TableBody>
         </Table>
+        </div>
+        </>
+        )}
       </Card>
     </div>
   );

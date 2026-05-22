@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FileText, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const OWNER_TYPES: Array<Document['ownerType']> = ['driver', 'vehicle', 'company', 'request', 'accident', 'cargo_damage'];
 
@@ -81,7 +82,14 @@ export default function DocumentsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [ownerTypeFilter, setOwnerTypeFilter] = useState<'all' | Document['ownerType']>('all');
   const [documentTypeFilter, setDocumentTypeFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | Document['status']>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | Document['status']>(() => {
+    const statusParam = searchParams.get('status');
+    if (!statusParam) return 'all';
+    if (statusParam === 'valid' || statusParam === 'expiring_soon' || statusParam === 'expired' || statusParam === 'missing') {
+      return statusParam;
+    }
+    return 'all';
+  });
   const [search, setSearch] = useState('');
 
   const [detailOpen, setDetailOpen] = useState(false);
@@ -91,22 +99,8 @@ export default function DocumentsPage() {
   const [formMode, setFormMode] = useState<DrawerMode>('add');
   const [formDocument, setFormDocument] = useState<Document | null>(null);
 
-  useEffect(() => {
-    const statusParam = searchParams.get('status');
-    if (!statusParam) {
-      setStatusFilter('all');
-      return;
-    }
-
-    if (statusParam === 'valid' || statusParam === 'expiring_soon' || statusParam === 'expired' || statusParam === 'missing') {
-      setStatusFilter(statusParam);
-      return;
-    }
-
-    setStatusFilter('all');
-  }, [searchParams]);
-
   const documents = useMemo(() => {
+    void reloadKey;
     const base = getDocuments();
     const missing = OWNER_TYPES.flatMap((ownerType) => {
       const options = ownerOptionsByType(ownerType);
@@ -253,6 +247,32 @@ export default function DocumentsPage() {
       </Card>
 
       <Card>
+        {filtered.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              icon={FileText}
+              title="No documents found"
+              subtitle="No documents uploaded yet."
+              actionLabel="Upload Document"
+              onAction={() => openForm('add')}
+            />
+          </div>
+        ) : (
+          <>
+        <div className="space-y-3 p-3 md:hidden">
+          {filtered.map((doc) => (
+            <div key={`doc-card-${doc.id}-${doc.status}`} className="rounded-lg border border-slate-200 bg-white p-3">
+              <p className="font-semibold text-slate-900">{doc.documentType}</p>
+              <p className="text-xs text-slate-600">{doc.fileName}</p>
+              <p className="text-xs text-slate-600">{getDocumentOwnerName(doc.ownerType, doc.ownerId)}</p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" className="font-medium text-blue-600 hover:underline" onClick={() => openDetail(doc)}>View</button>
+                <button type="button" className="font-medium text-slate-700 hover:underline" onClick={() => openForm('edit', doc)} disabled={doc.status === 'missing'}>Edit</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -290,6 +310,9 @@ export default function DocumentsPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
+          </>
+        )}
       </Card>
 
       <DocumentDetailDrawer open={detailOpen} onOpenChange={setDetailOpen} document={detailDocument} />
@@ -367,16 +390,6 @@ function AddDocumentDrawer({
 
   const ownerOptions = ownerOptionsByType(ownerType);
   const typeOptions = DOCUMENT_TYPES_BY_OWNER[ownerType] ?? [];
-
-  useEffect(() => {
-    if (!open) return;
-    setOwnerType(initialDocument?.ownerType ?? 'driver');
-    setOwnerId(initialDocument?.ownerId ?? '');
-    setDocumentType(initialDocument?.documentType ?? '');
-    setFileName(initialDocument?.fileName ?? '');
-    setExpiryDate(initialDocument?.expiryDate ?? '');
-    setNotes(initialDocument?.notes ?? '');
-  }, [initialDocument, open]);
 
   function resetWithInitial() {
     setOwnerType(initialDocument?.ownerType ?? 'driver');

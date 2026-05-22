@@ -11,6 +11,9 @@ interface CompanyAssignmentItem {
   vehiclePlate: string;
   startTime: string;
   route: string;
+  cargo?: string;
+  pickupAddress?: string;
+  deliveryAddress?: string;
 }
 
 interface CompanyNotificationRecord {
@@ -63,7 +66,10 @@ function badgeClass(status: EmailStatus) {
 
 function buildAssignmentSignature(items: CompanyAssignmentItem[]) {
   return items
-    .map((item) => `${item.assignmentId}|${item.driverName}|${item.vehiclePlate}|${item.startTime}|${item.route}`)
+    .map(
+      (item) =>
+        `${item.assignmentId}|${item.driverName}|${item.vehiclePlate}|${item.startTime}|${item.route}|${item.cargo ?? ''}|${item.pickupAddress ?? ''}|${item.deliveryAddress ?? ''}`,
+    )
     .sort()
     .join('||');
 }
@@ -72,7 +78,7 @@ function formatRowsForBody(items: CompanyAssignmentItem[]) {
   return items
     .map(
       (item) =>
-        `- Fahrer: ${item.driverName} | Fahrzeug: ${item.vehiclePlate || '-'} | Start: ${item.startTime || '-'} | Auftrag/Route: ${item.route || '-'}`,
+        `- Fahrer: ${item.driverName} | Fahrzeug: ${item.vehiclePlate || '-'} | Start: ${item.startTime || '-'} | Auftrag/Route: ${item.route || '-'} | Fracht: ${item.cargo || '-'} | Pickup: ${item.pickupAddress || '-'} | Delivery: ${item.deliveryAddress || '-'}`,
     )
     .join('\n');
 }
@@ -110,6 +116,9 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
           vehiclePlate: assignment.vehicle,
           startTime: assignment.startTime,
           route: assignment.routeJob,
+          cargo: assignment.cargoName,
+          pickupAddress: assignment.pickupAddress,
+          deliveryAddress: assignment.deliveryAddress,
         };
 
         const existing = grouped.get(assignment.company) ?? [];

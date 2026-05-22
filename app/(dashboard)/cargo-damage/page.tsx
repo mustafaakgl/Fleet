@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, PackageX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/ui/empty-state';
 import type { CargoDamageReport, CargoDamageStatus } from '@/lib/types';
 import {
   getCargoDamageReports,
@@ -68,6 +69,31 @@ export default function CargoDamagePage() {
       </div>
 
       <Card>
+        {visibleReports.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              icon={PackageX}
+              title="No cargo damage reports"
+              subtitle="No cargo damage cases match current filters."
+            />
+          </div>
+        ) : (
+          <>
+        <div className="space-y-3 p-3 md:hidden">
+          {visibleReports.map((report) => {
+            const driver = mockDrivers.find((item) => item.id === report.driverId);
+            const vehicle = mockVehicles.find((item) => item.id === report.vehicleId);
+            return (
+              <div key={`cdr-card-${report.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="font-semibold text-slate-900">{report.companyName}</p>
+                <p className="text-xs text-slate-600">{driver ? `${driver.first_name} ${driver.last_name}` : report.driverId}</p>
+                <p className="text-xs text-slate-600">{vehicle?.plate_number ?? report.vehicleId} · {report.date}</p>
+                <button type="button" onClick={() => setSelectedId(report.id)} className="mt-2 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">View</button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -113,6 +139,9 @@ export default function CargoDamagePage() {
             })}
           </TableBody>
         </Table>
+        </div>
+          </>
+        )}
       </Card>
 
       {selectedReport && (

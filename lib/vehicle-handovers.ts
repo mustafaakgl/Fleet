@@ -3,6 +3,7 @@ import type {
   VehicleHandoverPhotoStatus,
   VehicleHandoverStatus,
 } from './types';
+import { createCargoDamageReport } from './cargo-damage';
 
 interface HandoverSeedInput {
   id: string;
@@ -56,13 +57,13 @@ const handoverStore: VehicleHandover[] = [
   withRule({
     id: 'vh-1',
     driverId: 'ilker-cukur',
-    vehicleId: 'AP-101',
+    vehicleId: 'AP-103',
     previousVehicleId: 'AP-101',
     handoverType: 'pickup',
-    date: '2026-05-21',
-    time: '06:58',
-    photoStatus: 'not_required',
-    photos: [],
+    date: '2026-05-22',
+    time: '07:02',
+    photoStatus: 'submitted',
+    photos: ['handover-ilker-1.jpg'],
     damageDetected: false,
     status: 'completed',
   }),
@@ -70,28 +71,27 @@ const handoverStore: VehicleHandover[] = [
     id: 'vh-2',
     driverId: 'thomas-scharein',
     vehicleId: 'AP-102',
-    previousVehicleId: 'AP-105',
+    previousVehicleId: 'AP-102',
     handoverType: 'pickup',
-    date: '2026-05-21',
-    time: '07:15',
-    photoStatus: 'missing',
+    date: '2026-05-22',
+    time: '07:08',
+    photoStatus: 'submitted',
     photos: [],
     damageDetected: false,
-    damageNotes: 'Front bumper scratch',
-    status: 'pending',
+    status: 'completed',
   }),
   withRule({
     id: 'vh-3',
-    driverId: 'sita-diallo',
-    vehicleId: 'AP-103',
-    previousVehicleId: 'AP-101',
+    driverId: 'nesrin-feyzula',
+    vehicleId: 'AP-101',
+    previousVehicleId: 'AP-105',
     handoverType: 'pickup',
-    date: '2026-05-21',
-    time: '07:12',
-    photoStatus: 'submitted',
-    photos: ['handover-sita-1.jpg', 'handover-sita-2.jpg'],
+    date: '2026-05-22',
+    time: '07:21',
+    photoStatus: 'missing',
+    photos: [],
     damageDetected: true,
-    damageNotes: 'Minor scratch',
+    damageNotes: 'Rear door dent spotted during pickup check.',
     status: 'pending',
   }),
 ];
@@ -144,9 +144,67 @@ export function updateVehicleHandoverPhotoStatus(id: string, status: VehicleHand
   const item = handoverStore.find((entry) => entry.id === id);
   if (!item) return null;
   item.photoStatus = status;
+  if (status === 'submitted' && item.photos.length === 0) {
+    item.photos = [`${id}-photo-1.jpg`];
+  }
   if (status === 'approved') item.status = 'completed';
   if (status === 'rejected') item.status = 'pending';
+  if (status === 'missing') item.status = 'pending';
+  if (!item.photoRequired) {
+    item.photoStatus = 'not_required';
+    item.status = 'completed';
+  }
   return item;
+}
+
+export function uploadVehicleHandoverPhoto(id: string, fileName?: string) {
+  const item = handoverStore.find((entry) => entry.id === id);
+  if (!item) return null;
+  if (!item.photoRequired) {
+    item.photoStatus = 'not_required';
+    return item;
+  }
+
+  const nextName = fileName ?? `${id}-photo-${item.photos.length + 1}.jpg`;
+  item.photos = [...item.photos, nextName];
+  item.photoStatus = 'submitted';
+  if (item.status !== 'completed') {
+    item.status = 'pending';
+  }
+  return item;
+}
+
+export function markVehicleHandoverCompleted(id: string) {
+  const item = handoverStore.find((entry) => entry.id === id);
+  if (!item) return { ok: false as const, message: 'Handover not found.' };
+
+  if (item.photoRequired && item.photoStatus === 'missing') {
+    return { ok: false as const, message: 'Photo is required before completion.' };
+  }
+
+  item.status = 'completed';
+  return { ok: true as const, message: 'Handover marked as completed.' };
+}
+
+export function markVehicleHandoverDamage(id: string, notes?: string) {
+  const item = handoverStore.find((entry) => entry.id === id);
+  if (!item) return { ok: false as const, message: 'Handover not found.' };
+
+  item.damageDetected = true;
+  if (notes) item.damageNotes = notes;
+
+  createCargoDamageReport({
+    id: `cdr-handover-${item.id}`,
+    driverId: item.driverId,
+    vehicleId: item.vehicleId,
+    assignmentId: `handover-${item.id}`,
+    date: item.date,
+    time: item.time,
+    companyName: 'Fleet Operations',
+    description: item.damageNotes ?? 'Vehicle damage detected during handover.',
+  });
+
+  return { ok: true as const, message: 'Damage report created from handover.' };
 }
 
 export function upsertVehicleHandover(params: {

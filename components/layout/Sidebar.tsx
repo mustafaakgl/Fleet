@@ -20,7 +20,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { clearAuth, getUser } from '@/lib/auth';
 import { canManageSettings } from '@/lib/permissions';
@@ -51,11 +51,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(null);
-
-  useEffect(() => {
-    setUser(getUser());
-  }, []);
+  const [tabletCollapsed, setTabletCollapsed] = useState(true);
+  const [user] = useState<AuthUser | null>(() => getUser());
 
   const visibleNavItems = navItems.filter((item) => {
     if (item.href === '/settings') {
@@ -69,14 +66,23 @@ export function Sidebar() {
     router.push('/login');
   }
 
-  const NavContent = () => (
+  function renderNavContent() {
+    return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-100">
+      <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-100">
         <div className="w-8 h-8 rounded-md bg-blue-600 flex items-center justify-center">
           <Truck className="w-5 h-5 text-white" />
         </div>
-        <span className="text-lg font-bold text-gray-900">Fleet</span>
+        <span className={cn('text-lg font-bold text-gray-900', tabletCollapsed ? 'hidden lg:inline' : 'inline')}>Fleet</span>
+        <button
+          type="button"
+          onClick={() => setTabletCollapsed((current) => !current)}
+          className="ml-auto hidden rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 md:inline-flex lg:hidden"
+          aria-label="Toggle sidebar"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Nav */}
@@ -90,13 +96,14 @@ export function Sidebar() {
               onClick={() => setMobileOpen(false)}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
                 isActive
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
               )}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {t(labelKey)}
+              <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>{t(labelKey)}</span>
             </Link>
           );
         })}
@@ -106,20 +113,24 @@ export function Sidebar() {
       <div className="px-3 pb-4 border-t border-gray-100 pt-3">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 w-full transition-colors"
+          className={cn(
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 w-full transition-colors',
+            tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
+          )}
         >
           <LogOut className="w-5 h-5" />
-          {t('nav.logout')}
+          <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>{t('nav.logout')}</span>
         </button>
       </div>
     </div>
-  );
+    );
+  }
 
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-64 min-h-screen bg-white border-r border-gray-200">
-        <NavContent />
+      <aside className={cn('hidden md:flex md:flex-col min-h-screen bg-white border-r border-gray-200', tabletCollapsed ? 'w-20 lg:w-64' : 'w-64')}>
+        {renderNavContent()}
       </aside>
 
       {/* Mobile menu button */}
@@ -144,7 +155,7 @@ export function Sidebar() {
             >
               <X className="w-5 h-5 text-gray-500" />
             </button>
-            <NavContent />
+            {renderNavContent()}
           </aside>
         </div>
       )}

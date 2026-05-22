@@ -96,6 +96,46 @@ export function updateCargoDamageStatus(id: string, status: CargoDamageStatus) {
   return target;
 }
 
+export function createCargoDamageReport(input: {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  companyId?: string;
+  companyName?: string;
+  assignmentId?: string;
+  date: string;
+  time: string;
+  description?: string;
+}) {
+  if (input.assignmentId) {
+    const existing = cargoDamageStore.find((item) => item.assignmentId === input.assignmentId);
+    if (existing) return existing;
+  }
+
+  const report: CargoDamageReport = {
+    id: input.id,
+    driverId: input.driverId,
+    vehicleId: input.vehicleId,
+    companyId: input.companyId ?? 'cmp-dhl',
+    assignmentId: input.assignmentId,
+    date: input.date,
+    time: input.time,
+    damageType: 'other',
+    cargoName: 'Vehicle handover damage',
+    cargoOwner: input.companyName ?? 'Fleet Operations',
+    companyName: input.companyName ?? 'Fleet Operations',
+    description: input.description ?? 'Damage detected during vehicle handover.',
+    photos: [],
+    documentPhoto: undefined,
+    damageValue: undefined,
+    status: 'pending',
+    createdAt: `${input.date}T${input.time}:00Z`,
+  };
+
+  cargoDamageStore.push(report);
+  return report;
+}
+
 export function getCargoDamageTimeline(report: CargoDamageReport): CargoDamageTimelineItem[] {
   const base: CargoDamageTimelineItem[] = [
     {

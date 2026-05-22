@@ -5,7 +5,7 @@ import { getDriverRiskScore, type DriverRiskScore } from '@/lib/utils';
 import { findPreviousVehicleFromAssignments, upsertVehicleHandover } from '@/lib/vehicle-handovers';
 
 export type CalendarStatusCode = 'UT' | 'KT' | 'FT' | 'AT' | 'HO' | 'GR' | 'SCH';
-export type CalendarStatusSource = 'manual' | 'request';
+export type CalendarStatusSource = 'manual' | 'request' | 'assignment';
 export type DriverAvailability = 'Available' | 'Urlaub' | 'Krank' | 'Feiertag' | 'Not Assigned';
 export type PlanningStatus = 'Planned' | 'In Progress' | 'Unavailable';
 export type RequestStatus = 'Pending' | 'Approved' | 'Rejected' | 'Needs Review' | 'Cancelled';
@@ -24,7 +24,8 @@ export type SonstigeAbwesenheitType =
   | 'Schulung'
   | 'Homeoffice'
   | 'Geschäftsreise';
-export type AssignmentSource = 'manual' | 'mobile_checkin';
+export type AssignmentSource = 'manual' | 'mobile_checkin' | 'transport_request';
+export type TransportRequestStatus = 'pending' | 'approved' | 'rejected' | 'needs_review';
 export type MorningCheckinStatus =
   | 'Confirmed'
   | 'Waiting for Review'
@@ -49,6 +50,7 @@ export interface FleetCalendarStatus {
   status: CalendarStatusCode;
   source: CalendarStatusSource;
   requestId?: string;
+  assignmentId?: string;
 }
 
 export interface FleetAssignment {
@@ -60,12 +62,58 @@ export interface FleetAssignment {
   vehicle: string;
   company: string;
   routeJob: string;
+  routeName?: string;
+  cargoName?: string;
+  cargoOwner?: string;
+  pickupAddress?: string;
+  deliveryAddress?: string;
   startTime: string;
   endTime: string;
   status: PlanningStatus;
   source: AssignmentSource;
   expectedRevenue: number;
   notes: string;
+}
+
+export interface TransportRequest {
+  id: string;
+  driverId: string;
+  date: string;
+  submittedAt: string;
+  vehicleId: string;
+  companyId: string;
+  cargoName: string;
+  cargoOwner: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  startTime: string;
+  endTime?: string;
+  routeName?: string;
+  notes?: string;
+  status: TransportRequestStatus;
+  conflictReason?: string;
+  source: 'mobile_app';
+}
+
+export interface AssignmentHistoryEntry {
+  assignmentId: string;
+  driverId: string;
+  vehicleId: string;
+  companyId: string;
+  date: string;
+  startTime: string;
+  endTime?: string;
+  source: AssignmentSource;
+}
+
+export interface CompanyEmailDraft {
+  id: string;
+  companyId: string;
+  date: string;
+  subject: string;
+  body: string;
+  status: 'draft_ready' | 'needs_review';
+  lastUpdatedAt: string;
 }
 
 export interface MorningCheckin {
@@ -124,6 +172,11 @@ interface FleetDataContextValue {
   requests: FleetRequest[];
   assignments: FleetAssignment[];
   morningCheckins: MorningCheckin[];
+  transportRequests: TransportRequest[];
+  companyEmailDrafts: CompanyEmailDraft[];
+  driverAssignmentHistory: AssignmentHistoryEntry[];
+  vehicleAssignmentHistory: AssignmentHistoryEntry[];
+  companyAssignmentHistory: AssignmentHistoryEntry[];
   revenueData: RevenueData;
   approveRequest: (requestId: string) => { calendarUpdated: boolean };
   rejectRequest: (requestId: string) => void;
@@ -139,6 +192,9 @@ interface FleetDataContextValue {
   addCheckinToEinsatzplan: (checkinId: string) => { success: boolean; message: string };
   rejectMorningCheckin: (checkinId: string) => void;
   updateMorningCheckin: (checkinId: string, data: Partial<MorningCheckin>) => void;
+  approveTransportRequest: (requestId: string) => { success: boolean; message: string };
+  rejectTransportRequest: (requestId: string) => void;
+  getAssignmentById: (assignmentId: string) => FleetAssignment | undefined;
 }
 
 const FleetDataContext = createContext<FleetDataContextValue | undefined>(undefined);
@@ -204,6 +260,7 @@ const COMPANY_DEFAULT_REVENUE: Record<string, number> = {
   UPS: 900,
   Hermes: 800,
   'DB Schenker': 1050,
+  'Internal Dispatch': 0,
 };
 
 const initialCalendarStatuses: FleetCalendarStatus[] = [
@@ -319,6 +376,87 @@ const initialAssignments: FleetAssignment[] = [
     source: 'manual',
     expectedRevenue: 1050,
     notes: '',
+  },
+];
+
+const initialTransportRequests: TransportRequest[] = [
+  {
+    id: 'tr-1',
+    driverId: 'ilker-cukur',
+    date: tomorrow,
+    submittedAt: `${today} 17:12`,
+    vehicleId: 'AP-101',
+    companyId: 'DHL',
+    cargoName: 'Electronics pallets',
+    cargoOwner: 'DHL Customer',
+    pickupAddress: 'Berlin Neukolln',
+    deliveryAddress: 'Berlin Mitte',
+    startTime: '07:00',
+    status: 'pending',
+    source: 'mobile_app',
+  },
+  {
+    id: 'tr-2',
+    driverId: 'thomas-scharein',
+    date: tomorrow,
+    submittedAt: `${today} 17:20`,
+    vehicleId: 'AP-102',
+    companyId: 'Amazon',
+    cargoName: 'Parcel boxes',
+    cargoOwner: 'Amazon',
+    pickupAddress: 'Berlin Spandau',
+    deliveryAddress: 'Leipzig',
+    startTime: '06:30',
+    status: 'pending',
+    source: 'mobile_app',
+  },
+  {
+    id: 'tr-3',
+    driverId: 'sita-diallo',
+    date: tomorrow,
+    submittedAt: `${today} 17:25`,
+    vehicleId: 'AP-105',
+    companyId: 'DB Schenker',
+    cargoName: 'Furniture',
+    cargoOwner: 'DB Customer',
+    pickupAddress: 'Berlin Tempelhof',
+    deliveryAddress: 'Hamburg',
+    startTime: '08:00',
+    status: 'needs_review',
+    conflictReason: 'Driver marked Urlaub',
+    source: 'mobile_app',
+  },
+  {
+    id: 'tr-4',
+    driverId: 'andrii-dudiak',
+    date: tomorrow,
+    submittedAt: `${today} 17:28`,
+    vehicleId: 'AP-104',
+    companyId: 'Hermes',
+    cargoName: 'Packages',
+    cargoOwner: 'Hermes',
+    pickupAddress: 'Berlin Lichtenberg',
+    deliveryAddress: 'Potsdam',
+    startTime: '07:15',
+    status: 'needs_review',
+    conflictReason: 'Driver marked Krank',
+    source: 'mobile_app',
+  },
+  {
+    id: 'tr-5',
+    driverId: 'nesrin-feyzula',
+    date: tomorrow,
+    submittedAt: `${today} 17:31`,
+    vehicleId: 'AP-101',
+    companyId: 'UPS',
+    cargoName: 'Medical goods',
+    cargoOwner: 'UPS Client',
+    pickupAddress: 'Berlin Wedding',
+    deliveryAddress: 'Dresden',
+    startTime: '07:30',
+    status: 'needs_review',
+    conflictReason: 'Vehicle already assigned',
+    source: 'mobile_app',
   },
 ];
 
@@ -518,7 +656,193 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
   const [requests, setRequests] = useState<FleetRequest[]>(initialRequests);
   const [assignments, setAssignments] = useState<FleetAssignment[]>(initialAssignments);
   const [morningCheckins, setMorningCheckins] = useState<MorningCheckin[]>(initialMorningCheckins);
+  const [transportRequests, setTransportRequests] = useState<TransportRequest[]>(initialTransportRequests);
+  const [companyEmailDrafts, setCompanyEmailDrafts] = useState<CompanyEmailDraft[]>([]);
+  const [driverAssignmentHistory, setDriverAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
+  const [vehicleAssignmentHistory, setVehicleAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
+  const [companyAssignmentHistory, setCompanyAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [revenueData] = useState<RevenueData>(initialRevenueData);
+
+  function toMinutes(value: string | undefined) {
+    if (!value || !/^\d{2}:\d{2}$/.test(value)) return null;
+    const [h, m] = value.split(':').map(Number);
+    return h * 60 + m;
+  }
+
+  function hasTimeOverlap(aStart: string, aEnd: string | undefined, bStart: string, bEnd: string | undefined) {
+    const aStartMin = toMinutes(aStart);
+    const bStartMin = toMinutes(bStart);
+    if (aStartMin == null || bStartMin == null) return aStart === bStart;
+    const aEndMin = toMinutes(aEnd) ?? aStartMin + 60;
+    const bEndMin = toMinutes(bEnd) ?? bStartMin + 60;
+    return aStartMin < bEndMin && bStartMin < aEndMin;
+  }
+
+  function validateTransportRequest(request: TransportRequest) {
+    if (!request.vehicleId || !request.companyId || !request.cargoName || !request.pickupAddress || !request.deliveryAddress) {
+      return { valid: false, reason: 'Required fields are missing.' };
+    }
+
+    const calendarStatus = getCalendarStatusEntry(request.driverId, request.date);
+    if (calendarStatus?.status === 'UT') {
+      return { valid: false, reason: 'Driver marked Urlaub' };
+    }
+    if (calendarStatus?.status === 'KT') {
+      return { valid: false, reason: 'Driver marked Krank' };
+    }
+
+    const driverConflict = assignments.some(
+      (assignment) =>
+        assignment.date === request.date
+        && assignment.driverId === request.driverId
+        && hasTimeOverlap(request.startTime, request.endTime, assignment.startTime, assignment.endTime),
+    );
+    if (driverConflict) {
+      return { valid: false, reason: 'Driver already has assignment at this time' };
+    }
+
+    const vehicleConflict = assignments.some(
+      (assignment) =>
+        assignment.date === request.date
+        && assignment.vehicle === request.vehicleId
+        && hasTimeOverlap(request.startTime, request.endTime, assignment.startTime, assignment.endTime),
+    );
+    if (vehicleConflict) {
+      return { valid: false, reason: 'Vehicle already assigned at this time' };
+    }
+
+    return { valid: true as const };
+  }
+
+  function upsertCompanyEmailDraftFromTransport(request: TransportRequest, driverName: string) {
+    const draftId = `draft-${request.companyId}-${request.date}`;
+    const nextDraft: CompanyEmailDraft = {
+      id: draftId,
+      companyId: request.companyId,
+      date: request.date,
+      subject: `Einsatzplan ${request.date} - ${request.companyId}`,
+      body: [
+        `Driver: ${driverName}`,
+        `Vehicle: ${request.vehicleId}`,
+        `Cargo: ${request.cargoName}`,
+        `Pickup Address: ${request.pickupAddress}`,
+        `Delivery Address: ${request.deliveryAddress}`,
+        `Start Time: ${request.startTime}`,
+      ].join('\n'),
+      status: 'draft_ready',
+      lastUpdatedAt: new Date().toISOString(),
+    };
+
+    setCompanyEmailDrafts((current) => {
+      const existingIndex = current.findIndex((item) => item.id === draftId);
+      if (existingIndex < 0) return [...current, nextDraft];
+      return current.map((item, index) => (index === existingIndex ? nextDraft : item));
+    });
+  }
+
+  function getAssignmentById(assignmentId: string) {
+    return assignments.find((item) => item.id === assignmentId);
+  }
+
+  function approveTransportRequest(requestId: string) {
+    const request = transportRequests.find((item) => item.id === requestId);
+    if (!request) {
+      return { success: false, message: 'Transport request not found.' };
+    }
+
+    const validation = validateTransportRequest(request);
+    if (!validation.valid) {
+      setTransportRequests((current) =>
+        current.map((item) =>
+          item.id === requestId
+            ? { ...item, status: 'needs_review', conflictReason: validation.reason }
+            : item,
+        ),
+      );
+      return { success: false, message: validation.reason };
+    }
+
+    const driver = drivers.find((item) => item.id === request.driverId);
+    const assignmentId = `tp-transport-${request.id}`;
+    const assignmentDate = request.date;
+    const assignment: FleetAssignment = {
+      id: assignmentId,
+      date: assignmentDate,
+      driverId: request.driverId,
+      department: driver?.department ?? 'Unknown',
+      availability: 'Available',
+      vehicle: request.vehicleId,
+      company: request.companyId,
+      routeJob: request.routeName || request.cargoName,
+      routeName: request.routeName,
+      cargoName: request.cargoName,
+      cargoOwner: request.cargoOwner,
+      pickupAddress: request.pickupAddress,
+      deliveryAddress: request.deliveryAddress,
+      startTime: request.startTime,
+      endTime: request.endTime ?? '',
+      status: 'Planned',
+      source: 'transport_request',
+      expectedRevenue: COMPANY_DEFAULT_REVENUE[request.companyId] ?? 0,
+      notes: request.notes ?? '',
+    };
+
+    setAssignments((current) => [...current, assignment]);
+
+    setCalendarStatuses((current) => {
+      const withoutSameDay = current.filter(
+        (entry) => !(entry.driverId === request.driverId && entry.date === request.date),
+      );
+      return [
+        ...withoutSameDay,
+        {
+          id: `status-assignment-${assignmentId}`,
+          driverId: request.driverId,
+          date: request.date,
+          status: 'AT',
+          source: 'assignment',
+          assignmentId,
+        },
+      ];
+    });
+
+    const historyItem: AssignmentHistoryEntry = {
+      assignmentId,
+      driverId: request.driverId,
+      vehicleId: request.vehicleId,
+      companyId: request.companyId,
+      date: request.date,
+      startTime: request.startTime,
+      endTime: request.endTime,
+      source: 'transport_request',
+    };
+
+    setDriverAssignmentHistory((current) => [...current, historyItem]);
+    setVehicleAssignmentHistory((current) => [...current, historyItem]);
+    setCompanyAssignmentHistory((current) => [...current, historyItem]);
+
+    upsertCompanyEmailDraftFromTransport(request, driver?.name ?? request.driverId);
+
+    setTransportRequests((current) =>
+      current.map((item) =>
+        item.id === requestId
+          ? { ...item, status: 'approved', conflictReason: undefined }
+          : item,
+      ),
+    );
+
+    return { success: true, message: 'Transport request approved and added to Einsatzplan.' };
+  }
+
+  function rejectTransportRequest(requestId: string) {
+    setTransportRequests((current) =>
+      current.map((item) =>
+        item.id === requestId
+          ? { ...item, status: 'rejected' }
+          : item,
+      ),
+    );
+  }
 
   function validateMorningCheckinInternal(
     checkin: MorningCheckin,
@@ -874,6 +1198,11 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       requests,
       assignments,
       morningCheckins,
+      transportRequests,
+      companyEmailDrafts,
+      driverAssignmentHistory,
+      vehicleAssignmentHistory,
+      companyAssignmentHistory,
       revenueData,
       approveRequest,
       rejectRequest,
@@ -889,8 +1218,23 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       addCheckinToEinsatzplan,
       rejectMorningCheckin,
       updateMorningCheckin,
+      approveTransportRequest,
+      rejectTransportRequest,
+      getAssignmentById,
     }),
-    [assignments, calendarStatuses, drivers, morningCheckins, requests, revenueData],
+    [
+      assignments,
+      calendarStatuses,
+      companyAssignmentHistory,
+      companyEmailDrafts,
+      driverAssignmentHistory,
+      drivers,
+      morningCheckins,
+      requests,
+      revenueData,
+      transportRequests,
+      vehicleAssignmentHistory,
+    ],
   );
 
   return <FleetDataContext.Provider value={value}>{children}</FleetDataContext.Provider>;

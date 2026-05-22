@@ -1,12 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Eye, FileText, X } from 'lucide-react';
 import { useFleetData } from '@/context/FleetDataContext';
+import { EmptyState } from '@/components/ui/empty-state';
 
 type RequestTab = 'Pending' | 'Approved' | 'Rejected' | 'Needs Review' | 'Cancelled';
 
 export function RequestsPage() {
+  const searchParams = useSearchParams();
+  const typeFilter = searchParams.get('type');
   const {
     requests,
     drivers,
@@ -21,8 +25,13 @@ export function RequestsPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const filteredRequests = useMemo(
-    () => requests.filter((request) => request.status === activeTab),
-    [activeTab, requests],
+    () =>
+      requests.filter((request) => {
+        if (request.status !== activeTab) return false;
+        if (!typeFilter) return true;
+        return request.type === typeFilter;
+      }),
+    [activeTab, requests, typeFilter],
   );
 
   const selectedRequest = useMemo(
@@ -66,7 +75,7 @@ export function RequestsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Requests</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{typeFilter ? 'Accidents' : 'Requests'}</h1>
         <p className="mt-1 text-sm text-slate-600">Anfragen aus der Driver-App prufen und bei Freigabe in den Kalender ubernehmen.</p>
       </div>
 
@@ -88,7 +97,35 @@ export function RequestsPage() {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        {filteredRequests.length === 0 ? (
+          <div className="p-4">
+            <EmptyState
+              icon={FileText}
+              title={typeFilter ? 'No accident requests found' : 'No requests found'}
+              subtitle="No requests match current filters."
+              actionLabel="Clear filters"
+              onAction={() => setActiveTab('Pending')}
+            />
+          </div>
+        ) : (
+        <>
+        <div className="space-y-3 p-3 md:hidden">
+          {filteredRequests.map((request) => (
+            <div key={`request-card-${request.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
+              <p className="font-semibold text-slate-900">{request.id}</p>
+              <p className="text-xs text-slate-600">{getDriverName(request.driverId, request.driverName)} · {request.type}</p>
+              <p className="text-xs text-slate-600">{request.dateFrom ?? '-'} - {request.dateTo ?? '-'}</p>
+              <button
+                type="button"
+                className="mt-2 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                onClick={() => setSelectedRequestId(request.id)}
+              >
+                View
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-[1500px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -165,6 +202,8 @@ export function RequestsPage() {
             </tbody>
           </table>
         </div>
+        </>
+        )}
       </div>
 
       {selectedRequest && (

@@ -1,36 +1,26 @@
 'use client';
 
-import { Bell, Globe, Search } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { getUser, setDevelopmentRole } from '@/lib/auth';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { AuthUser } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/src/i18n';
+import { NotificationCenter } from './NotificationCenter';
+import { GlobalSearch } from './GlobalSearch';
 
 interface HeaderProps {
   title?: string;
 }
 
 export function Header({ title }: HeaderProps) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => getUser());
   const { t } = useTranslation();
-
-  useEffect(() => {
-    setUser(getUser());
-  }, []);
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200 lg:px-8">
       {/* Left: title or search */}
       <div className="flex items-center gap-4">
-        <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 min-w-[240px]">
-          <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          <input
-            type="text"
-            placeholder={t('header.searchPlaceholder')}
-            className="bg-transparent text-sm text-gray-700 placeholder:text-gray-400 outline-none w-full"
-          />
-        </div>
         {title && (
           <h1 className="text-xl font-semibold text-gray-900 sm:hidden">{title}</h1>
         )}
@@ -38,6 +28,10 @@ export function Header({ title }: HeaderProps) {
 
       {/* Right: notifications + user */}
       <div className="flex items-center gap-3">
+        <div className="hidden md:block">
+          <GlobalSearch />
+        </div>
+
         <div className="hidden items-center gap-2 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 md:flex">
           <Globe className="h-3.5 w-3.5 text-gray-500" />
           <span>{t('language.label')}</span>
@@ -70,10 +64,7 @@ export function Header({ title }: HeaderProps) {
           <option value="office">office</option>
         </select>
 
-        <button className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors" aria-label={t('header.notifications')}>
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <NotificationCenter />
 
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold">

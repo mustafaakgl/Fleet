@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Bell, ChevronRight, Printer, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Printer, TrendingUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { canViewFinancials } from '@/lib/permissions';
 import { getExpiringDocuments } from '@/lib/documents';
@@ -76,20 +78,22 @@ function alertClass(tone: CriticalAlert['tone']) {
 export default function DashboardPage() {
   const router = useRouter();
   const { t } = useTranslation();
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user] = useState<AuthUser | null>(() => getUser());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setUser(getUser());
+    const timeout = window.setTimeout(() => setIsLoading(false), 500);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   const showFinancials = user ? canViewFinancials(user.role) : false;
   const expiringDocumentCount = getExpiringDocuments(90).length;
   const kpiRowTwo: KpiItem[] = [
-    { id: 'k5', label: t('dashboard.openAccidents'), value: '1', toastOnly: true },
+    { id: 'k5', label: t('dashboard.openAccidents'), value: '1', href: '/requests?type=Unfall%20melden' },
     { id: 'k6', label: t('dashboard.cargoDamages'), value: '2', href: '/cargo-damage?status=pending,under_review' },
     { id: 'k7', label: t('dashboard.expiringDocuments'), value: String(expiringDocumentCount), href: '/documents?status=expiring_soon,expired' },
-    { id: 'k8', label: t('dashboard.unsentCompanyEmails'), value: '3', href: '/assignments?panel=company_notifications&emailStatus=Not%20Prepared,Needs%20Review' },
+    { id: 'k8', label: t('dashboard.unsentCompanyEmails'), value: '3', href: '/assignments?panel=company_notifications&view=company-notifications' },
   ];
 
   const kpiRowOneLocalized: KpiItem[] = [
@@ -147,21 +151,47 @@ export default function DashboardPage() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.kpiCards')}</h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {kpiRowOneLocalized.map((item) => (
-            <KpiCard key={item.id} item={item} onClick={openKpi} />
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {kpiRowTwo.map((item) => (
-            <KpiCard key={item.id} item={item} onClick={openKpi} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Card key={`kpi-skeleton-${index}`}>
+                <CardContent className="space-y-2 p-3">
+                  <Skeleton className="h-3 w-2/3" />
+                  <Skeleton className="h-7 w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {kpiRowOneLocalized.map((item) => (
+              <KpiCard key={item.id} item={item} onClick={openKpi} />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {kpiRowTwo.map((item) => (
+              <KpiCard key={item.id} item={item} onClick={openKpi} />
+            ))}
+          </div>
+          </>
+        )}
       </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.todayOperations')}</h2>
         <Card>
+          {todayOperations.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                icon={TrendingUp}
+                title="No assignments today"
+                subtitle="No assignments available for selected date."
+                actionLabel="Create Assignment"
+                onAction={() => router.push('/assignments/new')}
+              />
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -188,6 +218,7 @@ export default function DashboardPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </Card>
       </section>
 
@@ -200,14 +231,15 @@ export default function DashboardPage() {
           {showFinancials ? <StatCard label={t('dashboard.expectedRevenue')} value="EUR 11,400" /> : <StatCard label={t('dashboard.dispatchReadiness')} value="Ready" />}
         </div>
         <Button asChild>
-          <Link href="/assignments">{t('dashboard.openEinsatzplan')}</Link>
+          <Link href="/assignments?panel=tagesplanung&view=daily-overview">{t('dashboard.openEinsatzplan')}</Link>
         </Button>
       </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.vehicleHealth')}</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Card className="border-green-200">
+          <Link href="/vehicles/veh-001" className="block">
+          <Card className="cursor-pointer border-green-200 transition hover:shadow-sm">
             <CardContent className="space-y-1 p-4 text-sm">
               <p className="font-semibold text-slate-900">Vehicle AP-101</p>
               <p className="text-slate-700">TUV: 7 days</p>
@@ -215,18 +247,23 @@ export default function DashboardPage() {
               <p className="font-medium text-green-700">Status: Active</p>
             </CardContent>
           </Card>
-          <Card className="border-yellow-200">
+          </Link>
+          <Link href="/vehicles/veh-005" className="block">
+          <Card className="cursor-pointer border-yellow-200 transition hover:shadow-sm">
             <CardContent className="space-y-1 p-4 text-sm">
               <p className="font-semibold text-slate-900">Vehicle AP-105</p>
               <p className="font-medium text-yellow-700">Service Required</p>
             </CardContent>
           </Card>
-          <Card className="border-red-200">
+          </Link>
+          <Link href="/vehicles/veh-002" className="block">
+          <Card className="cursor-pointer border-red-200 transition hover:shadow-sm">
             <CardContent className="space-y-1 p-4 text-sm">
               <p className="font-semibold text-slate-900">Vehicle AP-102</p>
               <p className="font-medium text-red-700">Status: In Use</p>
             </CardContent>
           </Card>
+          </Link>
         </div>
       </section>
 
@@ -246,9 +283,17 @@ export default function DashboardPage() {
         <h2 className="text-lg font-semibold text-slate-900">Fleet Overview</h2>
         <Card>
           <CardContent className="space-y-4 p-4">
-            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
-              Map Placeholder - 31 active vehicles
-            </div>
+            {cityFleet.length === 0 ? (
+              <EmptyState
+                icon={TrendingUp}
+                title="No fleet data"
+                subtitle="No live fleet metrics are available right now."
+              />
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+                Map Placeholder - 31 active vehicles
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
               {cityFleet.map((item) => (
                 <div key={item.city} className="rounded border border-slate-200 px-3 py-2">
@@ -258,7 +303,7 @@ export default function DashboardPage() {
               ))}
             </div>
             <Button asChild variant="outline">
-              <Link href="/flottenmonitor">{t('dashboard.openFlottenmonitor')}</Link>
+              <Link href="/flottenmonitor?tab=overview">{t('dashboard.openFlottenmonitor')}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -268,9 +313,9 @@ export default function DashboardPage() {
         <h2 className="text-lg font-semibold text-slate-900">Driver Risk Overview</h2>
         <Card>
           <CardContent className="space-y-2 p-4">
-            <RiskRow driver="Sita Diallo" level="High" tone="red" />
-            <RiskRow driver="Thomas Scharein" level="Medium" tone="yellow" />
-            <RiskRow driver="Ilker Cukur" level="Low" tone="green" />
+            <RiskRow driver="Sita Diallo" level="High" tone="red" href="/drivers/sita-diallo" />
+            <RiskRow driver="Thomas Scharein" level="Medium" tone="yellow" href="/drivers/thomas-scharein" />
+            <RiskRow driver="Ilker Cukur" level="Low" tone="green" href="/drivers/ilker-cukur" />
           </CardContent>
         </Card>
       </section>
@@ -322,17 +367,27 @@ function RevenuePlaceholder({ title, value }: { title: string; value: string }) 
   );
 }
 
-function RiskRow({ driver, level, tone }: { driver: string; level: 'Low' | 'Medium' | 'High'; tone: 'green' | 'yellow' | 'red' }) {
+function RiskRow({
+  driver,
+  level,
+  tone,
+  href,
+}: {
+  driver: string;
+  level: 'Low' | 'Medium' | 'High';
+  tone: 'green' | 'yellow' | 'red';
+  href: string;
+}) {
   const style = tone === 'green' ? 'text-green-700' : tone === 'yellow' ? 'text-yellow-700' : 'text-red-700';
   const dot = tone === 'green' ? 'bg-green-500' : tone === 'yellow' ? 'bg-yellow-500' : 'bg-red-500';
 
   return (
-    <div className="flex items-center justify-between rounded border border-slate-200 px-3 py-2 text-sm">
+    <Link href={href} className="flex cursor-pointer items-center justify-between rounded border border-slate-200 px-3 py-2 text-sm transition hover:bg-slate-50">
       <span className="font-medium text-slate-900">{driver}</span>
       <span className={`inline-flex items-center gap-2 font-semibold ${style}`}>
         <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
         {level}
       </span>
-    </div>
+    </Link>
   );
 }
