@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Building2, ChevronLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -9,53 +8,199 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  canCurrentUserViewFinancials,
-  getCompanyAssignments,
-  getCompanyById,
-  getCompanyCargoDamages,
-  getCompanyCurrentStats,
-  getCompanyDocuments,
-  getCompanyDriverHistory,
-  getCompanyEmailHistory,
-  getCompanyVehicleHistory,
-} from '@/lib/companies';
-import { mockDrivers, mockVehicles } from '@/lib/mock-data';
+import { companiesApi, documentsApi, accidentsApi } from '@/lib/api';
+import type {
+  CompanyDetail,
+  CompanyEmail,
+  CompanyStats,
+  Document,
+} from '@/lib/types';
+import { canViewFinancials } from '@/lib/permissions';
+import { getUser } from '@/lib/auth';
+import { formatDate, statusColor } from '@/lib/utils';
 
-function currency(value: number) {
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
+interface CompanyAssignmentRow {
+  id: string;
+  workDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  cargoName?: string;
+  routeName?: string | null;
+  notes?: string | null;
+  driver: { id: string; firstName: string; lastName: string };
+  vehicle: { id: string; plateNumber: string };
 }
 
-function statusBadge(status: string) {
-  if (status === 'in_progress' || status === 'approved' || status === 'sent') return 'bg-emerald-100 text-emerald-700';
-  if (status === 'planned' || status === 'pending' || status === 'under_review') return 'bg-amber-100 text-amber-700';
-  if (status === 'cancelled' || status === 'rejected' || status === 'failed') return 'bg-rose-100 text-rose-700';
-  return 'bg-slate-100 text-slate-700';
+interface CompanyIncidentRow {
+  id: string;
+  type: 'vehicle_accident' | 'cargo_damage';
+  incidentDateTime: string;
+  cargoName?: string | null;
+  cargoOwner?: string | null;
+  damageValue?: number | string | null;
+  status: string;
+  driver?: { firstName: string; lastName: string };
+  vehicle?: { plateNumber: string };
 }
 
-export default function CompanyProfilePage() {
+function currency(value?: number | string | null) {
+  if (value === null || value === undefined) return '-';
+  const n = typeof value === 'string' ? Number(value) : value;
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+export default function CompanyProfilePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const { t } = useTranslation();
-  const params = useParams<{ id: string }>();
-  const company = getCompanyById(params.id);
-  const showFinancials = canCurrentUserViewFinancials();
 
-  const assignments = useMemo(() => {
-    if (!company) return [];
-    return getCompanyAssignments(company.id);
-  }, [company]);
+  const [company, setCompany] = useState<CompanyDetail | null>(null);
+  const [companyError, setCompanyError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const currentAssignments = assignments.filter((item) => item.status === 'in_progress' || item.status === 'planned');
-  const assignmentHistory = assignments.filter((item) => item.status === 'completed' || item.status === 'cancelled');
+  const [stats, setStats] = useState<CompanyStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
-  const driverHistory = company ? getCompanyDriverHistory(company.id) : [];
-  const vehicleHistory = company ? getCompanyVehicleHistory(company.id) : [];
-  const emailHistory = company ? getCompanyEmailHistory(company.id) : [];
-  const documents = company ? getCompanyDocuments(company.id) : [];
-  const cargoDamageHistory = company ? getCompanyCargoDamages(company.id) : [];
-  const stats = company ? getCompanyCurrentStats(company.id) : { activeAssignments: 0, currentDrivers: 0, currentVehicles: 0 };
+  const [assignments, setAssignments] = useState<CompanyAssignmentRow[]>([]);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
 
-  if (!company) {
-    return <div className="text-sm text-gray-600">Company not found.</div>;
+  const [emails, setEmails] = useState<CompanyEmail[]>([]);
+  const [emailsError, setEmailsError] = useState<string | null>(null);
+
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+
+  const [cargoDamages, setCargoDamages] = useState<CompanyIncidentRow[]>([]);
+  const [cargoDamagesError, setCargoDamagesError] = useState<string | null>(null);
+
+  const [showFinancials, setShowFinancials] = useState(false);
+
+  useEffect(() => {
+    const user = getUser();
+    setShowFinancials(user ? canViewFinancials(user.role) : false);
+  }, []);
+
+  useEffect(() => {
+    companiesApi
+      .getById(id)
+      .then(setCompany)
+      .catch((e) => setCompanyError(e?.message ?? 'Failed'))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    companiesApi
+      .getStats(id)
+      .then(setStats)
+      .catch((e) => setStatsError(e?.message ?? 'Failed'));
+    companiesApi
+      .getAssignments(id)
+      .then((rows) => setAssignments(rows as CompanyAssignmentRow[]))
+      .catch((e) => setAssignmentsError(e?.message ?? 'Failed'));
+    companiesApi
+      .getEmailHistory(id)
+      .then(setEmails)
+      .catch((e) => setEmailsError(e?.message ?? 'Failed'));
+    documentsApi
+      .list('company', id)
+      .then(setDocuments)
+      .catch((e) => setDocumentsError(e?.message ?? 'Failed'));
+    accidentsApi
+      .listByCompany(id)
+      .then((rows) => {
+        const all = rows as CompanyIncidentRow[];
+        setCargoDamages(all.filter((r) => r.type === 'cargo_damage'));
+      })
+      .catch((e) => setCargoDamagesError(e?.message ?? 'Failed'));
+  }, [id]);
+
+  const currentAssignments = useMemo(
+    () =>
+      assignments.filter(
+        (a) => a.status === 'planned' || a.status === 'confirmed' || a.status === 'in_progress',
+      ),
+    [assignments],
+  );
+  const assignmentHistory = useMemo(
+    () => assignments.filter((a) => a.status === 'completed' || a.status === 'cancelled'),
+    [assignments],
+  );
+
+  const driverHistory = useMemo(() => {
+    const map: Record<string, { name: string; first: string; last: string; total: number }> = {};
+    for (const a of assignments) {
+      const k = a.driver.id;
+      const name = `${a.driver.firstName} ${a.driver.lastName}`.trim();
+      if (!map[k]) {
+        map[k] = { name, first: a.workDate, last: a.workDate, total: 1 };
+      } else {
+        map[k] = {
+          name,
+          first: a.workDate < map[k].first ? a.workDate : map[k].first,
+          last: a.workDate > map[k].last ? a.workDate : map[k].last,
+          total: map[k].total + 1,
+        };
+      }
+    }
+    return Object.entries(map).map(([driverId, v]) => ({
+      driverId,
+      driverName: v.name,
+      firstAssignmentDate: v.first,
+      lastAssignmentDate: v.last,
+      totalAssignments: v.total,
+    }));
+  }, [assignments]);
+
+  const vehicleHistory = useMemo(() => {
+    const map: Record<string, { plate: string; first: string; last: string; total: number }> = {};
+    for (const a of assignments) {
+      const k = a.vehicle.id;
+      if (!map[k]) {
+        map[k] = { plate: a.vehicle.plateNumber, first: a.workDate, last: a.workDate, total: 1 };
+      } else {
+        map[k] = {
+          plate: a.vehicle.plateNumber,
+          first: a.workDate < map[k].first ? a.workDate : map[k].first,
+          last: a.workDate > map[k].last ? a.workDate : map[k].last,
+          total: map[k].total + 1,
+        };
+      }
+    }
+    return Object.entries(map).map(([vehicleId, v]) => ({
+      vehicleId,
+      plateNumber: v.plate,
+      firstAssignmentDate: v.first,
+      lastAssignmentDate: v.last,
+      totalAssignments: v.total,
+    }));
+  }, [assignments]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (companyError || !company) {
+    return (
+      <div className="py-20 text-center">
+        <p className="text-lg text-gray-500">Company not found.</p>
+        <Button variant="outline" className="mt-4" asChild>
+          <Link href="/companies">{t('common.back')}</Link>
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -76,15 +221,24 @@ export default function CompanyProfilePage() {
                 <h1 className="text-2xl font-bold text-gray-900">{company.name}</h1>
               </div>
               <p className="text-sm text-gray-600">
-                {company.contactPerson || '-'} | {company.email} | {company.phone}
+                {company.contact_person || '-'} | {company.email ?? '-'} | {company.phone ?? '-'}
               </p>
-              <p className="text-sm text-gray-600">{company.address}</p>
+              <p className="text-sm text-gray-600">{company.address ?? '-'}</p>
             </div>
 
             <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-              <HeaderStat label="Current active assignments" value={String(stats.activeAssignments)} />
-              <HeaderStat label="Current drivers" value={String(stats.currentDrivers)} />
-              <HeaderStat label="Current vehicles" value={String(stats.currentVehicles)} />
+              <HeaderStat
+                label="Active assignments"
+                value={statsError ? '?' : String(stats?.active_assignments ?? '...')}
+              />
+              <HeaderStat
+                label="Current drivers"
+                value={statsError ? '?' : String(stats?.current_drivers ?? '...')}
+              />
+              <HeaderStat
+                label="Current vehicles"
+                value={statsError ? '?' : String(stats?.current_vehicles ?? '...')}
+              />
             </div>
           </div>
         </CardContent>
@@ -92,185 +246,237 @@ export default function CompanyProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Company Information</CardTitle>
+          <CardTitle>Company information</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
             <InfoItem label="Name" value={company.name} />
-            <InfoItem label="Contact person" value={company.contactPerson || '-'} />
-            <InfoItem label="Email" value={company.email} />
-            <InfoItem label="Phone" value={company.phone} />
-            <InfoItem label="Address" value={company.address} />
+            <InfoItem label="Contact person" value={company.contact_person || '-'} />
+            <InfoItem label="Email" value={company.email ?? '-'} />
+            <InfoItem label="Phone" value={company.phone ?? '-'} />
+            <InfoItem label="Address" value={company.address ?? '-'} />
             <InfoItem label="Notes" value={company.notes || '-'} />
+            {showFinancials && (
+              <InfoItem
+                label="Default daily revenue"
+                value={
+                  company.default_daily_revenue !== null && company.default_daily_revenue !== undefined
+                    ? currency(company.default_daily_revenue)
+                    : '-'
+                }
+              />
+            )}
           </dl>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Current Assignments</CardTitle>
+          <CardTitle>Current assignments</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>Route</TableHead>
-                <TableHead>Start Time</TableHead>
-                <TableHead>End Time</TableHead>
-                <TableHead>Status</TableHead>
-                {showFinancials && <TableHead>Expected Revenue</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {currentAssignments.map((row) => {
-                const driver = mockDrivers.find((item) => item.id === row.driverId);
-                const vehicle = mockVehicles.find((item) => item.id === row.vehicleId);
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.date}</TableCell>
-                    <TableCell>{driver ? `${driver.first_name} ${driver.last_name}` : row.driverId}</TableCell>
-                    <TableCell>{vehicle?.plate_number ?? row.vehicleId}</TableCell>
-                    <TableCell>{row.route}</TableCell>
-                    <TableCell>{row.startTime}</TableCell>
-                    <TableCell>{row.endTime}</TableCell>
-                    <TableCell>
-                      <Badge className={statusBadge(row.status)}>{row.status}</Badge>
-                    </TableCell>
-                    {showFinancials && <TableCell>{currency(row.expectedRevenue)}</TableCell>}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Assignment History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>Route</TableHead>
-                <TableHead>Status</TableHead>
-                {showFinancials && <TableHead>Revenue</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {assignmentHistory.map((row) => {
-                const driver = mockDrivers.find((item) => item.id === row.driverId);
-                const vehicle = mockVehicles.find((item) => item.id === row.vehicleId);
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.date}</TableCell>
-                    <TableCell>{driver ? `${driver.first_name} ${driver.last_name}` : row.driverId}</TableCell>
-                    <TableCell>{vehicle?.plate_number ?? row.vehicleId}</TableCell>
-                    <TableCell>{row.route}</TableCell>
-                    <TableCell>
-                      <Badge className={statusBadge(row.status)}>{row.status}</Badge>
-                    </TableCell>
-                    {showFinancials && <TableCell>{currency(row.expectedRevenue)}</TableCell>}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Driver History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Driver</TableHead>
-                <TableHead>First Assignment Date</TableHead>
-                <TableHead>Last Assignment Date</TableHead>
-                <TableHead>Total Assignments</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {driverHistory.map((row) => (
-                <TableRow key={row.driverId}>
-                  <TableCell>{row.driverName}</TableCell>
-                  <TableCell>{row.firstAssignmentDate}</TableCell>
-                  <TableCell>{row.lastAssignmentDate}</TableCell>
-                  <TableCell>{row.totalAssignments}</TableCell>
+          {assignmentsError ? (
+            <p className="p-4 text-sm text-gray-500">Assignments could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Cargo</TableHead>
+                  <TableHead>Start time</TableHead>
+                  <TableHead>End time</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {currentAssignments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  currentAssignments.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{formatDate(row.workDate)}</TableCell>
+                      <TableCell>
+                        {row.driver.firstName} {row.driver.lastName}
+                      </TableCell>
+                      <TableCell>{row.vehicle.plateNumber}</TableCell>
+                      <TableCell>{row.cargoName || '-'}</TableCell>
+                      <TableCell>{row.startTime}</TableCell>
+                      <TableCell>{row.endTime}</TableCell>
+                      <TableCell>
+                        <Badge className={statusColor(row.status)}>{row.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle History</CardTitle>
+          <CardTitle>Assignment history</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>First Assignment Date</TableHead>
-                <TableHead>Last Assignment Date</TableHead>
-                <TableHead>Total Assignments</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vehicleHistory.map((row) => (
-                <TableRow key={row.vehicleId}>
-                  <TableCell>{row.plateNumber}</TableCell>
-                  <TableCell>{row.firstAssignmentDate}</TableCell>
-                  <TableCell>{row.lastAssignmentDate}</TableCell>
-                  <TableCell>{row.totalAssignments}</TableCell>
+          {assignmentsError ? (
+            <p className="p-4 text-sm text-gray-500">Assignments could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Cargo</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {assignmentHistory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  assignmentHistory.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{formatDate(row.workDate)}</TableCell>
+                      <TableCell>
+                        {row.driver.firstName} {row.driver.lastName}
+                      </TableCell>
+                      <TableCell>{row.vehicle.plateNumber}</TableCell>
+                      <TableCell>{row.cargoName || '-'}</TableCell>
+                      <TableCell>
+                        <Badge className={statusColor(row.status)}>{row.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Company Email History</CardTitle>
+          <CardTitle>Driver history</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Recipient</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Sent</TableHead>
+                <TableHead>Driver</TableHead>
+                <TableHead>First assignment</TableHead>
+                <TableHead>Last assignment</TableHead>
+                <TableHead>Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {emailHistory.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.date}</TableCell>
-                  <TableCell>{row.subject}</TableCell>
-                  <TableCell>{row.recipient}</TableCell>
-                  <TableCell>
-                    <Badge className={statusBadge(row.status)}>{row.status}</Badge>
+              {driverHistory.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                    {t('common.noRecords')}
                   </TableCell>
-                  <TableCell>{row.lastSent}</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                driverHistory.map((row) => (
+                  <TableRow key={row.driverId}>
+                    <TableCell>{row.driverName}</TableCell>
+                    <TableCell>{formatDate(row.firstAssignmentDate)}</TableCell>
+                    <TableCell>{formatDate(row.lastAssignmentDate)}</TableCell>
+                    <TableCell>{row.totalAssignments}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Vehicle history</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Vehicle</TableHead>
+                <TableHead>First assignment</TableHead>
+                <TableHead>Last assignment</TableHead>
+                <TableHead>Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {vehicleHistory.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                    {t('common.noRecords')}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                vehicleHistory.map((row) => (
+                  <TableRow key={row.vehicleId}>
+                    <TableCell>{row.plateNumber}</TableCell>
+                    <TableCell>{formatDate(row.firstAssignmentDate)}</TableCell>
+                    <TableCell>{formatDate(row.lastAssignmentDate)}</TableCell>
+                    <TableCell>{row.totalAssignments}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Company email history</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {emailsError ? (
+            <p className="p-4 text-sm text-gray-500">Emails could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last sent</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {emails.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  emails.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{formatDate(row.date)}</TableCell>
+                      <TableCell>{row.subject}</TableCell>
+                      <TableCell>
+                        <Badge className={statusColor(row.status)}>{row.status}</Badge>
+                      </TableCell>
+                      <TableCell>{row.lastSentAt ? formatDate(row.lastSentAt) : '-'}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -279,76 +485,93 @@ export default function CompanyProfilePage() {
           <CardTitle>Documents</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Document Type</TableHead>
-                <TableHead>File Name</TableHead>
-                <TableHead>Expiry Date</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {documents.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.documentType}</TableCell>
-                  <TableCell>{row.fileName}</TableCell>
-                  <TableCell>{row.expiryDate || '-'}</TableCell>
-                  <TableCell>
-                    <Badge className={statusBadge(row.status)}>{row.status}</Badge>
-                  </TableCell>
+          {documentsError ? (
+            <p className="p-4 text-sm text-gray-500">Documents could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Document type</TableHead>
+                  <TableHead>File name</TableHead>
+                  <TableHead>Expiry date</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {documents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  documents.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{row.documentType}</TableCell>
+                      <TableCell>{row.fileName}</TableCell>
+                      <TableCell>{formatDate(row.expiryDate)}</TableCell>
+                      <TableCell>
+                        <Badge className={statusColor(row.status)}>{row.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Cargo Damage History</CardTitle>
+          <CardTitle>Cargo damage history</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>Cargo Name</TableHead>
-                <TableHead>Status</TableHead>
-                {showFinancials && <TableHead>Damage Value</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cargoDamageHistory.map((row) => {
-                const driver = mockDrivers.find((item) => item.id === row.driverId);
-                const vehicle = mockVehicles.find((item) => item.id === row.vehicleId);
-
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.date}</TableCell>
-                    <TableCell>{driver ? `${driver.first_name} ${driver.last_name}` : row.driverId}</TableCell>
-                    <TableCell>{vehicle?.plate_number ?? row.vehicleId}</TableCell>
-                    <TableCell>{row.cargoName}</TableCell>
-                    <TableCell>
-                      <Badge className={statusBadge(row.status)}>{row.status}</Badge>
+          {cargoDamagesError ? (
+            <p className="p-4 text-sm text-gray-500">Cargo damages could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Cargo name</TableHead>
+                  <TableHead>Status</TableHead>
+                  {showFinancials && <TableHead>Damage value</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cargoDamages.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={showFinancials ? 6 : 5}
+                      className="text-center text-sm text-gray-500"
+                    >
+                      {t('common.noRecords')}
                     </TableCell>
-                    {showFinancials && <TableCell>{currency(row.damageValue ?? 0)}</TableCell>}
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-700">{company.notes || 'No internal notes added for this company yet.'}</p>
+                ) : (
+                  cargoDamages.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{formatDate(row.incidentDateTime)}</TableCell>
+                      <TableCell>
+                        {row.driver
+                          ? `${row.driver.firstName} ${row.driver.lastName}`
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{row.vehicle?.plateNumber ?? '-'}</TableCell>
+                      <TableCell>{row.cargoName ?? '-'}</TableCell>
+                      <TableCell>{row.status}</TableCell>
+                      {showFinancials && (
+                        <TableCell>{currency(row.damageValue)}</TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

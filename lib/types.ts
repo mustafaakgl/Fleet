@@ -6,7 +6,7 @@ export type Department = 'executive' | 'fleet' | 'payroll' | 'accident' | 'hr' |
 
 export interface AuthUser {
   id: string;
-  name: string;
+  name?: string;
   email: string;
   role: Role;
   department?: Department;
@@ -14,9 +14,10 @@ export interface AuthUser {
 }
 
 export interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
+  accessToken: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
   user: AuthUser;
 }
 
@@ -30,6 +31,8 @@ export interface Driver {
   first_name: string;
   last_name: string;
   accident_count: number;
+  current_vehicle_plate?: string | null;
+  current_company_name?: string | null;
   email?: string;
   phone?: string;
   license_number?: string;
@@ -56,7 +59,7 @@ export interface PaginatedDrivers {
 
 // ─── Vehicle ─────────────────────────────────────────────────────────────────
 
-export type VehicleStatus = 'active' | 'inactive' | 'broken' | 'in_service' | 'sold';
+export type VehicleStatus = 'active' | 'maintenance' | 'broken' | 'inactive';
 
 export interface Vehicle {
   id: string;
@@ -81,6 +84,36 @@ export interface PaginatedVehicles {
   page: number;
   limit: number;
   data: Vehicle[];
+}
+
+// ─── Company ─────────────────────────────────────────────────────────────────
+
+export interface Company {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contact_person?: string;
+  default_daily_revenue?: number | null;
+  notes?: string;
+  active_assignments_count: number;
+  current_drivers_count?: number;
+  current_vehicles_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CompanyDetail extends Company {
+  current_drivers: Array<{ id: string; first_name: string; last_name: string }>;
+  current_vehicles: Array<{ id: string; plate_number: string }>;
+}
+
+export interface PaginatedCompanies {
+  total: number;
+  page: number;
+  limit: number;
+  data: Company[];
 }
 
 // ─── Assignment ───────────────────────────────────────────────────────────────
@@ -189,6 +222,124 @@ export interface Document {
   notes?: string;
 }
 
+// ─── User (admin panel) ───────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
+export type UserStatus = 'active' | 'inactive';
+
+export interface User {
+  id: string;
+  full_name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  language: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// ─── Calendar event ───────────────────────────────────────────────────────
+
+export type CalendarStatusCode =
+  | 'AT' | 'UT' | 'KT' | 'FT' | 'HO' | 'SCH' | 'GR'
+  | 'AZ' | 'SZ' | 'US' | 'FR' | 'WE' | 'AB' | 'MT';
+export type CalendarSourceCode = 'manual' | 'leave' | 'assignment';
+
+export interface CalendarEvent {
+  id: string;
+  driverId: string;
+  assignmentId?: string | null;
+  requestId?: string | null;
+  date: string;
+  status: CalendarStatusCode;
+  source: CalendarSourceCode;
+}
+
+// ─── Transport request ────────────────────────────────────────────────────
+
+export type TransportRequestStatus = 'pending' | 'approved' | 'rejected' | 'needs_review';
+
+export interface TransportRequest {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  companyId: string;
+  cargoName: string;
+  cargoOwner: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  requestedDate: string;
+  startTime: string;
+  endTime: string;
+  status: TransportRequestStatus;
+  conflictReason?: string | null;
+  assignmentId?: string | null;
+  notes?: string | null;
+  driver?: { firstName: string; lastName: string };
+  vehicle?: { plateNumber: string };
+  company?: { name: string };
+}
+
+// ─── Service record (vehicle maintenance) ─────────────────────────────────
+
+export interface ServiceRecord {
+  id: string;
+  vehicle_id: string;
+  vehicle_plate: string;
+  date: string;
+  service_type: string;
+  repair_company: string;
+  cost_amount: number;
+  mileage_km?: number | null;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// ─── Leave request (vacation/sick/...) ────────────────────────────────────
+
+export type LeaveRequestType =
+  | 'vacation'
+  | 'sick_leave'
+  | 'training'
+  | 'business_trip'
+  | 'doctor_appointment'
+  | 'special_leave'
+  | 'overtime_compensation'
+  | 'free_day'
+  | 'other';
+
+export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'needs_review';
+
+export interface LeaveRequest {
+  id: string;
+  driverId: string;
+  type: LeaveRequestType;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+  status: LeaveRequestStatus;
+  approvedById?: string | null;
+  driver?: { id: string; firstName: string; lastName: string };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ─── Company email draft ──────────────────────────────────────────────────
+
+export type CompanyEmailStatus = 'draft' | 'draft_ready' | 'needs_review' | 'sent' | 'failed';
+
+export interface CompanyEmail {
+  id: string;
+  companyId: string;
+  date: string;
+  subject: string;
+  body: string;
+  status: CompanyEmailStatus;
+  lastSentAt?: string | null;
+  company?: { name: string };
+}
+
 // ─── Reminder ─────────────────────────────────────────────────────────────
 
 export type ReminderType =
@@ -227,11 +378,78 @@ export interface Notification {
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────
 
+export interface DashboardKpis {
+  activeDrivers: number;
+  driversOnVacation: number;
+  sickDrivers: number;
+  vehiclesInUse: number;
+  openAccidents: number;
+  cargoDamages: number;
+  expiringDocuments: number;
+  unsentCompanyEmails: number;
+}
+
+export interface DashboardCriticalAlert {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+}
+
+export interface DashboardTodayOperation {
+  id: string;
+  driverName: string;
+  vehiclePlate: string;
+  companyName: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+}
+
+export interface DashboardTomorrowPlanning {
+  plannedDrivers: number;
+  availableDrivers: number;
+  missingAssignments: number;
+  unavailableDrivers: Array<{ driverId: string; driverName: string; status: string }>;
+}
+
+export interface DashboardVehicleHealthRow {
+  vehicleId: string;
+  plateNumber: string;
+  status: string;
+  tuvExpiryDate?: string | null;
+  spExpiryDate?: string | null;
+  issue: string;
+}
+
+export interface DashboardDriverRiskRow {
+  driverId: string;
+  driverName: string;
+  riskLevel: 'green' | 'yellow' | 'red';
+  accidentCount: number;
+}
+
+export interface DashboardRevenueAnalytics {
+  todayRevenue?: number;
+  weeklyRevenue?: number;
+  monthlyRevenue?: number;
+  revenueByCompany?: Array<{
+    companyId: string;
+    companyName: string;
+    assignments: number;
+    revenue: number;
+  }>;
+}
+
 export interface DashboardSummary {
-  total_drivers: number;
-  active_drivers: number;
-  total_vehicles: number;
-  active_vehicles: number;
-  today_assignments: number;
-  upcoming_reminders: number;
+  kpis: DashboardKpis;
+  criticalAlerts: DashboardCriticalAlert[];
+  todayOperations: DashboardTodayOperation[];
+  tomorrowPlanning: DashboardTomorrowPlanning;
+  vehicleHealth: DashboardVehicleHealthRow[];
+  driverRiskOverview: DashboardDriverRiskRow[];
+  revenueAnalytics?: DashboardRevenueAnalytics;
 }

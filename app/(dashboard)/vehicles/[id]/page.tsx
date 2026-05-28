@@ -2,191 +2,153 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Pencil, Truck } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { vehiclesApi } from '@/lib/api';
-import type { VehicleDetail } from '@/lib/types';
-import { mockVehicleDetails } from '@/lib/mock-data';
-import { getCargoDamageReportsByVehicle } from '@/lib/cargo-damage';
-import { getVehicleHandoversByVehicle } from '@/lib/vehicle-handovers';
-import { getDocumentsByOwner, getMissingRequiredDocuments } from '@/lib/documents';
+import { vehiclesApi, documentsApi } from '@/lib/api';
+import type { VehicleDetail, Document } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
-import { expiryBadgeColor, formatDate, statusColor } from '@/lib/utils';
+import { formatDate, statusColor } from '@/lib/utils';
 
-interface VehicleExtraProfile {
-  vehicleCode: string;
-  vin: string;
-  mileage: number;
-  notes: string;
+interface VehicleAssignmentRow {
+  id: string;
+  workDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  notes?: string | null;
+  driver: { id: string; firstName: string; lastName: string };
+  company: { id: string; name: string };
 }
 
-const VEHICLE_EXTRA_PROFILE: Record<string, VehicleExtraProfile> = {
-  'veh-001': {
-    vehicleCode: 'AP-101',
-    vin: 'WDB00000123456789',
-    mileage: 142300,
-    notes: 'Preferred for city routes, recent brake check completed.',
-  },
-  'veh-002': {
-    vehicleCode: 'AP-102',
-    vin: 'WDB00000987654321',
-    mileage: 119900,
-    notes: 'Requires tire pressure verification every Monday.',
-  },
-};
+interface VehicleHandoverRow {
+  id: string;
+  handoverDateTime: string;
+  handoverType: string;
+  photoRequired: boolean;
+  photoStatus: string;
+  damageDetected: boolean;
+  damageNotes?: string | null;
+  status: string;
+  driver?: { firstName: string; lastName: string };
+}
 
-function currency(value?: number) {
+interface VehicleIncidentRow {
+  id: string;
+  type: 'vehicle_accident' | 'cargo_damage';
+  incidentDateTime: string;
+  description: string;
+  cargoName?: string | null;
+  cargoOwner?: string | null;
+  damageValue?: number | string | null;
+  status: string;
+  driver?: { firstName: string; lastName: string };
+}
+
+function currency(value?: number | string | null) {
+  if (value === null || value === undefined) return '-';
+  const n = typeof value === 'string' ? Number(value) : value;
   return new Intl.NumberFormat('de-DE', {
     style: 'currency',
     currency: 'EUR',
     maximumFractionDigits: 0,
-  }).format(value ?? 0);
-}
-
-
-function sectionStatusClass(value: string) {
-  if (value === 'Open' || value === 'Pending') return 'bg-amber-100 text-amber-700';
-  if (value === 'Closed' || value === 'Done') return 'bg-emerald-100 text-emerald-700';
-  if (value === 'Damaged') return 'bg-rose-100 text-rose-700';
-  return 'bg-slate-100 text-slate-700';
+  }).format(n);
 }
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t } = useTranslation();
+
   const [vehicle, setVehicle] = useState<VehicleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  const [assignments, setAssignments] = useState<VehicleAssignmentRow[]>([]);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+
+  const [handovers, setHandovers] = useState<VehicleHandoverRow[]>([]);
+  const [handoversError, setHandoversError] = useState<string | null>(null);
+
+  const [incidents, setIncidents] = useState<VehicleIncidentRow[]>([]);
+  const [incidentsError, setIncidentsError] = useState<string | null>(null);
+
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+
   useEffect(() => {
     vehiclesApi
       .getById(id)
-      .then((res) => setVehicle(res))
-      .catch(() => {
-        const mock = mockVehicleDetails[id];
-        if (mock) {
-          setVehicle(mock);
-          return;
-        }
-        setNotFound(true);
-      })
+      .then(setVehicle)
+      .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [id]);
 
-  const extra = useMemo(() => {
-    if (!vehicle) return null;
-    return (
-      VEHICLE_EXTRA_PROFILE[vehicle.id] ?? {
-        vehicleCode: `VC-${vehicle.id.toUpperCase()}`,
-        vin: 'VIN-NOT-SET',
-        mileage: 100000,
-        notes: 'No additional notes yet.',
-      }
-    );
-  }, [vehicle]);
+  useEffect(() => {
+    if (!id) return;
+    vehiclesApi
+      .getAssignments(id)
+      .then((rows) => setAssignments(rows as VehicleAssignmentRow[]))
+      .catch((e) => setAssignmentsError(e?.message ?? 'Failed'));
+    vehiclesApi
+      .getHandovers(id)
+      .then((rows) => setHandovers(rows as VehicleHandoverRow[]))
+      .catch((e) => setHandoversError(e?.message ?? 'Failed'));
+    vehiclesApi
+      .getIncidents(id)
+      .then((rows) => setIncidents(rows as VehicleIncidentRow[]))
+      .catch((e) => setIncidentsError(e?.message ?? 'Failed'));
+    documentsApi
+      .list('vehicle', id)
+      .then(setDocuments)
+      .catch((e) => setDocumentsError(e?.message ?? 'Failed'));
+  }, [id]);
 
   const currentAssignment = vehicle?.recent_assignments?.[0] ?? null;
-  const currentDriver = currentAssignment?.driver.name ?? (vehicle?.current_driver ? `${vehicle.current_driver.first_name} ${vehicle.current_driver.last_name}` : '-');
+  const currentDriver =
+    currentAssignment?.driver.name ??
+    (vehicle?.current_driver
+      ? `${vehicle.current_driver.first_name} ${vehicle.current_driver.last_name}`
+      : '-');
   const currentCompany = currentAssignment?.company_name ?? '-';
-  const cargoDamageHistory = getCargoDamageReportsByVehicle(vehicle?.id ?? '');
-  const vehicleHandoverHistory = getVehicleHandoversByVehicle(extra?.vehicleCode ?? '');
-  const vehicleDocuments = useMemo(() => {
-    if (!vehicle) return [];
-    return [
-      ...getDocumentsByOwner('vehicle', vehicle.id),
-      ...getMissingRequiredDocuments('vehicle', vehicle.id),
-    ];
-  }, [vehicle]);
+
+  const accidentRows = useMemo(
+    () => incidents.filter((i) => i.type === 'vehicle_accident'),
+    [incidents],
+  );
+  const cargoRows = useMemo(
+    () => incidents.filter((i) => i.type === 'cargo_damage'),
+    [incidents],
+  );
 
   const driverHistory = useMemo(() => {
-    if (!vehicle?.recent_assignments?.length) {
-      return [{ id: 'no-driver-history', driver: '-', fromDate: '-', toDate: '-', totalDays: 0 }];
+    if (assignments.length === 0) return [];
+    const map: Record<string, { firstUsed: string; lastUsed: string; total: number; name: string }> = {};
+    for (const item of assignments) {
+      const key = item.driver.id;
+      const name = `${item.driver.firstName} ${item.driver.lastName}`.trim();
+      const current = map[key];
+      if (!current) {
+        map[key] = { firstUsed: item.workDate, lastUsed: item.workDate, total: 1, name };
+      } else {
+        map[key] = {
+          firstUsed: item.workDate < current.firstUsed ? item.workDate : current.firstUsed,
+          lastUsed: item.workDate > current.lastUsed ? item.workDate : current.lastUsed,
+          total: current.total + 1,
+          name,
+        };
+      }
     }
-
-    return vehicle.recent_assignments.map((item, index) => ({
-      id: `${item.id}-dh`,
-      driver: item.driver.name,
-      fromDate: item.work_date,
-      toDate: item.work_date,
-      totalDays: 1 + index,
+    return Object.entries(map).map(([driverId, value]) => ({
+      id: `dh-${driverId}`,
+      driverId,
+      driver: value.name,
+      firstUsed: value.firstUsed,
+      lastUsed: value.lastUsed,
+      totalAssignments: value.total,
     }));
-  }, [vehicle]);
-
-  const serviceHistory = useMemo(() => {
-    return [
-      {
-        id: 'svc-1',
-        date: '2026-04-16',
-        serviceType: 'Periodic Maintenance',
-        repairCompany: 'Berlin Truck Service GmbH',
-        mileage: (extra?.mileage ?? 100000) - 5400,
-        cost: 1350,
-        status: 'Done',
-      },
-      {
-        id: 'svc-2',
-        date: '2026-05-05',
-        serviceType: 'Brake Inspection',
-        repairCompany: 'Nord Werkstatt AG',
-        mileage: (extra?.mileage ?? 100000) - 1200,
-        cost: 640,
-        status: 'Pending',
-      },
-    ];
-  }, [extra?.mileage]);
-
-  const handoverHistory = useMemo(() => {
-    return [
-      {
-        id: 'ho-1',
-        date: '2026-05-18',
-        driver: currentDriver,
-        type: 'pickup',
-        photoStatus: 'Uploaded',
-        damageNotes: 'No visible damage',
-      },
-      {
-        id: 'ho-2',
-        date: '2026-05-19',
-        driver: currentDriver,
-        type: 'return',
-        photoStatus: 'Pending',
-        damageNotes: 'Minor scratch on rear door',
-      },
-    ];
-  }, [currentDriver]);
-
-  const accidentHistory = useMemo(() => {
-    return [
-      {
-        id: 'acc-1',
-        date: '2026-03-02',
-        driver: currentDriver,
-        type: 'Mirror Damage',
-        damageCost: 480,
-        status: 'Closed',
-      },
-      {
-        id: 'acc-2',
-        date: '2026-04-21',
-        driver: currentDriver,
-        type: 'Rear bumper contact',
-        damageCost: 950,
-        status: 'Open',
-      },
-    ];
-  }, [currentDriver]);
-
-  const equipment = useMemo(() => {
-    return [
-      { id: 'eq-1', name: 'Fire Extinguisher', quantity: 2, condition: 'Good', lastChecked: '2026-05-01' },
-      { id: 'eq-2', name: 'First Aid Kit', quantity: 1, condition: 'Good', lastChecked: '2026-05-10' },
-      { id: 'eq-3', name: 'Tie-down Straps', quantity: 12, condition: 'Needs replacement', lastChecked: '2026-04-25' },
-    ];
-  }, []);
+  }, [assignments]);
 
   if (loading) {
     return (
@@ -196,7 +158,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  if (notFound || !vehicle || !extra) {
+  if (notFound || !vehicle) {
     return (
       <div className="py-20 text-center">
         <p className="text-lg text-gray-500">Vehicle not found.</p>
@@ -226,9 +188,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{vehicle.plate_number}</h1>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-700">
-                  <span>{extra.vehicleCode}</span>
+                  <span>
+                    {vehicle.brand} {vehicle.model}
+                  </span>
                   <span className="text-gray-400">|</span>
-                  <Badge className={statusColor(vehicle.status)}>{vehicle.status.replace('_', ' ')}</Badge>
+                  <Badge className={statusColor(vehicle.status)}>
+                    {vehicle.status.replace('_', ' ')}
+                  </Badge>
                 </div>
               </div>
             </div>
@@ -238,55 +204,33 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <HeaderItem label="Current company" value={currentCompany} />
               <HeaderItem label="TÜV expiry" value={formatDate(vehicle.tuv_expiry_date)} />
               <HeaderItem label="SP expiry" value={formatDate(vehicle.sp_expiry_date)} />
-              <HeaderItem label="Mileage" value={`${extra.mileage.toLocaleString('de-DE')} km`} />
             </div>
-
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/vehicles/${vehicle.id}/edit`}>
-                <Pencil className="mr-1 h-4 w-4" />
-                Edit
-              </Link>
-            </Button>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle Information</CardTitle>
+          <CardTitle>Vehicle information</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <InfoItem label="Plate number" value={vehicle.plate_number} />
-            <InfoItem label="Vehicle code" value={extra.vehicleCode} />
-            <InfoItem label="VIN" value={extra.vin} />
+            <InfoItem label="Plate" value={vehicle.plate_number} />
             <InfoItem label="Brand" value={vehicle.brand} />
             <InfoItem label="Model" value={vehicle.model} />
             <InfoItem label="Year" value={String(vehicle.year ?? '-')} />
-            <InfoItem label="Mileage" value={`${extra.mileage.toLocaleString('de-DE')} km`} />
+            <InfoItem label="TÜV expiry" value={formatDate(vehicle.tuv_expiry_date)} />
+            <InfoItem label="SP expiry" value={formatDate(vehicle.sp_expiry_date)} />
+            <InfoItem label="Status" value={vehicle.status.replace('_', ' ')} />
+            <InfoItem
+              label="Current driver"
+              value={
+                vehicle.current_driver
+                  ? `${vehicle.current_driver.first_name} ${vehicle.current_driver.last_name}`
+                  : '-'
+              }
+            />
           </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Current Assignment</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {currentAssignment ? (
-            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <InfoItem label="Date" value={formatDate(currentAssignment.work_date)} />
-              <InfoItem label="Driver" value={currentAssignment.driver.name} />
-              <InfoItem label="Company" value={currentAssignment.company_name} />
-              <InfoItem label="Route" value={currentAssignment.notes || 'Standard route'} />
-              <InfoItem label="Start time" value={currentAssignment.start_time} />
-              <InfoItem label="End time" value={currentAssignment.end_time} />
-              <InfoItem label="Status" value={currentAssignment.status} />
-              <InfoItem label="Expected revenue" value={currency(1100)} />
-            </dl>
-          ) : (
-            <p className="text-sm text-gray-500">No active assignment.</p>
-          )}
         </CardContent>
       </Card>
 
@@ -295,203 +239,133 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           <CardTitle>Documents</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Document type</TableHead>
-                <TableHead>File name</TableHead>
-                <TableHead>Expiry date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vehicleDocuments.map((doc) => (
-                <TableRow key={doc.id}>
-                  <TableCell>{doc.documentType}</TableCell>
-                  <TableCell>{doc.fileName}</TableCell>
-                  <TableCell>{formatDate(doc.expiryDate)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      className={
-                        doc.status === 'valid'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : doc.status === 'expiring_soon'
-                            ? 'bg-amber-100 text-amber-700'
-                            : doc.status === 'expired'
-                              ? 'bg-rose-100 text-rose-700'
-                              : 'bg-slate-100 text-slate-700'
-                      }
-                    >
-                      {doc.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <button type="button" className="text-sm font-medium text-blue-600 hover:underline">View</button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Assignment History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Route</TableHead>
-                <TableHead>Revenue</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vehicle.recent_assignments.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{formatDate(item.work_date)}</TableCell>
-                  <TableCell>{item.driver.name}</TableCell>
-                  <TableCell>{item.company_name}</TableCell>
-                  <TableCell>{item.notes || 'Daily route'}</TableCell>
-                  <TableCell>{currency(1050)}</TableCell>
-                  <TableCell>
-                    <Badge className={statusColor(item.status)}>{item.status}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Driver History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Driver</TableHead>
-                <TableHead>From date</TableHead>
-                <TableHead>To date</TableHead>
-                <TableHead>Total days</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {driverHistory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.driver}</TableCell>
-                  <TableCell>{formatDate(item.fromDate)}</TableCell>
-                  <TableCell>{formatDate(item.toDate)}</TableCell>
-                  <TableCell>{item.totalDays}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Service History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Service type</TableHead>
-                <TableHead>Repair company</TableHead>
-                <TableHead>Mileage</TableHead>
-                <TableHead>Cost</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {serviceHistory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{formatDate(item.date)}</TableCell>
-                  <TableCell>{item.serviceType}</TableCell>
-                  <TableCell>{item.repairCompany}</TableCell>
-                  <TableCell>{item.mileage.toLocaleString('de-DE')} km</TableCell>
-                  <TableCell>{currency(item.cost)}</TableCell>
-                  <TableCell>
-                    <Badge className={sectionStatusClass(item.status)}>{item.status}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Handover History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Photo status</TableHead>
-                <TableHead>Damage notes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {handoverHistory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{formatDate(item.date)}</TableCell>
-                  <TableCell>{item.driver}</TableCell>
-                  <TableCell>{item.type}</TableCell>
-                  <TableCell>{item.photoStatus}</TableCell>
-                  <TableCell>{item.damageNotes}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Vehicle Handover History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Previous Vehicle</TableHead>
-                <TableHead>Photo Required</TableHead>
-                <TableHead>Photo Status</TableHead>
-                <TableHead>Damage Notes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vehicleHandoverHistory.length === 0 ? (
+          {documentsError ? (
+            <p className="p-4 text-sm text-gray-500">Documents could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-gray-500">No handover records.</TableCell>
+                  <TableHead>Document type</TableHead>
+                  <TableHead>File name</TableHead>
+                  <TableHead>Expiry date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Uploaded at</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {documents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  documents.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell>{doc.documentType}</TableCell>
+                      <TableCell>{doc.fileName}</TableCell>
+                      <TableCell>{formatDate(doc.expiryDate)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            doc.status === 'valid'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : doc.status === 'expiring_soon'
+                                ? 'bg-amber-100 text-amber-700'
+                                : doc.status === 'expired'
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'bg-slate-100 text-slate-700'
+                          }
+                        >
+                          {doc.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDate(doc.uploadedAt)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Assignment history</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {assignmentsError ? (
+            <p className="p-4 text-sm text-gray-500">Assignments could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Start time</TableHead>
+                  <TableHead>End time</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assignments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  assignments.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell>{formatDate(a.workDate)}</TableCell>
+                      <TableCell>
+                        {a.driver.firstName} {a.driver.lastName}
+                      </TableCell>
+                      <TableCell>{a.company.name}</TableCell>
+                      <TableCell>{a.startTime}</TableCell>
+                      <TableCell>{a.endTime}</TableCell>
+                      <TableCell>
+                        <Badge className={statusColor(a.status)}>{a.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Driver history</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Driver</TableHead>
+                <TableHead>First used</TableHead>
+                <TableHead>Last used</TableHead>
+                <TableHead>Total assignments</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {driverHistory.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                    {t('common.noRecords')}
+                  </TableCell>
                 </TableRow>
               ) : (
-                vehicleHandoverHistory.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{formatDate(item.date)}</TableCell>
-                    <TableCell>{item.driverId}</TableCell>
-                    <TableCell>{item.previousVehicleId || '-'}</TableCell>
-                    <TableCell>{item.photoRequired ? 'Required' : 'Not Required'}</TableCell>
-                    <TableCell>{item.photoStatus.replace(/_/g, ' ')}</TableCell>
-                    <TableCell>{item.damageNotes || 'No damage'}</TableCell>
+                driverHistory.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.driver}</TableCell>
+                    <TableCell>{formatDate(row.firstUsed)}</TableCell>
+                    <TableCell>{formatDate(row.lastUsed)}</TableCell>
+                    <TableCell>{row.totalAssignments}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -502,112 +376,150 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Accident / Damage History</CardTitle>
+          <CardTitle>Handover history</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Damage cost</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accidentHistory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{formatDate(item.date)}</TableCell>
-                  <TableCell>{item.driver}</TableCell>
-                  <TableCell>{item.type}</TableCell>
-                  <TableCell>{currency(item.damageCost)}</TableCell>
-                  <TableCell>
-                    <Badge className={sectionStatusClass(item.status)}>{item.status}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Cargo Damage History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Cargo</TableHead>
-                <TableHead>Owner</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Damage value</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cargoDamageHistory.length === 0 ? (
+          {handoversError ? (
+            <p className="p-4 text-sm text-gray-500">Handovers could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-gray-500">No cargo damage reports.</TableCell>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Photo status</TableHead>
+                  <TableHead>Damage</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ) : (
-                cargoDamageHistory.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{formatDate(item.date)}</TableCell>
-                    <TableCell>{item.cargoName}</TableCell>
-                    <TableCell>{item.cargoOwner}</TableCell>
-                    <TableCell>{item.companyName}</TableCell>
-                    <TableCell>{item.damageValue != null ? currency(item.damageValue) : '-'}</TableCell>
-                    <TableCell>{item.status}</TableCell>
+              </TableHeader>
+              <TableBody>
+                {handovers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  handovers.map((h) => (
+                    <TableRow key={h.id}>
+                      <TableCell>{formatDate(h.handoverDateTime)}</TableCell>
+                      <TableCell>
+                        {h.driver ? `${h.driver.firstName} ${h.driver.lastName}` : '-'}
+                      </TableCell>
+                      <TableCell>{h.handoverType}</TableCell>
+                      <TableCell>{h.photoStatus.replace(/_/g, ' ')}</TableCell>
+                      <TableCell>{h.damageDetected ? h.damageNotes ?? 'Yes' : '-'}</TableCell>
+                      <TableCell>{h.status}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Equipment</CardTitle>
+          <CardTitle>Accident history</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Equipment name</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Condition</TableHead>
-                <TableHead>Last checked</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {equipment.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.quantity}</TableCell>
-                  <TableCell>{item.condition}</TableCell>
-                  <TableCell>{formatDate(item.lastChecked)}</TableCell>
+          {incidentsError ? (
+            <p className="p-4 text-sm text-gray-500">Incidents could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Damage value</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {accidentRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  accidentRows.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{formatDate(item.incidentDateTime)}</TableCell>
+                      <TableCell>
+                        {item.driver
+                          ? `${item.driver.firstName} ${item.driver.lastName}`
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{item.description}</TableCell>
+                      <TableCell>{currency(item.damageValue)}</TableCell>
+                      <TableCell>
+                        {item.status === 'reported' || item.status === 'under_review' ? (
+                          <span className="inline-flex items-center gap-1 text-amber-700">
+                            <AlertTriangle className="h-4 w-4" />
+                            {item.status}
+                          </span>
+                        ) : (
+                          item.status
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Notes</CardTitle>
+          <CardTitle>Cargo damage history</CardTitle>
         </CardHeader>
-        <CardContent>
-          <textarea
-            defaultValue={extra.notes}
-            rows={5}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800"
-          />
+        <CardContent className="p-0">
+          {incidentsError ? (
+            <p className="p-4 text-sm text-gray-500">Cargo damages could not be loaded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Cargo name</TableHead>
+                  <TableHead>Cargo owner</TableHead>
+                  <TableHead>Damage value</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cargoRows.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  cargoRows.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{formatDate(item.incidentDateTime)}</TableCell>
+                      <TableCell>
+                        {item.driver
+                          ? `${item.driver.firstName} ${item.driver.lastName}`
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{item.cargoName ?? '-'}</TableCell>
+                      <TableCell>{item.cargoOwner ?? '-'}</TableCell>
+                      <TableCell>{currency(item.damageValue)}</TableCell>
+                      <TableCell>{item.status}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -626,8 +538,8 @@ function HeaderItem({ label, value }: { label: string; value: string }) {
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-900">{value}</p>
+      <dt className="text-xs uppercase tracking-wide text-gray-500">{label}</dt>
+      <dd className="text-sm font-medium text-gray-900">{value}</dd>
     </div>
   );
 }

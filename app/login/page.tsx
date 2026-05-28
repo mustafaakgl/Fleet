@@ -20,47 +20,6 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-const DEMO_USERS: Record<string, { password: string; user: Parameters<typeof saveAuth>[1] }> = {
-  'admin@fleet.com': {
-    password: 'admin123',
-    user: {
-      id: 'demo-admin',
-      name: 'Admin User',
-      email: 'admin@fleet.com',
-      role: 'admin',
-      department: 'fleet',
-    },
-  },
-  'manager@fleet.com': {
-    password: 'manager123',
-    user: {
-      id: 'demo-manager',
-      name: 'Fleet Manager',
-      email: 'manager@fleet.com',
-      role: 'boss',
-      department: 'fleet',
-    },
-  },
-  'ali@fleet.com': {
-    password: 'driver123',
-    user: {
-      id: 'demo-driver',
-      name: 'Ali Driver',
-      email: 'ali@fleet.com',
-      role: 'office',
-      department: 'driver_ops',
-    },
-  },
-};
-
-function tryDemoSignIn(email: string, password: string): Parameters<typeof saveAuth>[1] | null {
-  const account = DEMO_USERS[email.toLowerCase()];
-  if (!account || account.password !== password) {
-    return null;
-  }
-  return account.user;
-}
-
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -83,16 +42,21 @@ export default function LoginPage() {
     setError(null);
     try {
       const res = await authApi.signIn(data.email, data.password);
-      saveAuth(res.access_token, res.user);
-      router.push('/dashboard');
-    } catch {
-      const demoUser = tryDemoSignIn(data.email, data.password);
-      if (demoUser) {
-        saveAuth('demo-token', demoUser);
-        router.push('/dashboard');
+      const token = res.accessToken ?? res.access_token;
+      if (!token) {
+        setError('Login response did not include access token.');
         return;
       }
-      setError('Invalid email/password or API is unreachable. Please try again.');
+      saveAuth(token, {
+        ...res.user,
+        name: res.user.name ?? res.user.email,
+      });
+      console.log('Token:', localStorage.getItem('accessToken'));
+      const rawUser = localStorage.getItem('user');
+      console.log('User:', rawUser ? JSON.parse(rawUser) : null);
+      router.push('/dashboard');
+    } catch {
+      setError('Invalid email/password. Please try again.');
     }
   }
 
@@ -162,22 +126,12 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-6 pt-4 border-t border-gray-100">
-              <p className="text-xs text-gray-500 text-center mb-2">Demo credentials</p>
-              <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
+              <p className="text-xs text-gray-500 text-center mb-2">Test credentials</p>
+              <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                 <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
                   <p className="font-medium">Admin</p>
                   <p>admin@fleet.com</p>
                   <p className="text-gray-400">admin123</p>
-                </div>
-                <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                  <p className="font-medium">Manager</p>
-                  <p>manager@fleet.com</p>
-                  <p className="text-gray-400">manager123</p>
-                </div>
-                <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                  <p className="font-medium">Driver</p>
-                  <p>ali@fleet.com</p>
-                  <p className="text-gray-400">driver123</p>
                 </div>
               </div>
             </div>

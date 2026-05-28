@@ -1,8 +1,10 @@
 import { AuthUser } from './types';
 import { jwtDecode } from 'jwt-decode';
 
-const TOKEN_KEY = 'fleet_access_token';
-const USER_KEY = 'fleet_user';
+const TOKEN_KEY = 'accessToken';
+const USER_KEY = 'user';
+const LEGACY_TOKEN_KEY = 'fleet_access_token';
+const LEGACY_USER_KEY = 'fleet_user';
 
 export const MOCK_CURRENT_USER: AuthUser = {
   id: 'u1',
@@ -23,24 +25,39 @@ interface JwtPayload {
 
 export function saveAuth(token: string, user: AuthUser): void {
   if (typeof window === 'undefined') return;
-  const normalizedUser = normalizeUserRole(user);
+  const normalizedUser = normalizeUserRole({
+    ...user,
+    name: user.name ?? user.email,
+  });
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
+  // Keep legacy keys for backward compatibility during transition.
+  localStorage.setItem(LEGACY_TOKEN_KEY, token);
+  localStorage.setItem(LEGACY_USER_KEY, JSON.stringify(normalizedUser));
 }
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(LEGACY_TOKEN_KEY);
 }
 
 export function getUser(): AuthUser | null {
   if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return MOCK_CURRENT_USER;
+  const raw = localStorage.getItem(USER_KEY) ?? localStorage.getItem(LEGACY_USER_KEY);
+  if (!raw) return null;
   try {
-    return normalizeUserRole(JSON.parse(raw) as AuthUser);
+    const parsed = JSON.parse(raw) as Partial<AuthUser>;
+    if (!parsed.email || !parsed.role) return null;
+    return normalizeUserRole({
+      id: parsed.id ?? 'unknown',
+      email: parsed.email,
+      role: parsed.role,
+      name: parsed.name ?? parsed.email,
+      department: parsed.department,
+      language: parsed.language,
+    });
   } catch {
-    return MOCK_CURRENT_USER;
+    return null;
   }
 }
 
@@ -70,6 +87,8 @@ export function clearAuth(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_USER_KEY);
 }
 
 export function isTokenValid(): boolean {
@@ -91,5 +110,5 @@ export function isTokenValid(): boolean {
 }
 
 export function isAuthenticated(): boolean {
-  return isTokenValid();
+  return isTokenValid() && getUser() !== null;
 }

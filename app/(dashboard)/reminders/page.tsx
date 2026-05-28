@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, CheckCheck, RefreshCw } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,58 +10,7 @@ import { remindersApi } from '@/lib/api';
 import type { Reminder, ReminderType } from '@/lib/types';
 import { formatDate, daysUntil } from '@/lib/utils';
 
-type ReminderCategory = 'service' | 'vehicle' | 'contact_renewals';
-type TrackedDocType = 'license' | 'passport' | 'ruhsat';
-
-interface TrackedDocument {
-  id: string;
-  person_name: string;
-  type: TrackedDocType;
-  expiry_date: string;
-}
-
-interface ServiceReminderRow {
-  id: string;
-  vehicle: string;
-  service_task: string;
-  completed_time: string;
-}
-
-const SERVICE_REMINDERS: ServiceReminderRow[] = [
-  {
-    id: 'sr-001',
-    vehicle: 'Mercedes-Benz Actros 1845',
-    service_task: 'Tire Rotation',
-    completed_time: '2026-05-12',
-  },
-  {
-    id: 'sr-002',
-    vehicle: 'MAN TGX 18.510',
-    service_task: 'Engine Oil Change',
-    completed_time: '2026-05-08',
-  },
-  {
-    id: 'sr-003',
-    vehicle: 'Scania R 450',
-    service_task: 'Filter Replacement',
-    completed_time: '2026-04-29',
-  },
-  {
-    id: 'sr-004',
-    vehicle: 'Volvo FH16',
-    service_task: 'Brake Inspection',
-    completed_time: '2026-04-21',
-  },
-];
-
-const TRACKED_DOCUMENTS: TrackedDocument[] = [
-  { id: 'drv-101-license', person_name: 'Ali Yilmaz', type: 'license', expiry_date: '2026-08-14' },
-  { id: 'drv-101-passport', person_name: 'Ali Yilmaz', type: 'passport', expiry_date: '2026-10-20' },
-  { id: 'drv-101-ruhsat', person_name: 'Ali Yilmaz', type: 'ruhsat', expiry_date: '2026-07-15' },
-  { id: 'drv-102-license', person_name: 'Mehmet Demir', type: 'license', expiry_date: '2026-09-01' },
-  { id: 'drv-102-passport', person_name: 'Mehmet Demir', type: 'passport', expiry_date: '2026-11-05' },
-  { id: 'drv-102-ruhsat', person_name: 'Mehmet Demir', type: 'ruhsat', expiry_date: '2026-08-10' },
-];
+type ReminderCategory = 'all' | 'vehicle' | 'contact_renewals' | 'service';
 
 const typeLabels: Record<ReminderType, string> = {
   license_expiry: 'License Expiry',
@@ -88,113 +37,68 @@ function DaysChip({ date }: { date: string }) {
   );
 }
 
-function reminderTypeFromDocType(type: TrackedDocType): ReminderType {
-  if (type === 'license') return 'license_expiry';
-  if (type === 'passport') return 'passport_expiry';
-  return 'custom';
-}
-
-function noticeWindow(days: number): number | null {
-  if (days < 0 || days > 90) return null;
-  if (days <= 30) return 30;
-  if (days <= 60) return 60;
-  return 90;
-}
-
-function getReminderSubcategory(reminder: Reminder): ReminderCategory {
+function getReminderCategory(reminder: Reminder): ReminderCategory {
   if (reminder.type === 'tuv_expiry' || reminder.type === 'sp_expiry') return 'vehicle';
-  if (reminder.type === 'license_expiry' || reminder.type === 'passport_expiry' || reminder.type === 'contract_expiry') {
+  if (
+    reminder.type === 'license_expiry' ||
+    reminder.type === 'passport_expiry' ||
+    reminder.type === 'contract_expiry'
+  ) {
     return 'contact_renewals';
   }
-
   if (reminder.type === 'custom') {
     const text = `${reminder.title} ${reminder.message}`.toLowerCase();
-    if (text.includes('ruhsat') || text.includes('vehicle') || text.includes('tuv') || text.includes('sp')) {
+    if (
+      text.includes('ruhsat') ||
+      text.includes('vehicle') ||
+      text.includes('tuv') ||
+      text.includes('sp') ||
+      text.includes('service')
+    ) {
       return 'vehicle';
     }
     return 'contact_renewals';
   }
-
   return 'service';
-}
-
-function buildLocalReminders(selectedStatus: string, category: ReminderCategory, resolvedIds: Set<string>): Reminder[] {
-  return TRACKED_DOCUMENTS
-    .map((doc): Reminder | null => {
-      const days = daysUntil(doc.expiry_date);
-      if (days === null) return null;
-
-      const notifyBefore = noticeWindow(days);
-      if (notifyBefore === null) return null;
-
-      const id = `local-${doc.id}`;
-      const reminderStatus = resolvedIds.has(id) ? 'resolved' : 'open';
-      if (selectedStatus && selectedStatus !== reminderStatus) return null;
-
-      const typeLabel = doc.type === 'license' ? 'Lisans' : doc.type === 'passport' ? 'Pasaport' : 'Ruhsat';
-      const monthLabel = notifyBefore === 30 ? '1 ay' : notifyBefore === 60 ? '2 ay' : '3 ay';
-
-      const reminder: Reminder = {
-        id,
-        type: reminderTypeFromDocType(doc.type),
-        title: `${typeLabel} bitis uyarisi`,
-        message: `${doc.person_name} icin ${typeLabel.toLowerCase()} belgesinin bitisine ${monthLabel} kaldi.`,
-        due_date: doc.expiry_date,
-        notify_before_days: notifyBefore,
-        status: reminderStatus,
-        related_entity_type: 'driver',
-        related_entity_id: doc.id,
-        related_entity_name: doc.person_name,
-      };
-
-      return getReminderSubcategory(reminder) === category ? reminder : null;
-    })
-    .filter((item): item is Reminder => item !== null);
 }
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [status, setStatus] = useState('open');
-  const [category, setCategory] = useState<ReminderCategory>('service');
+  const [category, setCategory] = useState<ReminderCategory>('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [resolvedLocalIds, setResolvedLocalIds] = useState<Set<string>>(new Set());
 
   const fetchReminders = useCallback(async () => {
     setLoading(true);
-    let apiReminders: Reminder[] = [];
+    setError(null);
     try {
       const res = await remindersApi.list({ status: status || undefined });
-      apiReminders = Array.isArray(res) ? res : [];
-    } catch {
-      apiReminders = [];
+      setReminders(Array.isArray(res) ? res : []);
+    } catch (e) {
+      setReminders([]);
+      setError(e instanceof Error ? e.message : 'Failed to load reminders');
     } finally {
-      const localReminders = buildLocalReminders(status, category, resolvedLocalIds);
-      const categoryFilteredApi = apiReminders.filter((reminder) => getReminderSubcategory(reminder) === category);
-      setReminders([...localReminders, ...categoryFilteredApi]);
       setLoading(false);
     }
-  }, [status, category, resolvedLocalIds]);
+  }, [status]);
 
   useEffect(() => {
     fetchReminders();
   }, [fetchReminders]);
 
-  async function handleResolve(id: string) {
-    if (id.startsWith('local-')) {
-      setResolvedLocalIds((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
-      return;
-    }
+  const visibleReminders = useMemo(() => {
+    if (category === 'all') return reminders;
+    return reminders.filter((r) => getReminderCategory(r) === category);
+  }, [reminders, category]);
 
+  async function handleResolve(id: string) {
     try {
       await remindersApi.resolve(id);
       setReminders((prev) => prev.filter((r) => r.id !== id));
-    } catch {
-      // handle error
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Failed to resolve');
     }
   }
 
@@ -203,8 +107,8 @@ export default function RemindersPage() {
     try {
       await remindersApi.generate();
       await fetchReminders();
-    } catch {
-      // handle error
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Failed to generate');
     } finally {
       setGenerating(false);
     }
@@ -212,14 +116,13 @@ export default function RemindersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Bell className="w-6 h-6 text-red-500" />
           <h1 className="text-2xl font-bold text-gray-900">Reminders</h1>
           {!loading && (
             <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
-              {reminders.length}
+              {visibleReminders.length}
             </span>
           )}
         </div>
@@ -229,15 +132,14 @@ export default function RemindersPage() {
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
-            variant={category === 'service' ? 'default' : 'outline'}
-            onClick={() => setCategory('service')}
+            variant={category === 'all' ? 'default' : 'outline'}
+            onClick={() => setCategory('all')}
           >
-            Service Reminders
+            All
           </Button>
           <Button
             size="sm"
@@ -253,6 +155,13 @@ export default function RemindersPage() {
           >
             Contact Renewals
           </Button>
+          <Button
+            size="sm"
+            variant={category === 'service' ? 'default' : 'outline'}
+            onClick={() => setCategory('service')}
+          >
+            Service
+          </Button>
         </div>
 
         <div className="flex gap-3">
@@ -264,53 +173,41 @@ export default function RemindersPage() {
         </div>
       </div>
 
-      {/* Reminders list */}
-      {category === 'service' ? (
-        <Card>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-left">
-                  <th className="px-4 py-3 font-semibold text-gray-700">Vehicle</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Service Task</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Completed Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SERVICE_REMINDERS.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 last:border-b-0">
-                    <td className="px-4 py-3 font-medium text-gray-900">{row.vehicle}</td>
-                    <td className="px-4 py-3 text-gray-700">{row.service_task}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatDate(row.completed_time)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      ) : loading ? (
+      {loading ? (
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
         </div>
-      ) : reminders.length === 0 ? (
+      ) : error ? (
+        <Card>
+          <CardContent className="p-6 text-center text-sm text-gray-500">
+            <p>{error}</p>
+            <Button variant="outline" className="mt-3" onClick={fetchReminders}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : visibleReminders.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
           <Bell className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p>No reminders found.</p>
+          {category === 'service' && (
+            <p className="text-xs mt-2">Service reminders are generated from vehicle maintenance records.</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          {reminders.map((r) => {
+          {visibleReminders.map((r) => {
             const days = daysUntil(r.due_date);
             const urgency =
               days === null
                 ? 'border-gray-200'
                 : days < 0
-                ? 'border-red-300 bg-red-50'
-                : days <= 30
-                ? 'border-red-200 bg-red-50'
-                : days <= 60
-                ? 'border-yellow-200 bg-yellow-50'
-                : 'border-green-200 bg-green-50';
+                  ? 'border-red-300 bg-red-50'
+                  : days <= 30
+                    ? 'border-red-200 bg-red-50'
+                    : days <= 60
+                      ? 'border-yellow-200 bg-yellow-50'
+                      : 'border-green-200 bg-green-50';
 
             return (
               <Card key={r.id} className={`border-l-4 ${urgency}`}>
@@ -346,11 +243,7 @@ export default function RemindersPage() {
                         {r.status}
                       </Badge>
                       {r.status === 'open' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleResolve(r.id)}
-                        >
+                        <Button size="sm" variant="outline" onClick={() => handleResolve(r.id)}>
                           <CheckCheck className="w-3.5 h-3.5 mr-1" />
                           Resolve
                         </Button>

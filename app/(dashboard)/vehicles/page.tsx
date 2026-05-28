@@ -15,7 +15,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { vehiclesApi } from '@/lib/api';
 import type { Vehicle } from '@/lib/types';
-import { filterMockVehicles } from '@/lib/mock-data';
 import { formatDate, statusColor } from '@/lib/utils';
 
 export default function VehiclesPage() {
@@ -30,24 +29,20 @@ export default function VehiclesPage() {
     return rawStatus === 'in_use' ? 'active' : rawStatus;
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const limit = 20;
 
   const fetchVehicles = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await vehiclesApi.list({ search, status: status || undefined, page, limit });
-      if (res.total > 0 || res.data.length > 0) {
-        setVehicles(res.data);
-        setTotal(res.total);
-      } else {
-        const mock = filterMockVehicles(search, status, page, limit);
-        setVehicles(mock.data);
-        setTotal(mock.total);
-      }
-    } catch {
-      const mock = filterMockVehicles(search, status, page, limit);
-      setVehicles(mock.data);
-      setTotal(mock.total);
+      setVehicles(res.data);
+      setTotal(res.total);
+    } catch (e) {
+      setVehicles([]);
+      setTotal(0);
+      setError(e instanceof Error ? e.message : 'Failed to load vehicles');
     } finally {
       setLoading(false);
     }
@@ -96,8 +91,7 @@ export default function VehiclesPage() {
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
           <option value="broken">Broken</option>
-          <option value="in_service">In Service</option>
-          <option value="sold">Sold</option>
+          <option value="maintenance">Maintenance</option>
         </Select>
       </div>
 
@@ -114,6 +108,16 @@ export default function VehiclesPage() {
                 <Skeleton className="h-9" />
               </div>
             ))}
+          </div>
+        ) : error ? (
+          <div className="p-4">
+            <EmptyState
+              icon={Truck}
+              title="Failed to load vehicles"
+              subtitle={error}
+              actionLabel="Retry"
+              onAction={fetchVehicles}
+            />
           </div>
         ) : vehicles.length === 0 ? (
           <div className="p-4">

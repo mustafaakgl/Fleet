@@ -14,7 +14,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { driversApi } from '@/lib/api';
 import type { Driver } from '@/lib/types';
-import { filterMockDrivers, mockDriverDetails } from '@/lib/mock-data';
 import { fullName } from '@/lib/utils';
 
 export default function DriversPage() {
@@ -26,25 +25,21 @@ export default function DriversPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(() => searchParams.get('status') || '');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const limit = 20;
 
   const fetchDrivers = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await driversApi.list({ search, status: status || undefined, page, limit });
-      if (res.total > 0 || res.data.length > 0) {
-        setDrivers(res.data);
-        setTotal(res.total);
-      } else {
-        const mock = filterMockDrivers(search, status, page, limit);
-        setDrivers(mock.data);
-        setTotal(mock.total);
-      }
-    } catch {
-      const mock = filterMockDrivers(search, status, page, limit);
-      setDrivers(mock.data);
-      setTotal(mock.total);
+      setDrivers(res.data);
+      setTotal(res.total);
+    } catch (e) {
+      setDrivers([]);
+      setTotal(0);
+      setError(e instanceof Error ? e.message : 'Failed to load drivers');
     } finally {
       setLoading(false);
     }
@@ -56,15 +51,6 @@ export default function DriversPage() {
   }, [fetchDrivers]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
-
-  function getCurrentInfo(driverId: string) {
-    const detail = mockDriverDetails[driverId];
-    const assignment = detail?.recent_assignments?.[0];
-    return {
-      vehicle: assignment?.vehicle.plate_number ?? '—',
-      company: assignment?.company_name ?? '—',
-    };
-  }
 
   function riskDot(risk: string) {
     const colors: Record<string, string> = {
@@ -137,6 +123,16 @@ export default function DriversPage() {
               </div>
             ))}
           </div>
+        ) : error ? (
+          <div className="p-4">
+            <EmptyState
+              icon={Users}
+              title="Failed to load drivers"
+              subtitle={error}
+              actionLabel="Retry"
+              onAction={fetchDrivers}
+            />
+          </div>
         ) : drivers.length === 0 ? (
           <div className="p-4">
             <EmptyState
@@ -188,8 +184,8 @@ export default function DriversPage() {
                 <TableRow key={d.id}>
                   <TableCell className="font-medium text-gray-900">{fullName(d.first_name, d.last_name)}</TableCell>
                   <TableCell>{d.phone ?? '—'}</TableCell>
-                  <TableCell>{getCurrentInfo(d.id).vehicle}</TableCell>
-                  <TableCell>{getCurrentInfo(d.id).company}</TableCell>
+                  <TableCell>{d.current_vehicle_plate ?? '—'}</TableCell>
+                  <TableCell>{d.current_company_name ?? '—'}</TableCell>
                   <TableCell>{d.accident_count}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
