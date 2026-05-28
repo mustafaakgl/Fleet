@@ -293,7 +293,7 @@ export default function DashboardPage() {
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {summary.vehicleHealth.map((v) => (
-              <Link key={v.vehicleId} href={`/vehicles/${v.vehicleId}`} className="block">
+              <Link key={`${v.vehicleId}-${v.issue}`} href={`/vehicles/${v.vehicleId}`} className="block">
                 <Card className="cursor-pointer border-yellow-200 transition hover:shadow-sm">
                   <CardContent className="space-y-1 p-4 text-sm">
                     <p className="font-semibold text-slate-900">{v.plateNumber}</p>

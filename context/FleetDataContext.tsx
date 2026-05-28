@@ -1,8 +1,16 @@
 'use client';
 
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { getDriverRiskScore, type DriverRiskScore } from '@/lib/utils';
-import { findPreviousVehicleFromAssignments, upsertVehicleHandover } from '@/lib/vehicle-handovers';
+import {
+  driversApi,
+  assignmentsApi,
+  calendarApi,
+  transportRequestsApi,
+  leaveRequestsApi,
+  morningCheckinsApi,
+  companyEmailsApi,
+} from '@/lib/api';
 
 export type CalendarStatusCode = 'UT' | 'KT' | 'FT' | 'AT' | 'HO' | 'GR' | 'SCH';
 export type CalendarStatusSource = 'manual' | 'request' | 'assignment';
@@ -651,7 +659,7 @@ const initialRevenueData: RevenueData = {
 };
 
 export function FleetDataProvider({ children }: { children: React.ReactNode }) {
-  const [drivers] = useState<FleetDriver[]>(initialDrivers);
+  const [drivers, setDrivers] = useState<FleetDriver[]>(initialDrivers);
   const [calendarStatuses, setCalendarStatuses] = useState<FleetCalendarStatus[]>(initialCalendarStatuses);
   const [requests, setRequests] = useState<FleetRequest[]>(initialRequests);
   const [assignments, setAssignments] = useState<FleetAssignment[]>(initialAssignments);
@@ -662,6 +670,216 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
   const [vehicleAssignmentHistory, setVehicleAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [companyAssignmentHistory, setCompanyAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [revenueData] = useState<RevenueData>(initialRevenueData);
+
+  // Hydrate from backend on mount. Mock initial state remains as fallback.
+  useEffect(() => {
+    let cancelled = false;
+
+    // Build a lookup of driver department from the initial mock (backend has no department field).
+    const departmentByDriverId = new Map<string, string>(
+      initialDrivers.map((d) => [d.id, d.department]),
+    );
+
+    const mapAssignmentStatus = (s: string): PlanningStatus => {
+      if (s === 'in_progress') return 'In Progress';
+      if (s === 'cancelled' || s === 'completed') return 'Unavailable';
+      return 'Planned';
+    };
+
+    void (async () => {
+      try {
+        const driversPage = await driversApi.list({ limit: 200 });
+        if (cancelled) return;
+        const fleetDrivers: FleetDriver[] = driversPage.data.map((d) => ({
+          id: d.id,
+          name: `${d.first_name} ${d.last_name}`.trim(),
+          department: departmentByDriverId.get(d.id) ?? 'Operations',
+          accidentCount: d.accident_count ?? 0,
+          riskScore: getDriverRiskScore(d.accident_count ?? 0),
+        }));
+        setDrivers(fleetDrivers);
+      } catch {
+        // Keep mock fallback
+      }
+
+      try {
+        const now = new Date();
+        const from = formatDate(addDays(now, -7));
+        const to = formatDate(addDays(now, 7));
+        const events = await calendarApi.list({ from, to });
+        if (cancelled) return;
+        const allowed = new Set(['UT', 'KT', 'FT', 'AT', 'HO', 'GR', 'SCH']);
+        const sourceMap: Record<string, CalendarStatusSource> = {
+          manual: 'manual',
+          leave: 'request',
+          assignment: 'assignment',
+        };
+        const fleetCalendar: FleetCalendarStatus[] = events
+          .filter((e) => allowed.has(e.status))
+          .map((e) => ({
+            id: e.id,
+            driverId: e.driverId,
+            date: (e.date ?? '').slice(0, 10),
+            status: e.status as CalendarStatusCode,
+            source: sourceMap[e.source] ?? 'manual',
+            requestId: e.requestId ?? undefined,
+            assignmentId: e.assignmentId ?? undefined,
+          }));
+        setCalendarStatuses(fleetCalendar);
+      } catch {
+        // Keep mock fallback
+      }
+
+      try {
+        const apiAssignments = await assignmentsApi.list();
+        if (cancelled) return;
+        const fleetAssignments: FleetAssignment[] = apiAssignments.data.map((a) => ({
+          id: a.id,
+          date: (a.work_date ?? '').slice(0, 10),
+          driverId: a.driver.id,
+          department: departmentByDriverId.get(a.driver.id) ?? 'Operations',
+          availability: 'Available',
+          vehicle: a.vehicle.plate_number,
+          company: a.company_name,
+          routeJob: a.notes ?? 'Daily route',
+          startTime: a.start_time,
+          endTime: a.end_time,
+          notes: a.notes ?? '',
+          status: mapAssignmentStatus(a.status),
+          source: 'manual',
+          expectedRevenue: 0,
+        }));
+        setAssignments(fleetAssignments);
+      } catch {
+        // Keep mock fallback
+      }
+
+      try {
+        const apiTransport = await transportRequestsApi.list();
+        if (cancelled) return;
+        const fleetTransport: TransportRequest[] = apiTransport.map((t) => ({
+          id: t.id,
+          driverId: t.driverId,
+          date: (t.requestedDate ?? '').slice(0, 10),
+          submittedAt: t.requestedDate ?? '',
+          vehicleId: t.vehicleId,
+          companyId: t.companyId,
+          cargoName: t.cargoName,
+          cargoOwner: t.cargoOwner,
+          pickupAddress: t.pickupAddress,
+          deliveryAddress: t.deliveryAddress,
+          startTime: t.startTime,
+          endTime: t.endTime,
+          routeName: undefined,
+          notes: t.notes ?? undefined,
+          status: t.status,
+          conflictReason: t.conflictReason ?? undefined,
+          source: 'mobile_app',
+        }));
+        setTransportRequests(fleetTransport);
+      } catch {
+        // Keep mock fallback
+      }
+
+      try {
+        const apiCheckins = await morningCheckinsApi.list({ date: formatDate(now) });
+        if (cancelled) return;
+        const statusMap: Record<string, MorningCheckinStatus> = {
+          confirmed: 'Confirmed',
+          waiting_for_review: 'Waiting for Review',
+          missing_vehicle_plate: 'Missing Vehicle Plate',
+          missing_company: 'Missing Company',
+          conflict: 'Conflict',
+          added_to_einsatzplan: 'Added to Einsatzplan',
+          rejected: 'Rejected',
+        };
+        const fleetCheckins: MorningCheckin[] = apiCheckins.map((c) => ({
+          id: c.id,
+          driverId: c.driver_id,
+          date: (c.date ?? '').slice(0, 10),
+          submittedAt: c.submitted_at ?? '',
+          vehiclePlate: c.vehicle_plate ?? '',
+          company: c.company_name ?? '',
+          status: statusMap[c.status] ?? 'Waiting for Review',
+          conflictReason: c.conflict_reason ?? undefined,
+          source: 'mobile_app',
+          notes: c.notes,
+        }));
+        setMorningCheckins(fleetCheckins);
+      } catch {
+        // Keep mock fallback
+      }
+
+      try {
+        const apiLeave = await leaveRequestsApi.list();
+        if (cancelled) return;
+        const reqStatusMap: Record<string, RequestStatus> = {
+          pending: 'Pending',
+          approved: 'Approved',
+          rejected: 'Rejected',
+          cancelled: 'Cancelled',
+          needs_review: 'Needs Review',
+        };
+        const typeMap: Record<string, RequestType> = {
+          vacation: 'Urlaub beantragen',
+          sick_leave: 'Krankheit melden',
+          training: 'Sonstige Abwesenheit',
+          business_trip: 'Sonstige Abwesenheit',
+          doctor_appointment: 'Sonstige Abwesenheit',
+          special_leave: 'Sonstige Abwesenheit',
+          overtime_compensation: 'Sonstige Abwesenheit',
+          free_day: 'Sonstige Abwesenheit',
+          other: 'Sonstige Abwesenheit',
+        };
+        const fleetRequests: FleetRequest[] = apiLeave.map((r) => ({
+          id: r.id,
+          driverId: r.driverId,
+          driverName: r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : r.driverId,
+          department: departmentByDriverId.get(r.driverId) ?? 'Operations',
+          type: typeMap[r.type] ?? 'Sonstige Abwesenheit',
+          dateFrom: (r.startDate ?? '').slice(0, 10),
+          dateTo: (r.endDate ?? '').slice(0, 10),
+          status: reqStatusMap[r.status] ?? 'Pending',
+          responsibleDepartment: 'HR',
+          submittedAt: r.createdAt ?? new Date().toISOString(),
+          notes: r.reason ?? '',
+          uploadedDocument: '',
+        }));
+        setRequests(fleetRequests);
+      } catch {
+        // Keep mock fallback
+      }
+
+      try {
+        const apiEmails = await companyEmailsApi.list();
+        if (cancelled) return;
+        const draftStatusMap: Record<string, CompanyEmailDraft['status']> = {
+          draft_ready: 'draft_ready',
+          needs_review: 'needs_review',
+          draft: 'needs_review',
+        };
+        const fleetEmails: CompanyEmailDraft[] = apiEmails
+          .filter((e) => e.status === 'draft_ready' || e.status === 'needs_review' || e.status === 'draft')
+          .map((e) => ({
+            id: e.id,
+            companyId: e.companyId,
+            date: (e.date ?? '').slice(0, 10),
+            subject: e.subject,
+            body: e.body,
+            status: draftStatusMap[e.status] ?? 'needs_review',
+            lastUpdatedAt: e.lastSentAt ?? new Date().toISOString(),
+          }));
+        setCompanyEmailDrafts(fleetEmails);
+      } catch {
+        // Keep mock fallback
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function toMinutes(value: string | undefined) {
     if (!value || !/^\d{2}:\d{2}$/.test(value)) return null;
@@ -831,6 +1049,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       ),
     );
 
+    void transportRequestsApi.approve(requestId).catch((e) => {
+      console.error('Failed to persist approveTransportRequest', e);
+    });
+
     return { success: true, message: 'Transport request approved and added to Einsatzplan.' };
   }
 
@@ -842,6 +1064,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
           : item,
       ),
     );
+
+    void transportRequestsApi.reject(requestId).catch((e) => {
+      console.error('Failed to persist rejectTransportRequest', e);
+    });
   }
 
   function validateMorningCheckinInternal(
@@ -927,6 +1153,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       ),
     );
 
+    void leaveRequestsApi.approve(requestId).catch((e) => {
+      console.error('Failed to persist approveRequest', e);
+    });
+
     return { calendarUpdated };
   }
 
@@ -943,6 +1173,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     );
 
     setCalendarStatuses((current) => current.filter((entry) => entry.requestId !== requestId));
+
+    void leaveRequestsApi.reject(requestId).catch((e) => {
+      console.error('Failed to persist rejectRequest', e);
+    });
   }
 
   function cancelRequest(requestId: string) {
@@ -958,6 +1192,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     );
 
     setCalendarStatuses((current) => current.filter((entry) => entry.requestId !== requestId));
+
+    void leaveRequestsApi.cancel(requestId).catch((e) => {
+      console.error('Failed to persist cancelRequest', e);
+    });
   }
 
   function moveRequestToNeedsReview(requestId: string) {
@@ -971,6 +1209,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
           : item,
       ),
     );
+
+    void leaveRequestsApi.needsReview(requestId).catch((e) => {
+      console.error('Failed to persist moveRequestToNeedsReview', e);
+    });
   }
 
   function getCalendarStatusEntry(driverId: string, date: string) {
@@ -1035,6 +1277,21 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
         };
       }),
     );
+
+    // Persist a minimal subset of fields to backend.
+    const patch: Record<string, unknown> = {};
+    if (updates.notes !== undefined) patch.notes = updates.notes;
+    if (updates.startTime !== undefined) patch.start_time = updates.startTime;
+    if (updates.endTime !== undefined) patch.end_time = updates.endTime;
+    if (updates.cargoName !== undefined) patch.cargo_name = updates.cargoName;
+    if (updates.cargoOwner !== undefined) patch.cargo_owner = updates.cargoOwner;
+    if (updates.pickupAddress !== undefined) patch.pickup_address = updates.pickupAddress;
+    if (updates.deliveryAddress !== undefined) patch.delivery_address = updates.deliveryAddress;
+    if (Object.keys(patch).length > 0) {
+      void assignmentsApi.update(assignmentId, patch).catch((e) => {
+        console.error('Failed to persist updateAssignment', e);
+      });
+    }
   }
 
   function validateMorningCheckin(checkin: MorningCheckin) {
@@ -1064,11 +1321,6 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     const company = checkin.company?.trim() ?? '';
     const vehiclePlate = checkin.vehiclePlate?.trim() ?? '';
     const expectedRevenue = COMPANY_DEFAULT_REVENUE[company] ?? 0;
-    const previousVehicle = findPreviousVehicleFromAssignments(
-      assignments.map((item) => ({ driverId: item.driverId, date: item.date, vehicle: item.vehicle })),
-      checkin.driverId,
-      checkin.date,
-    );
 
     setAssignments((current) => {
       const existing = current.find(
@@ -1127,14 +1379,11 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       ),
     );
 
-    upsertVehicleHandover({
-      id: `vh-auto-${checkin.id}`,
-      driverId: checkin.driverId,
-      vehicleId: vehiclePlate,
-      previousVehicleId: previousVehicle,
-      date: checkin.date,
-      time: checkin.submittedAt,
-      handoverType: 'pickup',
+    // Vehicle handover persistence happens server-side via
+    // morningCheckinsApi.addToEinsatzplan (creates assignment + calendar event).
+
+    void morningCheckinsApi.addToEinsatzplan(checkinId).catch((e) => {
+      console.error('Failed to persist addCheckinToEinsatzplan', e);
     });
 
     return { success: true, message: 'Check-in added to Einsatzplan.' };
@@ -1151,6 +1400,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
           : item,
       ),
     );
+
+    void morningCheckinsApi.update(checkinId, { status: 'rejected' }).catch((e) => {
+      console.error('Failed to persist rejectMorningCheckin', e);
+    });
   }
 
   function updateMorningCheckin(checkinId: string, data: Partial<MorningCheckin>) {
@@ -1165,22 +1418,7 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
 
         const validation = validateMorningCheckinInternal(merged, assignments);
 
-        if (merged.vehiclePlate?.trim()) {
-          const previousVehicle = findPreviousVehicleFromAssignments(
-            assignments.map((entry) => ({ driverId: entry.driverId, date: entry.date, vehicle: entry.vehicle })),
-            merged.driverId,
-            merged.date,
-          );
-          upsertVehicleHandover({
-            id: `vh-auto-${merged.id}`,
-            driverId: merged.driverId,
-            vehicleId: merged.vehiclePlate,
-            previousVehicleId: previousVehicle,
-            date: merged.date,
-            time: merged.submittedAt,
-            handoverType: 'pickup',
-          });
-        }
+        // Vehicle handover is created server-side when the check-in is added to Einsatzplan.
 
         return {
           ...merged,
@@ -1189,6 +1427,17 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
         };
       }),
     );
+
+    // Persist a minimal subset of fields to backend.
+    const patch: Record<string, string> = {};
+    if (data.vehiclePlate !== undefined) patch.vehicle_plate = data.vehiclePlate;
+    if (data.company !== undefined) patch.company_name = data.company;
+    if (data.notes !== undefined) patch.notes = data.notes;
+    if (Object.keys(patch).length > 0) {
+      void morningCheckinsApi.update(checkinId, patch).catch((e) => {
+        console.error('Failed to persist updateMorningCheckin', e);
+      });
+    }
   }
 
   const value = useMemo<FleetDataContextValue>(

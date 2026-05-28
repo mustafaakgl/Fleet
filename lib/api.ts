@@ -19,6 +19,7 @@ import type {
   TransportRequest,
   CompanyEmail,
   LeaveRequest,
+  MorningCheckin,
   ServiceRecord,
   Reminder,
   Notification,
@@ -213,6 +214,44 @@ export const assignmentsApi = {
     api.post(`/assignments/${id}/cancel`).then((r) => r.data),
 };
 
+// ─── Morning check-ins ───────────────────────────────────────────────────────
+
+export interface MorningCheckinListParams {
+  date?: string;
+  driver_id?: string;
+  status?: string;
+}
+
+export const morningCheckinsApi = {
+  list: (params?: MorningCheckinListParams) =>
+    api.get<MorningCheckin[]>('/morning-checkins', { params }).then((r) => r.data),
+
+  getById: (id: string) =>
+    api.get<MorningCheckin>(`/morning-checkins/${id}`).then((r) => r.data),
+
+  create: (data: {
+    driver_id: string;
+    date: string;
+    vehicle_plate?: string;
+    company_name?: string;
+    status?: string;
+    notes?: string;
+  }) => api.post<MorningCheckin>('/morning-checkins', data).then((r) => r.data),
+
+  update: (id: string, data: {
+    vehicle_plate?: string;
+    company_name?: string;
+    status?: string;
+    conflict_reason?: string;
+    notes?: string;
+  }) => api.patch<MorningCheckin>(`/morning-checkins/${id}`, data).then((r) => r.data),
+
+  addToEinsatzplan: (id: string) =>
+    api.post<{ checkin: MorningCheckin; assignment: unknown }>(
+      `/morning-checkins/${id}/add-to-einsatzplan`,
+    ).then((r) => r.data),
+};
+
 // ─── Service records (vehicle maintenance history) ───────────────────────────
 
 export interface ServiceRecordListParams {
@@ -247,6 +286,67 @@ export const serviceRecordsApi = {
 
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/service-records/${id}`).then((r) => r.data),
+};
+
+// ─── Vehicle handovers ───────────────────────────────────────────────────────
+
+export interface VehicleHandoverRecord {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  previousVehicleId?: string | null;
+  assignmentId?: string | null;
+  handoverType: 'pickup' | 'return';
+  handoverDateTime: string;
+  photoRequired: boolean;
+  photoStatus: 'not_required' | 'missing' | 'uploaded' | 'approved' | 'rejected';
+  damageDetected: boolean;
+  damageNotes?: string | null;
+  status: 'pending' | 'completed';
+  notes?: string | null;
+  driver?: { id: string; firstName: string; lastName: string };
+  vehicle?: { id: string; plateNumber: string };
+}
+
+export const vehicleHandoversApi = {
+  list: () =>
+    api.get<VehicleHandoverRecord[]>('/vehicle-handovers').then((r) => r.data),
+
+  getById: (id: string) =>
+    api.get<VehicleHandoverRecord>(`/vehicle-handovers/${id}`).then((r) => r.data),
+
+  update: (id: string, data: Partial<VehicleHandoverRecord>) =>
+    api.patch<VehicleHandoverRecord>(`/vehicle-handovers/${id}`, data).then((r) => r.data),
+
+  approvePhoto: (id: string) =>
+    api.post<VehicleHandoverRecord>(`/vehicle-handovers/${id}/approve-photo`).then((r) => r.data),
+
+  rejectPhoto: (id: string) =>
+    api.post<VehicleHandoverRecord>(`/vehicle-handovers/${id}/reject-photo`).then((r) => r.data),
+
+  complete: (id: string) =>
+    api.post<VehicleHandoverRecord>(`/vehicle-handovers/${id}/complete`).then((r) => r.data),
+};
+
+// ─── Search ──────────────────────────────────────────────────────────────────
+
+export interface SearchResult {
+  type: 'driver' | 'vehicle' | 'company' | 'document' | 'assignment' | 'transport_request';
+  id: string;
+  title: string;
+  subtitle: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResult[];
+}
+
+export const searchApi = {
+  query: (q: string) =>
+    api.get<SearchResponse>('/search', { params: { q } }).then((r) => r.data),
 };
 
 // ─── Accidents (vehicle accidents + cargo damages) ───────────────────────────

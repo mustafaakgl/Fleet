@@ -8,7 +8,6 @@ import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
 import { TagesuebersichtTab } from './TagesuebersichtTab';
 import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
-import { getHandoverLabelByAssignment } from '@/lib/vehicle-handovers';
 
 const COMPANY_REVENUE_MAP: Record<string, number> = {
   DHL: 850,
@@ -356,13 +355,7 @@ export function Tagesplanung({
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-slate-700">
-                      {row.assignment.vehicle
-                        ? getHandoverLabelByAssignment({
-                            driverId: row.assignment.driverId,
-                            vehicle: row.assignment.vehicle,
-                            date: row.assignment.date,
-                          })
-                        : 'Not Required'}
+                      {row.assignment.vehicle ? 'Required' : 'Not Required'}
                     </td>
                     <td className="px-3 py-2.5 font-semibold text-slate-900">{currency(disabled ? 0 : row.assignment.expectedRevenue)}</td>
                     <td className="px-3 py-2.5">

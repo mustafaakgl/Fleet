@@ -139,7 +139,7 @@ export type VehicleHandoverType = 'pickup' | 'return';
 export type VehicleHandoverPhotoStatus =
   | 'not_required'
   | 'missing'
-  | 'submitted'
+  | 'uploaded'
   | 'approved'
   | 'rejected';
 
@@ -278,6 +278,31 @@ export interface TransportRequest {
   driver?: { firstName: string; lastName: string };
   vehicle?: { plateNumber: string };
   company?: { name: string };
+}
+
+// ─── Morning check-in ────────────────────────────────────────────────────
+
+export type MorningCheckinBackendStatus =
+  | 'confirmed'
+  | 'waiting_for_review'
+  | 'missing_vehicle_plate'
+  | 'missing_company'
+  | 'conflict'
+  | 'added_to_einsatzplan'
+  | 'rejected';
+
+export interface MorningCheckin {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  date: string;
+  submitted_at: string;
+  vehicle_plate?: string | null;
+  company_name?: string | null;
+  status: MorningCheckinBackendStatus;
+  conflict_reason?: string | null;
+  assignment_id?: string | null;
+  notes?: string;
 }
 
 // ─── Service record (vehicle maintenance) ─────────────────────────────────

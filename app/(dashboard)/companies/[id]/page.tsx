@@ -8,11 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { companiesApi, documentsApi, accidentsApi } from '@/lib/api';
+import { companiesApi, documentsApi, accidentsApi, type CompanyStats } from '@/lib/api';
 import type {
   CompanyDetail,
   CompanyEmail,
-  CompanyStats,
   Document,
 } from '@/lib/types';
 import { canViewFinancials } from '@/lib/permissions';

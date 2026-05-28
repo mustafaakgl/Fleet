@@ -1,39 +1,32 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { useFleetData } from '@/context/FleetDataContext';
 import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { canEditVehicleHandovers } from '@/lib/permissions';
-import type { VehicleHandover, VehicleHandoverPhotoStatus } from '@/lib/types';
-import {
-  getVehicleHandovers,
-  markVehicleHandoverCompleted,
-  markVehicleHandoverDamage,
-  uploadVehicleHandoverPhoto,
-} from '@/lib/vehicle-handovers';
+import { vehicleHandoversApi, type VehicleHandoverRecord } from '@/lib/api';
 
 type TableStatusFilter = 'all' | 'completed' | 'pending' | 'missing';
-
 type DisplayStatus = 'Completed' | 'Pending' | 'Missing';
+type PhotoStatus = VehicleHandoverRecord['photoStatus'];
 
-function toDisplayDate(value: string) {
-  const [y, m, d] = value.split('-');
-  if (!y || !m || !d) return value;
-  return `${d}.${m}.${y}`;
+function toDisplayDate(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('de-DE');
 }
 
-function labelizePhotoStatus(value: VehicleHandoverPhotoStatus) {
+function labelizePhotoStatus(value: PhotoStatus) {
   if (value === 'not_required') return 'Not Required';
-  if (value === 'submitted') return 'Uploaded';
+  if (value === 'uploaded') return 'Uploaded';
   if (value === 'approved') return 'Uploaded';
   if (value === 'missing') return 'Missing';
   if (value === 'rejected') return 'Rejected';
   return value;
 }
 
-function getDisplayStatus(row: VehicleHandover): DisplayStatus {
+function getDisplayStatus(row: VehicleHandoverRecord): DisplayStatus {
   if (row.photoRequired && row.photoStatus === 'missing') return 'Missing';
   if (row.status === 'completed') return 'Completed';
   return 'Pending';
@@ -45,16 +38,17 @@ function displayStatusClass(status: DisplayStatus) {
   return 'bg-amber-100 text-amber-700 border-amber-200';
 }
 
-function photoStatusClass(value: VehicleHandoverPhotoStatus) {
+function photoStatusClass(value: PhotoStatus) {
   if (value === 'missing') return 'bg-rose-100 text-rose-700';
   if (value === 'not_required') return 'bg-slate-100 text-slate-700';
-  if (value === 'submitted' || value === 'approved') return 'bg-emerald-100 text-emerald-700';
+  if (value === 'uploaded' || value === 'approved') return 'bg-emerald-100 text-emerald-700';
   return 'bg-amber-100 text-amber-700';
 }
 
 export function VehicleHandovers() {
-  const { drivers } = useFleetData();
-  const [rows, setRows] = useState<VehicleHandover[]>(getVehicleHandovers());
+  const [rows, setRows] = useState<VehicleHandoverRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [driverQuery, setDriverQuery] = useState('');
   const [vehicleQuery, setVehicleQuery] = useState('');
@@ -65,72 +59,105 @@ export function VehicleHandovers() {
   const currentUser = getUser();
   const canEdit = currentUser ? canEditVehicleHandovers(currentUser.role) : false;
 
-  const selected = useMemo(() => rows.find((item) => item.id === selectedId) ?? null, [rows, selectedId]);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await vehicleHandoversApi.list();
+      setRows(data);
+    } catch (e) {
+      setRows([]);
+      setError(e instanceof Error ? e.message : 'Failed to load handovers');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function refresh() {
-    setRows(getVehicleHandovers());
-  }
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const selected = useMemo(
+    () => rows.find((item) => item.id === selectedId) ?? null,
+    [rows, selectedId],
+  );
 
   const filteredRows = useMemo(() => {
     const driverNeedle = driverQuery.trim().toLowerCase();
     const vehicleNeedle = vehicleQuery.trim().toLowerCase();
 
     return rows.filter((row) => {
-      const driver = drivers.find((item) => item.id === row.driverId);
-      const driverName = (driver?.name ?? row.driverId).toLowerCase();
+      const driverName = row.driver
+        ? `${row.driver.firstName} ${row.driver.lastName}`.toLowerCase()
+        : row.driverId.toLowerCase();
+      const vehiclePlate = row.vehicle?.plateNumber.toLowerCase() ?? row.vehicleId.toLowerCase();
       const displayStatus = getDisplayStatus(row);
+      const dateIso = row.handoverDateTime.slice(0, 10);
 
-      const matchesDate = !dateFilter || row.date === dateFilter;
+      const matchesDate = !dateFilter || dateIso === dateFilter;
       const matchesDriver = !driverNeedle || driverName.includes(driverNeedle);
       const matchesVehicle =
-        !vehicleNeedle
-        || row.vehicleId.toLowerCase().includes(vehicleNeedle)
-        || (row.previousVehicleId ?? '').toLowerCase().includes(vehicleNeedle);
+        !vehicleNeedle ||
+        vehiclePlate.includes(vehicleNeedle) ||
+        (row.previousVehicleId ?? '').toLowerCase().includes(vehicleNeedle);
       const matchesStatus =
-        statusFilter === 'all'
-        || (statusFilter === 'completed' && displayStatus === 'Completed')
-        || (statusFilter === 'pending' && displayStatus === 'Pending')
-        || (statusFilter === 'missing' && displayStatus === 'Missing');
+        statusFilter === 'all' ||
+        (statusFilter === 'completed' && displayStatus === 'Completed') ||
+        (statusFilter === 'pending' && displayStatus === 'Pending') ||
+        (statusFilter === 'missing' && displayStatus === 'Missing');
 
       return matchesDate && matchesDriver && matchesVehicle && matchesStatus;
     });
-  }, [dateFilter, driverQuery, drivers, rows, statusFilter, vehicleQuery]);
+  }, [dateFilter, driverQuery, rows, statusFilter, vehicleQuery]);
 
-  function openRow(id: string) {
-    setSelectedId(id);
+  async function handleApprovePhoto() {
+    if (!selected || !canEdit) return;
+    try {
+      await vehicleHandoversApi.approvePhoto(selected.id);
+      await refresh();
+      setMessage('Photo approved.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Failed to approve photo');
+    }
   }
 
-  function handleUploadPhoto() {
+  async function handleRejectPhoto() {
     if (!selected || !canEdit) return;
-    uploadVehicleHandoverPhoto(selected.id);
-    refresh();
-    setMessage('Photo uploaded (mock placeholder).');
+    try {
+      await vehicleHandoversApi.rejectPhoto(selected.id);
+      await refresh();
+      setMessage('Photo rejected.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Failed to reject photo');
+    }
   }
 
-  function handleMarkCompleted() {
+  async function handleMarkCompleted() {
     if (!selected || !canEdit) return;
-    const result = markVehicleHandoverCompleted(selected.id);
-    refresh();
-    setMessage(result.message);
-  }
-
-  function handleCreateDamageReport() {
-    if (!selected || !canEdit) return;
-    const result = markVehicleHandoverDamage(selected.id, selected.damageNotes);
-    refresh();
-    setMessage(result.message);
+    try {
+      await vehicleHandoversApi.complete(selected.id);
+      await refresh();
+      setMessage('Handover marked completed.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Failed to complete');
+    }
   }
 
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-bold text-slate-900">Vehicle Handovers</h2>
-        <p className="text-sm text-slate-600">Complete pickup handover workflow with photo and damage controls.</p>
+        <p className="text-sm text-slate-600">
+          Complete pickup handover workflow with photo and damage controls.
+        </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <div className="min-w-[160px] flex-1">
-          <label htmlFor="handover-date" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label
+            htmlFor="handover-date"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
             Date
           </label>
           <input
@@ -143,7 +170,10 @@ export function VehicleHandovers() {
         </div>
 
         <div className="min-w-[160px] flex-1">
-          <label htmlFor="handover-driver" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label
+            htmlFor="handover-driver"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
             Driver Search
           </label>
           <input
@@ -157,7 +187,10 @@ export function VehicleHandovers() {
         </div>
 
         <div className="min-w-[160px] flex-1">
-          <label htmlFor="handover-vehicle" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label
+            htmlFor="handover-vehicle"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
             Vehicle Search
           </label>
           <input
@@ -171,7 +204,10 @@ export function VehicleHandovers() {
         </div>
 
         <div className="w-[170px]">
-          <label htmlFor="handover-status" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <label
+            htmlFor="handover-status"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
             Status
           </label>
           <select
@@ -205,7 +241,19 @@ export function VehicleHandovers() {
       )}
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        {filteredRows.length === 0 ? (
+        {loading ? (
+          <div className="p-6 text-center text-sm text-slate-500">Loading...</div>
+        ) : error ? (
+          <div className="p-4">
+            <EmptyState
+              icon={AlertTriangle}
+              title="Failed to load handovers"
+              subtitle={error}
+              actionLabel="Retry"
+              onAction={refresh}
+            />
+          </div>
+        ) : filteredRows.length === 0 ? (
           <div className="p-4">
             <EmptyState
               icon={AlertTriangle}
@@ -221,65 +269,73 @@ export function VehicleHandovers() {
             />
           </div>
         ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-[1260px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="border-b border-slate-200 px-3 py-3">Date</th>
-                <th className="border-b border-slate-200 px-3 py-3">Driver</th>
-                <th className="border-b border-slate-200 px-3 py-3">Previous Vehicle</th>
-                <th className="border-b border-slate-200 px-3 py-3">Current Vehicle</th>
-                <th className="border-b border-slate-200 px-3 py-3">Photo Required</th>
-                <th className="border-b border-slate-200 px-3 py-3">Photo Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Damage Detected</th>
-                <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => {
-                const driver = drivers.find((item) => item.id === row.driverId);
-                const displayStatus = getDisplayStatus(row);
-                return (
-                  <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2.5 text-slate-700">{toDisplayDate(row.date)}</td>
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{driver?.name ?? row.driverId}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.previousVehicleId ?? '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.vehicleId}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.photoRequired ? 'Yes' : 'No'}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${photoStatusClass(row.photoStatus)}`}>
-                        {labelizePhotoStatus(row.photoStatus)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.damageDetected ? 'Yes' : 'No'}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${displayStatusClass(displayStatus)}`}>
-                        {displayStatus}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => openRow(row.id)}
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredRows.length === 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-[1260px] text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <td className="px-3 py-6 text-center text-slate-500" colSpan={9}>
-                    No handovers found for selected filters.
-                  </td>
+                  <th className="border-b border-slate-200 px-3 py-3">Date</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Driver</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Previous Vehicle</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Current Vehicle</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Photo Required</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Photo Status</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Damage Detected</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Status</th>
+                  <th className="border-b border-slate-200 px-3 py-3">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => {
+                  const driverName = row.driver
+                    ? `${row.driver.firstName} ${row.driver.lastName}`
+                    : row.driverId;
+                  const vehiclePlate = row.vehicle?.plateNumber ?? row.vehicleId;
+                  const displayStatus = getDisplayStatus(row);
+                  return (
+                    <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
+                      <td className="px-3 py-2.5 text-slate-700">
+                        {toDisplayDate(row.handoverDateTime)}
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-slate-900">{driverName}</td>
+                      <td className="px-3 py-2.5 text-slate-700">
+                        {row.previousVehicleId ?? '-'}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-700">{vehiclePlate}</td>
+                      <td className="px-3 py-2.5 text-slate-700">
+                        {row.photoRequired ? 'Yes' : 'No'}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${photoStatusClass(row.photoStatus)}`}
+                        >
+                          {labelizePhotoStatus(row.photoStatus)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-700">
+                        {row.damageDetected ? 'Yes' : 'No'}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${displayStatusClass(displayStatus)}`}
+                        >
+                          {displayStatus}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(row.id)}
+                          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -292,52 +348,51 @@ export function VehicleHandovers() {
             </div>
 
             <div className="space-y-4 px-5 py-4 text-sm">
-              <DetailRow label="Driver" value={drivers.find((item) => item.id === selected.driverId)?.name ?? selected.driverId} />
-              <DetailRow label="Date" value={toDisplayDate(selected.date)} />
+              <DetailRow
+                label="Driver"
+                value={
+                  selected.driver
+                    ? `${selected.driver.firstName} ${selected.driver.lastName}`
+                    : selected.driverId
+                }
+              />
+              <DetailRow label="Date" value={toDisplayDate(selected.handoverDateTime)} />
               <DetailRow label="Previous Vehicle" value={selected.previousVehicleId ?? '-'} />
-              <DetailRow label="Current Vehicle" value={selected.vehicleId} />
+              <DetailRow
+                label="Current Vehicle"
+                value={selected.vehicle?.plateNumber ?? selected.vehicleId}
+              />
+              <DetailRow label="Handover Type" value={selected.handoverType} />
               <DetailRow label="Photo Required" value={selected.photoRequired ? 'Yes' : 'No'} />
               <DetailRow label="Photo Status" value={labelizePhotoStatus(selected.photoStatus)} />
               <DetailRow label="Damage Detected" value={selected.damageDetected ? 'Yes' : 'No'} />
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Uploaded Photos</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {(selected.photos.length ? selected.photos : ['No photo uploaded']).map((photo) => (
-                    <div key={photo} className="rounded border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-600">
-                      {photo}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <DetailRow label="Notes" value={selected.damageNotes ?? 'No notes'} />
+              <DetailRow label="Notes" value={selected.notes ?? selected.damageNotes ?? '-'} />
             </div>
 
             <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-slate-200 bg-white px-5 py-4">
               <button
                 type="button"
-                onClick={handleUploadPhoto}
-                disabled={!canEdit}
-                className="rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={handleApprovePhoto}
+                disabled={!canEdit || selected.photoStatus !== 'uploaded'}
+                className="rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Upload Photo
+                Approve Photo
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectPhoto}
+                disabled={!canEdit || selected.photoStatus !== 'uploaded'}
+                className="rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Reject Photo
               </button>
               <button
                 type="button"
                 onClick={handleMarkCompleted}
-                disabled={!canEdit}
-                className="rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!canEdit || selected.status === 'completed'}
+                className="rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Mark Completed
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateDamageReport}
-                disabled={!canEdit}
-                className="rounded-md border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Create Damage Report
               </button>
               <button
                 type="button"

@@ -228,7 +228,6 @@ export default function DocumentsPage() {
           ownerId: payload.ownerId,
           documentType: payload.documentType,
           fileName: payload.fileName,
-          fileUrl: '#',
           expiryDate: payload.expiryDate,
           notes: payload.notes,
         });
@@ -242,7 +241,6 @@ export default function DocumentsPage() {
       } else if (formMode === 'replace' && formDocument?.id) {
         await documentsApi.replace(formDocument.id, {
           fileName: payload.fileName,
-          fileUrl: '#',
           expiryDate: payload.expiryDate,
           notes: payload.notes,
         });
