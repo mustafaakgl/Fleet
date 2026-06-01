@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { authApi } from '@/lib/api';
-import { isAuthenticated, saveAuth } from '@/lib/auth';
+import { isAuthenticated, saveAuth, MOCK_CURRENT_USER } from '@/lib/auth';
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
@@ -67,6 +67,11 @@ export default function LoginPage() {
       }
       setError('Giris sirasinda beklenmeyen bir hata olustu. Tekrar deneyin.');
     }
+  }
+
+  function handleDemoLogin() {
+    saveAuth('dev-demo-token', { ...MOCK_CURRENT_USER, role: 'admin', name: 'Demo Admin' });
+    router.push('/dashboard');
   }
 
   return (
@@ -133,6 +138,15 @@ export default function LoginPage() {
                 )}
               </Button>
             </form>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full mt-3"
+              onClick={handleDemoLogin}
+            >
+              Demo giris (backend olmadan)
+            </Button>
 
             <div className="mt-6 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500 text-center mb-2">Test credentials</p>
