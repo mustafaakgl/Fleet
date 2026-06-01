@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { isAxiosError } from 'axios';
@@ -74,7 +74,9 @@ export default function NewCompanyPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({
+    resolver: zodResolver(schema) as unknown as Resolver<FormData>,
+  });
 
   async function onSubmit(data: FormData) {
     setServerError(null);

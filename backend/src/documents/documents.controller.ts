@@ -135,9 +135,6 @@ export class DocumentsController {
         .addMaxSizeValidator({
           maxSize: MAX_FILE_SIZE_BYTES,
         })
-        .addFileTypeValidator({
-          fileType: /^(application\/pdf|image\/jpeg|image\/jpg|image\/png|image\/webp)$/,
-        })
         .build({
           fileIsRequired: true,
           errorHttpStatusCode: HttpStatus.BAD_REQUEST,
@@ -181,9 +178,6 @@ export class DocumentsController {
       new ParseFilePipeBuilder()
         .addMaxSizeValidator({
           maxSize: MAX_FILE_SIZE_BYTES,
-        })
-        .addFileTypeValidator({
-          fileType: /^(application\/pdf|image\/jpeg|image\/jpg|image\/png|image\/webp)$/,
         })
         .build({
           fileIsRequired: true,

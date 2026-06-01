@@ -8,6 +8,7 @@ import { spawn, spawnSync } from 'node:child_process';
 const command = process.argv[2];
 const forwardedArgs = process.argv.slice(3);
 const port = Number.parseInt(process.env.FRONTEND_PORT || '3001', 10);
+const defaultApiUrl = 'http://localhost:3000/api/v1';
 const rootDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const frontendDir = path.join(rootDir, 'frontend');
 const nextBin = path.join(frontendDir, 'node_modules', 'next', 'dist', 'bin', 'next');
@@ -68,7 +69,7 @@ function assertPortIsFree() {
       server.close(() => resolve(undefined));
     });
 
-    server.listen(port, '127.0.0.1');
+    server.listen(port);
   });
 }
 
@@ -116,9 +117,13 @@ async function main() {
   await assertPortIsFree();
 
   const args = [nextBin, command, '--port', String(port), ...forwardedArgs];
+  const env = {
+    ...process.env,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || defaultApiUrl,
+  };
   const child = spawn(nodeChoice.nodePath, args, {
     cwd: frontendDir,
-    env: process.env,
+    env,
     stdio: 'inherit',
   });
 

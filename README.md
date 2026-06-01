@@ -1,322 +1,316 @@
-# Fleet Management System
+# Fleet ERP
 
-Complete fleet management solution for logistics companies.
+Fleet ERP is a full-stack fleet operations platform for transport and logistics teams.  
+It centralizes daily planning, driver and vehicle lifecycle management, compliance documents, incident tracking, notifications, and operational reporting in one system.
 
-## Project Structure
+---
 
-```
-Fleet/
-├── backend/                 # NestJS API
-│   ├── src/
-│   │   ├── auth/           # Authentication module
-│   │   ├── drivers/        # Driver management
-│   │   ├── vehicles/       # Vehicle management
-│   │   ├── assignments/    # Assignment/Einsatzplan
-│   │   ├── leave-requests/ # Leave request handling
-│   │   ├── documents/      # Document tracking
-│   │   ├── reminders/      # Reminder system
-│   │   ├── notifications/  # Notification service
-│   │   ├── dashboard/      # Dashboard statistics
-│   │   ├── roles/          # Role management
-│   │   ├── departments/    # Department management
-│   │   ├── users/          # User management
-│   │   ├── common/         # Common utilities
-│   │   ├── prisma/         # Database service
-│   │   ├── app.module.ts   # Main module
-│   │   └── main.ts         # Entry point
-│   ├── prisma/
-│   │   ├── schema.prisma   # Database schema
-│   │   └── seed.ts         # Database seed
-│   └── package.json
-│
-├── frontend/                # Next.js Admin Panel
-│   ├── pages/
-│   │   ├── login.tsx       # Login page
-│   │   ├── dashboard.tsx   # Dashboard
-│   │   ├── drivers/        # Drivers management
-│   │   ├── vehicles/       # Vehicles management
-│   │   ├── assignments/    # Assignments
-│   │   ├── leave-requests/ # Leave requests
-│   │   └── reminders/      # Reminders
-│   ├── components/
-│   │   ├── layout/         # Layout components
-│   │   └── ui/             # UI components
-│   ├── lib/
-│   │   ├── api.ts          # API client
-│   │   └── services.ts     # API services
-│   ├── styles/
-│   └── package.json
-│
-├── 00_PROJECT_OVERVIEW.md
-├── 01_DATABASE_SCHEMA.md
-├── 02_ARCHITECTURE.md
-├── 03_API_SPECIFICATION.md
-├── 04_STATE_MACHINES.md
-├── 05_UI_WIREFRAMES.md
-├── 06_NOTIFICATION_RULES.md
-├── 07_PERMISSIONS_AND_ROLES.md
-├── docker-compose.yml
-└── README.md
-```
+## 1) Project Overview
 
-## Tech Stack
+This repository contains:
 
-**Backend:**
-- NestJS 10
-- PostgreSQL 16
+- A NestJS backend API (`/backend`) with PostgreSQL + Prisma.
+- A Next.js frontend (`/frontend`) for operations teams (dispatch, office, accounting, management).
+- Local file-based document upload and static file serving for ERP documents.
+- Role-based access control with financial field masking and route-level restrictions.
+
+The implementation is assignment-centered and designed around real operational workflows (driver/vehicle/company coordination for daily transport work).
+
+---
+
+## 2) Key Features
+
+- JWT-based authentication and protected API routes.
+- Assignment planning with create/update/cancel/transition flow.
+- Driver, vehicle, company, service record, and handover management.
+- Requests and leave workflows (approve/reject/cancel/needs-review).
+- Document tracking (expiring, expired, missing-required) with upload + replace-upload.
+- Accident and cargo damage tracking with role-aware financial masking.
+- Dashboard KPIs, critical alerts, vehicle health, driver risk overview, revenue analytics (financial roles only).
+- Notifications and reminders (including unread count and bulk read).
+- Global operational search with role constraints.
+
+---
+
+## 3) Technology Stack
+
+**Backend**
+
+- Node.js + NestJS
+- PostgreSQL
 - Prisma ORM
-- JWT Authentication
-- Passport.js
+- JWT + Passport
+- Multer (local disk storage for documents)
 
-**Frontend:**
-- Next.js 14
-- React 18
-- Tailwind CSS
-- Axios
-- TypeScript
+**Frontend**
 
-**DevOps:**
-- Docker & Docker Compose
-- PostgreSQL Alpine
+- Next.js (App Router)
+- React + TypeScript
+- Axios API client
+- Tailwind-based UI components
 
-## Getting Started
+**Infrastructure / Runtime**
+
+- Local development without Docker (`npm run dev:backend`, `npm run dev:frontend`, `npm run dev:full`)
+- Optional Docker Compose for deployment-like environments
+
+---
+
+## 4) Architecture Overview
+
+Fleet ERP follows a standard frontend-backend split:
+
+1. Frontend calls REST endpoints under `/api/v1`.
+2. Backend applies authentication, RBAC guards, validation, and business services.
+3. Prisma persists data to PostgreSQL.
+4. Uploaded files are stored on disk and exposed via `/uploads/documents/...`.
+
+Core patterns:
+
+- Module-based backend architecture (NestJS modules per domain).
+- DTO validation for request contracts.
+- Guard + decorator-based authorization (`JwtAuthGuard`, `RolesGuard`, `DriverBlockGuard`).
+- Shared permissions utility for financial visibility and masking.
+
+---
+
+## 5) Backend Modules
+
+Implemented backend domains include:
+
+- `auth`
+- `users`
+- `drivers`
+- `vehicles`
+- `companies`
+- `assignments`
+- `transport-requests`
+- `calendar`
+- `requests`
+- `leave-requests`
+- `documents`
+- `storage` (abstraction + local storage implementation)
+- `vehicle-handovers`
+- `accidents`
+- `company-emails`
+- `notifications`
+- `reminders`
+- `dashboard`
+- `search`
+- `service-records`
+- `morning-checkins`
+- `common`
+- `prisma`
+
+---
+
+## 6) Frontend Modules
+
+Implemented frontend areas (App Router pages) include:
+
+- Authentication (`/login`)
+- Dashboard (`/dashboard`)
+- Drivers (`/drivers`, detail, edit, new)
+- Vehicles (`/vehicles`, detail, edit, new)
+- Companies (`/companies`, detail, edit, new)
+- Assignments (`/assignments`, new)
+- Documents (`/documents`)
+- Requests (`/requests`)
+- Reminders (`/reminders`)
+- Service history (`/service-history`)
+- Cargo damage (`/cargo-damage`)
+- Additional implemented pages: `flottenmonitor`, `live-tracking`, `messenger`, `settings`, `dsgvo`
+
+---
+
+## 7) Assignment-Centered Workflow
+
+Assignments are the operational core:
+
+1. Plan an assignment by linking `driver + vehicle + company + date/time + route/cargo`.
+2. Transition assignment states (`planned`, `confirmed`, `in_progress`, `completed`) or cancel.
+3. Coordinate with related domains:
+   - Driver/vehicle availability
+   - Transport requests
+   - Calendar entries
+   - Vehicle handovers
+   - Incident and reminder visibility
+
+This keeps daily operations traceable from planning to completion.
+
+---
+
+## 8) File Upload System
+
+Documents support both metadata-only and file-backed flows:
+
+- `POST /documents/upload`
+- `POST /documents/:id/replace-upload`
+
+Implemented behavior:
+
+- Accepted types: PDF, JPG, JPEG, PNG, WEBP
+- Max size: 10MB
+- Disk storage in `backend/uploads/documents`
+- Static serving from `/uploads/documents/{filename}`
+- Storage abstraction (`StorageService`) with local implementation (`LocalStorageService`)
+
+---
+
+## 9) RBAC & Security
+
+Security model includes:
+
+- JWT authentication for protected endpoints.
+- Role checks via `@Roles(...)` + `RolesGuard`.
+- Driver-block guard for non-driver operational/admin endpoints.
+- Financial visibility controls:
+  - Office role cannot view sensitive financial fields.
+  - Financial roles can view relevant financial fields.
+  - Sensitive fields are masked in responses using shared masking utilities.
+- Role-aware mutation restrictions on critical planning and admin operations.
+
+---
+
+## 10) Local Setup
 
 ### Prerequisites
-- Node.js 20+
-- Docker & Docker Compose
-- PostgreSQL 16 (if running locally)
 
-### Local Development
+- Node.js (supported by repo engines)
+- PostgreSQL running locally (default: `localhost:5432`)
 
-#### 1. Backend Setup
+### Install
 
 ```bash
-cd backend
-
-# Install dependencies
 npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Setup database
-npm run prisma:migrate
-npm run prisma:seed
-
-# Start development server
-npm run start:dev
+npm --prefix backend install
+npm --prefix frontend install
 ```
 
-Backend will run on `http://localhost:3000`
-
-#### 2. Frontend Setup
+### Environment
 
 ```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Copy environment file
-cp .env.example .env
-
-# Start development server
-npm run dev
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
 ```
 
-Frontend will run on `http://localhost:3001`
+Expected local defaults:
 
-### Docker Compose (Production-like Local)
+- Backend: `http://localhost:3000`
+- Frontend: `http://localhost:3001`
+- Frontend API URL: `http://localhost:3000/api/v1`
 
-1) Copy environment template:
+### Run (No Docker)
 
 ```bash
-cp .env.example .env
+# backend only
+npm run dev:backend
+
+# frontend only
+npm run dev:frontend
+
+# backend + frontend together
+npm run dev:full
 ```
 
-2) Start all services:
+Notes:
+
+- Backend dev startup runs Prisma generate automatically (`prestart:dev`).
+- Upload directory is created automatically (`backend/uploads/documents`).
+
+---
+
+## 11) Seed Data
+
+Seed script populates realistic operational data (users, drivers, vehicles, companies, assignments, documents, incidents, reminders, notifications, etc.).
+
+```bash
+npm --prefix backend exec prisma db seed
+```
+
+Before seed (if needed), ensure schema is in sync:
+
+```bash
+npm --prefix backend run prisma:migrate
+```
+
+---
+
+## 12) Demo Credentials
+
+Seeded accounts:
+
+- `admin@fleet.com` / `admin123`
+- `boss@fleet.com` / `boss123`
+- `accounting@fleet.com` / `accounting123`
+- `office@fleet.com` / `office123`
+
+---
+
+## 13) API Overview
+
+Base path: `/api/v1`
+
+Main endpoint groups:
+
+- `auth`
+- `users`
+- `drivers`
+- `vehicles`
+- `companies`
+- `assignments`
+- `transport-requests`
+- `calendar`
+- `requests`
+- `leave-requests`
+- `documents`
+- `vehicle-handovers`
+- `accidents`
+- `company-emails`
+- `notifications`
+- `reminders`
+- `dashboard`
+- `search`
+- `service-records`
+- `morning-checkins`
+
+The frontend API client is implemented in `frontend/lib/api.ts`.
+
+---
+
+## 14) Roadmap
+
+Planned and/or future-facing areas (as tracked in project docs):
+
+- GPS live tracking enhancements
+- Work session / end-of-shift flows
+- Expanded internal messaging workflows
+- Broader multilingual support
+- Advanced accident and cargo incident workflows
+- Email automation improvements
+- Finance and salary integration extensions
+
+---
+
+## 15) Screenshots
+
+> Place product screenshots here.
+
+- `[Placeholder]` Login screen
+- `[Placeholder]` Dashboard overview
+- `[Placeholder]` Assignment planning
+- `[Placeholder]` Driver detail
+- `[Placeholder]` Vehicle detail
+- `[Placeholder]` Documents upload and replacement
+
+---
+
+## Optional: Docker (kept for deployment workflows)
+
+Docker files are intentionally kept in the repository for later deployment use.
 
 ```bash
 npm run docker:up
-```
-
-3) Watch logs:
-
-```bash
 npm run docker:logs
-```
-
-4) Stop services:
-
-```bash
 npm run docker:down
 ```
-
-Services:
-- Frontend: http://localhost:3001
-- Backend: http://localhost:3000
-- PostgreSQL: localhost:5432
-
-Notes:
-- Backend runs `prisma migrate deploy` on startup.
-- Uploaded files persist in Docker volume `backend_uploads` (`/uploads/documents` served by backend).
-- Postgres data persists in Docker volume `postgres_data`.
-
-Manual seed (after containers are up):
-
-```bash
-npm run docker:seed
-```
-
-## Test Credentials
-
-- **Admin:** admin@fleet.com / admin123
-- **Manager:** manager@fleet.com / manager123
-- **Driver:** ali@fleet.com / driver123
-
-## Key Features
-
-### MVP Phase 1
-- ✅ User authentication with JWT
-- ✅ Role-based access control (Admin, Fleet Manager, Driver, HR)
-- ✅ Driver management (CRUD, licenses, passports)
-- ✅ Vehicle management (CRUD, TÜV, SP tracking)
-- ✅ Assignment/Einsatzplan management
-- ✅ Leave request handling
-- ✅ Document expiry tracking
-- ✅ Automated reminders (7, 30, 60, 90 days)
-- ✅ Dashboard with statistics
-- ✅ Notification system
-
-### Future Features (Phase 2+)
-- GPS live tracking
-- Work sessions and Feierabend logic
-- Messenger system
-- Multi-language support
-- Accident reporting
-- Cargo incident reporting
-- Email automation
-- Salary integration
-
-## API Endpoints
-
-Base URL: `/api/v1`
-
-### Authentication
-- `POST /auth/signin` - User login
-- `GET /auth/me` - Get current user
-
-### Drivers
-- `GET /drivers` - Get all drivers
-- `POST /drivers` - Create driver
-- `GET /drivers/:id` - Get driver details
-- `PUT /drivers/:id` - Update driver
-- `DELETE /drivers/:id` - Delete driver
-
-### Vehicles
-- `GET /vehicles` - Get all vehicles
-- `POST /vehicles` - Create vehicle
-- `GET /vehicles/:id` - Get vehicle details
-- `PUT /vehicles/:id` - Update vehicle
-- `DELETE /vehicles/:id` - Delete vehicle
-
-### Assignments
-- `GET /assignments` - Get all assignments
-- `POST /assignments` - Create assignment
-- `PUT /assignments/:id` - Update assignment
-- `DELETE /assignments/:id` - Delete assignment
-
-### Leave Requests
-- `GET /leave-requests` - Get all leave requests
-- `POST /leave-requests` - Create leave request
-- `PUT /leave-requests/:id/approve` - Approve leave
-- `PUT /leave-requests/:id/reject` - Reject leave
-
-### Dashboard
-- `GET /dashboard` - Get dashboard statistics
-
-### Reminders
-- `GET /reminders` - Get all reminders
-
-### Notifications
-- `GET /notifications` - Get notifications
-- `PUT /notifications/:id/read` - Mark as read
-
-## Database Schema
-
-Key entities:
-- `users` - System users
-- `roles` - User roles (admin, fleet_manager, driver, hr)
-- `departments` - Company departments
-- `drivers` - Driver profiles
-- `vehicles` - Vehicle information
-- `assignments` - Driver-vehicle assignments
-- `leave_requests` - Leave/sick leave requests
-- `documents` - Document metadata
-- `reminders` - Expiry reminders
-- `notifications` - User notifications
-
-## Development
-
-### Code Quality
-```bash
-# Backend
-cd backend
-npm run lint
-npm run format
-
-# Frontend
-cd frontend
-npm run lint
-npm run format
-```
-
-### Testing
-```bash
-# Backend
-cd backend
-npm run test
-
-# Frontend
-cd frontend
-npm run test
-```
-
-## Deployment
-
-### Production Environment Variables
-
-**Backend (.env):**
-```
-DATABASE_URL=postgresql://user:pass@host:5432/fleet
-JWT_SECRET=your_strong_secret_key
-JWT_EXPIRY=3600
-PORT=3000
-NODE_ENV=production
-API_URL=https://api.yourdomain.com
-FRONTEND_URL=https://yourdomain.com
-```
-
-**Frontend (.env.local):**
-```
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api/v1
-```
-
-## Documentation
-
-- [Project Overview](./00_PROJECT_OVERVIEW.md)
-- [Database Schema](./01_DATABASE_SCHEMA.md)
-- [Architecture](./02_ARCHITECTURE.md)
-- [API Specification](./03_API_SPECIFICATION.md)
-- [State Machines](./04_STATE_MACHINES.md)
-- [UI Wireframes](./05_UI_WIREFRAMES.md)
-- [Notification Rules](./06_NOTIFICATION_RULES.md)
-- [Permissions & Roles](./07_PERMISSIONS_AND_ROLES.md)
-
-## License
-
-UNLICENSED
-
-## Support
-
-For issues and questions, please refer to the documentation files or contact the development team.
