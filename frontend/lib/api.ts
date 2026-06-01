@@ -25,6 +25,11 @@ import type {
   Reminder,
   Notification,
   Document,
+  ConversationListItem,
+  ConversationDetail,
+  MessengerMessage,
+  SendMessagePayload,
+  MessengerUnreadCount,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -469,6 +474,49 @@ export const notificationsApi = {
   markRead: (id: string) => api.post(`/notifications/${id}/read`).then((r) => r.data),
 
   markAllRead: () => api.post('/notifications/read-all').then((r) => r.data),
+};
+
+// ─── Messenger ───────────────────────────────────────────────────────────────
+
+export interface MessengerConversationListParams {
+  driverId?: string;
+  status?: string;
+  search?: string;
+}
+
+export interface MessengerListMessagesParams {
+  since?: string;
+  afterId?: string;
+  limit?: number;
+}
+
+export const messengerApi = {
+  listConversations: (params?: MessengerConversationListParams) =>
+    api.get<ConversationListItem[]>('/messenger/conversations', { params }).then((r) => r.data),
+
+  createConversation: (driverId: string, subject?: string) =>
+    api
+      .post<ConversationDetail>('/messenger/conversations', { driverId, subject })
+      .then((r) => r.data),
+
+  getConversation: (id: string) =>
+    api.get<ConversationDetail>(`/messenger/conversations/${id}`).then((r) => r.data),
+
+  listMessages: (conversationId: string, params?: MessengerListMessagesParams) =>
+    api
+      .get<MessengerMessage[]>(`/messenger/conversations/${conversationId}/messages`, { params })
+      .then((r) => r.data),
+
+  sendMessage: (conversationId: string, payload: SendMessagePayload) =>
+    api
+      .post<MessengerMessage>(`/messenger/conversations/${conversationId}/messages`, payload)
+      .then((r) => r.data),
+
+  markConversationRead: (conversationId: string) =>
+    api.post(`/messenger/conversations/${conversationId}/read`).then((r) => r.data),
+
+  getUnreadCount: () =>
+    api.get<MessengerUnreadCount>('/messenger/unread-count').then((r) => r.data),
 };
 
 // ─── Users (admin) ────────────────────────────────────────────────────────────

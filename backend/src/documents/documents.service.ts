@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -36,7 +38,23 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
+    private readonly auditService: AuditService,
   ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private parseDateInput(value?: string | null): Date | null {
     if (value === undefined || value === null || value === '') {
@@ -109,7 +127,7 @@ export class DocumentsService {
     const status = this.getDocumentStatus(expiryDate);
 
     const db = this.prisma as any;
-    return db.document.create({
+    const created = await db.document.create({
       data: {
         ownerType,
         ownerId: dto.ownerId,
@@ -125,6 +143,22 @@ export class DocumentsService {
         uploadedBy: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId: uploadedById,
+      action: 'document.created',
+      entityType: 'document',
+      entityId: created.id,
+      summary: 'Document created',
+      metadata: {
+        ownerType: created.ownerType,
+        ownerId: created.ownerId,
+        documentType: created.documentType,
+        status: created.status,
+      },
+    });
+
+    return created;
   }
 
   async createUploadedDocument(
@@ -146,7 +180,7 @@ export class DocumentsService {
       throw new BadRequestException('file is required');
     }
 
-    return this.createDocument(
+    const created = await this.createDocument(
       {
         ownerType: dto.ownerType as CreateDocumentDto['ownerType'],
         ownerId: dto.ownerId,
@@ -158,6 +192,21 @@ export class DocumentsService {
       },
       uploadedById,
     );
+
+    await this.safeAuditLog({
+      actorUserId: uploadedById,
+      action: 'document.uploaded',
+      entityType: 'document',
+      entityId: created.id,
+      summary: 'Document uploaded',
+      metadata: {
+        ownerType: created.ownerType,
+        ownerId: created.ownerId,
+        documentType: created.documentType,
+      },
+    });
+
+    return created;
   }
 
   async listDocuments(filters: {
@@ -282,7 +331,7 @@ export class DocumentsService {
   }
 
   async replaceDocument(id: string, dto: UpdateDocumentDto, uploadedById?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const replacement = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
       const oldDocument = await db.document.findUnique({
         where: { id },
@@ -299,7 +348,7 @@ export class DocumentsService {
         }
       }
 
-      await db.document.update({
+      const archived = await db.document.update({
         where: { id: oldDocument.id },
         data: {
           status: 'archived',
@@ -309,7 +358,7 @@ export class DocumentsService {
       const expiryDate = this.parseDateInput(dto.expiryDate);
       const status = dto.status ? this.ensureStatus(dto.status) : this.getDocumentStatus(expiryDate);
 
-      return db.document.create({
+      const created = await db.document.create({
         data: {
           ownerType: oldDocument.ownerType,
           ownerId: oldDocument.ownerId,
@@ -325,7 +374,35 @@ export class DocumentsService {
           uploadedBy: true,
         },
       });
+
+      return { archived, created };
     });
+
+    await this.safeAuditLog({
+      actorUserId: uploadedById,
+      action: 'document.archived',
+      entityType: 'document',
+      entityId: replacement.archived.id,
+      summary: 'Document archived during replacement',
+      metadata: {
+        ownerType: replacement.archived.ownerType,
+        ownerId: replacement.archived.ownerId,
+      },
+    });
+    await this.safeAuditLog({
+      actorUserId: uploadedById,
+      action: 'document.replaced',
+      entityType: 'document',
+      entityId: replacement.created.id,
+      summary: 'Document replaced',
+      metadata: {
+        replacedDocumentId: id,
+        ownerType: replacement.created.ownerType,
+        ownerId: replacement.created.ownerId,
+      },
+    });
+
+    return replacement.created;
   }
 
   async replaceDocumentWithUpload(
@@ -342,7 +419,7 @@ export class DocumentsService {
     },
     uploadedById?: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const replacement = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
       const oldDocument = await db.document.findUnique({
         where: { id },
@@ -363,7 +440,7 @@ export class DocumentsService {
         }
       }
 
-      await db.document.update({
+      const archived = await db.document.update({
         where: { id: oldDocument.id },
         data: {
           status: 'archived',
@@ -376,7 +453,7 @@ export class DocumentsService {
           : oldDocument.expiryDate;
       const status = this.getDocumentStatus(expiryDate);
 
-      return db.document.create({
+      const created = await db.document.create({
         data: {
           ownerType: oldDocument.ownerType,
           ownerId: oldDocument.ownerId,
@@ -394,22 +471,75 @@ export class DocumentsService {
           uploadedBy: true,
         },
       });
+
+      return { archived, created };
     });
+
+    await this.safeAuditLog({
+      actorUserId: uploadedById,
+      action: 'document.archived',
+      entityType: 'document',
+      entityId: replacement.archived.id,
+      summary: 'Document archived during upload replacement',
+      metadata: {
+        ownerType: replacement.archived.ownerType,
+        ownerId: replacement.archived.ownerId,
+      },
+    });
+    await this.safeAuditLog({
+      actorUserId: uploadedById,
+      action: 'document.replaced',
+      entityType: 'document',
+      entityId: replacement.created.id,
+      summary: 'Document replaced via upload',
+      metadata: {
+        replacedDocumentId: id,
+        ownerType: replacement.created.ownerType,
+        ownerId: replacement.created.ownerId,
+      },
+    });
+    await this.safeAuditLog({
+      actorUserId: uploadedById,
+      action: 'document.uploaded',
+      entityType: 'document',
+      entityId: replacement.created.id,
+      summary: 'Replacement document uploaded',
+      metadata: {
+        ownerType: replacement.created.ownerType,
+        ownerId: replacement.created.ownerId,
+      },
+    });
+
+    return replacement.created;
   }
 
-  async deleteDocument(id: string) {
+  async deleteDocument(id: string, actorUserId?: string) {
     const db = this.prisma as any;
     const existing = await db.document.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Document not found');
     }
 
-    return db.document.update({
+    const archived = await db.document.update({
       where: { id },
       data: {
         status: 'archived',
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'document.archived',
+      entityType: 'document',
+      entityId: archived.id,
+      summary: 'Document archived',
+      metadata: {
+        ownerType: archived.ownerType,
+        ownerId: archived.ownerId,
+      },
+    });
+
+    return archived;
   }
 
   async getExpiringDocuments(days = 90) {

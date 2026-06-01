@@ -9,6 +9,11 @@ import type {
   DriverMorningCheckin,
   DriverNotification,
   DriverRequest,
+  ConversationListItem,
+  ConversationDetail,
+  MessengerMessage,
+  SendMessagePayload,
+  MessengerUnreadCount,
 } from './types';
 
 type LoginResponse = {
@@ -142,6 +147,44 @@ export const driverApi = {
   },
   async markAllNotificationsRead() {
     const { data } = await apiClient.post('/driver/notifications/read-all');
+    return data;
+  },
+};
+
+export const messengerApi = {
+  async listConversations() {
+    const { data } = await apiClient.get<ConversationListItem[]>('/messenger/conversations');
+    return data;
+  },
+  async getConversation(id: string) {
+    const { data } = await apiClient.get<ConversationDetail>(`/messenger/conversations/${id}`);
+    return data;
+  },
+  async listMessages(
+    conversationId: string,
+    params?: { since?: string; afterId?: string; limit?: number },
+  ) {
+    const { data } = await apiClient.get<MessengerMessage[]>(
+      `/messenger/conversations/${conversationId}/messages`,
+      { params },
+    );
+    return data;
+  },
+  async sendMessage(conversationId: string, payload: SendMessagePayload) {
+    const { data } = await apiClient.post<MessengerMessage>(
+      `/messenger/conversations/${conversationId}/messages`,
+      payload,
+    );
+    return data;
+  },
+  async markConversationRead(conversationId: string) {
+    const { data } = await apiClient.post(
+      `/messenger/conversations/${conversationId}/read`,
+    );
+    return data;
+  },
+  async getUnreadCount() {
+    const { data } = await apiClient.get<MessengerUnreadCount>('/messenger/unread-count');
     return data;
   },
 };

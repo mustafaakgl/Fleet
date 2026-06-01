@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyEmailDto } from './dto/update-company-email.dto';
 
@@ -19,7 +21,25 @@ type EmailRow = {
 
 @Injectable()
 export class CompanyEmailsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private normalizeDate(dateInput: string | Date): Date {
     const parsed = dateInput instanceof Date ? new Date(dateInput) : new Date(dateInput);
@@ -103,7 +123,7 @@ export class CompanyEmailsService {
     });
   }
 
-  async generateDraftForCompany(dateInput: string | Date, companyId: string) {
+  async generateDraftForCompany(dateInput: string | Date, companyId: string, actorUserId?: string) {
     const date = this.normalizeDate(dateInput);
 
     const company = await this.prisma.company.findUnique({
@@ -135,6 +155,7 @@ export class CompanyEmailsService {
     const body = this.buildBody(date, company.name, rows);
     const recipientEmail = company.email ?? '';
 
+    let createdNewDraft = false;
     const result = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
       const existing = await db.companyEmail.findUnique({
@@ -161,7 +182,7 @@ export class CompanyEmailsService {
         });
       }
 
-      return db.companyEmail.create({
+      const created = await db.companyEmail.create({
         data: {
           companyId,
           date,
@@ -174,12 +195,30 @@ export class CompanyEmailsService {
           company: true,
         },
       });
+
+      createdNewDraft = true;
+      return created;
     });
+
+    if (createdNewDraft) {
+      await this.safeAuditLog({
+        actorUserId,
+        action: 'company_email.created',
+        entityType: 'company_email',
+        entityId: result.id,
+        summary: 'Company email draft created',
+        metadata: {
+          companyId: result.companyId,
+          status: result.status,
+          date: result.date.toISOString(),
+        },
+      });
+    }
 
     return result;
   }
 
-  async generateDraftsForDate(dateInput: string | Date) {
+  async generateDraftsForDate(dateInput: string | Date, actorUserId?: string) {
     const { start, end } = this.getDayRange(dateInput);
 
     const assignments = await this.prisma.assignment.findMany({
@@ -197,7 +236,7 @@ export class CompanyEmailsService {
 
     const drafts = [] as Array<unknown>;
     for (const item of assignments) {
-      const draft = await this.generateDraftForCompany(start, item.companyId);
+      const draft = await this.generateDraftForCompany(start, item.companyId, actorUserId);
       drafts.push(draft);
     }
 
@@ -253,7 +292,7 @@ export class CompanyEmailsService {
     return row;
   }
 
-  async updateDraft(id: string, input: UpdateCompanyEmailDto) {
+  async updateDraft(id: string, input: UpdateCompanyEmailDto, actorUserId?: string) {
     await this.getCompanyEmailById(id);
 
     const payload: Record<string, unknown> = {};
@@ -263,31 +302,59 @@ export class CompanyEmailsService {
     if (input.status !== undefined) payload.status = this.ensureStatus(input.status);
 
     const db = this.prisma as any;
-    return db.companyEmail.update({
+    const updated = await db.companyEmail.update({
       where: { id },
       data: payload,
       include: {
         company: true,
       },
     });
+
+    if (input.status !== undefined) {
+      await this.safeAuditLog({
+        actorUserId,
+        action: 'company_email.status_changed',
+        entityType: 'company_email',
+        entityId: updated.id,
+        summary: 'Company email status changed',
+        metadata: {
+          status: updated.status,
+        },
+      });
+    }
+
+    return updated;
   }
 
-  async markAsDraftReady(emailId: string) {
+  async markAsDraftReady(emailId: string, actorUserId?: string) {
     await this.getCompanyEmailById(emailId);
 
     const db = this.prisma as any;
-    return db.companyEmail.update({
+    const updated = await db.companyEmail.update({
       where: { id: emailId },
       data: { status: 'draft_ready' },
       include: { company: true },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'company_email.marked_draft_ready',
+      entityType: 'company_email',
+      entityId: updated.id,
+      summary: 'Company email marked as draft ready',
+      metadata: {
+        status: updated.status,
+      },
+    });
+
+    return updated;
   }
 
-  async markAsSent(emailId: string) {
+  async markAsSent(emailId: string, actorUserId?: string) {
     await this.getCompanyEmailById(emailId);
 
     const db = this.prisma as any;
-    return db.companyEmail.update({
+    const updated = await db.companyEmail.update({
       where: { id: emailId },
       data: {
         status: 'sent',
@@ -297,13 +364,26 @@ export class CompanyEmailsService {
         company: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'company_email.status_changed',
+      entityType: 'company_email',
+      entityId: updated.id,
+      summary: 'Company email marked sent',
+      metadata: {
+        status: updated.status,
+      },
+    });
+
+    return updated;
   }
 
-  async markAsFailed(emailId: string) {
+  async markAsFailed(emailId: string, actorUserId?: string) {
     await this.getCompanyEmailById(emailId);
 
     const db = this.prisma as any;
-    return db.companyEmail.update({
+    const updated = await db.companyEmail.update({
       where: { id: emailId },
       data: {
         status: 'failed',
@@ -312,6 +392,19 @@ export class CompanyEmailsService {
         company: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'company_email.status_changed',
+      entityType: 'company_email',
+      entityId: updated.id,
+      summary: 'Company email marked failed',
+      metadata: {
+        status: updated.status,
+      },
+    });
+
+    return updated;
   }
 
   async updateEmailStatusAfterAssignmentChange(companyId: string, dateInput: string | Date) {

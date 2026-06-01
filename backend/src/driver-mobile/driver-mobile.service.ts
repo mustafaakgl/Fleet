@@ -9,6 +9,7 @@ import {
   RequestType,
   RequestStatus,
 } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDriverMorningCheckinDto } from './dto/create-driver-morning-checkin.dto';
 import { CreateDriverRequestDto } from './dto/create-driver-request.dto';
@@ -45,7 +46,23 @@ export class DriverMobileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly auditService: AuditService,
   ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private dayRange(value: string): { start: Date; end: Date } {
     const date = new Date(value);
@@ -255,6 +272,19 @@ export class DriverMobileService {
       },
     });
 
+    await this.safeAuditLog({
+      actorUserId: userId,
+      action: 'driver_mobile.morning_checkin_created',
+      entityType: 'morning_checkin',
+      entityId: row.id,
+      summary: 'Driver morning check-in created',
+      metadata: {
+        driverId: driver.id,
+        date: row.date.toISOString(),
+        status: row.status,
+      },
+    });
+
     return {
       id: row.id,
       date: row.date.toISOString(),
@@ -392,6 +422,19 @@ export class DriverMobileService {
       include: handoverInclude,
     });
 
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.handover_photo_uploaded',
+      entityType: 'vehicle_handover',
+      entityId: updatedHandover.id,
+      summary: 'Driver uploaded handover photo',
+      metadata: {
+        handoverId,
+        photoDocumentId: document.id,
+        photoStatus: updatedHandover.photoStatus,
+      },
+    });
+
     return {
       handover: updatedHandover,
       photo: {
@@ -427,7 +470,7 @@ export class DriverMobileService {
       throw new BadRequestException('endDate must be greater than or equal to startDate');
     }
 
-    return this.prisma.request.create({
+    const created = await this.prisma.request.create({
       data: {
         driverId: driver.id,
         type: dto.type,
@@ -437,6 +480,21 @@ export class DriverMobileService {
       },
       include: requestInclude,
     });
+
+    await this.safeAuditLog({
+      actorUserId: userId,
+      action: 'driver_mobile.request_created',
+      entityType: 'request',
+      entityId: created.id,
+      summary: 'Driver created request',
+      metadata: {
+        driverId: driver.id,
+        type: created.type,
+        status: created.status,
+      },
+    });
+
+    return created;
   }
 
   async listAccidents(userId: string, type?: string, status?: string) {
@@ -488,7 +546,7 @@ export class DriverMobileService {
 
     const companyId = dto.companyId ?? assignment?.companyId ?? null;
 
-    return this.prisma.accident.create({
+    const created = await this.prisma.accident.create({
       data: {
         type: dto.type,
         driverId: driver.id,
@@ -503,6 +561,21 @@ export class DriverMobileService {
       },
       include: incidentInclude,
     });
+
+    await this.safeAuditLog({
+      actorUserId: userId,
+      action: 'driver_mobile.incident_created',
+      entityType: 'incident',
+      entityId: created.id,
+      summary: 'Driver created incident',
+      metadata: {
+        driverId: driver.id,
+        type: created.type,
+        status: created.status,
+      },
+    });
+
+    return created;
   }
 
   async listNotifications(userId: string, status?: string) {

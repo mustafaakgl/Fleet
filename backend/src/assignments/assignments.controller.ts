@@ -56,21 +56,25 @@ export class AssignmentsController {
 
   @Patch(':id')
   @Roles(...OPERATIONAL_WRITE_ROLES)
-  update(@Param('id') id: string, @Body() dto: UpdateAssignmentDto) {
-    return this.assignments.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateAssignmentDto, @Req() req: AuthenticatedRequest) {
+    return this.assignments.update(id, dto, req.user.id);
   }
 
   @Post(':id/cancel')
   @Roles(...OPERATIONAL_WRITE_ROLES)
   @HttpCode(HttpStatus.OK)
-  cancel(@Param('id') id: string) {
-    return this.assignments.cancel(id);
+  cancel(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.assignments.cancel(id, req.user.id);
   }
 
   @Post(':id/transition')
   @Roles(...OPERATIONAL_WRITE_ROLES)
   @HttpCode(HttpStatus.OK)
-  transition(@Param('id') id: string, @Body() dto: TransitionAssignmentDto) {
-    return this.assignments.transition(id, dto.to);
+  transition(
+    @Param('id') id: string,
+    @Body() dto: TransitionAssignmentDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.assignments.transition(id, dto.to, req.user.id);
   }
 }

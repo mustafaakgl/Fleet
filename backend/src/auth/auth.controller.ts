@@ -14,8 +14,11 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto) {
-    return this.auth.login(dto.email, dto.password);
+  login(@Body() dto: LoginDto, @Req() req: Request) {
+    return this.auth.login(dto.email, dto.password, {
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? undefined,
+    });
   }
 
   @Get('me')

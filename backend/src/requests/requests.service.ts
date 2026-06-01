@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
@@ -32,7 +34,25 @@ const REQUEST_STATUSES: RequestStatus[] = ['pending', 'approved', 'rejected', 'c
 
 @Injectable()
 export class RequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private parseDateInput(value?: string): Date | undefined {
     if (value === undefined) {
@@ -93,7 +113,7 @@ export class RequestsService {
     return dates;
   }
 
-  async createRequest(dto: CreateRequestDto) {
+  async createRequest(dto: CreateRequestDto, actorUserId?: string) {
     const startDate = this.parseDateInput(dto.startDate);
     const endDate = this.parseDateInput(dto.endDate);
 
@@ -113,7 +133,7 @@ export class RequestsService {
     }
 
     const db = this.prisma as any;
-    return db.request.create({
+    const created = await db.request.create({
       data: {
         driverId: dto.driverId,
         type: requestType,
@@ -128,6 +148,21 @@ export class RequestsService {
         calendarEvents: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'request.created',
+      entityType: 'request',
+      entityId: created.id,
+      summary: 'Request created',
+      metadata: {
+        driverId: created.driverId,
+        type: created.type,
+        status: created.status,
+      },
+    });
+
+    return created;
   }
 
   async listRequests(filters: {
@@ -198,7 +233,7 @@ export class RequestsService {
     return request;
   }
 
-  async updateRequest(id: string, dto: UpdateRequestDto) {
+  async updateRequest(id: string, dto: UpdateRequestDto, actorUserId?: string) {
     await this.getRequestById(id);
 
     const payload: Record<string, unknown> = {};
@@ -235,7 +270,7 @@ export class RequestsService {
       throw new BadRequestException('endDate must be greater than or equal to startDate');
     }
 
-    return db.request.update({
+    const updated = await db.request.update({
       where: { id },
       data: payload,
       include: {
@@ -244,14 +279,28 @@ export class RequestsService {
         calendarEvents: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'request.updated',
+      entityType: 'request',
+      entityId: updated.id,
+      summary: 'Request updated',
+      metadata: {
+        status: updated.status,
+        type: updated.type,
+      },
+    });
+
+    return updated;
   }
 
-  async approveRequest(id: string, currentUserId: string) {
+  async approveRequest(id: string, currentUserId: string, actorUserId?: string) {
     if (!currentUserId) {
       throw new BadRequestException('currentUserId is required');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const approved = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
 
       const request = await db.request.findUnique({
@@ -314,9 +363,23 @@ export class RequestsService {
         },
       });
     });
+
+    await this.safeAuditLog({
+      actorUserId: actorUserId ?? currentUserId,
+      action: 'request.approved',
+      entityType: 'request',
+      entityId: approved.id,
+      summary: 'Request approved',
+      metadata: {
+        approvedById: currentUserId,
+        status: approved.status,
+      },
+    });
+
+    return approved;
   }
 
-  async rejectRequest(id: string) {
+  async rejectRequest(id: string, actorUserId?: string) {
     const db = this.prisma as any;
     const request = await db.request.findUnique({ where: { id } });
 
@@ -328,7 +391,7 @@ export class RequestsService {
       throw new BadRequestException('Only pending requests can be rejected');
     }
 
-    return db.request.update({
+    const rejected = await db.request.update({
       where: { id },
       data: {
         status: 'rejected',
@@ -339,10 +402,23 @@ export class RequestsService {
         calendarEvents: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'request.rejected',
+      entityType: 'request',
+      entityId: rejected.id,
+      summary: 'Request rejected',
+      metadata: {
+        status: rejected.status,
+      },
+    });
+
+    return rejected;
   }
 
-  async cancelRequest(id: string) {
-    return this.prisma.$transaction(async (tx) => {
+  async cancelRequest(id: string, actorUserId?: string) {
+    const cancelled = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
 
       const request = await db.request.findUnique({ where: { id } });
@@ -368,5 +444,18 @@ export class RequestsService {
         },
       });
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'request.cancelled',
+      entityType: 'request',
+      entityId: cancelled.id,
+      summary: 'Request cancelled',
+      metadata: {
+        status: cancelled.status,
+      },
+    });
+
+    return cancelled;
   }
 }

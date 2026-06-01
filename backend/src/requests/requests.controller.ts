@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -38,31 +39,35 @@ export class RequestsController {
 
 	@Post()
 	@Roles(...OPERATIONAL_WRITE_ROLES)
-	createRequest(@Body() dto: CreateRequestDto) {
-		return this.requestsService.createRequest(dto);
+	createRequest(@Body() dto: CreateRequestDto, @CurrentUser('id') currentUserId?: string) {
+		return this.requestsService.createRequest(dto, currentUserId);
 	}
 
 	@Post(':id/approve')
 	@Roles(...OPERATIONAL_WRITE_ROLES)
-	approveRequest(@Param('id') id: string, @Body('currentUserId') currentUserId: string) {
-		return this.requestsService.approveRequest(id, currentUserId);
+	approveRequest(
+		@Param('id') id: string,
+		@Body('currentUserId') currentUserId: string,
+		@CurrentUser('id') actorUserId?: string,
+	) {
+		return this.requestsService.approveRequest(id, currentUserId, actorUserId);
 	}
 
 	@Post(':id/reject')
 	@Roles(...OPERATIONAL_WRITE_ROLES)
-	rejectRequest(@Param('id') id: string) {
-		return this.requestsService.rejectRequest(id);
+	rejectRequest(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
+		return this.requestsService.rejectRequest(id, currentUserId);
 	}
 
 	@Post(':id/cancel')
 	@Roles(...OPERATIONAL_WRITE_ROLES)
-	cancelRequest(@Param('id') id: string) {
-		return this.requestsService.cancelRequest(id);
+	cancelRequest(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
+		return this.requestsService.cancelRequest(id, currentUserId);
 	}
 
 	@Patch(':id')
 	@Roles(...OPERATIONAL_WRITE_ROLES)
-	updateRequest(@Param('id') id: string, @Body() dto: UpdateRequestDto) {
-		return this.requestsService.updateRequest(id, dto);
+	updateRequest(@Param('id') id: string, @Body() dto: UpdateRequestDto, @CurrentUser('id') currentUserId?: string) {
+		return this.requestsService.updateRequest(id, dto, currentUserId);
 	}
 }

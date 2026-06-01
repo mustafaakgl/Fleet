@@ -12,6 +12,7 @@ const PROTECTED_PREFIXES = [
   '/documents',
   '/requests',
   '/assignments',
+  '/messenger',
 ];
 
 interface ProtectedRouteProps {

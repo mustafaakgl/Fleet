@@ -65,11 +65,17 @@ export class AccidentsController {
   }
 
   @Post()
-  createIncident(@Body() data: CreateAccidentDto, @CurrentUser('role') role?: string) {
+  createIncident(
+    @Body() data: CreateAccidentDto,
+    @CurrentUser('role') role?: string,
+    @CurrentUser('id') userId?: string,
+  ) {
     if (!canViewFinancialFields(role) && data.damageValue !== undefined) {
       throw new ForbiddenException('You do not have permission to set damage value');
     }
-    return this.accidentsService.createIncident(data).then((result) => maskFinancialFields(result, role));
+    return this.accidentsService
+      .createIncident(data, userId)
+      .then((result) => maskFinancialFields(result, role));
   }
 
   @Patch(':id')
@@ -85,7 +91,10 @@ export class AccidentsController {
     @Param('id') id: string,
     @Body('status') status: 'reported' | 'under_review' | 'resolved' | 'rejected',
     @CurrentUser('role') role?: string,
+    @CurrentUser('id') userId?: string,
   ) {
-    return this.accidentsService.updateIncidentStatus(id, status).then((result) => maskFinancialFields(result, role));
+    return this.accidentsService
+      .updateIncidentStatus(id, status, userId)
+      .then((result) => maskFinancialFields(result, role));
   }
 }

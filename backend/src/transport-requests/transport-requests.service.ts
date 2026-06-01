@@ -9,6 +9,7 @@ import {
   VehicleStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { CompanyEmailsService } from '../company-emails/company-emails.service';
 
 type DayRange = {
@@ -27,7 +28,23 @@ export class TransportRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly companyEmailsService: CompanyEmailsService,
+    private readonly auditService: AuditService,
   ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private getDayRange(date: Date): DayRange {
     const start = new Date(date);
@@ -164,8 +181,8 @@ export class TransportRequestsService {
     startTime: string;
     endTime: string;
     notes?: string;
-  }) {
-    return this.prisma.transportRequest.create({
+  }, actorUserId?: string) {
+    const created = await this.prisma.transportRequest.create({
       data: {
         driverId: input.driverId,
         vehicleId: input.vehicleId,
@@ -182,6 +199,21 @@ export class TransportRequestsService {
       },
       include: { driver: true, vehicle: true, company: true },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'transport_request.created',
+      entityType: 'transport_request',
+      entityId: created.id,
+      summary: 'Transport request created',
+      metadata: {
+        status: created.status,
+        driverId: created.driverId,
+        vehicleId: created.vehicleId,
+      },
+    });
+
+    return created;
   }
 
   async getById(id: string) {
@@ -304,6 +336,18 @@ export class TransportRequestsService {
 
     await this.companyEmailsService.updateEmailStatusAfterAssignmentChange(result.assignment.companyId, result.assignment.workDate);
 
+    await this.safeAuditLog({
+      actorUserId: currentUserId,
+      action: 'transport_request.approved',
+      entityType: 'transport_request',
+      entityId: result.request.id,
+      summary: 'Transport request approved',
+      metadata: {
+        status: result.request.status,
+        assignmentId: result.assignment.id,
+      },
+    });
+
     return {
       request: result.request,
       assignment: result.assignment,
@@ -311,7 +355,7 @@ export class TransportRequestsService {
     };
   }
 
-  async rejectRequest(requestId: string, reason?: string) {
+  async rejectRequest(requestId: string, reason?: string, actorUserId?: string) {
     // TODO(notifications): create notification when a new transport request is created.
     const request = await this.prisma.transportRequest.findUnique({
       where: { id: requestId },
@@ -322,12 +366,26 @@ export class TransportRequestsService {
       throw new NotFoundException('Transport request not found');
     }
 
-    return this.prisma.transportRequest.update({
+    const rejected = await this.prisma.transportRequest.update({
       where: { id: requestId },
       data: {
         status: TransportRequestStatus.rejected,
         conflictReason: reason ?? null,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'transport_request.rejected',
+      entityType: 'transport_request',
+      entityId: rejected.id,
+      summary: 'Transport request rejected',
+      metadata: {
+        status: rejected.status,
+        reason: reason ?? null,
+      },
+    });
+
+    return rejected;
   }
 }

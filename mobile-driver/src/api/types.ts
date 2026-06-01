@@ -125,3 +125,84 @@ export type DriverNotification = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type MessengerLanguage = 'de' | 'tr' | 'en';
+export type MessageTranslationStatus = 'translated' | 'failed' | 'not_requested' | 'pending';
+
+export type ConversationParticipant = {
+  userId: string;
+  role: 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
+  joinedAt: string;
+  lastReadAt: string | null;
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+    role: 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
+  };
+};
+
+export type MessengerDriverSummary = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  userId: string | null;
+};
+
+export type MessengerMessage = {
+  id: string;
+  conversationId: string;
+  senderUserId: string;
+  senderName: string;
+  originalText: string;
+  translatedText: string | null;
+  originalLanguage: MessengerLanguage;
+  targetLanguage: MessengerLanguage | null;
+  translationStatus: MessageTranslationStatus;
+  createdAt: string;
+  readByCurrentUser: boolean;
+};
+
+export type ConversationListItem = {
+  id: string;
+  subject: string | null;
+  driver: MessengerDriverSummary;
+  participants: ConversationParticipant[];
+  lastMessage: {
+    id: string;
+    senderUserId: string;
+    senderName: string;
+    originalText: string;
+    translatedText: string | null;
+    originalLanguage: MessengerLanguage;
+    targetLanguage: MessengerLanguage | null;
+    translationStatus: MessageTranslationStatus;
+    createdAt: string;
+  } | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+};
+
+export type ConversationDetail = {
+  id: string;
+  subject: string | null;
+  driver: MessengerDriverSummary;
+  participants: ConversationParticipant[];
+  lastMessageAt: string | null;
+  unreadCount: number;
+  messagesPreview: MessengerMessage[];
+};
+
+export type SendMessagePayload = {
+  text: string;
+  originalLanguage: MessengerLanguage;
+  targetLanguage?: MessengerLanguage;
+};
+
+export type MessengerUnreadCount = {
+  total: number;
+  byConversation: Array<{
+    conversationId: string;
+    count: number;
+  }>;
+};

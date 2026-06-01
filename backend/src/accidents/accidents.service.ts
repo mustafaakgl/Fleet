@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccidentDto } from './dto/create-accident.dto';
 import { UpdateAccidentDto } from './dto/update-accident.dto';
@@ -12,7 +14,25 @@ const INCIDENT_STATUSES: IncidentStatus[] = ['reported', 'under_review', 'resolv
 
 @Injectable()
 export class AccidentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private parseIncidentDateTime(value: string): Date {
     const parsed = new Date(value);
@@ -94,7 +114,7 @@ export class AccidentsService {
     return 'green';
   }
 
-  async createIncident(data: CreateAccidentDto) {
+  async createIncident(data: CreateAccidentDto, actorUserId?: string) {
     if (!data.description || data.description.trim() === '') {
       throw new BadRequestException('description is required');
     }
@@ -114,7 +134,7 @@ export class AccidentsService {
     const incidentType = this.ensureIncidentType(data.type);
     const incidentStatus = data.status ? this.ensureIncidentStatus(data.status) : 'reported';
 
-    return this.prisma.$transaction(async (tx) => {
+    const incident = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
 
       const incident = await db.accident.create({
@@ -144,6 +164,22 @@ export class AccidentsService {
 
       return incident;
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'incident.created',
+      entityType: 'incident',
+      entityId: incident.id,
+      summary: 'Incident created',
+      metadata: {
+        type: incident.type,
+        status: incident.status,
+        driverId: incident.driverId,
+        vehicleId: incident.vehicleId,
+      },
+    });
+
+    return incident;
   }
 
   async listIncidents(filters: {
@@ -281,11 +317,11 @@ export class AccidentsService {
     });
   }
 
-  async updateIncidentStatus(id: string, status: IncidentStatus) {
+  async updateIncidentStatus(id: string, status: IncidentStatus, actorUserId?: string) {
     const normalizedStatus = this.ensureIncidentStatus(status);
     const existing = await this.getIncidentById(id);
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
 
       const updated = await db.accident.update({
@@ -306,6 +342,20 @@ export class AccidentsService {
 
       return updated;
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'incident.status_changed',
+      entityType: 'incident',
+      entityId: updated.id,
+      summary: 'Incident status changed',
+      metadata: {
+        fromStatus: existing.status,
+        toStatus: updated.status,
+      },
+    });
+
+    return updated;
   }
 
   async getDriverIncidents(driverId: string) {

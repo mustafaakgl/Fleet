@@ -198,6 +198,13 @@ enum ReminderType {
   custom
 }
 
+enum MessageTranslationStatus {
+  not_requested
+  pending
+  translated
+  failed
+}
+
 model User {
   id           String     @id @default(cuid())
   fullName     String
@@ -214,6 +221,11 @@ model User {
   approvedRequests   Request[]      @relation("ApprovedRequests")
   uploadedDocuments  Document[]     @relation("DocumentUploadedBy")
   notifications      Notification[]
+  createdConversations Conversation[]           @relation("ConversationCreatedBy")
+  conversationParticipants ConversationParticipant[]
+  sentMessages       Message[]                  @relation("MessageSentBy")
+  messageReads       MessageRead[]
+  auditLogs         AuditLog[]
 }
 
 model Driver {
@@ -244,6 +256,7 @@ model Driver {
   vehicleHandovers  VehicleHandover[]
   accidents         Accident[]
   morningCheckins   MorningCheckin[]
+  conversations     Conversation[]
 }
 
 model Vehicle {
@@ -569,4 +582,95 @@ model ServiceRecord {
 
   @@index([vehicleId, date])
   @@index([repairCompany])
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  driverId      String
+  createdById   String
+  subject       String?
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  driver       Driver                     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  createdBy    User                       @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([driverId, updatedAt])
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  role           UserRole
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, conversationId])
+}
+
+model Message {
+  id                String                   @id @default(cuid())
+  conversationId    String
+  senderUserId      String
+  originalText      String
+  translatedText    String?
+  originalLanguage  String
+  targetLanguage    String?
+  translationStatus MessageTranslationStatus @default(not_requested)
+  translatedAt      DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSentBy", fields: [senderUserId], references: [id], onDelete: Restrict)
+  reads        MessageRead[]
+
+  @@index([conversationId, createdAt])
+  @@index([senderUserId, createdAt])
+}
+
+model MessageRead {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId, readAt])
+  @@index([messageId])
+}
+
+model AuditLog {
+  id          String @id @default(cuid())
+  actorUserId String?
+  actorUser   User?  @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  action     String
+  entityType String
+  entityId   String?
+
+  summary   String?
+  metadata  Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([createdAt])
 }

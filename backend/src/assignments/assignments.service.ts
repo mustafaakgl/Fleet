@@ -9,6 +9,7 @@ import {
   VehicleStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { CompanyEmailsService } from '../company-emails/company-emails.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -75,7 +76,23 @@ export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly companyEmailsService: CompanyEmailsService,
+    private readonly auditService: AuditService,
   ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private getDayRange(date: Date): DayRange {
     const start = new Date(date);
@@ -238,10 +255,24 @@ export class AssignmentsService {
       created.workDate,
     );
 
+    await this.safeAuditLog({
+      actorUserId: currentUserId,
+      action: 'assignment.created',
+      entityType: 'assignment',
+      entityId: created.id,
+      summary: 'Assignment created',
+      metadata: {
+        driverId: created.driverId,
+        vehicleId: created.vehicleId,
+        companyId: created.companyId,
+        status: created.status,
+      },
+    });
+
     return toClientAssignment(created);
   }
 
-  async update(id: string, dto: UpdateAssignmentDto) {
+  async update(id: string, dto: UpdateAssignmentDto, actorUserId?: string) {
     const existing = await this.prisma.assignment.findUnique({
       where: { id },
       select: {
@@ -308,10 +339,22 @@ export class AssignmentsService {
       );
     }
 
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'assignment.updated',
+      entityType: 'assignment',
+      entityId: updated.id,
+      summary: 'Assignment updated',
+      metadata: {
+        status: updated.status,
+        workDate: updated.workDate.toISOString(),
+      },
+    });
+
     return toClientAssignment(updated);
   }
 
-  async transition(id: string, to: AssignmentTransitionTarget) {
+  async transition(id: string, to: AssignmentTransitionTarget, actorUserId?: string) {
     const existing = await this.prisma.assignment.findUnique({
       where: { id },
       select: { id: true, status: true },
@@ -331,10 +374,22 @@ export class AssignmentsService {
       include: clientInclude,
     });
 
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'assignment.updated',
+      entityType: 'assignment',
+      entityId: updated.id,
+      summary: 'Assignment status transitioned',
+      metadata: {
+        fromStatus: existing.status,
+        toStatus: updated.status,
+      },
+    });
+
     return toClientAssignment(updated);
   }
 
-  async cancel(id: string) {
+  async cancel(id: string, actorUserId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.assignment.findUnique({
         where: { id },
@@ -369,6 +424,18 @@ export class AssignmentsService {
       result.companyId,
       result.workDate,
     );
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'assignment.cancelled',
+      entityType: 'assignment',
+      entityId: result.id,
+      summary: 'Assignment cancelled',
+      metadata: {
+        status: result.status,
+        workDate: result.workDate.toISOString(),
+      },
+    });
 
     return toClientAssignment(result);
   }

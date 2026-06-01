@@ -223,7 +223,7 @@ export class DocumentsController {
   }
 
   @Delete(':id')
-  deleteDocument(@Param('id') id: string) {
-    return this.documentsService.deleteDocument(id);
+  deleteDocument(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
+    return this.documentsService.deleteDocument(id, currentUserId);
   }
 }

@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -47,7 +48,7 @@ export class TransportRequestsController {
   @Post()
   @Roles(...OPERATIONAL_WRITE_ROLES)
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateTransportRequestDto) {
+  create(@Body() dto: CreateTransportRequestDto, @CurrentUser('id') currentUserId?: string) {
     return this.transport.createRequest({
       driverId: dto.driver_id,
       vehicleId: dto.vehicle_id,
@@ -60,7 +61,7 @@ export class TransportRequestsController {
       startTime: dto.start_time,
       endTime: dto.end_time,
       notes: dto.notes,
-    });
+    }, currentUserId);
   }
 
   @Post(':id/approve')
@@ -73,7 +74,11 @@ export class TransportRequestsController {
   @Post(':id/reject')
   @Roles(...OPERATIONAL_WRITE_ROLES)
   @HttpCode(HttpStatus.OK)
-  reject(@Param('id') id: string, @Body() dto: RejectTransportRequestDto) {
-    return this.transport.rejectRequest(id, dto.reason);
+  reject(
+    @Param('id') id: string,
+    @Body() dto: RejectTransportRequestDto,
+    @CurrentUser('id') currentUserId?: string,
+  ) {
+    return this.transport.rejectRequest(id, dto.reason, currentUserId);
   }
 }

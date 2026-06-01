@@ -22,6 +22,8 @@ import { SearchModule } from './search/search.module';
 import { ServiceRecordsModule } from './service-records/service-records.module';
 import { MorningCheckinsModule } from './morning-checkins/morning-checkins.module';
 import { DriverMobileModule } from './driver-mobile/driver-mobile.module';
+import { MessengerModule } from './messenger/messenger.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { DriverMobileModule } from './driver-mobile/driver-mobile.module';
     ServiceRecordsModule,
     MorningCheckinsModule,
     DriverMobileModule,
+    MessengerModule,
+    AuditModule,
   ],
 })
 export class AppModule {}

@@ -1,6 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface AuthUserPayload {
@@ -16,20 +18,60 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly auditService: AuditService,
   ) {}
 
-  async login(email: string, password: string): Promise<{
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+    ipAddress?: string;
+    userAgent?: string;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
+
+  async login(
+    email: string,
+    password: string,
+    context?: { ipAddress?: string; userAgent?: string },
+  ): Promise<{
     accessToken: string;
     user: AuthUserPayload;
   }> {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user || user.status !== 'active') {
+      await this.safeAuditLog({
+        action: 'auth.login_failed',
+        entityType: 'auth',
+        summary: 'Login failed',
+        metadata: { email: normalizedEmail, reason: 'invalid_credentials' },
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
+      await this.safeAuditLog({
+        actorUserId: user.id,
+        action: 'auth.login_failed',
+        entityType: 'auth',
+        entityId: user.id,
+        summary: 'Login failed',
+        metadata: { reason: 'invalid_credentials' },
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -37,6 +79,17 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+    });
+
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'auth.login_success',
+      entityType: 'auth',
+      entityId: user.id,
+      summary: 'User login successful',
+      metadata: { role: user.role },
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
     });
 
     return {

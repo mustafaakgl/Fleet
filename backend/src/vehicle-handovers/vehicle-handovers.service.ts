@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVehicleHandoverDto } from './dto/create-vehicle-handover.dto';
 import { UpdateVehicleHandoverDto } from './dto/update-vehicle-handover.dto';
@@ -9,7 +11,25 @@ type HandoverStatus = 'pending' | 'completed';
 
 @Injectable()
 export class VehicleHandoversService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  private async safeAuditLog(params: {
+    actorUserId?: string;
+    action: string;
+    entityType: string;
+    entityId?: string;
+    summary?: string;
+    metadata?: Prisma.InputJsonValue;
+  }) {
+    try {
+      await this.auditService.logAction(params);
+    } catch (error) {
+      console.warn('Audit log failed:', error);
+    }
+  }
 
   private ensureDate(value: string): Date {
     const parsed = new Date(value);
@@ -81,7 +101,7 @@ export class VehicleHandoversService {
     };
   }
 
-  async createHandover(dto: CreateVehicleHandoverDto) {
+  async createHandover(dto: CreateVehicleHandoverDto, actorUserId?: string) {
     const handoverDateTime = this.ensureDate(dto.handoverDateTime);
     const handoverType = this.ensureHandoverType(dto.handoverType);
 
@@ -124,7 +144,7 @@ export class VehicleHandoversService {
     const rule = this.calculatePhotoRequirement(dto.previousVehicleId ?? null, dto.vehicleId);
 
     const db = this.prisma as any;
-    return db.vehicleHandover.create({
+    const created = await db.vehicleHandover.create({
       data: {
         driverId: dto.driverId,
         vehicleId: dto.vehicleId,
@@ -145,10 +165,26 @@ export class VehicleHandoversService {
         assignment: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'handover.created',
+      entityType: 'vehicle_handover',
+      entityId: created.id,
+      summary: 'Vehicle handover created',
+      metadata: {
+        driverId: created.driverId,
+        vehicleId: created.vehicleId,
+        status: created.status,
+        photoStatus: created.photoStatus,
+      },
+    });
+
+    return created;
   }
 
-  async createHandoverFromAssignment(assignmentId: string) {
-    return this.prisma.$transaction(async (tx) => {
+  async createHandoverFromAssignment(assignmentId: string, actorUserId?: string) {
+    const created = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
 
       const assignment = await db.assignment.findUnique({
@@ -200,6 +236,22 @@ export class VehicleHandoversService {
         },
       });
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'handover.created',
+      entityType: 'vehicle_handover',
+      entityId: created.id,
+      summary: 'Vehicle handover created from assignment',
+      metadata: {
+        assignmentId,
+        driverId: created.driverId,
+        vehicleId: created.vehicleId,
+        status: created.status,
+      },
+    });
+
+    return created;
   }
 
   async listHandovers(filters: {
@@ -330,11 +382,11 @@ export class VehicleHandoversService {
     });
   }
 
-  async rejectPhoto(handoverId: string) {
+  async rejectPhoto(handoverId: string, actorUserId?: string) {
     await this.getHandoverById(handoverId);
 
     const db = this.prisma as any;
-    return db.vehicleHandover.update({
+    const rejected = await db.vehicleHandover.update({
       where: { id: handoverId },
       data: {
         photoStatus: 'rejected',
@@ -346,13 +398,27 @@ export class VehicleHandoversService {
         assignment: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'handover.rejected',
+      entityType: 'vehicle_handover',
+      entityId: rejected.id,
+      summary: 'Handover photo rejected',
+      metadata: {
+        status: rejected.status,
+        photoStatus: rejected.photoStatus,
+      },
+    });
+
+    return rejected;
   }
 
-  async markCompleted(handoverId: string) {
+  async markCompleted(handoverId: string, actorUserId?: string) {
     await this.getHandoverById(handoverId);
 
     const db = this.prisma as any;
-    return db.vehicleHandover.update({
+    const completed = await db.vehicleHandover.update({
       where: { id: handoverId },
       data: {
         status: 'completed',
@@ -363,5 +429,19 @@ export class VehicleHandoversService {
         assignment: true,
       },
     });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'handover.completed',
+      entityType: 'vehicle_handover',
+      entityId: completed.id,
+      summary: 'Handover marked completed',
+      metadata: {
+        status: completed.status,
+        photoStatus: completed.photoStatus,
+      },
+    });
+
+    return completed;
   }
 }

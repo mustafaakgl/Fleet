@@ -12,6 +12,7 @@ import {
   HandoverType,
   IncidentStatus,
   IncidentType,
+  MessageTranslationStatus,
   NotificationPriority,
   NotificationStatus,
   NotificationType,
@@ -1109,6 +1110,161 @@ async function main(): Promise<void> {
     !penny
   ) {
     throw new Error('Seed references are incomplete.');
+  }
+
+  await prisma.conversation.upsert({
+    where: { id: 'conv_office_driver_ilker' },
+    update: {
+      driverId: ilker.id,
+      createdById: officeUser.id,
+      subject: 'Today route updates',
+      lastMessageAt: atTime(today, 8, 20),
+    },
+    create: {
+      id: 'conv_office_driver_ilker',
+      driverId: ilker.id,
+      createdById: officeUser.id,
+      subject: 'Today route updates',
+      lastMessageAt: atTime(today, 8, 20),
+    },
+  });
+
+  await prisma.conversation.upsert({
+    where: { id: 'conv_admin_driver_ilker' },
+    update: {
+      driverId: ilker.id,
+      createdById: adminUser.id,
+      subject: 'Invoice and document follow-up',
+      lastMessageAt: atTime(today, 11, 5),
+    },
+    create: {
+      id: 'conv_admin_driver_ilker',
+      driverId: ilker.id,
+      createdById: adminUser.id,
+      subject: 'Invoice and document follow-up',
+      lastMessageAt: atTime(today, 11, 5),
+    },
+  });
+
+  const participantRows = [
+    { conversationId: 'conv_office_driver_ilker', userId: officeUser.id, role: UserRole.office, lastReadAt: atTime(today, 8, 20) },
+    { conversationId: 'conv_office_driver_ilker', userId: driverQaUser.id, role: UserRole.driver, lastReadAt: atTime(today, 8, 5) },
+    { conversationId: 'conv_admin_driver_ilker', userId: adminUser.id, role: UserRole.admin, lastReadAt: atTime(today, 11, 5) },
+    { conversationId: 'conv_admin_driver_ilker', userId: accountingUser.id, role: UserRole.accounting, lastReadAt: atTime(today, 10, 50) },
+    { conversationId: 'conv_admin_driver_ilker', userId: bossUser.id, role: UserRole.boss, lastReadAt: atTime(today, 10, 45) },
+    { conversationId: 'conv_admin_driver_ilker', userId: driverQaUser.id, role: UserRole.driver, lastReadAt: atTime(today, 10, 40) },
+  ] as const;
+
+  for (const participant of participantRows) {
+    await prisma.conversationParticipant.upsert({
+      where: {
+        conversationId_userId: {
+          conversationId: participant.conversationId,
+          userId: participant.userId,
+        },
+      },
+      update: {
+        role: participant.role,
+        lastReadAt: participant.lastReadAt,
+      },
+      create: {
+        conversationId: participant.conversationId,
+        userId: participant.userId,
+        role: participant.role,
+        lastReadAt: participant.lastReadAt,
+      },
+    });
+  }
+
+  const messageRows = [
+    {
+      id: 'msg_office_driver_1',
+      conversationId: 'conv_office_driver_ilker',
+      senderUserId: officeUser.id,
+      originalText: 'Heute bitte zuerst Leipzig Hub anfahren.',
+      translatedText: 'Bugun lutfen once Leipzig hub noktasina gidin.',
+      originalLanguage: 'de',
+      targetLanguage: 'tr',
+      translationStatus: MessageTranslationStatus.translated,
+      translatedAt: atTime(today, 7, 46),
+      createdAt: atTime(today, 7, 45),
+    },
+    {
+      id: 'msg_office_driver_2',
+      conversationId: 'conv_office_driver_ilker',
+      senderUserId: driverQaUser.id,
+      originalText: 'Tamam, once Leipzig teslimatini yapacagim.',
+      translatedText: 'Verstanden, ich erledige zuerst die Leipzig-Lieferung.',
+      originalLanguage: 'tr',
+      targetLanguage: 'de',
+      translationStatus: MessageTranslationStatus.translated,
+      translatedAt: atTime(today, 8, 6),
+      createdAt: atTime(today, 8, 5),
+    },
+    {
+      id: 'msg_admin_driver_1',
+      conversationId: 'conv_admin_driver_ilker',
+      senderUserId: accountingUser.id,
+      originalText: 'Please upload the handover photo before end of shift.',
+      translatedText: 'Vardiya bitmeden once teslim fotografini yukleyin.',
+      originalLanguage: 'en',
+      targetLanguage: 'tr',
+      translationStatus: MessageTranslationStatus.translated,
+      translatedAt: atTime(today, 10, 41),
+      createdAt: atTime(today, 10, 40),
+    },
+    {
+      id: 'msg_admin_driver_2',
+      conversationId: 'conv_admin_driver_ilker',
+      senderUserId: bossUser.id,
+      originalText: 'Danke fur die schnelle Ruckmeldung.',
+      translatedText: null,
+      originalLanguage: 'de',
+      targetLanguage: null,
+      translationStatus: MessageTranslationStatus.not_requested,
+      translatedAt: null,
+      createdAt: atTime(today, 11, 5),
+    },
+  ] as const;
+
+  for (const message of messageRows) {
+    await prisma.message.upsert({
+      where: { id: message.id },
+      update: {
+        conversationId: message.conversationId,
+        senderUserId: message.senderUserId,
+        originalText: message.originalText,
+        translatedText: message.translatedText,
+        originalLanguage: message.originalLanguage,
+        targetLanguage: message.targetLanguage,
+        translationStatus: message.translationStatus,
+        translatedAt: message.translatedAt,
+        createdAt: message.createdAt,
+      },
+      create: message,
+    });
+  }
+
+  const readRows = [
+    { messageId: 'msg_office_driver_1', userId: officeUser.id, readAt: atTime(today, 7, 46) },
+    { messageId: 'msg_office_driver_1', userId: driverQaUser.id, readAt: atTime(today, 7, 50) },
+    { messageId: 'msg_office_driver_2', userId: officeUser.id, readAt: atTime(today, 8, 7) },
+    { messageId: 'msg_admin_driver_1', userId: accountingUser.id, readAt: atTime(today, 10, 41) },
+    { messageId: 'msg_admin_driver_1', userId: driverQaUser.id, readAt: atTime(today, 10, 55) },
+    { messageId: 'msg_admin_driver_2', userId: bossUser.id, readAt: atTime(today, 11, 5) },
+  ] as const;
+
+  for (const read of readRows) {
+    await prisma.messageRead.upsert({
+      where: {
+        messageId_userId: {
+          messageId: read.messageId,
+          userId: read.userId,
+        },
+      },
+      update: { readAt: read.readAt },
+      create: read,
+    });
   }
 
   await upsertVehicle({

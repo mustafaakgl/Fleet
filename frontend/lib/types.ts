@@ -478,3 +478,86 @@ export interface DashboardSummary {
   driverRiskOverview: DashboardDriverRiskRow[];
   revenueAnalytics?: DashboardRevenueAnalytics;
 }
+
+// ─── Messenger ─────────────────────────────────────────────────────────────
+
+export type MessengerLanguage = 'de' | 'tr' | 'en';
+export type MessageTranslationStatus = 'translated' | 'failed' | 'not_requested' | 'pending';
+
+export interface ConversationParticipant {
+  userId: string;
+  role: UserRole;
+  joinedAt: string;
+  lastReadAt: string | null;
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+    role: UserRole;
+  };
+}
+
+export interface MessengerDriverSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  userId: string | null;
+}
+
+export interface MessengerMessage {
+  id: string;
+  conversationId: string;
+  senderUserId: string;
+  senderName: string;
+  originalText: string;
+  translatedText: string | null;
+  originalLanguage: MessengerLanguage;
+  targetLanguage: MessengerLanguage | null;
+  translationStatus: MessageTranslationStatus;
+  createdAt: string;
+  readByCurrentUser: boolean;
+}
+
+export interface ConversationListItem {
+  id: string;
+  subject: string | null;
+  driver: MessengerDriverSummary;
+  participants: ConversationParticipant[];
+  lastMessage: {
+    id: string;
+    senderUserId: string;
+    senderName: string;
+    originalText: string;
+    translatedText: string | null;
+    originalLanguage: MessengerLanguage;
+    targetLanguage: MessengerLanguage | null;
+    translationStatus: MessageTranslationStatus;
+    createdAt: string;
+  } | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+}
+
+export interface ConversationDetail {
+  id: string;
+  subject: string | null;
+  driver: MessengerDriverSummary;
+  participants: ConversationParticipant[];
+  lastMessageAt: string | null;
+  unreadCount: number;
+  messagesPreview: MessengerMessage[];
+}
+
+export interface SendMessagePayload {
+  text: string;
+  originalLanguage: MessengerLanguage;
+  targetLanguage?: MessengerLanguage;
+}
+
+export interface MessengerUnreadCount {
+  total: number;
+  byConversation: Array<{
+    conversationId: string;
+    count: number;
+  }>;
+}

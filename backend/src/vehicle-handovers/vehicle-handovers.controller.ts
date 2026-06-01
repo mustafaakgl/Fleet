@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -40,14 +41,17 @@ export class VehicleHandoversController {
 
   @Post()
   @Roles(...OPERATIONAL_WRITE_ROLES)
-  createHandover(@Body() dto: CreateVehicleHandoverDto) {
-    return this.vehicleHandoversService.createHandover(dto);
+  createHandover(@Body() dto: CreateVehicleHandoverDto, @CurrentUser('id') currentUserId?: string) {
+    return this.vehicleHandoversService.createHandover(dto, currentUserId);
   }
 
   @Post('from-assignment/:assignmentId')
   @Roles(...OPERATIONAL_WRITE_ROLES)
-  createHandoverFromAssignment(@Param('assignmentId') assignmentId: string) {
-    return this.vehicleHandoversService.createHandoverFromAssignment(assignmentId);
+  createHandoverFromAssignment(
+    @Param('assignmentId') assignmentId: string,
+    @CurrentUser('id') currentUserId?: string,
+  ) {
+    return this.vehicleHandoversService.createHandoverFromAssignment(assignmentId, currentUserId);
   }
 
   @Patch(':id')
@@ -64,13 +68,13 @@ export class VehicleHandoversController {
 
   @Post(':id/reject-photo')
   @Roles(...OPERATIONAL_WRITE_ROLES)
-  rejectPhoto(@Param('id') id: string) {
-    return this.vehicleHandoversService.rejectPhoto(id);
+  rejectPhoto(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
+    return this.vehicleHandoversService.rejectPhoto(id, currentUserId);
   }
 
   @Post(':id/complete')
   @Roles(...OPERATIONAL_WRITE_ROLES)
-  markCompleted(@Param('id') id: string) {
-    return this.vehicleHandoversService.markCompleted(id);
+  markCompleted(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
+    return this.vehicleHandoversService.markCompleted(id, currentUserId);
   }
 }
