@@ -89,10 +89,9 @@ export function statusColor(status: string): string {
       return 'bg-blue-100 text-blue-700';
     case 'sick':
     case 'broken':
-    case 'in_service':
+    case 'maintenance':
       return 'bg-orange-100 text-orange-700';
     case 'terminated':
-    case 'sold':
       return 'bg-red-100 text-red-700';
     default:
       return 'bg-gray-100 text-gray-600';

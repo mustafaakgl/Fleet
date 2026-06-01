@@ -6,8 +6,8 @@ import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
+import { TagesuebersichtTab } from './TagesuebersichtTab';
 import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
-import { getHandoverLabelByAssignment } from '@/lib/vehicle-handovers';
 
 const COMPANY_REVENUE_MAP: Record<string, number> = {
   DHL: 850,
@@ -18,18 +18,37 @@ const COMPANY_REVENUE_MAP: Record<string, number> = {
 };
 
 const AVAILABILITY_OPTIONS = ['Available', 'Urlaub', 'Krank', 'Feiertag', 'Not Assigned'] as const;
-type PlanSubTab = 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
+type PlanSubTab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
 
 function currency(value: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
 }
 
-export function Tagesplanung() {
-  const { assignments, drivers, getDriverAvailability, calculateDailyRevenue, updateAssignment } = useFleetData();
+export function Tagesplanung({
+  initialSubTab,
+}: {
+  initialSubTab?: PlanSubTab;
+}) {
+  const {
+    assignments,
+    drivers,
+    transportRequests,
+    getDriverAvailability,
+    calculateDailyRevenue,
+    updateAssignment,
+    approveTransportRequest,
+    rejectTransportRequest,
+  } = useFleetData();
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<PlanSubTab>('planning');
+  const [activeSubTab, setActiveSubTab] = useState<PlanSubTab>(initialSubTab ?? 'daily-overview');
   const [companyEmailAttentionCount, setCompanyEmailAttentionCount] = useState(0);
+  const [selectedTransportRequestId, setSelectedTransportRequestId] = useState<string | null>(null);
   const planningDate = getTodayDate();
+
+  const selectedTransportRequest = useMemo(
+    () => transportRequests.find((request) => request.id === selectedTransportRequestId) ?? null,
+    [selectedTransportRequestId, transportRequests],
+  );
 
   const planningRows = useMemo(() => {
     return assignments
@@ -66,6 +85,17 @@ export function Tagesplanung() {
       </div>
 
       <div className="flex gap-2 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('daily-overview')}
+          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
+            activeSubTab === 'daily-overview'
+              ? 'border-blue-700 bg-blue-700 text-white'
+              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Tagesuebersicht
+        </button>
         <button
           type="button"
           onClick={() => setActiveSubTab('planning')}
@@ -125,6 +155,10 @@ export function Tagesplanung() {
 
       <section className={activeSubTab === 'morning-checkins' ? 'block' : 'hidden'}>
         <MorningCheckins />
+      </section>
+
+      <section className={activeSubTab === 'daily-overview' ? 'block' : 'hidden'}>
+        <TagesuebersichtTab />
       </section>
 
       <section className={activeSubTab === 'planning' ? 'block' : 'hidden'}>
@@ -285,10 +319,16 @@ export function Tagesplanung() {
                         className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
                           row.assignment.source === 'mobile_checkin'
                             ? 'border-blue-200 bg-blue-100 text-blue-700'
+                            : row.assignment.source === 'transport_request'
+                            ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
                             : 'border-slate-200 bg-slate-100 text-slate-700'
                         }`}
                       >
-                        {row.assignment.source === 'mobile_checkin' ? 'Mobile Check-in' : 'Manual'}
+                        {row.assignment.source === 'mobile_checkin'
+                          ? 'Mobile Check-in'
+                          : row.assignment.source === 'transport_request'
+                          ? 'Transport Request'
+                          : 'Manual'}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-slate-700">{formatAccidentCountLabel(row.accidentCount)}</td>
@@ -315,13 +355,7 @@ export function Tagesplanung() {
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-slate-700">
-                      {row.assignment.vehicle
-                        ? getHandoverLabelByAssignment({
-                            driverId: row.assignment.driverId,
-                            vehicle: row.assignment.vehicle,
-                            date: row.assignment.date,
-                          })
-                        : 'Not Required'}
+                      {row.assignment.vehicle ? 'Required' : 'Not Required'}
                     </td>
                     <td className="px-3 py-2.5 font-semibold text-slate-900">{currency(disabled ? 0 : row.assignment.expectedRevenue)}</td>
                     <td className="px-3 py-2.5">
@@ -353,6 +387,108 @@ export function Tagesplanung() {
         </div>
       </div>
 
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h3 className="text-base font-semibold text-slate-900">Transport Requests</h3>
+          <p className="text-sm text-slate-600">Incoming transport requests from mobile app drivers.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-[1600px] text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="border-b border-slate-200 px-3 py-3">Driver</th>
+                <th className="border-b border-slate-200 px-3 py-3">Date</th>
+                <th className="border-b border-slate-200 px-3 py-3">Vehicle</th>
+                <th className="border-b border-slate-200 px-3 py-3">Company</th>
+                <th className="border-b border-slate-200 px-3 py-3">Cargo</th>
+                <th className="border-b border-slate-200 px-3 py-3">Pickup</th>
+                <th className="border-b border-slate-200 px-3 py-3">Delivery</th>
+                <th className="border-b border-slate-200 px-3 py-3">Start</th>
+                <th className="border-b border-slate-200 px-3 py-3">End</th>
+                <th className="border-b border-slate-200 px-3 py-3">Status</th>
+                <th className="border-b border-slate-200 px-3 py-3">Conflict</th>
+                <th className="border-b border-slate-200 px-3 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transportRequests.map((request) => {
+                const driver = drivers.find((item) => item.id === request.driverId);
+                const canDecide = request.status !== 'approved' && request.status !== 'rejected';
+
+                return (
+                  <tr key={request.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-3 py-2.5 font-medium text-slate-900">{driver?.name ?? request.driverId}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.date}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.vehicleId}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.companyId}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.cargoName}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.pickupAddress}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.deliveryAddress}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.startTime}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.endTime ?? '-'}</td>
+                    <td className="px-3 py-2.5">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                          request.status === 'approved'
+                            ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
+                            : request.status === 'rejected'
+                            ? 'border-rose-200 bg-rose-100 text-rose-700'
+                            : request.status === 'needs_review'
+                            ? 'border-amber-200 bg-amber-100 text-amber-700'
+                            : 'border-slate-200 bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {request.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-700">{request.conflictReason ?? '-'}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTransportRequestId(request.id)}
+                          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canDecide}
+                          onClick={() => {
+                            const result = approveTransportRequest(request.id);
+                            if (result.success) {
+                              setInfoMessage('Transport request approved and added to Einsatzplan.');
+                            } else {
+                              setInfoMessage(result.message);
+                            }
+                            setTimeout(() => setInfoMessage(null), 2200);
+                          }}
+                          className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canDecide}
+                          onClick={() => {
+                            rejectTransportRequest(request.id);
+                            setInfoMessage('Transport request rejected.');
+                            setTimeout(() => setInfoMessage(null), 2200);
+                          }}
+                          className="rounded-md border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
         </>
       </section>
 
@@ -364,11 +500,60 @@ export function Tagesplanung() {
         <CompanyNotifications onAttentionCountChange={setCompanyEmailAttentionCount} />
       </section>
 
+      {selectedTransportRequest && (
+        <>
+          <div className="fixed inset-0 z-30 bg-black/30" onClick={() => setSelectedTransportRequestId(null)} />
+          <aside className="fixed right-0 top-0 z-40 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-lg font-bold text-slate-900">Transport Request Details</h3>
+            </div>
+
+            <div className="space-y-3 px-5 py-4 text-sm">
+              <DetailRow label="Driver" value={drivers.find((item) => item.id === selectedTransportRequest.driverId)?.name ?? selectedTransportRequest.driverId} />
+              <DetailRow label="Date" value={selectedTransportRequest.date} />
+              <DetailRow label="Submitted At" value={selectedTransportRequest.submittedAt} />
+              <DetailRow label="Vehicle" value={selectedTransportRequest.vehicleId} />
+              <DetailRow label="Company" value={selectedTransportRequest.companyId} />
+              <DetailRow label="Cargo" value={selectedTransportRequest.cargoName} />
+              <DetailRow label="Cargo Owner" value={selectedTransportRequest.cargoOwner} />
+              <DetailRow label="Pickup Address" value={selectedTransportRequest.pickupAddress} />
+              <DetailRow label="Delivery Address" value={selectedTransportRequest.deliveryAddress} />
+              <DetailRow label="Start Time" value={selectedTransportRequest.startTime} />
+              <DetailRow label="End Time" value={selectedTransportRequest.endTime ?? '-'} />
+              <DetailRow label="Route Name" value={selectedTransportRequest.routeName ?? '-'} />
+              <DetailRow label="Status" value={selectedTransportRequest.status} />
+              <DetailRow label="Conflict" value={selectedTransportRequest.conflictReason ?? '-'} />
+              <DetailRow label="Source" value="Mobile App" />
+              <DetailRow label="Notes" value={selectedTransportRequest.notes ?? '-'} />
+            </div>
+
+            <div className="sticky bottom-0 border-t border-slate-200 bg-white px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setSelectedTransportRequestId(null)}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
+
       {infoMessage && (
         <div className="fixed bottom-6 right-6 z-30 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
           {infoMessage}
         </div>
       )}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-1 gap-1 border-b border-slate-100 pb-2 sm:grid-cols-[180px_1fr]">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-sm text-slate-900">{value}</p>
     </div>
   );
 }

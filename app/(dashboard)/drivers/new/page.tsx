@@ -6,12 +6,33 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { isAxiosError } from 'axios';
 import { ChevronLeft, Loader2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { driversApi } from '@/lib/api';
+
+function blankToUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== '' && v !== undefined && v !== null) {
+      (out as Record<string, unknown>)[k] = v;
+    }
+  }
+  return out;
+}
+
+function extractServerError(e: unknown): string {
+  if (isAxiosError(e)) {
+    const data = e.response?.data as { message?: string | string[] } | undefined;
+    if (data?.message) {
+      return Array.isArray(data.message) ? data.message.join('. ') : data.message;
+    }
+  }
+  return 'Failed to create driver. Please try again.';
+}
 
 const schema = z.object({
   first_name: z.string().min(1, 'Required'),
@@ -61,10 +82,11 @@ export default function NewDriverPage() {
   async function onSubmit(data: FormData) {
     setServerError(null);
     try {
-      const driver = await driversApi.create(data);
+      const payload = blankToUndefined(data);
+      const driver = await driversApi.create(payload);
       router.push(`/drivers/${driver.id}`);
-    } catch {
-      setServerError('Failed to create driver. Please try again.');
+    } catch (e) {
+      setServerError(extractServerError(e));
     }
   }
 

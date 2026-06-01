@@ -1,0 +1,236 @@
+'use client';
+
+import { use, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { isAxiosError } from 'axios';
+import { ChevronLeft, Loader2, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { driversApi } from '@/lib/api';
+import type { DriverStatus } from '@/lib/types';
+
+const schema = z.object({
+  first_name: z.string().min(1, 'Required'),
+  last_name: z.string().min(1, 'Required'),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  phone: z.string().optional(),
+  license_number: z.string().optional(),
+  license_expiry_date: z.string().optional(),
+  passport_number: z.string().optional(),
+  passport_expiry_date: z.string().optional(),
+  status: z.enum(['active', 'inactive', 'on_leave', 'sick', 'terminated']),
+});
+
+type FormData = z.infer<typeof schema>;
+
+function blankToUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== '' && v !== undefined && v !== null) {
+      (out as Record<string, unknown>)[k] = v;
+    }
+  }
+  return out;
+}
+
+function extractServerError(e: unknown): string {
+  if (isAxiosError(e)) {
+    const data = e.response?.data as { message?: string | string[] } | undefined;
+    if (data?.message) {
+      return Array.isArray(data.message) ? data.message.join('. ') : data.message;
+    }
+  }
+  return 'Failed to update driver. Please try again.';
+}
+
+function toDateInputValue(iso?: string): string {
+  if (!iso) return '';
+  return iso.slice(0, 10);
+}
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+export default function EditDriverPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  useEffect(() => {
+    driversApi
+      .getById(id)
+      .then((driver) => {
+        reset({
+          first_name: driver.first_name,
+          last_name: driver.last_name,
+          email: driver.email ?? '',
+          phone: driver.phone ?? '',
+          license_number: driver.license_number ?? '',
+          license_expiry_date: toDateInputValue(driver.license_expiry_date),
+          passport_number: driver.passport_number ?? '',
+          passport_expiry_date: toDateInputValue(driver.passport_expiry_date),
+          status: driver.status as DriverStatus,
+        });
+      })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  }, [id, reset]);
+
+  async function onSubmit(data: FormData) {
+    setServerError(null);
+    try {
+      const payload = blankToUndefined(data);
+      await driversApi.update(id, payload);
+      router.push(`/drivers/${id}`);
+    } catch (e) {
+      setServerError(extractServerError(e));
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="py-20 text-center">
+        <p className="text-lg text-gray-500">Driver not found.</p>
+        <Button variant="outline" className="mt-4" asChild>
+          <Link href="/drivers">Back</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <Button variant="ghost" size="sm" asChild>
+        <Link href={`/drivers/${id}`}>
+          <ChevronLeft className="w-4 h-4 mr-1" />
+          Back
+        </Link>
+      </Button>
+
+      <div className="flex items-center gap-3">
+        <Pencil className="w-6 h-6 text-blue-600" />
+        <h1 className="text-2xl font-bold text-gray-900">Edit Driver</h1>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Personal Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="First Name *" error={errors.first_name?.message}>
+                <Input {...register('first_name')} />
+              </Field>
+              <Field label="Last Name *" error={errors.last_name?.message}>
+                <Input {...register('last_name')} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Email" error={errors.email?.message}>
+                <Input type="email" {...register('email')} />
+              </Field>
+              <Field label="Phone" error={errors.phone?.message}>
+                <Input {...register('phone')} />
+              </Field>
+            </div>
+            <Field label="Status" error={errors.status?.message}>
+              <Select {...register('status')}>
+                <option value="active">Active</option>
+                <option value="on_leave">On Leave</option>
+                <option value="sick">Sick</option>
+                <option value="inactive">Inactive</option>
+                <option value="terminated">Terminated</option>
+              </Select>
+            </Field>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Documents</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="License Number" error={errors.license_number?.message}>
+                <Input {...register('license_number')} />
+              </Field>
+              <Field label="License Expiry Date" error={errors.license_expiry_date?.message}>
+                <Input type="date" {...register('license_expiry_date')} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Passport Number" error={errors.passport_number?.message}>
+                <Input {...register('passport_number')} />
+              </Field>
+              <Field label="Passport Expiry Date" error={errors.passport_expiry_date?.message}>
+                <Input type="date" {...register('passport_expiry_date')} />
+              </Field>
+            </div>
+          </CardContent>
+        </Card>
+
+        {serverError && (
+          <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">
+            <p className="text-sm text-red-700">{serverError}</p>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+          <Button variant="outline" type="button" asChild>
+            <Link href={`/drivers/${id}`}>Cancel</Link>
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}

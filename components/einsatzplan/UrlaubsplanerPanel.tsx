@@ -7,6 +7,7 @@ import { Jahreskalender } from './Jahreskalender';
 import { Antragsverwaltung } from './Antragsverwaltung';
 
 type PlannerSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
+type AbsenceFocus = 'UT' | 'KT';
 
 const subtabs: Array<{ id: PlannerSubtab; label: string }> = [
   { id: 'jahreskalender', label: 'Jahreskalender' },
@@ -14,9 +15,15 @@ const subtabs: Array<{ id: PlannerSubtab; label: string }> = [
   { id: 'antragsverwaltung', label: 'Antragsverwaltung' },
 ];
 
-export function UrlaubsplanerPanel() {
+export function UrlaubsplanerPanel({
+  initialSubtab,
+  initialAbsenceFocus,
+}: {
+  initialSubtab?: PlannerSubtab;
+  initialAbsenceFocus?: AbsenceFocus;
+}) {
   const { t } = useTranslation();
-  const [activeSubtab, setActiveSubtab] = useState<PlannerSubtab>('jahreskalender');
+  const [activeSubtab, setActiveSubtab] = useState<PlannerSubtab>(initialSubtab ?? 'jahreskalender');
 
   return (
     <div className="space-y-5">
@@ -43,7 +50,7 @@ export function UrlaubsplanerPanel() {
       </div>
 
       {activeSubtab === 'jahreskalender' && <Jahreskalender />}
-      {activeSubtab === 'abteilungskalender' && <Abteilungskalender />}
+      {activeSubtab === 'abteilungskalender' && <Abteilungskalender statusFocus={initialAbsenceFocus} />}
       {activeSubtab === 'antragsverwaltung' && <Antragsverwaltung />}
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
   Gauge,
@@ -18,6 +19,8 @@ import { Tagesplanung } from './Tagesplanung';
 import { UrlaubsplanerPanel } from './UrlaubsplanerPanel';
 
 type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue' | 'status' | 'users';
+type UrlaubSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
+type PlanningSubtab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
 type DocStatus = 'Valid' | 'Expiring soon' | 'Expired';
 
 interface SummaryCard {
@@ -90,7 +93,36 @@ function badgeClasses(status: TomorrowPlanItem['status'] | DocStatus) {
 
 export function EinsatzplanPage() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<TopTab>('dashboard');
+  const searchParams = useSearchParams();
+
+  const panelFromQuery = searchParams.get('panel');
+  const viewFromQuery = searchParams.get('view');
+  const absenceFromQuery = searchParams.get('absence');
+
+  const initialTopTab = useMemo<TopTab>(() => {
+    if (panelFromQuery === 'urlaubsplaner') return 'urlaub';
+    if (panelFromQuery === 'tagesplanung' || panelFromQuery === 'company_notifications') return 'tagesplanung';
+    return 'dashboard';
+  }, [panelFromQuery]);
+
+  const initialUrlaubSubtab = useMemo<UrlaubSubtab | undefined>(() => {
+    if (viewFromQuery === 'jahreskalender') return 'jahreskalender';
+    if (viewFromQuery === 'antragsverwaltung') return 'antragsverwaltung';
+    if (viewFromQuery === 'abteilungskalender') return 'abteilungskalender';
+    return undefined;
+  }, [viewFromQuery]);
+
+  const initialPlanningSubtab = useMemo<PlanningSubtab | undefined>(() => {
+    if (panelFromQuery === 'company_notifications') return 'company-notifications';
+    if (viewFromQuery === 'company-notifications') return 'company-notifications';
+    if (viewFromQuery === 'morning-checkins') return 'morning-checkins';
+    if (viewFromQuery === 'vehicle-handovers') return 'vehicle-handovers';
+    if (viewFromQuery === 'planning') return 'planning';
+    if (viewFromQuery === 'daily-overview' || panelFromQuery === 'tagesplanung') return 'daily-overview';
+    return undefined;
+  }, [panelFromQuery, viewFromQuery]);
+
+  const [activeTab, setActiveTab] = useState<TopTab>(initialTopTab);
 
   return (
     <div className="space-y-5 bg-[#f5f7fb]">
@@ -192,10 +224,10 @@ export function EinsatzplanPage() {
           )}
 
           {activeTab === 'urlaub' && (
-            <UrlaubsplanerPanel />
+            <UrlaubsplanerPanel initialSubtab={initialUrlaubSubtab} initialAbsenceFocus={absenceFromQuery === 'UT' || absenceFromQuery === 'KT' ? absenceFromQuery : undefined} />
           )}
 
-          {activeTab === 'tagesplanung' && <Tagesplanung />}
+          {activeTab === 'tagesplanung' && <Tagesplanung initialSubTab={initialPlanningSubtab} />}
 
           {activeTab === 'revenue' && <RevenueSummary />}
 

@@ -6,12 +6,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Truck, Loader2 } from 'lucide-react';
+import { AxiosError } from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { authApi } from '@/lib/api';
-import { isAuthenticated, saveAuth } from '@/lib/auth';
+import { isAuthenticated, saveAuth, MOCK_CURRENT_USER } from '@/lib/auth';
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
@@ -41,12 +42,36 @@ export default function LoginPage() {
   async function onSubmit(data: FormData) {
     setError(null);
     try {
-      const res = await authApi.signIn(data.email, data.password);
-      saveAuth(res.access_token, res.user);
+      const email = data.email.trim().toLowerCase();
+      const res = await authApi.signIn(email, data.password);
+      const token = res.accessToken ?? res.access_token;
+      if (!token) {
+        setError('Login response did not include access token.');
+        return;
+      }
+      saveAuth(token, {
+        ...res.user,
+        name: res.user.name ?? res.user.email,
+      });
       router.push('/dashboard');
-    } catch {
-      setError('Invalid email or password. Please try again.');
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          setError('Backend sunucusuna ulasilamiyor. Lutfen backend servisini baslatin.');
+          return;
+        }
+        if (err.response.status === 401) {
+          setError('Invalid email/password. Please try again.');
+          return;
+        }
+      }
+      setError('Giris sirasinda beklenmeyen bir hata olustu. Tekrar deneyin.');
     }
+  }
+
+  function handleDemoLogin() {
+    saveAuth('dev-demo-token', { ...MOCK_CURRENT_USER, role: 'admin', name: 'Demo Admin' });
+    router.push('/dashboard');
   }
 
   return (
@@ -114,23 +139,22 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full mt-3"
+              onClick={handleDemoLogin}
+            >
+              Demo giris (backend olmadan)
+            </Button>
+
             <div className="mt-6 pt-4 border-t border-gray-100">
-              <p className="text-xs text-gray-500 text-center mb-2">Demo credentials</p>
-              <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
+              <p className="text-xs text-gray-500 text-center mb-2">Test credentials</p>
+              <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                 <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
                   <p className="font-medium">Admin</p>
                   <p>admin@fleet.com</p>
                   <p className="text-gray-400">admin123</p>
-                </div>
-                <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                  <p className="font-medium">Manager</p>
-                  <p>manager@fleet.com</p>
-                  <p className="text-gray-400">manager123</p>
-                </div>
-                <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                  <p className="font-medium">Driver</p>
-                  <p>ali@fleet.com</p>
-                  <p className="text-gray-400">driver123</p>
                 </div>
               </div>
             </div>

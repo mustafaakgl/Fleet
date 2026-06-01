@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import { driversApi } from '@/lib/api';
 import type { Driver } from '@/lib/types';
-import { filterMockDrivers, mockDriverDetails } from '@/lib/mock-data';
 import { fullName } from '@/lib/utils';
 
 export default function DriversPage() {
@@ -22,33 +23,23 @@ export default function DriversPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(() => searchParams.get('status') || '');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const limit = 20;
 
-  useEffect(() => {
-    const statusParam = searchParams.get('status') || '';
-    setStatus(statusParam);
-    setPage(1);
-  }, [searchParams]);
-
   const fetchDrivers = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await driversApi.list({ search, status: status || undefined, page, limit });
-      if (res.total > 0 || res.data.length > 0) {
-        setDrivers(res.data);
-        setTotal(res.total);
-      } else {
-        const mock = filterMockDrivers(search, status, page, limit);
-        setDrivers(mock.data);
-        setTotal(mock.total);
-      }
-    } catch {
-      const mock = filterMockDrivers(search, status, page, limit);
-      setDrivers(mock.data);
-      setTotal(mock.total);
+      setDrivers(res.data);
+      setTotal(res.total);
+    } catch (e) {
+      setDrivers([]);
+      setTotal(0);
+      setError(e instanceof Error ? e.message : 'Failed to load drivers');
     } finally {
       setLoading(false);
     }
@@ -60,15 +51,6 @@ export default function DriversPage() {
   }, [fetchDrivers]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
-
-  function getCurrentInfo(driverId: string) {
-    const detail = mockDriverDetails[driverId];
-    const assignment = detail?.recent_assignments?.[0];
-    return {
-      vehicle: assignment?.vehicle.plate_number ?? '—',
-      company: assignment?.company_name ?? '—',
-    };
-  }
 
   function riskDot(risk: string) {
     const colors: Record<string, string> = {
@@ -129,15 +111,62 @@ export default function DriversPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={`driver-skeleton-${index}`} className="grid grid-cols-6 gap-3">
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="p-4">
+            <EmptyState
+              icon={Users}
+              title="Failed to load drivers"
+              subtitle={error}
+              actionLabel="Retry"
+              onAction={fetchDrivers}
+            />
           </div>
         ) : drivers.length === 0 ? (
-          <div className="text-center py-16 text-gray-500">
-            <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>No drivers found</p>
+          <div className="p-4">
+            <EmptyState
+              icon={Users}
+              title="No drivers found"
+              subtitle="No drivers match current filters."
+              actionLabel="Clear filters"
+              onAction={() => {
+                setSearch('');
+                setStatus('');
+                setPage(1);
+              }}
+            />
           </div>
         ) : (
+          <>
+          <div className="md:hidden space-y-3 p-3">
+            {drivers.map((d) => (
+              <div key={`driver-card-${d.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="font-semibold text-slate-900">{fullName(d.first_name, d.last_name)}</p>
+                <p className="text-xs text-slate-600">Phone: {d.phone ?? '—'}</p>
+                <p className="text-xs text-slate-600">Status: {d.status}</p>
+                <div className="mt-2 flex gap-2">
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/drivers/${d.id}`}>View</Link>
+                  </Button>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/drivers/${d.id}/edit`}>Edit</Link>
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -155,8 +184,8 @@ export default function DriversPage() {
                 <TableRow key={d.id}>
                   <TableCell className="font-medium text-gray-900">{fullName(d.first_name, d.last_name)}</TableCell>
                   <TableCell>{d.phone ?? '—'}</TableCell>
-                  <TableCell>{getCurrentInfo(d.id).vehicle}</TableCell>
-                  <TableCell>{getCurrentInfo(d.id).company}</TableCell>
+                  <TableCell>{d.current_vehicle_plate ?? '—'}</TableCell>
+                  <TableCell>{d.current_company_name ?? '—'}</TableCell>
                   <TableCell>{d.accident_count}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
@@ -178,6 +207,8 @@ export default function DriversPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </Card>
 

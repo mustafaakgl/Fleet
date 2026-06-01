@@ -10,6 +10,8 @@ import {
   X,
 } from 'lucide-react';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
+import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
+import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { useFleetData } from '@/context/FleetDataContext';
 import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
 
@@ -32,6 +34,18 @@ interface Employee {
 interface StatusEntry {
   status: CalendarStatus;
   notes: string;
+  source?: TooltipSource;
+  sourceDate?: string;
+  requestId?: string;
+  assignmentId?: string;
+}
+
+interface HoveredStatusCell {
+  employeeId: string;
+  day: number;
+  month: number;
+  year: number;
+  entry: StatusEntry;
 }
 
 interface SelectedCell {
@@ -44,6 +58,14 @@ interface SelectedCell {
 }
 
 interface PendingAbsenceSelection {
+  employee: Employee;
+  department: Department;
+  day: number;
+  month: number;
+  year: number;
+}
+
+interface SelectedEmptyCell {
   employee: Employee;
   department: Department;
   day: number;
@@ -169,15 +191,32 @@ function isWeekend(year: number, month: number, day: number) {
 function createMonthlyStatusMap() {
   const map: Record<string, Record<string, StatusEntry>> = {};
 
-  const setEntry = (employeeId: string, month: number, day: number, status: Exclude<CalendarStatus, ''>, notes: string) => {
+  const setEntry = (
+    employeeId: string,
+    month: number,
+    day: number,
+    status: Exclude<CalendarStatus, ''>,
+    notes: string,
+    metadata?: Pick<StatusEntry, 'source' | 'sourceDate' | 'requestId' | 'assignmentId'>,
+  ) => {
     map[employeeId] ??= {};
-    map[employeeId][`${month}-${day}`] = { status, notes };
+    map[employeeId][`${month}-${day}`] = { status, notes, ...metadata };
   };
 
   setEntry('ozdemir-hakan', 4, 1, 'FT', 'Labour Day holiday.');
   setEntry('ozdemir-hakan', 4, 5, 'AT', 'Office planning day.');
   setEntry('ozdemir-hakan', 4, 12, 'UT', 'Approved vacation day.');
   setEntry('ozdemir-hakan', 4, 13, 'UT', 'Approved vacation day.');
+  setEntry('ozdemir-hakan', 4, 20, 'KT', 'Krankmeldung eingegangen.', {
+    source: 'request',
+    sourceDate: '2026-05-20',
+    requestId: 'REQ-2026-0520',
+  });
+  setEntry('ozdemir-hakan', 4, 21, 'AT', 'Einsatzbestatigung vorhanden.', {
+    source: 'assignment',
+    sourceDate: '2026-05-21',
+    assignmentId: 'ASSIGN-2026-0521',
+  });
   setEntry('office-2', 4, 7, 'KT', 'Medical leave.');
   setEntry('office-2', 4, 8, 'KT', 'Medical leave.');
 
@@ -209,8 +248,8 @@ function createMonthlyStatusMap() {
 
 const monthlyStatusMap = createMonthlyStatusMap();
 
-export function Abteilungskalender() {
-  const { drivers, getCalendarStatusEntry } = useFleetData();
+export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' }) {
+  const { drivers, getCalendarStatusEntry, getAssignmentById } = useFleetData();
   const [statusMap, setStatusMap] = useState<Record<string, Record<string, StatusEntry>>>(monthlyStatusMap);
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([
     'office',
@@ -234,6 +273,9 @@ export function Abteilungskalender() {
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [pendingAbsenceSelection, setPendingAbsenceSelection] = useState<PendingAbsenceSelection | null>(null);
   const [selectedAbsenceTypeId, setSelectedAbsenceTypeId] = useState<string | null>(null);
+  const [hoveredStatusCell, setHoveredStatusCell] = useState<HoveredStatusCell | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectedEmptyCell, setSelectedEmptyCell] = useState<SelectedEmptyCell | null>(null);
 
   const visibleDepartments = useMemo(() => {
     return departments.filter((department) => selectedDepartmentIds.includes(department.id));
@@ -257,7 +299,13 @@ export function Abteilungskalender() {
           status: shared.status as CalendarStatus,
           notes: shared.source === 'request'
             ? `Automatisch aus Request ${shared.requestId ?? ''} aktualisiert.`
+            : shared.source === 'assignment'
+            ? `Automatisch aus Einsatz ${shared.assignmentId ?? ''} aktualisiert.`
             : 'Automatisch aus gemeinsamer Planung aktualisiert.',
+          source: shared.source,
+          sourceDate: dateKey,
+          requestId: shared.requestId,
+          assignmentId: shared.assignmentId,
         };
       }
 
@@ -308,8 +356,78 @@ export function Abteilungskalender() {
     return drivers.find((driver) => driver.id === selectedCell.employee.id) ?? null;
   }, [drivers, selectedCell]);
 
+  const selectedAssignment = useMemo(() => {
+    if (!selectedCell?.entry.assignmentId) return null;
+    return getAssignmentById(selectedCell.entry.assignmentId) ?? null;
+  }, [getAssignmentById, selectedCell]);
+
+  const closeContextMenu = () => {
+    setContextMenuPosition(null);
+    setSelectedEmptyCell(null);
+  };
+
+  const openContextMenu = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    payload: SelectedEmptyCell,
+  ) => {
+    event.preventDefault();
+    setSelectedCell(null);
+    setPendingAbsenceSelection(null);
+    setSelectedAbsenceTypeId(null);
+    setSelectedEmptyCell(payload);
+    setContextMenuPosition({ x: event.clientX + 8, y: event.clientY + 8 });
+  };
+
+  const applyManualStatus = (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
+    const sourceDate = `${target.year}-${String(target.month + 1).padStart(2, '0')}-${String(target.day).padStart(2, '0')}`;
+
+    setStatusMap((current) => ({
+      ...current,
+      [target.employee.id]: {
+        ...(current[target.employee.id] ?? {}),
+        [`${target.month}-${target.day}`]: {
+          status,
+          notes: 'Manuell eingetragen.',
+          source: 'manual',
+          sourceDate,
+        },
+      },
+    }));
+  };
+
+  const handleContextMenuAction = (action: CalendarCellContextMenuAction) => {
+    if (!selectedEmptyCell) return;
+
+    if (action === 'urlaub') {
+      applyManualStatus(selectedEmptyCell, 'UT');
+      closeContextMenu();
+      return;
+    }
+
+    if (action === 'krank') {
+      applyManualStatus(selectedEmptyCell, 'KT');
+      closeContextMenu();
+      return;
+    }
+
+    if (absenceTypes.length > 0) {
+      setPendingAbsenceSelection(selectedEmptyCell);
+      setSelectedAbsenceTypeId(null);
+    } else {
+      applyManualStatus(selectedEmptyCell, 'SA');
+    }
+
+    closeContextMenu();
+  };
+
   return (
     <div className="space-y-5">
+      {statusFocus && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
+          Fokus aktiv: {statusFocus} Status wird hervorgehoben.
+        </div>
+      )}
+
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="relative flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -542,29 +660,72 @@ export function Abteilungskalender() {
                           const currentDay = day === 21 && month === 4 && year === 2026;
                           const weekend = isWeekend(year, month, day);
                           const colorClass = entry.status ? statusColors[entry.status as Exclude<CalendarStatus, ''>] : 'bg-slate-200 text-slate-300';
+                          const shouldDimForFocus = Boolean(
+                            statusFocus && entry.status && entry.status !== statusFocus,
+                          );
 
                           return (
                             <button
                               key={`${employee.id}-${day}`}
                               type="button"
+                              onMouseEnter={() => {
+                                if (!entry.status) return;
+                                setHoveredStatusCell({ employeeId: employee.id, day, month, year, entry });
+                              }}
+                              onMouseLeave={() => {
+                                setHoveredStatusCell((current) => {
+                                  if (!current) return null;
+                                  if (
+                                    current.employeeId !== employee.id ||
+                                    current.day !== day ||
+                                    current.month !== month ||
+                                    current.year !== year
+                                  ) {
+                                    return current;
+                                  }
+                                  return null;
+                                });
+                              }}
+                              onContextMenu={(event) => {
+                                if (entry.status) return;
+                                openContextMenu(event, { employee, department, day, month, year });
+                              }}
                               onClick={() => {
                                 if (entry.status) {
+                                  closeContextMenu();
                                   setSelectedCell({ employee, department, day, month, year, entry });
                                   setPendingAbsenceSelection(null);
                                   return;
                                 }
 
                                 setSelectedCell(null);
-                                setPendingAbsenceSelection({ employee, department, day, month, year });
+                                setPendingAbsenceSelection(null);
                                 setSelectedAbsenceTypeId(null);
+                              }}
+                              onMouseDown={(event) => {
+                                if (entry.status) return;
+                                if (event.button !== 0) return;
+                                openContextMenu(event, { employee, department, day, month, year });
                               }}
                               className={`border-l border-slate-200 px-1 py-1.5 hover:bg-blue-50 ${
                                 weekend ? 'bg-slate-100/70' : 'bg-white'
-                              } ${currentDay ? 'bg-amber-50' : ''}`}
+                              } ${currentDay ? 'bg-amber-50' : ''} ${shouldDimForFocus ? 'opacity-40' : ''}`}
                             >
-                              <div className="flex min-h-[40px] flex-col items-center justify-center rounded-sm text-[11px] font-semibold">
+                              <div className="relative flex min-h-[40px] flex-col items-center justify-center rounded-sm text-[11px] font-semibold">
                                 <span className={entry.status ? colorClass.split(' ')[1] : 'text-slate-300'}>{entry.status}</span>
                                 <span className={`mt-1 h-1 w-6 rounded-full ${colorClass.split(' ')[0]}`} />
+                                {entry.status &&
+                                  hoveredStatusCell?.employeeId === employee.id &&
+                                  hoveredStatusCell?.day === day &&
+                                  hoveredStatusCell?.month === month &&
+                                  hoveredStatusCell?.year === year && (
+                                    <CalendarStatusTooltip
+                                      date={new Date(year, month, day)}
+                                      status={entry.status}
+                                      source={entry.source}
+                                      sourceDate={entry.sourceDate}
+                                    />
+                                  )}
                               </div>
                             </button>
                           );
@@ -640,6 +801,35 @@ export function Abteilungskalender() {
                 <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">{selectedCell.entry.notes}</p>
               </div>
 
+              {selectedAssignment && (
+                <>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Assignment source</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.source}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Vehicle</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.vehicle || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Company</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.company || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Cargo</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.cargoName || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Pickup</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.pickupAddress || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Delivery</p>
+                    <p className="mt-1 font-medium text-slate-900">{selectedAssignment.deliveryAddress || '-'}</p>
+                  </div>
+                </>
+              )}
+
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                   Edit Status
@@ -657,6 +847,15 @@ export function Abteilungskalender() {
             </div>
           </aside>
         </>
+      )}
+
+      {contextMenuPosition && selectedEmptyCell && (
+        <CalendarCellContextMenu
+          x={contextMenuPosition.x}
+          y={contextMenuPosition.y}
+          onClose={closeContextMenu}
+          onSelect={handleContextMenuAction}
+        />
       )}
 
       <AbsenceTypeModal
@@ -680,6 +879,8 @@ export function Abteilungskalender() {
               [`${pendingAbsenceSelection.month}-${pendingAbsenceSelection.day}`]: {
                 status: selectedAbsenceType.abkuerzung,
                 notes: `${selectedAbsenceType.bezeichnung} wurde lokal zugewiesen.`,
+                source: 'manual',
+                sourceDate: `${pendingAbsenceSelection.year}-${String(pendingAbsenceSelection.month + 1).padStart(2, '0')}-${String(pendingAbsenceSelection.day).padStart(2, '0')}`,
               },
             },
           }));
