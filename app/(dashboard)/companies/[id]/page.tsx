@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Building2, ChevronLeft } from 'lucide-react';
+import { Building2, ChevronLeft, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -239,6 +239,15 @@ export default function CompanyProfilePage({
                 value={statsError ? '?' : String(stats?.current_vehicles ?? '...')}
               />
             </div>
+
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/companies/${id}/edit`}>
+                <span className="inline-flex items-center">
+                  <Pencil className="mr-1 h-4 w-4" />
+                  Edit
+                </span>
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

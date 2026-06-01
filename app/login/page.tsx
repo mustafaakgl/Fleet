@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Truck, Loader2 } from 'lucide-react';
+import { AxiosError } from 'axios';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +42,8 @@ export default function LoginPage() {
   async function onSubmit(data: FormData) {
     setError(null);
     try {
-      const res = await authApi.signIn(data.email, data.password);
+      const email = data.email.trim().toLowerCase();
+      const res = await authApi.signIn(email, data.password);
       const token = res.accessToken ?? res.access_token;
       if (!token) {
         setError('Login response did not include access token.');
@@ -51,12 +53,19 @@ export default function LoginPage() {
         ...res.user,
         name: res.user.name ?? res.user.email,
       });
-      console.log('Token:', localStorage.getItem('accessToken'));
-      const rawUser = localStorage.getItem('user');
-      console.log('User:', rawUser ? JSON.parse(rawUser) : null);
       router.push('/dashboard');
-    } catch {
-      setError('Invalid email/password. Please try again.');
+    } catch (err) {
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          setError('Backend sunucusuna ulasilamiyor. Lutfen backend servisini baslatin.');
+          return;
+        }
+        if (err.response.status === 401) {
+          setError('Invalid email/password. Please try again.');
+          return;
+        }
+      }
+      setError('Giris sirasinda beklenmeyen bir hata olustu. Tekrar deneyin.');
     }
   }
 

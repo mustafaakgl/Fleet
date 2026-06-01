@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ChevronLeft, Truck } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Pencil, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -205,6 +205,15 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <HeaderItem label="TÜV expiry" value={formatDate(vehicle.tuv_expiry_date)} />
               <HeaderItem label="SP expiry" value={formatDate(vehicle.sp_expiry_date)} />
             </div>
+
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/vehicles/${id}/edit`}>
+                <span className="inline-flex items-center">
+                  <Pencil className="mr-1 h-4 w-4" />
+                  Edit
+                </span>
+              </Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -43,14 +43,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ─── Response interceptor: handle 401 ───────────────────────────────────────
+// ─── Response interceptor: handle 401/403 ──────────────────────────────────
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    if (status === 401) {
       clearAuth();
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
+      }
+    } else if (status === 403 && typeof window !== 'undefined') {
+      // Surface a one-time toast so silent forbidden errors don't confuse the user.
+      const detail =
+        (error.response?.data as { message?: string | string[] } | undefined)?.message;
+      const msg = Array.isArray(detail) ? detail.join('. ') : (detail ?? 'You do not have permission to perform this action.');
+      // Use a session-scoped flag to avoid spamming the user during cascaded calls.
+      const key = '__forbidden_toast_shown__';
+      const win = window as unknown as Record<string, unknown>;
+      if (!win[key]) {
+        win[key] = true;
+        window.setTimeout(() => { win[key] = false; }, 3000);
+        window.alert(`Forbidden: ${msg}`);
       }
     }
     return Promise.reject(error);

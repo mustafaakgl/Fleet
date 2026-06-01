@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2 } from 'lucide-react';
+import { Building2, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -37,14 +38,22 @@ export default function CompaniesPage() {
 
   return (
     <div className="space-y-5 pb-6">
-      <div className="flex items-center gap-3">
-        <Building2 className="h-6 w-6 text-blue-600" />
-        <h1 className="text-2xl font-bold text-gray-900">{t('companies.title')}</h1>
-        {!loading && !error && (
-          <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
-            {companies.length}
-          </span>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Building2 className="h-6 w-6 text-blue-600" />
+          <h1 className="text-2xl font-bold text-gray-900">{t('companies.title')}</h1>
+          {!loading && !error && (
+            <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
+              {companies.length}
+            </span>
+          )}
+        </div>
+        <Button asChild>
+          <Link href="/companies/new">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Company
+          </Link>
+        </Button>
       </div>
 
       <Card>
