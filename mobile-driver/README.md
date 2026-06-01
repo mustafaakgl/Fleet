@@ -40,6 +40,30 @@ npm install
 npm run start
 ```
 
+### iOS Simulator
+
+```bash
+cd mobile-driver
+npm run ios
+```
+
+### Android Emulator
+
+```bash
+cd mobile-driver
+npm run android
+```
+
+### Physical Phone (Expo Go)
+
+```bash
+cd mobile-driver
+npm run start
+```
+
+- Scan the QR code with Expo Go.
+- Keep your phone and dev machine on the same Wi-Fi network.
+
 ## QA Credentials
 
 These credentials are created by `prisma db seed`:
@@ -54,3 +78,11 @@ From workspace root:
 ```bash
 npm run qa:mobile-driver
 ```
+
+## API Base URL Behavior
+
+- Default API base URL comes from `app.json` (`expo.extra.apiBaseUrl`).
+- If not explicitly set, the app resolves backend URL from Expo host IP at runtime:
+  - `http://<expo-host-ip>:3000/api/v1`
+- This makes physical-device demos work without code changes.
+- If your backend runs on a different host/port, set `expo.extra.apiBaseUrl` accordingly.

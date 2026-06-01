@@ -5,6 +5,10 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "fleetdriver",
+    "splash": {
+      "backgroundColor": "#0F172A",
+      "resizeMode": "contain"
+    },
     "userInterfaceStyle": "automatic",
     "plugins": [
       "expo-router",
@@ -14,7 +18,8 @@
         {
           "photosPermission": "Allow Fleet Driver to access photos for handover uploads."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

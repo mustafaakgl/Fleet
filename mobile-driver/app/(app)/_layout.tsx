@@ -9,9 +9,9 @@ export default function AppLayout() {
 
   return (
     <Tabs screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="today" options={{ title: 'Today' }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Notifications' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+      <Tabs.Screen name="today" options={{ title: 'Fleet Driver Today' }} />
+      <Tabs.Screen name="notifications" options={{ title: 'Fleet Notifications' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Fleet Profile' }} />
     </Tabs>
   );
 }

@@ -43,7 +43,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScreenLayout title="Driver Login" subtitle="Sign in to Fleet Driver App">
+    <ScreenLayout title="Fleet Driver Login" subtitle="Sign in to Fleet Driver">
       <View style={styles.form}>
         <TextInput
           autoCapitalize="none"

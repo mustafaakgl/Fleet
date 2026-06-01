@@ -7,6 +7,10 @@ type ErrorPayload = {
 
 export function getErrorMessage(error: unknown, fallback = 'Unexpected error') {
   if (axios.isAxiosError<ErrorPayload>(error)) {
+    if (!error.response || error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+      return 'Cannot connect to Fleet ERP backend.';
+    }
+
     const data = error.response?.data;
     const message = data?.message;
     if (Array.isArray(message)) {
