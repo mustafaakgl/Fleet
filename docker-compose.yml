@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fleet_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fleet}
+      POSTGRES_USER: ${POSTGRES_USER:-fleet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fleet123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fleet} -d ${POSTGRES_DB:-fleet}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fleet_backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://fleet:fleet123@postgres:5432/fleet}
+      JWT_SECRET: ${JWT_SECRET:-secret}
+      PORT: ${BACKEND_PORT:-3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - backend_uploads:/app/uploads/documents
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api/v1}
+    container_name: fleet_frontend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api/v1}
+    depends_on:
+      - backend
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  backend_uploads:

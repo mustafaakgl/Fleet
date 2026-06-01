@@ -12,7 +12,11 @@
     "dev:backend": "npm --prefix backend run start:dev",
     "build": "npm --prefix frontend run build",
     "start": "node scripts/dev-next.mjs start",
-    "lint": "npm --prefix frontend run lint"
+    "lint": "npm --prefix frontend run lint",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:seed": "docker compose exec backend npx prisma db seed"
   },
   "dependencies": {
     "multer": "^2.1.1"

@@ -126,23 +126,47 @@ npm run dev
 
 Frontend will run on `http://localhost:3001`
 
-### Docker Compose
+### Docker Compose (Production-like Local)
+
+1) Copy environment template:
 
 ```bash
-# Start all services
-docker-compose up -d
+cp .env.example .env
+```
 
-# View logs
-docker-compose logs -f
+2) Start all services:
 
-# Stop services
-docker-compose down
+```bash
+npm run docker:up
+```
+
+3) Watch logs:
+
+```bash
+npm run docker:logs
+```
+
+4) Stop services:
+
+```bash
+npm run docker:down
 ```
 
 Services:
 - Frontend: http://localhost:3001
 - Backend: http://localhost:3000
 - PostgreSQL: localhost:5432
+
+Notes:
+- Backend runs `prisma migrate deploy` on startup.
+- Uploaded files persist in Docker volume `backend_uploads` (`/uploads/documents` served by backend).
+- Postgres data persists in Docker volume `postgres_data`.
+
+Manual seed (after containers are up):
+
+```bash
+npm run docker:seed
+```
 
 ## Test Credentials
 
