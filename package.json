@@ -17,7 +17,8 @@
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
-    "docker:seed": "docker compose exec backend npx prisma db seed"
+    "docker:seed": "docker compose exec backend npx prisma db seed",
+    "qa:mobile-driver": "node scripts/qa-mobile-driver.mjs"
   },
   "dependencies": {
     "multer": "^2.1.1"

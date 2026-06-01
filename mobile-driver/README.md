@@ -39,3 +39,18 @@ cd mobile-driver
 npm install
 npm run start
 ```
+
+## QA Credentials
+
+These credentials are created by `prisma db seed`:
+
+- Email: `driver@fleet.com`
+- Password: `driver123`
+
+## Quick QA Script
+
+From workspace root:
+
+```bash
+npm run qa:mobile-driver
+```

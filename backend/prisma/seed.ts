@@ -91,6 +91,7 @@ async function upsertDriver(params: {
   status?: DriverStatus;
   riskLevel?: RiskLevel;
   notes?: string;
+  userId?: string | null;
 }) {
   return prisma.driver.upsert({
     where: { employeeNumber: params.employeeNumber },
@@ -105,7 +106,7 @@ async function upsertDriver(params: {
       status: params.status ?? DriverStatus.active,
       riskLevel: params.riskLevel ?? RiskLevel.green,
       notes: params.notes,
-      userId: null,
+      ...(params.userId !== undefined ? { userId: params.userId } : {}),
     },
     create: {
       ...(params.id ? { id: params.id } : {}),
@@ -120,7 +121,7 @@ async function upsertDriver(params: {
       status: params.status ?? DriverStatus.active,
       riskLevel: params.riskLevel ?? RiskLevel.green,
       notes: params.notes,
-      userId: null,
+      userId: params.userId ?? null,
     },
   });
 }
@@ -700,6 +701,14 @@ async function main(): Promise<void> {
     role: UserRole.office,
   });
 
+  const driverQaUser = await upsertUser({
+    fullName: 'Ilker Cukur',
+    email: 'driver@fleet.com',
+    password: 'driver123',
+    role: UserRole.driver,
+    status: UserStatus.active,
+  });
+
   const drivers = [
     {
       id: 'drv_ilker_cukur',
@@ -714,6 +723,7 @@ async function main(): Promise<void> {
       passportExpiryDate: addDays(today, 400),
       status: DriverStatus.active,
       riskLevel: RiskLevel.green,
+      userId: driverQaUser.id,
     },
     {
       id: 'drv_thomas_scharein',
@@ -1791,6 +1801,14 @@ async function main(): Promise<void> {
     priority: NotificationPriority.high,
     relatedEntityType: 'CompanyEmail',
     relatedEntityId: failedEmail.id,
+  });
+
+  await upsertNotification({
+    userId: driverQaUser.id,
+    title: 'Driver mobile QA ready',
+    message: 'Your account is seeded and linked to an active driver profile.',
+    type: NotificationType.system,
+    priority: NotificationPriority.low,
   });
 
   await upsertReminder({
