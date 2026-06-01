@@ -218,7 +218,7 @@ export interface Document {
   fileUrl?: string;
   expiryDate?: string;
   uploadedAt: string;
-  status: 'valid' | 'expiring_soon' | 'expired' | 'missing';
+  status: 'valid' | 'expiring_soon' | 'expired' | 'missing' | 'archived';
   notes?: string;
 }
 

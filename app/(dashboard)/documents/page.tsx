@@ -54,6 +54,21 @@ function badgeClass(status: Document['status']) {
   return 'bg-slate-100 text-slate-700';
 }
 
+function resolveDocumentUrl(fileUrl?: string) {
+  if (!fileUrl) return null;
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+    return fileUrl;
+  }
+
+  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+  try {
+    const origin = new URL(base).origin;
+    return `${origin}${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`;
+  } catch {
+    return fileUrl;
+  }
+}
+
 export default function DocumentsPage() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
@@ -64,13 +79,21 @@ export default function DocumentsPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [ownerTypeFilter, setOwnerTypeFilter] = useState<'all' | Document['ownerType']>('all');
   const [documentTypeFilter, setDocumentTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Document['status']>(() => {
     const statusParam = searchParams.get('status');
-    if (statusParam === 'valid' || statusParam === 'expiring_soon' || statusParam === 'expired' || statusParam === 'missing') {
+    if (
+      statusParam === 'valid' ||
+      statusParam === 'expiring_soon' ||
+      statusParam === 'expired' ||
+      statusParam === 'missing' ||
+      statusParam === 'archived'
+    ) {
       return statusParam;
     }
     return 'all';
@@ -109,6 +132,12 @@ export default function DocumentsPage() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const ownerNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -182,6 +211,13 @@ export default function DocumentsPage() {
     setDetailOpen(true);
   }
 
+  function openFileIfAvailable(doc: Document) {
+    const url = resolveDocumentUrl(doc.fileUrl);
+    if (!url) return false;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return true;
+  }
+
   function openForm(mode: DrawerMode, doc?: Document, missingRow?: MissingDocumentRow) {
     setFormMode(mode);
     if (doc) {
@@ -220,17 +256,32 @@ export default function DocumentsPage() {
     fileName: string;
     expiryDate?: string;
     notes?: string;
+    file?: File | null;
   }) {
+    setSaving(true);
     try {
       if (formMode === 'add') {
-        await documentsApi.create({
-          ownerType: payload.ownerType,
-          ownerId: payload.ownerId,
-          documentType: payload.documentType,
-          fileName: payload.fileName,
-          expiryDate: payload.expiryDate,
-          notes: payload.notes,
-        });
+        if (payload.file) {
+          const formData = new FormData();
+          formData.append('ownerType', payload.ownerType);
+          formData.append('ownerId', payload.ownerId);
+          formData.append('documentType', payload.documentType);
+          if (payload.expiryDate) formData.append('expiryDate', payload.expiryDate);
+          if (payload.notes) formData.append('notes', payload.notes);
+          formData.append('file', payload.file);
+          await documentsApi.upload(formData);
+          setToast({ type: 'success', message: 'Document uploaded successfully.' });
+        } else {
+          await documentsApi.create({
+            ownerType: payload.ownerType,
+            ownerId: payload.ownerId,
+            documentType: payload.documentType,
+            fileName: payload.fileName,
+            expiryDate: payload.expiryDate,
+            notes: payload.notes,
+          });
+          setToast({ type: 'success', message: 'Document metadata saved.' });
+        }
       } else if (formMode === 'edit' && formDocument?.id) {
         await documentsApi.update(formDocument.id, {
           documentType: payload.documentType,
@@ -238,17 +289,33 @@ export default function DocumentsPage() {
           expiryDate: payload.expiryDate,
           notes: payload.notes,
         });
+        setToast({ type: 'success', message: 'Document updated.' });
       } else if (formMode === 'replace' && formDocument?.id) {
-        await documentsApi.replace(formDocument.id, {
-          fileName: payload.fileName,
-          expiryDate: payload.expiryDate,
-          notes: payload.notes,
-        });
+        if (payload.file) {
+          const formData = new FormData();
+          if (payload.documentType) formData.append('documentType', payload.documentType);
+          if (payload.expiryDate) formData.append('expiryDate', payload.expiryDate);
+          if (payload.notes) formData.append('notes', payload.notes);
+          formData.append('file', payload.file);
+          await documentsApi.replaceUpload(formDocument.id, formData);
+          setToast({ type: 'success', message: 'Document replaced with uploaded file.' });
+        } else {
+          await documentsApi.replace(formDocument.id, {
+            fileName: payload.fileName,
+            expiryDate: payload.expiryDate,
+            notes: payload.notes,
+          });
+          setToast({ type: 'success', message: 'Document metadata replaced.' });
+        }
       }
       setFormOpen(false);
       await reload();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Failed to save');
+      const message = e instanceof Error ? e.message : 'Failed to save';
+      window.alert(message);
+      setToast({ type: 'error', message: `Upload failed: ${message}` });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -305,6 +372,7 @@ export default function DocumentsPage() {
               <option value="expiring_soon">expiring_soon</option>
               <option value="expired">expired</option>
               <option value="missing">missing</option>
+              <option value="archived">archived</option>
             </Select>
 
             <Input
@@ -397,9 +465,13 @@ export default function DocumentsPage() {
                           <button
                             type="button"
                             className="font-medium text-blue-600 hover:underline"
-                            onClick={() => openDetail(doc)}
+                            onClick={() => {
+                              if (!openFileIfAvailable(doc)) {
+                                openDetail(doc);
+                              }
+                            }}
                           >
-                            View
+                            Open
                           </button>
                           <button
                             type="button"
@@ -438,6 +510,14 @@ export default function DocumentsPage() {
         onOpenChange={setDetailOpen}
         document={detailDocument}
         ownerName={ownerName}
+        onOpenFile={(doc) => {
+          const url = resolveDocumentUrl(doc.fileUrl);
+          if (url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+            return;
+          }
+          setToast({ type: 'error', message: 'Metadata-only document: no file available.' });
+        }}
       />
 
       <AddDocumentDrawer
@@ -447,7 +527,18 @@ export default function DocumentsPage() {
         initialDocument={formDocument}
         ownerOptionsByType={ownerOptionsByType}
         onSubmit={handleSubmitForm}
+        isSaving={saving}
       />
+
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 rounded-md px-4 py-2 text-sm font-medium text-white shadow-lg ${
+            toast.type === 'success' ? 'bg-emerald-700' : 'bg-red-700'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
@@ -457,11 +548,13 @@ function DocumentDetailDrawer({
   onOpenChange,
   document,
   ownerName,
+  onOpenFile,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   document: Document | null;
   ownerName: (ot: string, oi: string) => string;
+  onOpenFile: (doc: Document) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -469,9 +562,7 @@ function DocumentDetailDrawer({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('documents.viewDetail')}</DialogTitle>
-          <DialogDescription>
-            Owner and document metadata with file preview placeholder.
-          </DialogDescription>
+          <DialogDescription>Owner and document metadata.</DialogDescription>
         </DialogHeader>
 
         {!document ? (
@@ -488,9 +579,29 @@ function DocumentDetailDrawer({
             <DetailItem label="Status" value={document.status} />
             <DetailItem label="Uploaded At" value={formatDate(document.uploadedAt)} />
             <DetailItem label="Notes" value={document.notes || '-'} />
-            <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-gray-500 md:col-span-2">
-              {t('documents.filePreview')}
-            </div>
+            {document.fileUrl ? (
+              <div className="space-y-3 rounded border border-gray-200 bg-gray-50 p-4 md:col-span-2">
+                <p className="text-xs font-semibold uppercase text-gray-500">File</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => onOpenFile(document)}>
+                    Open in new tab
+                  </Button>
+                  <a
+                    href={resolveDocumentUrl(document.fileUrl) ?? '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                    className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Download
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-gray-500 md:col-span-2">
+                Metadata-only document (no uploaded file).
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
@@ -505,6 +616,7 @@ function AddDocumentDrawer({
   initialDocument,
   ownerOptionsByType,
   onSubmit,
+  isSaving,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -518,7 +630,9 @@ function AddDocumentDrawer({
     fileName: string;
     expiryDate?: string;
     notes?: string;
+    file?: File | null;
   }) => void | Promise<void>;
+  isSaving: boolean;
 }) {
   const { t } = useTranslation();
   const [ownerType, setOwnerType] = useState<Document['ownerType']>(
@@ -527,6 +641,7 @@ function AddDocumentDrawer({
   const [ownerId, setOwnerId] = useState(initialDocument?.ownerId ?? '');
   const [documentType, setDocumentType] = useState(initialDocument?.documentType ?? '');
   const [fileName, setFileName] = useState(initialDocument?.fileName ?? '');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [expiryDate, setExpiryDate] = useState(initialDocument?.expiryDate?.slice(0, 10) ?? '');
   const [notes, setNotes] = useState(initialDocument?.notes ?? '');
 
@@ -539,20 +654,23 @@ function AddDocumentDrawer({
       setOwnerId(initialDocument?.ownerId ?? '');
       setDocumentType(initialDocument?.documentType ?? '');
       setFileName(initialDocument?.fileName ?? '');
+      setSelectedFile(null);
       setExpiryDate(initialDocument?.expiryDate?.slice(0, 10) ?? '');
       setNotes(initialDocument?.notes ?? '');
     }
   }, [open, initialDocument]);
 
   function submit() {
-    if (!ownerId || !documentType || !fileName) return;
+    const effectiveFileName = selectedFile?.name ?? fileName;
+    if (!ownerId || !documentType || !effectiveFileName) return;
     void onSubmit({
       ownerType,
       ownerId,
       documentType,
-      fileName,
+      fileName: effectiveFileName,
       expiryDate: expiryDate || undefined,
       notes: notes || undefined,
+      file: selectedFile,
     });
   }
 
@@ -565,7 +683,7 @@ function AddDocumentDrawer({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            No real upload in MVP. File fields are placeholders only.
+            Metadata-only flow is still supported. Choose a file to upload.
           </DialogDescription>
         </DialogHeader>
 
@@ -624,8 +742,26 @@ function AddDocumentDrawer({
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
               placeholder="example.pdf"
+              disabled={Boolean(selectedFile)}
             />
           </div>
+
+          {(mode === 'add' || mode === 'replace') && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase text-gray-600">File Upload</label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setSelectedFile(file);
+                  if (file) {
+                    setFileName(file.name);
+                  }
+                }}
+              />
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase text-gray-600">Expiry Date</label>
@@ -646,7 +782,9 @@ function AddDocumentDrawer({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={submit}>{mode === 'add' ? t('common.add') : 'Save'}</Button>
+          <Button onClick={submit} disabled={isSaving}>
+            {isSaving ? 'Uploading...' : mode === 'add' ? t('common.add') : 'Save'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

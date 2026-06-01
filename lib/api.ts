@@ -37,6 +37,15 @@ const api = axios.create({
 
 // ─── Request interceptor: attach JWT ────────────────────────────────────────
 api.interceptors.request.use((config) => {
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    // Let the browser set multipart boundary automatically.
+    if (config.headers && typeof (config.headers as { set?: (name: string, value: string | undefined) => void }).set === 'function') {
+      (config.headers as { set: (name: string, value: string | undefined) => void }).set('Content-Type', undefined);
+    } else if (config.headers) {
+      delete (config.headers as Record<string, unknown>)['Content-Type'];
+    }
+  }
+
   const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -651,11 +660,17 @@ export const documentsApi = {
   create: (data: Partial<Document>) =>
     api.post<Document>('/documents', data).then((r) => r.data),
 
+  upload: (formData: FormData) =>
+    api.post<Document>('/documents/upload', formData).then((r) => r.data),
+
   update: (id: string, data: Partial<Document>) =>
     api.patch<Document>(`/documents/${id}`, data).then((r) => r.data),
 
   replace: (id: string, data: Partial<Document>) =>
     api.post<Document>(`/documents/${id}/replace`, data).then((r) => r.data),
+
+  replaceUpload: (id: string, formData: FormData) =>
+    api.post<Document>(`/documents/${id}/replace-upload`, formData).then((r) => r.data),
 
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/documents/${id}`).then((r) => r.data),
