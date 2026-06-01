@@ -3,6 +3,7 @@ import { clearAuth } from './auth';
 import type {
   AuthResponse,
   DashboardSummary,
+  DashboardRevenueAnalytics,
   Driver,
   DriverDetail,
   PaginatedDrivers,
@@ -84,6 +85,12 @@ export const authApi = {
 
 export const dashboardApi = {
   getSummary: () => api.get<DashboardSummary>('/dashboard').then((r) => r.data),
+
+  // Financial-roles only: standalone revenue analytics for a given date.
+  getRevenueAnalytics: (date?: string) =>
+    api
+      .get<DashboardRevenueAnalytics | null>('/dashboard/revenue-analytics', { params: { date } })
+      .then((r) => r.data),
 };
 
 // ─── Drivers ─────────────────────────────────────────────────────────────────
@@ -218,6 +225,9 @@ export const assignmentsApi = {
   list: (params?: AssignmentListParams) =>
     api.get<PaginatedAssignments>('/assignments', { params }).then((r) => r.data),
 
+  getById: (id: string) =>
+    api.get<Assignment>(`/assignments/${id}`).then((r) => r.data),
+
   create: (data: Partial<Assignment>) =>
     api.post<Assignment>('/assignments', data).then((r) => r.data),
 
@@ -226,6 +236,9 @@ export const assignmentsApi = {
 
   cancel: (id: string) =>
     api.post(`/assignments/${id}/cancel`).then((r) => r.data),
+
+  transition: (id: string, to: 'confirmed' | 'in_progress' | 'completed') =>
+    api.post<Assignment>(`/assignments/${id}/transition`, { to }).then((r) => r.data),
 };
 
 // ─── Morning check-ins ───────────────────────────────────────────────────────
@@ -322,12 +335,32 @@ export interface VehicleHandoverRecord {
   vehicle?: { id: string; plateNumber: string };
 }
 
+export interface CreateVehicleHandoverInput {
+  driverId: string;
+  vehicleId: string;
+  previousVehicleId?: string;
+  assignmentId?: string;
+  handoverType: 'pickup' | 'return';
+  handoverDateTime: string;
+  damageDetected?: boolean;
+  damageNotes?: string;
+  notes?: string;
+}
+
 export const vehicleHandoversApi = {
   list: () =>
     api.get<VehicleHandoverRecord[]>('/vehicle-handovers').then((r) => r.data),
 
   getById: (id: string) =>
     api.get<VehicleHandoverRecord>(`/vehicle-handovers/${id}`).then((r) => r.data),
+
+  create: (data: CreateVehicleHandoverInput) =>
+    api.post<VehicleHandoverRecord>('/vehicle-handovers', data).then((r) => r.data),
+
+  createFromAssignment: (assignmentId: string) =>
+    api
+      .post<VehicleHandoverRecord>(`/vehicle-handovers/from-assignment/${assignmentId}`)
+      .then((r) => r.data),
 
   update: (id: string, data: Partial<VehicleHandoverRecord>) =>
     api.patch<VehicleHandoverRecord>(`/vehicle-handovers/${id}`, data).then((r) => r.data),
@@ -411,6 +444,8 @@ export const remindersApi = {
 
   resolve: (id: string) => api.post(`/reminders/${id}/resolve`).then((r) => r.data),
 
+  ignore: (id: string) => api.post(`/reminders/${id}/ignore`).then((r) => r.data),
+
   generate: () => api.post('/reminders/generate').then((r) => r.data),
 };
 
@@ -419,7 +454,12 @@ export const remindersApi = {
 export const notificationsApi = {
   list: () => api.get<Notification[]>('/notifications').then((r) => r.data),
 
+  getUnreadCount: () =>
+    api.get<{ count: number }>('/notifications/unread-count').then((r) => r.data),
+
   markRead: (id: string) => api.post(`/notifications/${id}/read`).then((r) => r.data),
+
+  markAllRead: () => api.post('/notifications/read-all').then((r) => r.data),
 };
 
 // ─── Users (admin) ────────────────────────────────────────────────────────────
@@ -619,6 +659,75 @@ export const documentsApi = {
 
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/documents/${id}`).then((r) => r.data),
+};
+
+// ─── Requests (driver absence/leave workflow — Anträge) ──────────────────────
+
+export type BackendRequestType =
+  | 'vacation'
+  | 'sick_leave'
+  | 'training'
+  | 'business_trip'
+  | 'doctor_appointment'
+  | 'special_leave'
+  | 'overtime_compensation'
+  | 'free_day'
+  | 'other';
+
+export type BackendRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface BackendRequest {
+  id: string;
+  driverId: string;
+  type: BackendRequestType;
+  startDate: string;
+  endDate: string;
+  reason?: string | null;
+  status: BackendRequestStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RequestListParams {
+  driverId?: string;
+  status?: string;
+  type?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface CreateRequestInput {
+  driverId: string;
+  type: BackendRequestType;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+}
+
+export const requestsApi = {
+  list: (params?: RequestListParams) =>
+    api.get<BackendRequest[]>('/requests', { params }).then((r) => r.data),
+
+  getById: (id: string) => api.get<BackendRequest>(`/requests/${id}`).then((r) => r.data),
+
+  create: (data: CreateRequestInput) =>
+    api.post<BackendRequest>('/requests', data).then((r) => r.data),
+
+  approve: (id: string, currentUserId: string) =>
+    api.post<BackendRequest>(`/requests/${id}/approve`, { currentUserId }).then((r) => r.data),
+
+  reject: (id: string) =>
+    api.post<BackendRequest>(`/requests/${id}/reject`).then((r) => r.data),
+
+  cancel: (id: string) =>
+    api.post<BackendRequest>(`/requests/${id}/cancel`).then((r) => r.data),
+
+  update: (
+    id: string,
+    data: Partial<Pick<CreateRequestInput, 'type' | 'startDate' | 'endDate' | 'reason'>> & {
+      status?: BackendRequestStatus;
+    },
+  ) => api.patch<BackendRequest>(`/requests/${id}`, data).then((r) => r.data),
 };
 
 export default api;

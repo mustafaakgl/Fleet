@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useFleetData } from '@/context/FleetDataContext';
-import { dashboardApi } from '@/lib/api';
+import { dashboardApi, notificationsApi } from '@/lib/api';
 import type { DashboardCriticalAlert } from '@/lib/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -223,6 +223,10 @@ export function NotificationCenter() {
 
   function markAllAsRead() {
     setReadIds(notifications.map((item) => item.id));
+    // Best-effort: also persist read state for backend-stored notifications.
+    notificationsApi.markAllRead().catch(() => {
+      /* non-blocking: local read state already updated */
+    });
   }
 
   function handleNotificationClick(notification: FleetNotification) {

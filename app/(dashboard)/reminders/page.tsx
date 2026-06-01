@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCheck, RefreshCw } from 'lucide-react';
+import { Bell, CheckCheck, RefreshCw, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
@@ -99,6 +99,15 @@ export default function RemindersPage() {
       setReminders((prev) => prev.filter((r) => r.id !== id));
     } catch (e) {
       window.alert(e instanceof Error ? e.message : 'Failed to resolve');
+    }
+  }
+
+  async function handleIgnore(id: string) {
+    try {
+      await remindersApi.ignore(id);
+      setReminders((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Failed to ignore');
     }
   }
 
@@ -243,10 +252,16 @@ export default function RemindersPage() {
                         {r.status}
                       </Badge>
                       {r.status === 'open' && (
-                        <Button size="sm" variant="outline" onClick={() => handleResolve(r.id)}>
-                          <CheckCheck className="w-3.5 h-3.5 mr-1" />
-                          Resolve
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => handleResolve(r.id)}>
+                            <CheckCheck className="w-3.5 h-3.5 mr-1" />
+                            Resolve
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => handleIgnore(r.id)}>
+                            <X className="w-3.5 h-3.5 mr-1" />
+                            Ignore
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
