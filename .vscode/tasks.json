@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Backend Dev",
+			"type": "shell",
+			"command": "PATH=/opt/homebrew/opt/node@22/bin:$PATH npm --prefix backend run start:dev",
+			"isBackground": true
+		},
+		{
+			"label": "Install Backend Deps",
+			"type": "shell",
+			"command": "PATH=/opt/homebrew/opt/node@22/bin:$PATH npm --prefix backend install",
+			"problemMatcher": []
+		}
+	]
+}

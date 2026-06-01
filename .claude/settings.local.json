@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\nTime: %{time_total}s\\\\n\" http://localhost:3001/ --max-time 30)",
+      "Bash(lsof -iTCP:3001 -sTCP:LISTEN -P -n)",
+      "Bash(rm -rf /Users/mustafaakgul/Desktop/Projects/Fleet/frontend/.next && echo \".next removed\")",
+      "Bash(npm run *)",
+      "Bash(awk '{printf \"%-6s %s%% %s%% %s\\\\n\", $2, $3, $4, substr\\($0, index\\($0,$11\\)\\)}')",
+      "Bash(sample 19132 2 -mayDie)",
+      "Bash(PGPASSWORD=fleet123 psql -h localhost -U fleet -d fleet -c 'SELECT COUNT\\(*\\) AS users, COUNT\\(*\\) FILTER \\(WHERE email='\\\\''admin@fleet.com'\\\\''\\) AS admin FROM \"User\";')",
+      "Bash(pkill -f \"ts-node-dev\\\\|node.*main.ts\")",
+      "Bash(npm install *)",
+      "Bash(sed -n '272,295p' /Users/mustafaakgul/Desktop/Projects/Fleet/backend/prisma/schema.prisma)",
+      "Bash(grep -nA15 \"^// ─── Company\\\\|interface Company\" /Users/mustafaakgul/Desktop/Projects/Fleet/frontend/lib/types.ts)",
+      "Bash(grep -nA8 \"companiesApi\\\\s*=\" /Users/mustafaakgul/Desktop/Projects/Fleet/frontend/lib/api.ts)",
+      "Bash(lsof -iTCP:3000 -sTCP:LISTEN -P -n)",
+      "Bash(curl -s -o /dev/null -w \"GET /assignments: HTTP %{http_code} Time: %{time_total}s\\\\n\" http://localhost:3001/assignments --max-time 60)",
+      "Bash(grep -nB1 -A3 \"getHandoverLabelByAssignment\\\\|vehicle-handovers\" /Users/mustafaakgul/Desktop/Projects/Fleet/frontend/components/einsatzplan/Tagesplanung.tsx)",
+      "Bash(PATH=/opt/homebrew/opt/node@22/bin:__TRACKED_VAR__ npm run build)",
+      "Bash(grep -nA2 \"^export interface MorningCheckin\" /Users/mustafaakgul/Desktop/Projects/Fleet/frontend/context/FleetDataContext.tsx)",
+      "Bash(PATH=/opt/homebrew/opt/node@22/bin:__TRACKED_VAR__ npm run start:dev)",
+      "Bash(pkill -9 -f \"ts-node-dev\\\\|main\\\\.ts\\\\|nest\")",
+      "Bash(pkill -9 -f \"next-server\\\\|next dev\\\\|dev-workspace\\\\|dev-next\")",
+      "Bash(rm -rf /Users/mustafaakgul/Desktop/Projects/Fleet/frontend/.next)",
+      "Bash(PATH=/opt/homebrew/opt/node@22/bin:__TRACKED_VAR__ npm run dev)",
+      "Bash(kill -9 59269 59237)",
+      "Bash(tail -40 /tmp/be.log 2>/dev/null *)",
+      "Read(//private/tmp/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/mustafaakgul/Desktop/Projects/Fleet/frontend/.next"
+    ]
+  }
+}

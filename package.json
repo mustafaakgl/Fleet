@@ -1,0 +1,23 @@
+{
+  "name": "fleet",
+  "private": true,
+  "engines": {
+    "node": ">=20.9 <23"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-workspace.mjs",
+    "dev:lts": "node scripts/dev-workspace.mjs",
+    "dev:full": "START_BACKEND_ON_DEV=true node scripts/dev-workspace.mjs",
+    "dev:frontend": "node scripts/dev-next.mjs dev",
+    "dev:backend": "npm --prefix backend run start:dev",
+    "build": "npm --prefix frontend run build",
+    "start": "node scripts/dev-next.mjs start",
+    "lint": "npm --prefix frontend run lint"
+  },
+  "dependencies": {
+    "multer": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/multer": "^2.1.0"
+  }
+}

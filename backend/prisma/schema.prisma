@@ -1,0 +1,572 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  boss
+  accounting
+  office
+  driver
+}
+
+enum UserStatus {
+  active
+  inactive
+}
+
+enum DriverStatus {
+  active
+  on_leave
+  sick
+  inactive
+  terminated
+}
+
+enum RiskLevel {
+  green
+  yellow
+  red
+}
+
+enum VehicleStatus {
+  active
+  maintenance
+  broken
+  inactive
+}
+
+enum AssignmentStatus {
+  planned
+  confirmed
+  in_progress
+  completed
+  cancelled
+}
+
+enum TransportRequestStatus {
+  pending
+  approved
+  rejected
+  needs_review
+}
+
+enum CalendarStatus {
+  AT
+  UT
+  KT
+  FT
+  HO
+  SCH
+  GR
+  AZ
+  SZ
+  US
+  FR
+  WE
+  AB
+  MT
+}
+
+enum CalendarSource {
+  assignment
+  leave
+  manual
+}
+
+enum RequestType {
+  vacation
+  sick_leave
+  training
+  business_trip
+  doctor_appointment
+  special_leave
+  overtime_compensation
+  free_day
+  other
+}
+
+enum RequestStatus {
+  pending
+  approved
+  rejected
+  cancelled
+  needs_review
+}
+
+enum DocumentOwnerType {
+  driver
+  vehicle
+  company
+  request
+  accident
+  cargo_damage
+  vehicle_handover
+  assignment
+  service_record
+}
+
+enum DocumentStatus {
+  valid
+  expiring_soon
+  expired
+  missing
+  archived
+}
+
+enum HandoverType {
+  pickup
+  return
+}
+
+enum HandoverPhotoStatus {
+  not_required
+  missing
+  uploaded
+  approved
+  rejected
+}
+
+enum HandoverStatus {
+  pending
+  completed
+}
+
+enum IncidentType {
+  vehicle_accident
+  cargo_damage
+}
+
+enum IncidentStatus {
+  reported
+  under_review
+  resolved
+  rejected
+}
+
+enum CompanyEmailStatus {
+  draft
+  draft_ready
+  needs_review
+  sent
+  failed
+}
+
+enum NotificationType {
+  transport_request
+  request
+  document
+  handover
+  accident
+  cargo_damage
+  company_email
+  reminder
+  system
+}
+
+enum NotificationPriority {
+  low
+  medium
+  high
+  critical
+}
+
+enum NotificationStatus {
+  unread
+  read
+}
+
+enum ReminderStatus {
+  open
+  sent
+  resolved
+  ignored
+}
+
+enum ReminderType {
+  license_expiry
+  passport_expiry
+  tuv_expiry
+  sp_expiry
+  insurance_expiry
+  document_expiry
+  custom
+}
+
+model User {
+  id           String     @id @default(cuid())
+  fullName     String
+  email        String     @unique
+  passwordHash String
+  role         UserRole
+  status       UserStatus @default(active)
+  language     String     @default("de")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  driver             Driver?
+  createdAssignments Assignment[]   @relation("AssignmentCreatedBy")
+  approvedRequests   Request[]      @relation("ApprovedRequests")
+  uploadedDocuments  Document[]     @relation("DocumentUploadedBy")
+  notifications      Notification[]
+}
+
+model Driver {
+  id                 String       @id @default(cuid())
+  userId             String?      @unique
+  employeeNumber     String       @unique
+  firstName          String
+  lastName           String
+  phone              String?
+  email              String?
+  licenseNumber      String?
+  licenseExpiryDate  DateTime?
+  passportNumber     String?
+  passportExpiryDate DateTime?
+  status             DriverStatus @default(active)
+  riskLevel          RiskLevel    @default(green)
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  currentVehicles   Vehicle[]          @relation("CurrentVehicleDriver")
+  assignments       Assignment[]
+  transportRequests TransportRequest[]
+  calendarEvents    CalendarEvent[]
+  requests          Request[]
+  vehicleHandovers  VehicleHandover[]
+  accidents         Accident[]
+  morningCheckins   MorningCheckin[]
+}
+
+model Vehicle {
+  id                     String        @id @default(cuid())
+  plateNumber            String        @unique
+  internalCode           String        @unique
+  brand                  String
+  model                  String
+  year                   Int?
+  vin                    String?       @unique
+  status                 VehicleStatus @default(active)
+  currentDriverId        String?
+  tuvExpiryDate          DateTime?
+  spExpiryDate           DateTime?
+  insuranceExpiryDate    DateTime?
+  registrationExpiryDate DateTime?
+  notes                  String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  currentDriver Driver? @relation("CurrentVehicleDriver", fields: [currentDriverId], references: [id], onDelete: SetNull)
+
+  assignments       Assignment[]
+  transportRequests TransportRequest[]
+  vehicleHandovers  VehicleHandover[]
+  accidents         Accident[]
+  serviceRecords    ServiceRecord[]
+}
+
+model Company {
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  email               String?
+  phone               String?
+  address             String?
+  contactPerson       String?
+  defaultDailyRevenue Decimal? @db.Decimal(10, 2)
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  assignments       Assignment[]
+  transportRequests TransportRequest[]
+  accidents         Accident[]
+  companyEmails     CompanyEmail[]
+}
+
+model Assignment {
+  id              String           @id @default(cuid())
+  driverId        String
+  vehicleId       String
+  companyId       String
+  cargoName       String
+  cargoOwner      String
+  pickupAddress   String
+  deliveryAddress String
+  workDate        DateTime
+  startTime       String
+  endTime         String
+  routeName       String?
+  status          AssignmentStatus @default(planned)
+  notes           String?
+  createdById     String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  driver           Driver            @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle          Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  createdBy        User              @relation("AssignmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  calendarEvents   CalendarEvent[]
+  transportRequest TransportRequest? @relation("TransportRequestAssignment")
+  vehicleHandovers VehicleHandover[]
+  accidents        Accident[]
+  morningCheckins  MorningCheckin[]
+
+  @@index([driverId, workDate])
+  @@index([vehicleId, workDate])
+  @@index([companyId, workDate])
+}
+
+model TransportRequest {
+  id              String                 @id @default(cuid())
+  driverId        String
+  vehicleId       String
+  companyId       String
+  cargoName       String
+  cargoOwner      String
+  pickupAddress   String
+  deliveryAddress String
+  requestedDate   DateTime
+  startTime       String
+  endTime         String
+  status          TransportRequestStatus @default(pending)
+  conflictReason  String?
+  assignmentId    String?                @unique
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  driver     Driver      @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  assignment Assignment? @relation("TransportRequestAssignment", fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([driverId, requestedDate])
+  @@index([vehicleId, requestedDate])
+  @@index([companyId, requestedDate])
+}
+
+model CalendarEvent {
+  id           String         @id @default(cuid())
+  driverId     String
+  assignmentId String?
+  requestId    String?
+  date         DateTime
+  status       CalendarStatus
+  source       CalendarSource
+  createdAt    DateTime       @default(now())
+
+  driver     Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  request    Request?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([driverId, date])
+  @@index([requestId])
+}
+
+model Request {
+  id           String        @id @default(uuid())
+  driverId     String
+  type         RequestType
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  status       RequestStatus @default(pending)
+  approvedById String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  driver         Driver          @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  approvedBy     User?           @relation("ApprovedRequests", fields: [approvedById], references: [id], onDelete: SetNull)
+  calendarEvents CalendarEvent[]
+
+  @@index([driverId, startDate, endDate])
+}
+
+model Document {
+  id           String            @id @default(uuid())
+  ownerType    DocumentOwnerType
+  ownerId      String
+  documentType String
+  fileName     String
+  fileUrl      String?
+  expiryDate   DateTime?
+  status       DocumentStatus    @default(valid)
+  notes        String?
+  uploadedById String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  uploadedBy User? @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([ownerType, ownerId])
+  @@index([status])
+  @@index([documentType])
+  @@index([expiryDate])
+}
+
+model VehicleHandover {
+  id                String              @id @default(uuid())
+  driverId          String
+  vehicleId         String
+  previousVehicleId String?
+  assignmentId      String?
+  handoverType      HandoverType
+  handoverDateTime  DateTime
+  photoRequired     Boolean             @default(false)
+  photoStatus       HandoverPhotoStatus @default(not_required)
+  damageDetected    Boolean             @default(false)
+  damageNotes       String?
+  status            HandoverStatus      @default(pending)
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  driver     Driver      @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([driverId, handoverDateTime])
+  @@index([vehicleId, handoverDateTime])
+  @@index([assignmentId])
+}
+
+model Accident {
+  id               String         @id @default(uuid())
+  type             IncidentType
+  driverId         String
+  vehicleId        String
+  companyId        String?
+  assignmentId     String?
+  incidentDateTime DateTime
+  location         String?
+  description      String
+  cargoName        String?
+  cargoOwner       String?
+  damageValue      Decimal?       @db.Decimal(12, 2)
+  status           IncidentStatus @default(reported)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  driver     Driver      @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  company    Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([driverId, incidentDateTime])
+  @@index([vehicleId, incidentDateTime])
+  @@index([companyId, incidentDateTime])
+  @@index([assignmentId])
+  @@index([type, status])
+}
+
+model CompanyEmail {
+  id             String             @id @default(uuid())
+  companyId      String
+  date           DateTime
+  subject        String
+  recipientEmail String
+  body           String
+  status         CompanyEmailStatus @default(draft)
+  lastSentAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId, date])
+}
+
+model Notification {
+  id                String               @id @default(uuid())
+  userId            String
+  title             String
+  message           String
+  type              NotificationType
+  priority          NotificationPriority @default(medium)
+  status            NotificationStatus   @default(unread)
+  relatedEntityType String?
+  relatedEntityId   String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([type, createdAt])
+}
+
+model Reminder {
+  id               String         @id @default(uuid())
+  targetType       String
+  targetId         String
+  reminderType     ReminderType
+  title            String
+  description      String?
+  dueDate          DateTime
+  notifyBeforeDays Int
+  status           ReminderStatus @default(open)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([targetType, targetId, reminderType, dueDate, notifyBeforeDays])
+  @@index([status, dueDate])
+  @@index([targetType, targetId])
+}
+
+enum MorningCheckinStatus {
+  confirmed
+  waiting_for_review
+  missing_vehicle_plate
+  missing_company
+  conflict
+  added_to_einsatzplan
+  rejected
+}
+
+model MorningCheckin {
+  id             String               @id @default(cuid())
+  driverId       String
+  date           DateTime
+  submittedAt    DateTime             @default(now())
+  vehiclePlate   String?
+  companyName    String?
+  status         MorningCheckinStatus @default(waiting_for_review)
+  conflictReason String?
+  assignmentId   String?
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  driver     Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([driverId, date])
+  @@index([status, date])
+}
+
+model ServiceRecord {
+  id            String   @id @default(cuid())
+  vehicleId     String
+  date          DateTime
+  serviceType   String
+  repairCompany String
+  costAmount    Decimal  @db.Decimal(10, 2)
+  mileageKm     Int?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, date])
+  @@index([repairCompany])
+}
