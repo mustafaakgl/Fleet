@@ -10,6 +10,7 @@
     "dev:full": "node scripts/dev-workspace.mjs",
     "dev:frontend": "node scripts/dev-next.mjs dev",
     "dev:backend": "node scripts/dev-backend.mjs",
+    "dev:mobile": "npm --prefix mobile-driver run start",
     "build": "npm --prefix frontend run build",
     "start": "node scripts/dev-next.mjs start",
     "lint": "npm --prefix frontend run lint",

@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Fleet Driver",
+    "slug": "fleet-driver-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "fleetdriver",
+    "userInterfaceStyle": "automatic",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Fleet Driver to access photos for handover uploads."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:3000/api/v1"
+    }
+  }
+}
