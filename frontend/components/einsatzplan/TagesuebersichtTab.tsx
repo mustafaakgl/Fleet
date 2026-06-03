@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { getTodayDate, type FleetAssignment, useFleetData } from '@/context/FleetDataContext';
+import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
+import { groupAssignmentsByCompany, TRAILER_BY_VEHICLE } from './companyBoard';
 
 interface StatusBlockItem {
   name: string;
@@ -27,13 +29,6 @@ interface TagesuebersichtExportAssignment {
   notes: string;
 }
 
-interface BoardCompany {
-  key: string;
-  label: string;
-  aliases: string[];
-  headerClass: string;
-}
-
 const STATUS_BLOCKS: Record<'urlaub' | 'kuendigung' | 'krank', StatusBlockItem[]> = {
   urlaub: [
     { name: 'Sita', until: '29.05' },
@@ -53,38 +48,6 @@ const STATUS_BLOCKS: Record<'urlaub' | 'kuendigung' | 'krank', StatusBlockItem[]
   ],
 };
 
-const BOARD_COMPANIES: BoardCompany[] = [
-  { key: 'krage', label: 'Krage', aliases: ['krage'], headerClass: 'bg-blue-50 text-blue-800' },
-  { key: 'ups', label: 'UPS', aliases: ['ups'], headerClass: 'bg-amber-50 text-amber-800' },
-  { key: 'schnellecke', label: 'Schnellecke', aliases: ['schnellecke'], headerClass: 'bg-cyan-50 text-cyan-800' },
-  { key: 'kunzendorf', label: 'Kunzendorf', aliases: ['kunzendorf'], headerClass: 'bg-violet-50 text-violet-800' },
-  { key: 'raben', label: 'Raben', aliases: ['raben', 'raben trans'], headerClass: 'bg-indigo-50 text-indigo-800' },
-  { key: 'weliver', label: 'Weliver', aliases: ['weliver'], headerClass: 'bg-lime-50 text-lime-800' },
-  { key: 'penny', label: 'Penny', aliases: ['penny'], headerClass: 'bg-yellow-50 text-yellow-800' },
-  { key: 'weidler', label: 'Weidler', aliases: ['weidler'], headerClass: 'bg-slate-100 text-slate-800' },
-  {
-    key: 'go-immanuel-klinikum',
-    label: 'GO-Immanuel Klinikum',
-    aliases: ['go-immanuel klinikum', 'go immanuel klinikum', 'immanuel klinikum', 'go'],
-    headerClass: 'bg-emerald-50 text-emerald-800',
-  },
-  { key: 'securitas', label: 'Securitas', aliases: ['securitas'], headerClass: 'bg-rose-50 text-rose-800' },
-];
-
-const TRAILER_BY_VEHICLE: Record<string, string> = {
-  N165: '1734',
-  N119: '1572',
-  BSG693: '1740',
-  AP101: '1733',
-  AP102: '1567',
-  AP104: '1745',
-  AP105: '1711',
-};
-
-function normalizeCompany(value: string) {
-  return value.trim().toLowerCase();
-}
-
 function toDate(value: string) {
   return new Date(`${value}T00:00:00`);
 }
@@ -102,12 +65,6 @@ function formatHeaderDate(value: string) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
   return `Einsatzplan - ${weekday}, ${day}.${month}.${year}`;
-}
-
-function statusBadge(status: string) {
-  if (status === 'Planned') return 'bg-blue-50 text-blue-700 border-blue-200';
-  if (status === 'In Progress') return 'bg-amber-50 text-amber-700 border-amber-200';
-  return 'bg-slate-50 text-slate-700 border-slate-200';
 }
 
 export async function exportCurrentTagesuebersichtToExcel({
@@ -199,17 +156,7 @@ export function TagesuebersichtTab() {
     });
   }, [assignments, blockedDriverIds, companySearch, driverSearch, drivers, selectedDate]);
 
-  const companyGroups = useMemo(() => {
-    return BOARD_COMPANIES.map((company) => {
-      const rows = assignmentPool
-        .filter((assignment) => {
-          const normalized = normalizeCompany(assignment.company);
-          return company.aliases.some((alias) => normalized.includes(alias));
-        })
-        .sort((a, b) => a.startTime.localeCompare(b.startTime));
-      return { company, rows };
-    });
-  }, [assignmentPool]);
+  const companyGroups = useMemo(() => groupAssignmentsByCompany(assignmentPool), [assignmentPool]);
 
   const exportAssignments = useMemo<TagesuebersichtExportAssignment[]>(() => {
     return companyGroups.flatMap(({ company, rows }) =>
@@ -386,59 +333,12 @@ export function TagesuebersichtTab() {
       </div>
 
       <div className="max-h-[58vh] overflow-auto rounded-md border border-slate-300 bg-white p-2">
-        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-          {companyGroups.map(({ company, rows }) => (
-            <div key={company.key} className="border border-slate-300 bg-white">
-              <div className={`border-b border-slate-300 px-2 py-1 text-xs font-bold uppercase tracking-wide ${company.headerClass}`}>
-                {company.label}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] border-collapse text-[11px]">
-                  <thead>
-                    <tr className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
-                      <th className="border-b border-r border-slate-300 px-2 py-1">Driver</th>
-                      <th className="border-b border-r border-slate-300 px-2 py-1">Vehicle</th>
-                      <th className="border-b border-r border-slate-300 px-2 py-1">Trailer</th>
-                      <th className="border-b border-r border-slate-300 px-2 py-1">Start</th>
-                      <th className="border-b border-slate-300 px-2 py-1">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="border-b border-slate-200 px-2 py-2 text-center text-[11px] text-slate-400">
-                          No assignment
-                        </td>
-                      </tr>
-                    )}
-                    {rows.map((assignment) => {
-                      const driverName = drivers.find((driver) => driver.id === assignment.driverId)?.name ?? assignment.driverId;
-                      const trailer = TRAILER_BY_VEHICLE[assignment.vehicle.replace(/-/g, '')] ?? '---';
-
-                      return (
-                        <tr
-                          key={assignment.id}
-                          className="cursor-pointer hover:bg-slate-50"
-                          onClick={() => openDrawer(assignment)}
-                        >
-                          <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-900">{driverName}</td>
-                          <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-800">{assignment.vehicle || '-'}</td>
-                          <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-800">{trailer}</td>
-                          <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-800">{assignment.startTime || '-'}</td>
-                          <td className="border-b border-slate-200 px-2 py-1">
-                            <span className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${statusBadge(assignment.status)}`}>
-                              {assignment.status}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-        </div>
+        <CompanyAssignmentBoard
+          groups={companyGroups}
+          drivers={drivers}
+          onAssignmentClick={openDrawer}
+          emptyMessage="No assignments for selected day."
+        />
       </div>
 
       {selectedAssignment && (

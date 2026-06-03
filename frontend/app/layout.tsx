@@ -3,8 +3,9 @@ import './globals.css';
 import { I18nProvider } from '@/components/providers/I18nProvider';
 
 export const metadata: Metadata = {
-  title: 'Fleet Management',
-  description: 'Fleet management admin panel',
+  title: 'MyFleet — Fleet Management Platform',
+  description:
+    'Track vehicles, manage drivers, plan routes and stay compliant — all from one cloud platform.',
 };
 
 export default function RootLayout({

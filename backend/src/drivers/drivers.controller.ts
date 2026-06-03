@@ -18,13 +18,22 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
+import { DriverBirthdaysService } from './driver-birthdays.service';
 import { DriversService } from './drivers.service';
 
 @Controller('drivers')
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)
 export class DriversController {
-  constructor(private readonly driversService: DriversService) {}
+  constructor(
+    private readonly driversService: DriversService,
+    private readonly driverBirthdaysService: DriverBirthdaysService,
+  ) {}
+
+  @Post('birthdays/send-today')
+  sendTodayBirthdayNotifications() {
+    return this.driverBirthdaysService.sendTodayBirthdayNotifications();
+  }
 
   @Get()
   listDrivers(

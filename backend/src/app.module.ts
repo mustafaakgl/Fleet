@@ -24,6 +24,9 @@ import { MorningCheckinsModule } from './morning-checkins/morning-checkins.modul
 import { DriverMobileModule } from './driver-mobile/driver-mobile.module';
 import { MessengerModule } from './messenger/messenger.module';
 import { AuditModule } from './audit/audit.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
+import { TrackingModule } from './tracking/tracking.module';
+import { CustomerPortalModule } from './customer-portal/customer-portal.module';
 
 @Module({
   imports: [
@@ -52,6 +55,9 @@ import { AuditModule } from './audit/audit.module';
     DriverMobileModule,
     MessengerModule,
     AuditModule,
+    PushNotificationsModule,
+    TrackingModule,
+    CustomerPortalModule,
   ],
 })
 export class AppModule {}

@@ -4,6 +4,11 @@ import { DeepLTranslationService } from './deepl-translation.service';
 const SUPPORTED_LANGUAGE_CODES = {
   de: 'DE',
   en: 'EN',
+  es: 'ES',
+  it: 'IT',
+  nl: 'NL',
+  pl: 'PL',
+  ru: 'RU',
   tr: 'TR',
 } as const;
 
@@ -11,7 +16,8 @@ type SupportedLanguage = keyof typeof SUPPORTED_LANGUAGE_CODES;
 
 export type TranslateTextParams = {
   text: string;
-  sourceLang: string;
+  /** Omit to let DeepL auto-detect the source language (recommended for driver messages). */
+  sourceLang?: string;
   targetLang: string;
 };
 
@@ -20,6 +26,8 @@ export type TranslationResult = {
   status: 'translated' | 'failed' | 'not_requested';
   provider?: 'deepl' | 'none';
   errorMessage?: string;
+  /** App language code (e.g. tr, pl) when DeepL auto-detected the source. */
+  detectedSourceLang?: string;
 };
 
 @Injectable()
@@ -32,6 +40,12 @@ export class TranslationService {
 
   private toDeepLLang(language: string): string | null {
     return SUPPORTED_LANGUAGE_CODES[language as SupportedLanguage] ?? null;
+  }
+
+  fromDeepLLang(deepLCode: string): string | null {
+    const normalized = deepLCode.trim().toUpperCase().split('-')[0];
+    const entry = Object.entries(SUPPORTED_LANGUAGE_CODES).find(([, code]) => code === normalized);
+    return entry?.[0] ?? null;
   }
 
   async translateText(params: TranslateTextParams): Promise<TranslationResult> {
@@ -52,7 +66,7 @@ export class TranslationService {
       };
     }
 
-    if (params.sourceLang === params.targetLang) {
+    if (params.sourceLang && params.sourceLang === params.targetLang) {
       return {
         translatedText: null,
         status: 'not_requested',
@@ -78,21 +92,31 @@ export class TranslationService {
       };
     }
 
-    const sourceLang = this.toDeepLLang(params.sourceLang);
+    const sourceLang = params.sourceLang
+      ? (this.toDeepLLang(params.sourceLang) ?? undefined)
+      : undefined;
     const targetLang = this.toDeepLLang(params.targetLang);
-    if (!sourceLang || !targetLang) {
+    if (params.sourceLang && !sourceLang) {
       return {
         translatedText: null,
         status: 'failed',
         provider: 'none',
-        errorMessage: 'Unsupported language code',
+        errorMessage: 'Unsupported source language code',
+      };
+    }
+    if (!targetLang) {
+      return {
+        translatedText: null,
+        status: 'failed',
+        provider: 'none',
+        errorMessage: 'Unsupported target language code',
       };
     }
 
     const apiUrl = process.env.DEEPL_API_URL?.trim() || 'https://api-free.deepl.com/v2/translate';
     const timeoutMs = Number.parseInt(process.env.DEEPL_TIMEOUT_MS ?? '5000', 10);
 
-    return this.deepLTranslationService.translateText({
+    const result = await this.deepLTranslationService.translateText({
       text: normalizedText,
       sourceLang,
       targetLang,
@@ -100,5 +124,23 @@ export class TranslationService {
       apiUrl,
       timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 5000,
     });
+
+    const detectedSourceLang = result.detectedDeepLSourceLang
+      ? this.fromDeepLLang(result.detectedDeepLSourceLang)
+      : undefined;
+
+    if (detectedSourceLang && detectedSourceLang === params.targetLang) {
+      return {
+        translatedText: null,
+        status: 'not_requested',
+        provider: 'none',
+        detectedSourceLang,
+      };
+    }
+
+    return {
+      ...result,
+      detectedSourceLang: detectedSourceLang ?? result.detectedSourceLang,
+    };
   }
 }

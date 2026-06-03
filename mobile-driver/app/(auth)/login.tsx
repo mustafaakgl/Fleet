@@ -1,12 +1,20 @@
 import { useState } from 'react';
-import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ScreenLayout } from '@/components/ScreenLayout';
+import { router, Stack } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi, driverApi } from '@/api/endpoints';
+import { Button } from '@/components/ui/Button';
+import { TextField } from '@/components/ui/TextField';
 import { authStore } from '@/features/auth/store';
+import { useTranslation } from '@/i18n/useTranslation';
+import { registerPushTokenAfterLogin } from '@/lib/push-notifications';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const setSession = authStore((s) => s.setSession);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,93 +28,116 @@ export default function LoginScreen() {
 
   const onSubmit = async () => {
     if (!isFormValid) {
-      setError('Enter a valid email and password (min 6 chars).');
+      setError(t('login.invalidEmail'));
       return;
     }
 
     setSubmitting(true);
     setError(null);
     try {
+      queryClient.clear();
       const login = await authApi.login(emailTrimmed, password);
-      const driverProfile = await driverApi.me();
+      const driverProfile = await driverApi.me(login.accessToken);
+      if (driverProfile.user.role !== 'driver') {
+        setError(t('login.notDriver'));
+        return;
+      }
       await setSession({
         accessToken: login.accessToken,
         user: driverProfile.user,
         driver: driverProfile.driver,
       });
+      void registerPushTokenAfterLogin();
       router.replace('/(app)/today');
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Login failed. Please check your credentials.'));
+      setError(getErrorMessage(submitError, t('login.failed')));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <ScreenLayout title="Fleet Driver Login" subtitle="Sign in to Fleet Driver">
-      <View style={styles.form}>
-        <TextInput
+    <SafeAreaView style={styles.safe}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.hero}>
+        <View style={styles.logoWrap}>
+          <Text style={styles.logoText}>MyFleet</Text>
+        </View>
+        <Text style={styles.title}>{t('login.title')}</Text>
+        <Text style={styles.subtitle}>{t('login.subtitle')}</Text>
+      </View>
+      <View style={styles.card}>
+        <TextField
+          label={t('login.email')}
           autoCapitalize="none"
           keyboardType="email-address"
-          placeholder="Email"
-          style={styles.input}
           value={email}
           onChangeText={setEmail}
+          placeholder="name@company.com"
         />
-        {!isEmailValid && email.length > 0 ? <Text style={styles.validation}>Please enter a valid email.</Text> : null}
-        <TextInput
+        {!isEmailValid && email.length > 0 ? (
+          <Text style={styles.validation}>{t('login.invalidEmail')}</Text>
+        ) : null}
+        <TextField
+          label={t('login.password')}
           secureTextEntry
-          placeholder="Password"
-          style={styles.input}
           value={password}
           onChangeText={setPassword}
+          placeholder="••••••••"
         />
-        {!isPasswordValid && password.length > 0 ? <Text style={styles.validation}>Password must be at least 6 characters.</Text> : null}
+        {!isPasswordValid && password.length > 0 ? (
+          <Text style={styles.validation}>{t('login.invalidPassword')}</Text>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable
-          style={[styles.button, (submitting || !isFormValid) && styles.buttonDisabled]}
+        <Button
+          label={submitting ? t('login.signingIn') : t('login.signIn')}
           onPress={() => void onSubmit()}
           disabled={submitting || !isFormValid}
-        >
-          <Text style={styles.buttonText}>{submitting ? 'Signing in...' : 'Sign In'}</Text>
-        </Pressable>
+          loading={submitting}
+          variant="primary"
+        />
       </View>
-    </ScreenLayout>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  form: {
-    gap: 12,
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.lg,
+    justifyContent: 'center',
+    gap: spacing.xl,
   },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D1D5DB',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  button: {
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
-    paddingVertical: 12,
+  hero: {
     alignItems: 'center',
+    gap: spacing.sm,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  logoWrap: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+    ...shadows.md,
   },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+  logoText: {
+    color: colors.white,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  error: {
-    color: '#B91C1C',
-    fontSize: 13,
+  title: { ...typography.h1, textAlign: 'center' },
+  subtitle: { ...typography.caption, textAlign: 'center', textTransform: 'none', fontSize: 14 },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadows.sm,
   },
-  validation: {
-    color: '#92400E',
-    fontSize: 12,
-  },
+  validation: { color: colors.warning, fontSize: 12 },
+  error: { color: colors.danger, fontSize: 13, textAlign: 'center' },
 });

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -22,8 +23,12 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { DOCUMENT_UPLOAD_ABSOLUTE_DIR } from '../storage/local-storage.service';
 import { CreateDriverMorningCheckinDto } from './dto/create-driver-morning-checkin.dto';
 import { CreateDriverRequestDto } from './dto/create-driver-request.dto';
+import { CreateDriverTransportRequestDto } from './dto/create-driver-transport-request.dto';
 import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
+import { UpdateDriverLanguageDto } from './dto/update-driver-language.dto';
+import { RegisterPushTokenDto } from './dto/register-push-token.dto';
+import { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import { DriverMobileService } from './driver-mobile.service';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -71,6 +76,41 @@ export class DriverMobileController {
   @Get('me')
   me(@CurrentUser('id') userId: string) {
     return this.driverMobile.me(userId);
+  }
+
+  @Post('me/language')
+  @HttpCode(HttpStatus.OK)
+  updateLanguage(@CurrentUser('id') userId: string, @Body() dto: UpdateDriverLanguageDto) {
+    return this.driverMobile.updatePreferredLanguage(userId, dto.language);
+  }
+
+  @Post('me/push-token')
+  @HttpCode(HttpStatus.OK)
+  registerPushToken(@CurrentUser('id') userId: string, @Body() dto: RegisterPushTokenDto) {
+    return this.driverMobile.registerPushToken(userId, dto.token);
+  }
+
+  @Delete('me/push-token')
+  @HttpCode(HttpStatus.OK)
+  clearPushToken(@CurrentUser('id') userId: string) {
+    return this.driverMobile.clearPushToken(userId);
+  }
+
+  @Post('me/location-consent')
+  @HttpCode(HttpStatus.OK)
+  grantLocationConsent(@CurrentUser('id') userId: string) {
+    return this.driverMobile.grantLocationConsent(userId);
+  }
+
+  @Get('me/location-status')
+  getLocationStatus(@CurrentUser('id') userId: string) {
+    return this.driverMobile.getLocationStatus(userId);
+  }
+
+  @Post('location')
+  @HttpCode(HttpStatus.OK)
+  submitLocation(@CurrentUser('id') userId: string, @Body() dto: SubmitLocationDto) {
+    return this.driverMobile.submitLocation(userId, dto);
   }
 
   @Get('assignments/today')
@@ -140,6 +180,27 @@ export class DriverMobileController {
   @Post('requests')
   createRequest(@CurrentUser('id') userId: string, @Body() dto: CreateDriverRequestDto) {
     return this.driverMobile.createRequest(userId, dto);
+  }
+
+  @Get('transport-requests')
+  listTransportRequests(
+    @CurrentUser('id') userId: string,
+    @Query('status') status?: string,
+  ) {
+    return this.driverMobile.listTransportRequests(userId, status);
+  }
+
+  @Get('transport-form-options')
+  getTransportFormOptions(@CurrentUser('id') userId: string) {
+    return this.driverMobile.getTransportFormOptions(userId);
+  }
+
+  @Post('transport-requests')
+  createTransportRequest(
+    @CurrentUser('id') userId: string,
+    @Body() dto: CreateDriverTransportRequestDto,
+  ) {
+    return this.driverMobile.createTransportRequest(userId, dto);
   }
 
   @Get('accidents')

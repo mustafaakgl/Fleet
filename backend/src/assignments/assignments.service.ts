@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CompanyEmailsService } from '../company-emails/company-emails.service';
+import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { AssignmentTransitionTarget } from './dto/transition-assignment.dto';
@@ -77,6 +78,7 @@ export class AssignmentsService {
     private readonly prisma: PrismaService,
     private readonly companyEmailsService: CompanyEmailsService,
     private readonly auditService: AuditService,
+    private readonly driverNotify: DriverNotifyService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -268,6 +270,23 @@ export class AssignmentsService {
         status: created.status,
       },
     });
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: created.driverId },
+      select: { userId: true },
+    });
+
+    if (driver?.userId) {
+      const dateLabel = created.workDate.toISOString().slice(0, 10);
+      this.driverNotify.notifyUserSafely({
+        userId: driver.userId,
+        key: 'assignment_created',
+        params: { date: dateLabel },
+        type: 'system',
+        relatedEntityType: 'assignment',
+        relatedEntityId: created.id,
+      });
+    }
 
     return toClientAssignment(created);
   }

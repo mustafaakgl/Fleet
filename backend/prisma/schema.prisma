@@ -13,6 +13,12 @@ enum UserRole {
   accounting
   office
   driver
+  customer
+}
+
+enum CompanyUserRole {
+  viewer
+  manager
 }
 
 enum UserStatus {
@@ -205,6 +211,17 @@ enum MessageTranslationStatus {
   failed
 }
 
+enum LocationSource {
+  mobile
+  telematics
+}
+
+enum LocationTrackingStatus {
+  active
+  paused
+  denied
+}
+
 model User {
   id           String     @id @default(cuid())
   fullName     String
@@ -213,6 +230,7 @@ model User {
   role         UserRole
   status       UserStatus @default(active)
   language     String     @default("de")
+  expoPushToken String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -226,6 +244,7 @@ model User {
   sentMessages       Message[]                  @relation("MessageSentBy")
   messageReads       MessageRead[]
   auditLogs         AuditLog[]
+  companyMemberships CompanyUser[]
 }
 
 model Driver {
@@ -243,6 +262,11 @@ model Driver {
   status             DriverStatus @default(active)
   riskLevel          RiskLevel    @default(green)
   notes              String?
+  dateOfBirth        DateTime?    @db.Date
+  lastBirthdayNotifiedYear Int?
+  locationTrackingConsentAt DateTime?
+  locationTrackingStatus    LocationTrackingStatus @default(paused)
+  locationTrackingEnabledAt DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -257,6 +281,8 @@ model Driver {
   accidents         Accident[]
   morningCheckins   MorningCheckin[]
   conversations     Conversation[]
+  locationLatest    DriverLocationLatest?
+  locationHistory   DriverLocationHistory[]
 }
 
 model Vehicle {
@@ -284,6 +310,8 @@ model Vehicle {
   vehicleHandovers  VehicleHandover[]
   accidents         Accident[]
   serviceRecords    ServiceRecord[]
+  locationLatestSnapshots DriverLocationLatest[]
+  locationHistory   DriverLocationHistory[]
 }
 
 model Company {
@@ -302,6 +330,37 @@ model Company {
   transportRequests TransportRequest[]
   accidents         Accident[]
   companyEmails     CompanyEmail[]
+  companyUsers      CompanyUser[]
+  portalSettings    CompanyPortalSettings?
+}
+
+model CompanyUser {
+  id        String          @id @default(cuid())
+  userId    String
+  companyId String
+  role      CompanyUserRole @default(viewer)
+  isPrimary Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+  @@index([userId])
+}
+
+model CompanyPortalSettings {
+  companyId          String   @id
+  portalEnabled      Boolean  @default(true)
+  showLiveTracking   Boolean  @default(true)
+  showDriverFullName Boolean  @default(false)
+  showInternalNotes  Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Assignment {
@@ -336,6 +395,48 @@ model Assignment {
   @@index([driverId, workDate])
   @@index([vehicleId, workDate])
   @@index([companyId, workDate])
+}
+
+model DriverLocationLatest {
+  driverId   String         @id
+  latitude   Decimal        @db.Decimal(10, 7)
+  longitude  Decimal        @db.Decimal(10, 7)
+  accuracyM  Float?
+  speedMps   Float?
+  headingDeg Float?
+  altitudeM  Float?
+  recordedAt DateTime
+  receivedAt DateTime       @updatedAt
+  source     LocationSource @default(mobile)
+  vehicleId  String?
+
+  driver  Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([receivedAt])
+  @@index([vehicleId])
+}
+
+model DriverLocationHistory {
+  id         String         @id @default(cuid())
+  driverId   String
+  vehicleId  String?
+  latitude   Decimal        @db.Decimal(10, 7)
+  longitude  Decimal        @db.Decimal(10, 7)
+  accuracyM  Float?
+  speedMps   Float?
+  headingDeg Float?
+  altitudeM  Float?
+  recordedAt DateTime
+  receivedAt DateTime       @default(now())
+  source     LocationSource @default(mobile)
+
+  driver  Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([driverId, recordedAt])
+  @@index([vehicleId, recordedAt])
+  @@index([recordedAt])
 }
 
 model TransportRequest {

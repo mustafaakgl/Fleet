@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CompanyEmailsService } from '../company-emails/company-emails.service';
+import { DriverNotifyService } from '../notifications/driver-notify.service';
 
 type DayRange = {
   start: Date;
@@ -29,6 +30,7 @@ export class TransportRequestsService {
     private readonly prisma: PrismaService,
     private readonly companyEmailsService: CompanyEmailsService,
     private readonly auditService: AuditService,
+    private readonly driverNotify: DriverNotifyService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -348,6 +350,20 @@ export class TransportRequestsService {
       },
     });
 
+    const approvedDriver = await this.prisma.driver.findUnique({
+      where: { id: result.request.driverId },
+      select: { userId: true },
+    });
+    if (approvedDriver?.userId) {
+      this.driverNotify.notifyUserSafely({
+        userId: approvedDriver.userId,
+        key: 'transport_approved',
+        type: 'transport_request',
+        relatedEntityType: 'transport_request',
+        relatedEntityId: result.request.id,
+      });
+    }
+
     return {
       request: result.request,
       assignment: result.assignment,
@@ -356,13 +372,12 @@ export class TransportRequestsService {
   }
 
   async rejectRequest(requestId: string, reason?: string, actorUserId?: string) {
-    // TODO(notifications): create notification when a new transport request is created.
-    const request = await this.prisma.transportRequest.findUnique({
+    const existing = await this.prisma.transportRequest.findUnique({
       where: { id: requestId },
-      select: { id: true },
+      select: { id: true, driverId: true },
     });
 
-    if (!request) {
+    if (!existing) {
       throw new NotFoundException('Transport request not found');
     }
 
@@ -385,6 +400,21 @@ export class TransportRequestsService {
         reason: reason ?? null,
       },
     });
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: existing.driverId },
+      select: { userId: true },
+    });
+    if (driver?.userId) {
+      this.driverNotify.notifyUserSafely({
+        userId: driver.userId,
+        key: 'transport_rejected',
+        params: reason ? { reason } : {},
+        type: 'transport_request',
+        relatedEntityType: 'transport_request',
+        relatedEntityId: rejected.id,
+      });
+    }
 
     return rejected;
   }

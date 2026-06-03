@@ -30,6 +30,11 @@ import type {
   MessengerMessage,
   SendMessagePayload,
   MessengerUnreadCount,
+  LiveTrackingItem,
+  CustomerDashboardStats,
+  CustomerAssignment,
+  PaginatedCustomerAssignments,
+  CustomerPortalMe,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -93,6 +98,29 @@ export const authApi = {
     api.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data),
 
   me: () => api.get<AuthResponse['user']>('/auth/me').then((r) => r.data),
+};
+
+// ─── Customer Portal ────────────────────────────────────────────────────────
+
+export interface CustomerAssignmentListParams {
+  status?: string;
+  from?: string;
+  to?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export const customerPortalApi = {
+  getMe: () => api.get<CustomerPortalMe>('/customer/me').then((r) => r.data),
+
+  getDashboard: () => api.get<CustomerDashboardStats>('/customer/dashboard').then((r) => r.data),
+
+  getAssignments: (params?: CustomerAssignmentListParams) =>
+    api.get<PaginatedCustomerAssignments>('/customer/assignments', { params }).then((r) => r.data),
+
+  getAssignment: (id: string) =>
+    api.get<CustomerAssignment>(`/customer/assignments/${id}`).then((r) => r.data),
 };
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -791,6 +819,19 @@ export const requestsApi = {
       status?: BackendRequestStatus;
     },
   ) => api.patch<BackendRequest>(`/requests/${id}`, data).then((r) => r.data),
+};
+
+// ─── Live Tracking ───────────────────────────────────────────────────────────
+
+export interface LiveTrackingQueryParams {
+  staleAfterSec?: number;
+  includeOffline?: boolean;
+  search?: string;
+}
+
+export const trackingApi = {
+  getLive: (params?: LiveTrackingQueryParams) =>
+    api.get<LiveTrackingItem[]>('/tracking/live', { params }).then((r) => r.data),
 };
 
 export default api;

@@ -9,11 +9,17 @@ import type {
   DriverMorningCheckin,
   DriverNotification,
   DriverRequest,
+  DriverTransportRequest,
+  TransportFormOptions,
   ConversationListItem,
   ConversationDetail,
   MessengerMessage,
+  MessengerLanguage,
   SendMessagePayload,
   MessengerUnreadCount,
+  LocationStatusResponse,
+  SubmitLocationPayload,
+  SubmitLocationResponse,
 } from './types';
 
 type LoginResponse = {
@@ -38,8 +44,37 @@ export const authApi = {
 };
 
 export const driverApi = {
-  async me() {
-    const { data } = await apiClient.get<DriverMeResponse>('/driver/me');
+  async me(accessToken?: string) {
+    const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+    const { data } = await apiClient.get<DriverMeResponse>('/driver/me', { headers });
+    return data;
+  },
+  async updateLanguage(language: MessengerLanguage) {
+    const { data } = await apiClient.post<DriverMeResponse>('/driver/me/language', { language });
+    return data;
+  },
+  async registerPushToken(token: string) {
+    const { data } = await apiClient.post<{ registered: boolean }>('/driver/me/push-token', { token });
+    return data;
+  },
+  async clearPushToken() {
+    const { data } = await apiClient.delete<{ cleared: boolean }>('/driver/me/push-token');
+    return data;
+  },
+  async getLocationStatus() {
+    const { data } = await apiClient.get<LocationStatusResponse>('/driver/me/location-status');
+    return data;
+  },
+  async grantLocationConsent() {
+    const { data } = await apiClient.post<{
+      consentGranted: boolean;
+      consentAt: string;
+      trackingStatus: LocationStatusResponse['trackingStatus'];
+    }>('/driver/me/location-consent');
+    return data;
+  },
+  async submitLocation(payload: SubmitLocationPayload) {
+    const { data } = await apiClient.post<SubmitLocationResponse>('/driver/location', payload);
     return data;
   },
   async todayAssignments(date?: string) {
@@ -107,12 +142,45 @@ export const driverApi = {
     return data;
   },
   async createRequest(payload: {
-    type: 'vacation' | 'sick_leave' | 'other';
+    type:
+      | 'vacation'
+      | 'sick_leave'
+      | 'training'
+      | 'business_trip'
+      | 'doctor_appointment'
+      | 'special_leave'
+      | 'overtime_compensation'
+      | 'free_day'
+      | 'other';
     startDate: string;
     endDate: string;
     reason?: string;
   }) {
     const { data } = await apiClient.post<DriverRequest>('/driver/requests', payload);
+    return data;
+  },
+  async listTransportRequests(status?: string) {
+    const { data } = await apiClient.get<DriverTransportRequest[]>('/driver/transport-requests', {
+      params: status ? { status } : undefined,
+    });
+    return data;
+  },
+  async getTransportFormOptions() {
+    const { data } = await apiClient.get<TransportFormOptions>('/driver/transport-form-options');
+    return data;
+  },
+  async createTransportRequest(payload: {
+    vehicleId: string;
+    companyId: string;
+    cargoName: string;
+    cargoOwner: string;
+    pickupAddress: string;
+    deliveryAddress: string;
+    requestedDate: string;
+    startTime: string;
+    endTime: string;
+  }) {
+    const { data } = await apiClient.post<DriverTransportRequest>('/driver/transport-requests', payload);
     return data;
   },
   async listAccidents(params?: { type?: string; status?: string }) {

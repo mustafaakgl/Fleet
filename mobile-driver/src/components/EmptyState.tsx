@@ -1,33 +1,42 @@
+import { Feather } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography } from '@/theme';
 
-type EmptyStateProps = {
+export function EmptyState({
+  title,
+  message,
+  icon = 'inbox',
+}: {
   title: string;
-  message?: string;
-};
-
-export function EmptyState({ title, message }: EmptyStateProps) {
+  message: string;
+  icon?: keyof typeof Feather.glyphMap;
+}) {
   return (
-    <View style={styles.container}>
+    <View style={styles.wrap}>
+      <View style={styles.iconCircle}>
+        <Feather name={icon} size={28} color={colors.accent} />
+      </View>
       <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <Text style={styles.message}>{message}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#F9FAFB',
-    borderColor: '#E5E7EB',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 14,
-    gap: 4,
+  wrap: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
   },
-  title: {
-    color: '#111827',
-    fontWeight: '600',
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
   },
-  message: {
-    color: '#4B5563',
-  },
+  title: { ...typography.h3, textAlign: 'center' },
+  message: { ...typography.caption, textAlign: 'center', textTransform: 'none', lineHeight: 20 },
 });

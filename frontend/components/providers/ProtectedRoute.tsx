@@ -1,19 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { isAuthenticated } from '@/lib/auth';
-
-const PROTECTED_PREFIXES = [
-  '/dashboard',
-  '/drivers',
-  '/vehicles',
-  '/companies',
-  '/documents',
-  '/requests',
-  '/assignments',
-  '/messenger',
-];
+import { useRouter } from 'next/navigation';
+import { getPostLoginPath, getUser, isAuthenticated } from '@/lib/auth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -21,24 +10,24 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const [canRender, setCanRender] = useState(false);
 
   useEffect(() => {
-    const needsProtection = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-    if (!needsProtection) {
-      setCanRender(true);
-      return;
-    }
-
     if (!isAuthenticated()) {
       router.replace('/login');
       setCanRender(false);
       return;
     }
 
+    const user = getUser();
+    if (user?.role === 'customer') {
+      router.replace(getPostLoginPath('customer'));
+      setCanRender(false);
+      return;
+    }
+
     setCanRender(true);
-  }, [pathname, router]);
+  }, [router]);
 
   if (!canRender) {
     return null;

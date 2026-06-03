@@ -19,7 +19,15 @@
           "photosPermission": "Allow Fleet Driver to access photos for handover uploads."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Fleet Driver uses your location during assignments so dispatch can track your vehicle."
+        }
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

@@ -73,7 +73,7 @@ export default function MessengerPage() {
 
   const [composerText, setComposerText] = useState('');
   const [originalLanguage, setOriginalLanguage] = useState<MessengerLanguage>('de');
-  const [targetLanguage, setTargetLanguage] = useState<MessengerLanguage | 'none'>('tr');
+  const [targetLanguage, setTargetLanguage] = useState<MessengerLanguage | 'none'>('none');
 
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -130,10 +130,12 @@ export default function MessengerPage() {
           search: search.trim() || undefined,
         });
         setConversations(list);
-        if (!selectedConversationId && list.length > 0) {
-          setSelectedConversationId(list[0].id);
-        } else if (selectedConversationId && !list.some((item) => item.id === selectedConversationId)) {
-          setSelectedConversationId(list[0]?.id ?? null);
+        if (!silent) {
+          if (!selectedConversationId && list.length > 0) {
+            setSelectedConversationId(list[0].id);
+          } else if (selectedConversationId && !list.some((item) => item.id === selectedConversationId)) {
+            setSelectedConversationId(list[0]?.id ?? null);
+          }
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load conversations');
@@ -161,14 +163,20 @@ export default function MessengerPage() {
         setMessages(list);
         const driverParticipant = detail.participants.find((participant) => participant.role === 'driver');
         const preferred = (driverParticipant?.user as { language?: string } | undefined)?.language;
-        if (preferred === 'de' || preferred === 'tr' || preferred === 'en') {
+        if (
+          preferred === 'de' ||
+          preferred === 'tr' ||
+          preferred === 'en' ||
+          preferred === 'pl' ||
+          preferred === 'nl' ||
+          preferred === 'it'
+        ) {
           setTargetLanguage(preferred);
         } else {
-          setTargetLanguage('tr');
+          setTargetLanguage('none');
         }
         await messengerApi.markConversationRead(conversationId);
         await fetchUnreadCount();
-        await fetchConversations(true);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load conversation');
       } finally {
@@ -205,25 +213,29 @@ export default function MessengerPage() {
 
   const pollMessages = useCallback(async () => {
     if (!selectedConversationId) return;
-    const last = messages[messages.length - 1];
-    const incremental = await messengerApi.listMessages(selectedConversationId, {
-      since: last?.createdAt,
-      afterId: last?.id,
-      limit: 50,
-    });
-    if (incremental.length > 0) {
-      setMessages((previous) => {
-        const seen = new Set(previous.map((item) => item.id));
-        const merged = [...previous];
-        for (const message of incremental) {
-          if (!seen.has(message.id)) {
-            merged.push(message);
-          }
-        }
-        return merged;
+    try {
+      const last = messages[messages.length - 1];
+      const incremental = await messengerApi.listMessages(selectedConversationId, {
+        since: last?.createdAt,
+        afterId: last?.id,
+        limit: 50,
       });
-      await messengerApi.markConversationRead(selectedConversationId);
-      await refreshLeftPanel();
+      if (incremental.length > 0) {
+        setMessages((previous) => {
+          const seen = new Set(previous.map((item) => item.id));
+          const merged = [...previous];
+          for (const message of incremental) {
+            if (!seen.has(message.id)) {
+              merged.push(message);
+            }
+          }
+          return merged;
+        });
+        await messengerApi.markConversationRead(selectedConversationId);
+        await refreshLeftPanel();
+      }
+    } catch {
+      // Ignore transient polling errors; manual/open actions handle visible errors.
     }
   }, [messages, refreshLeftPanel, selectedConversationId]);
 
@@ -411,7 +423,10 @@ export default function MessengerPage() {
                   <button
                     type="button"
                     key={conversation.id}
-                    onClick={() => setSelectedConversationId(conversation.id)}
+                    onClick={() => {
+                      setSelectedConversationId(conversation.id);
+                      void fetchConversationDetailAndMessages(conversation.id);
+                    }}
                     className={`w-full rounded-lg border px-3 py-3 text-left transition ${
                       active
                         ? 'border-blue-300 bg-blue-50'
@@ -481,12 +496,23 @@ export default function MessengerPage() {
                           }`}
                         >
                           <p className="mb-1 text-xs font-semibold text-gray-600">{message.senderName}</p>
-                          <p className="whitespace-pre-wrap text-gray-900">{message.originalText}</p>
-                          {message.translatedText ? (
-                            <p className="mt-1 whitespace-pre-wrap text-xs text-gray-700">
-                              {message.translatedText}
-                            </p>
-                          ) : null}
+                          {message.translatedText && !own ? (
+                            <>
+                              <p className="whitespace-pre-wrap text-gray-900">{message.translatedText}</p>
+                              <p className="mt-1 whitespace-pre-wrap text-xs text-gray-600">
+                                Original ({message.originalLanguage}): {message.originalText}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="whitespace-pre-wrap text-gray-900">{message.originalText}</p>
+                              {message.translatedText ? (
+                                <p className="mt-1 whitespace-pre-wrap text-xs text-gray-700">
+                                  {message.translatedText}
+                                </p>
+                              ) : null}
+                            </>
+                          )}
                           {message.translationStatus === 'failed' ? (
                             <p className="mt-1 text-[11px] text-amber-700">Translation failed</p>
                           ) : null}
@@ -516,6 +542,11 @@ export default function MessengerPage() {
                       <option value="de">Original: de</option>
                       <option value="tr">Original: tr</option>
                       <option value="en">Original: en</option>
+                      <option value="pl">Original: pl</option>
+                      <option value="nl">Original: nl</option>
+                      <option value="it">Original: it</option>
+                      <option value="es">Original: es</option>
+                      <option value="ru">Original: ru</option>
                     </Select>
                     <Select
                       value={targetLanguage}
@@ -528,6 +559,11 @@ export default function MessengerPage() {
                       <option value="de">Target: de</option>
                       <option value="tr">Target: tr</option>
                       <option value="en">Target: en</option>
+                      <option value="pl">Target: pl</option>
+                      <option value="nl">Target: nl</option>
+                      <option value="it">Target: it</option>
+                      <option value="es">Target: es</option>
+                      <option value="ru">Target: ru</option>
                     </Select>
                     <Button onClick={handleSendMessage} disabled={sending || !composerText.trim()}>
                       <Send className="mr-2 h-4 w-4" />

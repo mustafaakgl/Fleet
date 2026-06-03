@@ -34,6 +34,7 @@ function toClientDriver(row: DriverWithCurrent) {
     passport_expiry_date: row.passportExpiryDate?.toISOString(),
     status: row.status,
     risk_level: row.riskLevel,
+    date_of_birth: row.dateOfBirth?.toISOString().slice(0, 10) ?? null,
     current_vehicle_plate: row.assignments[0]?.vehicle.plateNumber ?? null,
     current_company_name: row.assignments[0]?.company.name ?? null,
     created_at: row.createdAt.toISOString(),
@@ -182,6 +183,7 @@ export class DriversService {
         licenseExpiryDate: dto.license_expiry_date ? new Date(dto.license_expiry_date) : undefined,
         passportNumber: dto.passport_number,
         passportExpiryDate: dto.passport_expiry_date ? new Date(dto.passport_expiry_date) : undefined,
+        dateOfBirth: dto.date_of_birth ? new Date(dto.date_of_birth) : undefined,
         status: dto.status,
         riskLevel: dto.risk_level,
         notes: dto.notes,
@@ -208,6 +210,12 @@ export class DriversService {
     if (dto.passport_number !== undefined) data.passportNumber = dto.passport_number;
     if (dto.passport_expiry_date !== undefined) {
       data.passportExpiryDate = dto.passport_expiry_date ? new Date(dto.passport_expiry_date) : null;
+    }
+    if (dto.date_of_birth !== undefined) {
+      data.dateOfBirth = dto.date_of_birth ? new Date(dto.date_of_birth) : null;
+      if (!dto.date_of_birth) {
+        data.lastBirthdayNotifiedYear = null;
+      }
     }
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.risk_level !== undefined) data.riskLevel = dto.risk_level;

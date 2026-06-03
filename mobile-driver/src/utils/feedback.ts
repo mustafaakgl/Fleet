@@ -1,9 +1,9 @@
-import { Alert } from 'react-native';
+import { showToast } from '@/providers/ToastProvider';
 
 export function showSuccess(message: string) {
-  Alert.alert('Success', message);
+  showToast(message, 'success');
 }
 
 export function showError(message: string) {
-  Alert.alert('Error', message);
+  showToast(message, 'error');
 }

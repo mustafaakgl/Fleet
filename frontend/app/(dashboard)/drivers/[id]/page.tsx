@@ -340,6 +340,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
             <InfoItem label="Last name" value={driver.last_name} />
             <InfoItem label="Phone" value={driver.phone ?? '-'} />
             <InfoItem label="Email" value={driver.email ?? '-'} />
+            <InfoItem label="Date of birth" value={formatDate(driver.date_of_birth)} />
             <InfoItem label="License number" value={driver.license_number ?? '-'} />
             <InfoItem label="License expiry" value={formatDate(driver.license_expiry_date)} />
             <InfoItem label="Passport number" value={driver.passport_number ?? '-'} />

@@ -1,26 +1,24 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography } from '@/theme';
 
 type LoadingStateProps = {
   label?: string;
 };
 
-export function LoadingState({ label = 'Loading...' }: LoadingStateProps) {
+export function LoadingState({ label }: LoadingStateProps) {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="small" color="#2563EB" />
-      <Text style={styles.label}>{label}</Text>
+      <ActivityIndicator size="small" color={colors.accent} />
+      {label ? <Text style={styles.label}>{label}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 24,
+    paddingVertical: spacing.xl,
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
-  label: {
-    fontSize: 14,
-    color: '#4B5563',
-  },
+  label: { ...typography.caption, textTransform: 'none' },
 });

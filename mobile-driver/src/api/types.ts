@@ -96,6 +96,41 @@ export type DriverRequest = {
   createdAt?: string;
 };
 
+export type DriverTransportRequest = {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  companyId: string;
+  vehicle?: { id: string; plateNumber: string };
+  company?: { id: string; name: string };
+  cargoName: string;
+  cargoOwner: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  requestedDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  conflictReason?: string | null;
+  assignmentId?: string | null;
+  createdAt?: string;
+};
+
+export type TransportFormOptions = {
+  vehicles: Array<{ id: string; plateNumber: string }>;
+  companies: Array<{ id: string; name: string }>;
+  assignments: Array<{
+    id: string;
+    vehicleId: string;
+    companyId: string;
+    vehiclePlate: string;
+    companyName: string;
+    workDate: string;
+    startTime: string;
+    endTime: string;
+  }>;
+};
+
 export type DriverIncident = {
   id: string;
   type: IncidentType;
@@ -126,7 +161,7 @@ export type DriverNotification = {
   updatedAt: string;
 };
 
-export type MessengerLanguage = 'de' | 'tr' | 'en';
+export type MessengerLanguage = 'de' | 'tr' | 'en' | 'pl' | 'nl' | 'it' | 'es' | 'ru';
 export type MessageTranslationStatus = 'translated' | 'failed' | 'not_requested' | 'pending';
 
 export type ConversationParticipant = {
@@ -205,4 +240,37 @@ export type MessengerUnreadCount = {
     conversationId: string;
     count: number;
   }>;
+};
+
+export type LocationTrackingStatus = 'active' | 'paused' | 'denied';
+
+export type LocationStatusResponse = {
+  consentGranted: boolean;
+  consentAt: string | null;
+  trackingStatus: LocationTrackingStatus;
+  hasTrackableAssignmentToday: boolean;
+  trackingAllowed: boolean;
+  lastUpload: {
+    recordedAt: string;
+    receivedAt: string;
+    vehicleId: string | null;
+  } | null;
+};
+
+export type SubmitLocationPayload = {
+  latitude: number;
+  longitude: number;
+  accuracyM?: number;
+  speedMps?: number;
+  headingDeg?: number;
+  altitudeM?: number;
+  recordedAt: string;
+};
+
+export type SubmitLocationResponse = {
+  accepted: boolean;
+  deduplicated: boolean;
+  vehicleId: string | null;
+  nextUploadAfterSec: number;
+  lowAccuracy: boolean;
 };

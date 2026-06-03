@@ -39,6 +39,10 @@ export class CreateDriverDto {
   passport_expiry_date?: string;
 
   @IsOptional()
+  @IsDateString()
+  date_of_birth?: string;
+
+  @IsOptional()
   @IsEnum(DriverStatus)
   status?: DriverStatus;
 

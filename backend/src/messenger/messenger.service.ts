@@ -7,6 +7,7 @@ import {
 import { MessageTranslationStatus, Prisma, type UserRole } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { TranslationService } from '../translation/translation.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
@@ -116,7 +117,8 @@ const messageInclude = {
   reads: true,
 } satisfies Prisma.MessageInclude;
 
-const SUPPORTED_LANGUAGES = new Set(['de', 'tr', 'en']);
+const SUPPORTED_LANGUAGES = new Set(['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru']);
+const FLEET_TRANSLATION_LANGUAGE = 'de';
 const TRANSLATION_MAX_TEXT_LENGTH = 4000;
 
 @Injectable()
@@ -125,6 +127,7 @@ export class MessengerService {
     private readonly prisma: PrismaService,
     private readonly translationService: TranslationService,
     private readonly auditService: AuditService,
+    private readonly driverNotify: DriverNotifyService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -187,10 +190,70 @@ export class MessengerService {
     return parsed;
   }
 
+  private async resolveLinkedDriverId(userId: string): Promise<string | null> {
+    const driver = await this.prisma.driver.findFirst({
+      where: { userId },
+      select: { id: true },
+    });
+    return driver?.id ?? null;
+  }
+
   private assertSupportedLanguage(value: string, fieldName: string): void {
     if (!SUPPORTED_LANGUAGES.has(value)) {
-      throw new BadRequestException(`Unsupported ${fieldName}. Supported values: de, tr, en`);
+      throw new BadRequestException(
+        `Unsupported ${fieldName}. Supported values: de, tr, en, pl, nl, it, es, ru`,
+      );
     }
+  }
+
+  private async resolveAutomaticTargetLanguage(params: {
+    conversationId: string;
+    senderUserId: string;
+    senderRole: UserRole;
+  }): Promise<string | null> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: params.conversationId },
+      select: {
+        id: true,
+        driver: {
+          select: {
+            userId: true,
+          },
+        },
+        participants: {
+          select: {
+            userId: true,
+            role: true,
+            user: {
+              select: {
+                language: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found');
+    }
+
+    if (params.senderRole === 'driver') {
+      return FLEET_TRANSLATION_LANGUAGE;
+    }
+
+    const driverUserId = conversation.driver.userId;
+    if (!driverUserId) {
+      return null;
+    }
+    const driverParticipant = conversation.participants.find(
+      (participant) => participant.userId === driverUserId,
+    );
+    const target = driverParticipant?.user.language ?? null;
+    if (target && SUPPORTED_LANGUAGES.has(target)) {
+      return target;
+    }
+    return null;
   }
 
   private mapParticipant(
@@ -280,6 +343,17 @@ export class MessengerService {
     currentUser: MessengerUser,
     conversationId: string,
   ): Promise<void> {
+    if (currentUser.role !== 'driver') {
+      const exists = await this.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new NotFoundException('Conversation not found');
+      }
+      return;
+    }
+
     const participant = await this.prisma.conversationParticipant.findUnique({
       where: {
         conversationId_userId: {
@@ -293,6 +367,7 @@ export class MessengerService {
             id: true,
             driver: {
               select: {
+                id: true,
                 userId: true,
               },
             },
@@ -305,10 +380,13 @@ export class MessengerService {
       throw new ForbiddenException('You are not a participant of this conversation');
     }
 
-    if (
-      currentUser.role === 'driver' &&
-      participant.conversation.driver.userId !== currentUser.id
-    ) {
+    const linkedDriverId = await this.resolveLinkedDriverId(currentUser.id);
+    const conversationDriver = participant.conversation.driver;
+    const ownsConversation =
+      conversationDriver.userId === currentUser.id ||
+      (linkedDriverId !== null && conversationDriver.id === linkedDriverId);
+
+    if (!ownsConversation) {
       throw new ForbiddenException('Driver can only access own conversation threads');
     }
   }
@@ -326,22 +404,22 @@ export class MessengerService {
       }
     }
 
-    const where: Prisma.ConversationWhereInput = {
-      participants: {
-        some: {
-          userId: currentUser.id,
-        },
-      },
-    };
+    const where: Prisma.ConversationWhereInput = {};
 
     if (query.driverId) {
       where.driverId = query.driverId;
     }
 
     if (currentUser.role === 'driver') {
-      where.driver = {
-        userId: currentUser.id,
+      const linkedDriverId = await this.resolveLinkedDriverId(currentUser.id);
+      where.participants = {
+        some: {
+          userId: currentUser.id,
+        },
       };
+      if (linkedDriverId) {
+        where.driverId = linkedDriverId;
+      }
     }
 
     if (query.search?.trim()) {
@@ -582,19 +660,40 @@ export class MessengerService {
       this.assertSupportedLanguage(dto.targetLanguage, 'targetLanguage');
     }
 
+    const effectiveTargetLanguage =
+      dto.targetLanguage ??
+      (await this.resolveAutomaticTargetLanguage({
+        conversationId,
+        senderUserId: currentUser.id,
+        senderRole: currentUser.role,
+      }));
+
     let translationStatus: MessageTranslationStatus = MessageTranslationStatus.not_requested;
     let translatedText: string | null = null;
     let translatedAt: Date | null = null;
 
-    if (dto.targetLanguage && dto.targetLanguage !== dto.originalLanguage) {
+    const autoDetectSource = currentUser.role === 'driver';
+    let storedOriginalLanguage: string = dto.originalLanguage;
+    const shouldAttemptTranslation =
+      Boolean(effectiveTargetLanguage) &&
+      (autoDetectSource || effectiveTargetLanguage !== dto.originalLanguage);
+
+    if (shouldAttemptTranslation && effectiveTargetLanguage) {
       if (normalizedText.length > TRANSLATION_MAX_TEXT_LENGTH) {
         translationStatus = MessageTranslationStatus.failed;
       } else {
         const translationResult = await this.translationService.translateText({
           text: normalizedText,
-          sourceLang: dto.originalLanguage,
-          targetLang: dto.targetLanguage,
+          sourceLang: autoDetectSource ? undefined : dto.originalLanguage,
+          targetLang: effectiveTargetLanguage,
         });
+
+        if (
+          translationResult.detectedSourceLang &&
+          SUPPORTED_LANGUAGES.has(translationResult.detectedSourceLang)
+        ) {
+          storedOriginalLanguage = translationResult.detectedSourceLang;
+        }
 
         if (translationResult.status === 'translated' && translationResult.translatedText) {
           translationStatus = MessageTranslationStatus.translated;
@@ -615,8 +714,8 @@ export class MessengerService {
           senderUserId: currentUser.id,
           originalText: normalizedText,
           translatedText,
-          originalLanguage: dto.originalLanguage,
-          targetLanguage: dto.targetLanguage ?? null,
+          originalLanguage: storedOriginalLanguage,
+          targetLanguage: effectiveTargetLanguage ?? null,
           translationStatus,
           translatedAt,
         },
@@ -644,6 +743,29 @@ export class MessengerService {
         translationStatus: createdMessage.translationStatus,
       },
     });
+
+    const recipients = await this.prisma.conversationParticipant.findMany({
+      where: {
+        conversationId,
+        userId: { not: currentUser.id },
+      },
+      select: { userId: true },
+    });
+
+    const preview =
+      createdMessage.translatedText?.trim() ||
+      createdMessage.originalText.trim().slice(0, 120);
+
+    for (const recipient of recipients) {
+      this.driverNotify.notifyUserSafely({
+        userId: recipient.userId,
+        key: 'messenger_message',
+        params: { preview },
+        type: 'system',
+        relatedEntityType: 'conversation',
+        relatedEntityId: conversationId,
+      });
+    }
 
     return this.mapMessage(createdMessage, currentUser.id);
   }
@@ -680,14 +802,20 @@ export class MessengerService {
         });
       }
 
-      await tx.conversationParticipant.update({
+      await tx.conversationParticipant.upsert({
         where: {
           conversationId_userId: {
             conversationId,
             userId: currentUser.id,
           },
         },
-        data: {
+        update: {
+          lastReadAt: now,
+        },
+        create: {
+          conversationId,
+          userId: currentUser.id,
+          role: currentUser.role,
           lastReadAt: now,
         },
       });
@@ -713,23 +841,22 @@ export class MessengerService {
 
   async unreadCount(currentUserId: string) {
     const currentUser = await this.resolveCurrentUser(currentUserId);
+    const linkedDriverId =
+      currentUser.role === 'driver' ? await this.resolveLinkedDriverId(currentUser.id) : null;
 
     const rows = await this.prisma.message.findMany({
       where: {
-        conversation: {
-          participants: {
-            some: {
-              userId: currentUser.id,
-            },
-          },
-          ...(currentUser.role === 'driver'
+        conversation:
+          currentUser.role === 'driver'
             ? {
-                driver: {
-                  userId: currentUser.id,
+                participants: {
+                  some: {
+                    userId: currentUser.id,
+                  },
                 },
+                ...(linkedDriverId ? { driverId: linkedDriverId } : {}),
               }
-            : {}),
-        },
+            : undefined,
         senderUserId: {
           not: currentUser.id,
         },

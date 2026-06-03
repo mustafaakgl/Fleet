@@ -17,8 +17,19 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
+  const defaultCorsOrigins = [
+    'http://localhost:3001',
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+    'http://localhost:19006',
+    'http://127.0.0.1:19006',
+  ];
+  const corsOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
+    : defaultCorsOrigins;
+
   app.enableCors({
-    origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3001').split(','),
+    origin: corsOrigins,
     credentials: true,
   });
 

@@ -3,17 +3,20 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { messengerApi } from '@/api/endpoints';
+import { Avatar } from '@/components/Avatar';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
-import { LoadingState } from '@/components/LoadingState';
+import { SkeletonCard } from '@/components/Skeleton';
 import { ScreenLayout } from '@/components/ScreenLayout';
+import { useTranslation } from '@/i18n/useTranslation';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
 }
 
 function conversationTitle(item: {
@@ -21,20 +24,23 @@ function conversationTitle(item: {
   driver: { firstName: string; lastName: string };
 }) {
   const driverName = `${item.driver.firstName} ${item.driver.lastName}`.trim();
-  return item.subject ? `${driverName} · ${item.subject}` : driverName;
+  return item.subject ? `${item.subject}` : driverName;
+}
+
+function previewText(item: {
+  lastMessage?: { originalText: string; translatedText: string | null } | null;
+}) {
+  const msg = item.lastMessage;
+  if (!msg) return '';
+  return msg.translatedText ?? msg.originalText;
 }
 
 export default function MessagesListScreen() {
+  const { t } = useTranslation();
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
 
-  const {
-    data: conversations,
-    isLoading,
-    isRefetching,
-    error,
-    refetch,
-  } = useQuery({
+  const { data: conversations, isLoading, isRefetching, error, refetch } = useQuery({
     queryKey: ['messenger-conversations'],
     queryFn: () => messengerApi.listConversations(),
     refetchInterval: isFocused ? 10000 : false,
@@ -48,19 +54,24 @@ export default function MessagesListScreen() {
 
   return (
     <ScreenLayout
-      title="Messages"
-      subtitle={`Unread total: ${unread?.total ?? 0}`}
+      title={t('messages.title')}
+      subtitle={t('messages.subtitle', { count: unread?.total ?? 0 })}
       refreshing={isRefetching}
       onRefresh={() => {
         void refetch();
         void queryClient.invalidateQueries({ queryKey: ['messenger-unread-count'] });
       }}
     >
-      {isLoading ? <LoadingState label="Loading conversations..." /> : null}
+      {isLoading ? (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
+      ) : null}
 
       {!isLoading && error ? (
         <ErrorState
-          message={getErrorMessage(error, 'Failed to load conversations.')}
+          message={getErrorMessage(error, t('messages.loadError'))}
           onRetry={() => {
             void refetch();
           }}
@@ -69,35 +80,42 @@ export default function MessagesListScreen() {
 
       {!isLoading && !error && conversations && conversations.length === 0 ? (
         <EmptyState
-          title="No conversations yet"
-          message="Your office/admin team can create a new conversation for you."
+          title={t('messages.emptyTitle')}
+          message={t('messages.emptyMessage')}
+          icon="message-circle"
         />
       ) : null}
 
       {!isLoading && !error && conversations && conversations.length > 0 ? (
         <View style={styles.list}>
-          {conversations.map((item) => (
-            <Pressable
-              key={item.id}
-              style={styles.card}
-              onPress={() => router.push(`/(app)/messages/${item.id}`)}
-            >
-              <View style={styles.headerRow}>
-                <Text style={styles.title}>{conversationTitle(item)}</Text>
+          {conversations.map((item) => {
+            const title = conversationTitle(item);
+            return (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                onPress={() => router.push(`/(app)/messages/${item.id}`)}
+              >
+                <Avatar name={title} size={44} />
+                <View style={styles.content}>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.title} numberOfLines={1}>
+                      {title}
+                    </Text>
+                    <Text style={styles.meta}>{formatDateTime(item.lastMessageAt)}</Text>
+                  </View>
+                  <Text style={styles.preview} numberOfLines={2}>
+                    {previewText(item) || '—'}
+                  </Text>
+                </View>
                 {item.unreadCount > 0 ? (
                   <View style={styles.unreadBadge}>
                     <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
                   </View>
                 ) : null}
-              </View>
-              <Text style={styles.preview} numberOfLines={2}>
-                {item.lastMessage?.translatedText ??
-                  item.lastMessage?.originalText ??
-                  'No messages yet'}
-              </Text>
-              <Text style={styles.meta}>{formatDateTime(item.lastMessageAt)}</Text>
-            </Pressable>
-          ))}
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
     </ScreenLayout>
@@ -105,47 +123,51 @@ export default function MessagesListScreen() {
 }
 
 const styles = StyleSheet.create({
-  list: {
-    gap: 10,
-  },
+  list: { gap: spacing.sm },
   card: {
-    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    padding: 12,
-    gap: 6,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    ...shadows.sm,
   },
+  cardPressed: { backgroundColor: colors.overlay },
+  content: { flex: 1, gap: 4 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: spacing.sm,
   },
   title: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
+    ...typography.bodyMedium,
+    color: colors.primary,
   },
   preview: {
-    color: '#374151',
-    fontSize: 13,
+    color: colors.subtext,
+    fontSize: 14,
+    lineHeight: 20,
   },
   meta: {
-    color: '#6B7280',
-    fontSize: 12,
+    color: colors.muted,
+    fontSize: 11,
   },
   unreadBadge: {
-    minWidth: 20,
-    borderRadius: 999,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    minWidth: 22,
+    height: 22,
+    borderRadius: radius.pill,
+    backgroundColor: colors.danger,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   unreadBadgeText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 11,
     fontWeight: '700',
   },

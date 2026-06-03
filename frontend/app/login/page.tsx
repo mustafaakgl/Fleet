@@ -5,14 +5,15 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Truck, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { AxiosError } from 'axios';
+import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { authApi } from '@/lib/api';
-import { isAuthenticated, saveAuth, MOCK_CURRENT_USER } from '@/lib/auth';
+import { isAuthenticated, saveAuth, MOCK_CURRENT_USER, getPostLoginPath, getUser } from '@/lib/auth';
 
 const schema = z.object({
   email: z.string().email('Invalid email'),
@@ -27,7 +28,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated()) {
-      router.replace('/dashboard');
+      const user = getUser();
+      router.replace(getPostLoginPath(user?.role ?? 'office'));
     }
   }, [router]);
 
@@ -53,7 +55,7 @@ export default function LoginPage() {
         ...res.user,
         name: res.user.name ?? res.user.email,
       });
-      router.push('/dashboard');
+      router.push(getPostLoginPath(res.user.role));
     } catch (err) {
       if (err instanceof AxiosError) {
         if (!err.response) {
@@ -79,11 +81,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg mb-4">
-            <Truck className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Fleet Management</h1>
-          <p className="text-gray-500 text-sm mt-1">Admin Panel</p>
+          <MyFleetLogo height={72} href={null} priority />
+          <p className="text-gray-500 text-sm mt-4">Admin Panel</p>
         </div>
 
         <Card>
@@ -155,6 +154,11 @@ export default function LoginPage() {
                   <p className="font-medium">Admin</p>
                   <p>admin@fleet.com</p>
                   <p className="text-gray-400">admin123</p>
+                </div>
+                <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
+                  <p className="font-medium">Customer (DHL)</p>
+                  <p>dhl.customer@fleet.com</p>
+                  <p className="text-gray-400">customer123</p>
                 </div>
               </div>
             </div>

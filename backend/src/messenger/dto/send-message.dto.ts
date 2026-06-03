@@ -1,6 +1,6 @@
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
-const SUPPORTED_LANGUAGES = ['de', 'tr', 'en'] as const;
+const SUPPORTED_LANGUAGES = ['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru'] as const;
 
 export class SendMessageDto {
   @IsString()

@@ -43,6 +43,7 @@ const schema = z.object({
   license_expiry_date: z.string().optional(),
   passport_number: z.string().optional(),
   passport_expiry_date: z.string().optional(),
+  date_of_birth: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -130,6 +131,9 @@ export default function NewDriverPage() {
                 <Input {...register('phone')} placeholder="+49 123 456 789" />
               </Field>
             </FieldGroup>
+            <Field label="Date of birth" error={errors.date_of_birth?.message}>
+              <Input type="date" {...register('date_of_birth')} />
+            </Field>
           </CardContent>
         </Card>
 

@@ -26,6 +26,7 @@ import {
   UserRole,
   UserStatus,
   VehicleStatus,
+  CompanyUserRole,
 } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -79,6 +80,57 @@ async function upsertUser(params: {
   });
 }
 
+async function upsertCompanyUser(params: {
+  userId: string;
+  companyId: string;
+  role?: CompanyUserRole;
+  isPrimary?: boolean;
+}) {
+  return prisma.companyUser.upsert({
+    where: {
+      userId_companyId: {
+        userId: params.userId,
+        companyId: params.companyId,
+      },
+    },
+    update: {
+      role: params.role ?? CompanyUserRole.viewer,
+      isPrimary: params.isPrimary ?? false,
+    },
+    create: {
+      userId: params.userId,
+      companyId: params.companyId,
+      role: params.role ?? CompanyUserRole.viewer,
+      isPrimary: params.isPrimary ?? false,
+    },
+  });
+}
+
+async function upsertCompanyPortalSettings(params: {
+  companyId: string;
+  portalEnabled?: boolean;
+  showLiveTracking?: boolean;
+  showDriverFullName?: boolean;
+  showInternalNotes?: boolean;
+}) {
+  return prisma.companyPortalSettings.upsert({
+    where: { companyId: params.companyId },
+    update: {
+      portalEnabled: params.portalEnabled ?? true,
+      showLiveTracking: params.showLiveTracking ?? true,
+      showDriverFullName: params.showDriverFullName ?? false,
+      showInternalNotes: params.showInternalNotes ?? false,
+    },
+    create: {
+      companyId: params.companyId,
+      portalEnabled: params.portalEnabled ?? true,
+      showLiveTracking: params.showLiveTracking ?? true,
+      showDriverFullName: params.showDriverFullName ?? false,
+      showInternalNotes: params.showInternalNotes ?? false,
+    },
+  });
+}
+
 async function upsertDriver(params: {
   id?: string;
   employeeNumber: string;
@@ -92,6 +144,7 @@ async function upsertDriver(params: {
   status?: DriverStatus;
   riskLevel?: RiskLevel;
   notes?: string;
+  dateOfBirth?: Date;
   userId?: string | null;
 }) {
   return prisma.driver.upsert({
@@ -107,6 +160,7 @@ async function upsertDriver(params: {
       status: params.status ?? DriverStatus.active,
       riskLevel: params.riskLevel ?? RiskLevel.green,
       notes: params.notes,
+      ...(params.dateOfBirth !== undefined ? { dateOfBirth: params.dateOfBirth } : {}),
       ...(params.userId !== undefined ? { userId: params.userId } : {}),
     },
     create: {
@@ -122,6 +176,7 @@ async function upsertDriver(params: {
       status: params.status ?? DriverStatus.active,
       riskLevel: params.riskLevel ?? RiskLevel.green,
       notes: params.notes,
+      dateOfBirth: params.dateOfBirth,
       userId: params.userId ?? null,
     },
   });
@@ -708,7 +763,12 @@ async function main(): Promise<void> {
     password: 'driver123',
     role: UserRole.driver,
     status: UserStatus.active,
+    language: 'tr',
   });
+
+  const utcBirthdayToday = new Date(
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()),
+  );
 
   const drivers = [
     {
@@ -725,6 +785,7 @@ async function main(): Promise<void> {
       status: DriverStatus.active,
       riskLevel: RiskLevel.green,
       userId: driverQaUser.id,
+      dateOfBirth: utcBirthdayToday,
     },
     {
       id: 'drv_thomas_scharein',
@@ -1082,6 +1143,46 @@ async function main(): Promise<void> {
   const krage = companiesByName.get('Krage');
   const raben = companiesByName.get('Raben');
   const penny = companiesByName.get('Penny');
+
+  const dhlCustomerUser = await upsertUser({
+    fullName: 'DHL Customer',
+    email: 'dhl.customer@fleet.com',
+    password: 'customer123',
+    role: UserRole.customer,
+  });
+
+  const amazonCustomerUser = await upsertUser({
+    fullName: 'Amazon Customer',
+    email: 'amazon.customer@fleet.com',
+    password: 'customer123',
+    role: UserRole.customer,
+  });
+
+  if (dhl) {
+    await upsertCompanyUser({
+      userId: dhlCustomerUser.id,
+      companyId: dhl.id,
+      isPrimary: true,
+    });
+    await upsertCompanyPortalSettings({
+      companyId: dhl.id,
+      portalEnabled: true,
+      showLiveTracking: true,
+    });
+  }
+
+  if (amazon) {
+    await upsertCompanyUser({
+      userId: amazonCustomerUser.id,
+      companyId: amazon.id,
+      isPrimary: true,
+    });
+    await upsertCompanyPortalSettings({
+      companyId: amazon.id,
+      portalEnabled: true,
+      showLiveTracking: true,
+    });
+  }
 
   if (
     !ilker ||
@@ -1806,7 +1907,7 @@ async function main(): Promise<void> {
 
   await prisma.driver.update({
     where: { id: ilker.id },
-    data: { riskLevel: RiskLevel.yellow },
+    data: { riskLevel: RiskLevel.yellow, userId: driverQaUser.id },
   });
 
   await prisma.companyEmail.upsert({

@@ -1,8 +1,11 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import deCommon from './locales/de/common.json';
+import deLanding from './locales/de/landing.json';
 import enCommon from './locales/en/common.json';
+import enLanding from './locales/en/landing.json';
 import trCommon from './locales/tr/common.json';
+import trLanding from './locales/tr/landing.json';
 
 export const LANG_STORAGE_KEY = 'fleet_language';
 export const SUPPORTED_LANGUAGES = ['de', 'en', 'tr'] as const;
@@ -34,15 +37,15 @@ if (!i18n.isInitialized) {
     .use(initReactI18next)
     .init({
       resources: {
-        de: { common: deCommon },
-        en: { common: enCommon },
-        tr: { common: trCommon },
+        de: { common: deCommon, landing: deLanding },
+        en: { common: enCommon, landing: enLanding },
+        tr: { common: trCommon, landing: trLanding },
       },
       lng: detectLanguage(),
       fallbackLng: 'de',
       supportedLngs: SUPPORTED_LANGUAGES,
       defaultNS: 'common',
-      ns: ['common'],
+      ns: ['common', 'landing'],
       interpolation: {
         escapeValue: false,
       },

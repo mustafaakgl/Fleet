@@ -13,7 +13,10 @@ import {
   X,
   Plus,
 } from 'lucide-react';
+import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { Benutzerverwaltung } from './Benutzerverwaltung';
+import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
+import { groupAssignmentsByCompany } from './companyBoard';
 import { RevenueSummary } from './RevenueSummary';
 import { Tagesplanung } from './Tagesplanung';
 import { UrlaubsplanerPanel } from './UrlaubsplanerPanel';
@@ -26,14 +29,6 @@ type DocStatus = 'Valid' | 'Expiring soon' | 'Expired';
 interface SummaryCard {
   label: string;
   value: number;
-}
-
-interface TomorrowPlanItem {
-  driver: string;
-  vehicle: string;
-  company: string;
-  startTime: string;
-  status: 'Planned' | 'In Progress' | 'Completed';
 }
 
 interface DocumentItem {
@@ -60,13 +55,6 @@ const summaryCards: SummaryCard[] = [
   { label: 'Sick drivers', value: 2 },
 ];
 
-const tomorrowPlan: TomorrowPlanItem[] = [
-  { driver: 'Ilker Cukur', vehicle: 'AP101', company: 'DHL', startTime: '07:00', status: 'Planned' },
-  { driver: 'Thomas Scharein', vehicle: 'AP102', company: 'Amazon', startTime: '08:30', status: 'In Progress' },
-  { driver: 'Sita Diallo', vehicle: 'AP103', company: 'UPS', startTime: '09:00', status: 'Completed' },
-  { driver: 'Andrii Dudiak', vehicle: 'AP104', company: 'Hermes', startTime: '06:45', status: 'Planned' },
-];
-
 const documentItems: DocumentItem[] = [
   { type: 'License', name: 'Ilker Cukur', category: 'Driver', expiryDate: '2026-06-21', status: 'Expiring soon' },
   { type: 'Passport', name: 'Sita Diallo', category: 'Driver', expiryDate: '2026-12-14', status: 'Valid' },
@@ -74,14 +62,10 @@ const documentItems: DocumentItem[] = [
   { type: 'Insurance', name: 'AP104', category: 'Vehicle', expiryDate: '2026-05-10', status: 'Expired' },
 ];
 
-function badgeClasses(status: TomorrowPlanItem['status'] | DocStatus) {
+function badgeClasses(status: DocStatus) {
   switch (status) {
-    case 'Planned':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
-    case 'In Progress':
     case 'Expiring soon':
       return 'bg-amber-100 text-amber-700 border-amber-200';
-    case 'Completed':
     case 'Valid':
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'Expired':
@@ -93,7 +77,17 @@ function badgeClasses(status: TomorrowPlanItem['status'] | DocStatus) {
 
 export function EinsatzplanPage() {
   const { t } = useTranslation();
+  const { assignments, drivers } = useFleetData();
   const searchParams = useSearchParams();
+  const tomorrowDate = getTomorrowDate();
+
+  const tomorrowCompanyGroups = useMemo(() => {
+    const tomorrowAssignments = assignments.filter((assignment) => {
+      if (assignment.date !== tomorrowDate) return false;
+      return ['manual', 'mobile_checkin', 'transport_request'].includes(assignment.source);
+    });
+    return groupAssignmentsByCompany(tomorrowAssignments);
+  }, [assignments, tomorrowDate]);
 
   const panelFromQuery = searchParams.get('panel');
   const viewFromQuery = searchParams.get('view');
@@ -190,34 +184,16 @@ export function EinsatzplanPage() {
               <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 px-4 py-3">
                   <h2 className="text-sm font-semibold text-slate-900">Tomorrow&apos;s Einsatzplan</h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Grouped by company — same company assignments are listed together.
+                  </p>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Driver</th>
-                        <th className="px-4 py-3">Vehicle</th>
-                        <th className="px-4 py-3">Company</th>
-                        <th className="px-4 py-3">Start time</th>
-                        <th className="px-4 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tomorrowPlan.map((row) => (
-                        <tr key={`${row.driver}-${row.vehicle}`} className="border-t border-slate-100">
-                          <td className="px-4 py-3 font-medium text-slate-900">{row.driver}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.vehicle}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.company}</td>
-                          <td className="px-4 py-3 text-slate-700">{row.startTime}</td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClasses(row.status)}`}>
-                              {row.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="p-3">
+                  <CompanyAssignmentBoard
+                    groups={tomorrowCompanyGroups}
+                    drivers={drivers}
+                    emptyMessage="No assignments planned for tomorrow."
+                  />
                 </div>
               </div>
             </div>

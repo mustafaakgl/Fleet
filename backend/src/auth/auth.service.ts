@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveCustomerCompanyContext } from './customer-company-context';
 
 interface AuthUserPayload {
   id: string;
@@ -11,6 +12,9 @@ interface AuthUserPayload {
   name: string;
   role: string;
   language: string;
+  companyIds?: string[];
+  companyId?: string | null;
+  companies?: { id: string; name: string }[];
 }
 
 @Injectable()
@@ -36,6 +40,33 @@ export class AuthService {
     } catch (error) {
       console.warn('Audit log failed:', error);
     }
+  }
+
+  private async buildAuthUserPayload(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: string;
+    language: string;
+  }): Promise<AuthUserPayload> {
+    const payload: AuthUserPayload = {
+      id: user.id,
+      email: user.email,
+      name: user.fullName,
+      role: user.role,
+      language: user.language,
+    };
+
+    if (user.role === 'customer') {
+      const companyContext = await resolveCustomerCompanyContext(this.prisma, user.id);
+      if (companyContext) {
+        payload.companyIds = companyContext.companyIds;
+        payload.companyId = companyContext.companyId;
+        payload.companies = companyContext.companies;
+      }
+    }
+
+    return payload;
   }
 
   async login(
@@ -94,13 +125,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.fullName,
-        role: user.role,
-        language: user.language,
-      },
+      user: await this.buildAuthUserPayload(user),
     };
   }
 
@@ -109,12 +134,6 @@ export class AuthService {
     if (!user || user.status !== 'active') {
       throw new UnauthorizedException('User not found');
     }
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.fullName,
-      role: user.role,
-      language: user.language,
-    };
+    return this.buildAuthUserPayload(user);
   }
 }

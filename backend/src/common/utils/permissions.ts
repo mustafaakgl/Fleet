@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
+export type UserRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver' | 'customer';
 
 export const OPERATIONAL_ROLES: UserRole[] = ['admin', 'boss', 'accounting', 'office'];
 export const OPERATIONAL_WRITE_ROLES: UserRole[] = ['admin', 'boss', 'office'];

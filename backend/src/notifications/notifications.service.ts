@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 
 type NotificationType =
@@ -46,7 +47,10 @@ const NOTIFICATION_STATUSES: NotificationStatus[] = ['unread', 'read'];
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushNotifications: PushNotificationsService,
+  ) {}
 
   private ensureType(value: string): NotificationType {
     if (!NOTIFICATION_TYPES.includes(value as NotificationType)) {
@@ -82,7 +86,7 @@ export class NotificationsService {
     }
 
     const db = this.prisma as any;
-    return db.notification.create({
+    const notification = await db.notification.create({
       data: {
         userId: data.userId,
         title: data.title,
@@ -94,6 +98,20 @@ export class NotificationsService {
         relatedEntityId: data.relatedEntityId ?? null,
       },
     });
+
+    this.pushNotifications.sendToUserSafely(data.userId, {
+      title: data.title,
+      body: data.message,
+      data: {
+        type: 'notification',
+        notificationId: notification.id,
+        notificationType: type,
+        ...(data.relatedEntityType ? { relatedEntityType: data.relatedEntityType } : {}),
+        ...(data.relatedEntityId ? { relatedEntityId: data.relatedEntityId } : {}),
+      },
+    });
+
+    return notification;
   }
 
   async listMyNotifications(userId: string, status?: string) {
@@ -185,6 +203,20 @@ export class NotificationsService {
         relatedEntityId: data.relatedEntityId ?? null,
       })),
     });
+
+    this.pushNotifications.sendToUsersSafely(
+      users.map((user) => user.id),
+      {
+        title: data.title,
+        body: data.message,
+        data: {
+          type: 'notification',
+          notificationType: type,
+          ...(data.relatedEntityType ? { relatedEntityType: data.relatedEntityType } : {}),
+          ...(data.relatedEntityId ? { relatedEntityId: data.relatedEntityId } : {}),
+        },
+      },
+    );
 
     return { created: users.length };
   }

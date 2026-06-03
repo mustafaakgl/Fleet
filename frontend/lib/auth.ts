@@ -55,6 +55,9 @@ export function getUser(): AuthUser | null {
       name: parsed.name ?? parsed.email,
       department: parsed.department,
       language: parsed.language,
+      companyIds: parsed.companyIds,
+      companyId: parsed.companyId,
+      companies: parsed.companies,
     });
   } catch {
     return null;
@@ -73,7 +76,13 @@ export function setDevelopmentRole(role: AuthUser['role']): AuthUser | null {
 }
 
 function normalizeUserRole(user: AuthUser): AuthUser {
-  if (user.role === 'admin' || user.role === 'boss' || user.role === 'accounting' || user.role === 'office') {
+  if (
+    user.role === 'admin' ||
+    user.role === 'boss' ||
+    user.role === 'accounting' ||
+    user.role === 'office' ||
+    user.role === 'customer'
+  ) {
     return user;
   }
 
@@ -81,6 +90,14 @@ function normalizeUserRole(user: AuthUser): AuthUser {
     ...user,
     role: 'office',
   };
+}
+
+export function getPostLoginPath(role: AuthUser['role'] | string): string {
+  if (role === 'customer') {
+    return '/portal/dashboard';
+  }
+
+  return '/dashboard';
 }
 
 export function clearAuth(): void {

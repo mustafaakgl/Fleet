@@ -1,36 +1,62 @@
-import { PropsWithChildren } from 'react';
-import { RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { PropsWithChildren, ReactNode } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors, spacing, typography } from '@/theme';
 
 type ScreenLayoutProps = PropsWithChildren<{
   title: string;
   subtitle?: string;
   refreshing?: boolean;
   onRefresh?: () => void;
+  footer?: ReactNode;
+  scroll?: boolean;
 }>;
 
-export function ScreenLayout({ title, subtitle, children, refreshing, onRefresh }: ScreenLayoutProps) {
+export function ScreenLayout({
+  title,
+  subtitle,
+  children,
+  refreshing,
+  onRefresh,
+  footer,
+  scroll = true,
+}: ScreenLayoutProps) {
+  const header = (
+    <View style={styles.header}>
+      <Text style={styles.title}>{title}</Text>
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    </View>
+  );
+
+  const body = scroll ? (
+    <ScrollView
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={Boolean(refreshing)}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
+        ) : undefined
+      }
+    >
+      {header}
+      {children}
+    </ScrollView>
+  ) : (
+    <View style={[styles.content, styles.contentStatic]}>
+      {header}
+      <View style={styles.flex}>{children}</View>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          onRefresh
-            ? (
-              <RefreshControl
-                refreshing={Boolean(refreshing)}
-                onRefresh={onRefresh}
-                tintColor="#2563EB"
-              />
-            )
-            : undefined
-        }
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-        </View>
-        {children}
-      </ScrollView>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+      {body}
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
     </SafeAreaView>
   );
 }
@@ -38,22 +64,24 @@ export function ScreenLayout({ title, subtitle, children, refreshing, onRefresh 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
-    gap: 16,
+    padding: spacing.lg,
+    gap: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
-  header: {
-    gap: 4,
+  contentStatic: {
+    flex: 1,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#4B5563',
+  flex: { flex: 1 },
+  header: { gap: spacing.xs },
+  title: { ...typography.h1, fontSize: 22 },
+  subtitle: { ...typography.caption, textTransform: 'none', fontSize: 14 },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.card,
+    padding: spacing.lg,
   },
 });

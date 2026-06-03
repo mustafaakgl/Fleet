@@ -1,36 +1,57 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { messengerApi } from '@/api/endpoints';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { messengerApi, driverApi } from '@/api/endpoints';
+import { authStore } from '@/features/auth/store';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
-import { ScreenLayout } from '@/components/ScreenLayout';
+import { MessageBubble } from '@/components/MessageBubble';
+import type { MessengerLanguage } from '@/api/types';
+import { useTranslation } from '@/i18n/useTranslation';
+import { colors, radius, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { showError } from '@/utils/feedback';
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
+import { handleMessengerForbidden } from '@/utils/messenger-errors';
 
 function conversationTitle(item: {
   subject: string | null;
   driver: { firstName: string; lastName: string };
 }) {
   const driverName = `${item.driver.firstName} ${item.driver.lastName}`.trim();
-  return item.subject ? `${driverName} · ${item.subject}` : driverName;
+  return item.subject ? item.subject : driverName;
 }
 
 export default function MessageThreadScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { t } = useTranslation();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const conversationId =
+    typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
   const queryClient = useQueryClient();
   const isFocused = useIsFocused();
+  const sessionUserId = authStore((s) => s.session?.user.id);
+  const sessionLanguage = authStore((s) => s.session?.user.language);
   const [messages, setMessages] = useState<Awaited<ReturnType<typeof messengerApi.listMessages>>>([]);
   const [messageText, setMessageText] = useState('');
+
+  const { data: driverMe } = useQuery({
+    queryKey: ['driver-me'],
+    queryFn: () => driverApi.me(),
+  });
 
   const {
     data: conversation,
@@ -38,9 +59,9 @@ export default function MessageThreadScreen() {
     error: conversationError,
     refetch: refetchConversation,
   } = useQuery({
-    queryKey: ['messenger-conversation-detail', id],
-    queryFn: async () => messengerApi.getConversation(id),
-    enabled: Boolean(id),
+    queryKey: ['messenger-conversation-detail', conversationId],
+    queryFn: async () => messengerApi.getConversation(conversationId),
+    enabled: Boolean(conversationId),
   });
 
   const {
@@ -48,64 +69,70 @@ export default function MessageThreadScreen() {
     error: messagesError,
     refetch: refetchMessages,
   } = useQuery({
-    queryKey: ['messenger-conversation-messages', id],
+    queryKey: ['messenger-conversation-messages', conversationId],
     queryFn: async () => {
-      const list = await messengerApi.listMessages(id, { limit: 50 });
+      const list = await messengerApi.listMessages(conversationId, { limit: 50 });
       setMessages(list);
       return list;
     },
-    enabled: Boolean(id),
+    enabled: Boolean(conversationId),
   });
 
   const pollIncremental = useCallback(async () => {
-    if (!id) return;
-    const last = messages[messages.length - 1];
-    const incremental = await messengerApi.listMessages(id, {
-      since: last?.createdAt,
-      afterId: last?.id,
-      limit: 50,
-    });
-    if (incremental.length > 0) {
-      setMessages((prev) => {
-        const seen = new Set(prev.map((m) => m.id));
-        const merged = [...prev];
-        for (const row of incremental) {
-          if (!seen.has(row.id)) {
-            merged.push(row);
-          }
-        }
-        return merged;
+    if (!conversationId) return;
+    try {
+      const last = messages[messages.length - 1];
+      const incremental = await messengerApi.listMessages(conversationId, {
+        since: last?.createdAt,
+        afterId: last?.id,
+        limit: 50,
       });
-      await messengerApi.markConversationRead(id);
-      await queryClient.invalidateQueries({ queryKey: ['messenger-conversations'] });
-      await queryClient.invalidateQueries({ queryKey: ['messenger-unread-count'] });
+      if (incremental.length > 0) {
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          const merged = [...prev];
+          for (const row of incremental) {
+            if (!seen.has(row.id)) {
+              merged.push(row);
+            }
+          }
+          return merged;
+        });
+        await messengerApi.markConversationRead(conversationId);
+        await queryClient.invalidateQueries({ queryKey: ['messenger-conversations'] });
+        await queryClient.invalidateQueries({ queryKey: ['messenger-unread-count'] });
+      }
+    } catch (error) {
+      handleMessengerForbidden(error, t('messages.accessDenied'));
     }
-  }, [id, messages, queryClient]);
+  }, [conversationId, messages, queryClient, t]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!id) return undefined;
-      void messengerApi.markConversationRead(id).then(() => {
-        void queryClient.invalidateQueries({ queryKey: ['messenger-conversations'] });
-        void queryClient.invalidateQueries({ queryKey: ['messenger-unread-count'] });
-      });
+      if (!conversationId) return undefined;
+      void messengerApi
+        .markConversationRead(conversationId)
+        .then(() => {
+          void queryClient.invalidateQueries({ queryKey: ['messenger-conversations'] });
+          void queryClient.invalidateQueries({ queryKey: ['messenger-unread-count'] });
+        })
+        .catch((error) => {
+          handleMessengerForbidden(error, t('messages.accessDenied'));
+        });
 
       const interval = setInterval(() => {
         void pollIncremental();
       }, 10000);
 
-      return () => {
-        clearInterval(interval);
-      };
-    }, [id, pollIncremental, queryClient]),
+      return () => clearInterval(interval);
+    }, [conversationId, pollIncremental, queryClient, t]),
   );
 
   const sendMutation = useMutation({
-    mutationFn: (payload: { text: string }) =>
-      messengerApi.sendMessage(id, {
+    mutationFn: (payload: { text: string; originalLanguage: MessengerLanguage }) =>
+      messengerApi.sendMessage(conversationId, {
         text: payload.text,
-        originalLanguage: 'tr',
-        targetLanguage: 'de',
+        originalLanguage: payload.originalLanguage,
       }),
     onSuccess: async (created) => {
       setMessages((prev) => [...prev, created]);
@@ -114,194 +141,166 @@ export default function MessageThreadScreen() {
       await queryClient.invalidateQueries({ queryKey: ['messenger-unread-count'] });
     },
     onError: (error) => {
-      showError(getErrorMessage(error, 'Failed to send message.'));
+      if (handleMessengerForbidden(error, t('messages.accessDenied'))) return;
+      showError(getErrorMessage(error, t('messages.sendFailed')));
     },
   });
 
-  const myUserId = useMemo(() => {
-    const participant = conversation?.participants.find((row) => row.role === 'driver');
-    return participant?.userId;
-  }, [conversation]);
+  const myUserId = sessionUserId ?? conversation?.participants.find((row) => row.role === 'driver')?.userId;
 
   const handleSend = () => {
-    const text = messageText.trim();
-    if (!text) {
-      showError('Message cannot be empty.');
+    if (!conversationId) {
+      showError(t('messages.loadThreadError'));
       return;
     }
-    sendMutation.mutate({ text });
+    const text = messageText.trim();
+    if (!text) return;
+    const language = (driverMe?.user?.language ?? sessionLanguage ?? 'tr') as MessengerLanguage;
+    sendMutation.mutate({ text, originalLanguage: language });
   };
 
+  const canSend = Boolean(messageText.trim()) && !sendMutation.isPending;
+  const threadReady =
+    !loadingConversation && !loadingMessages && !conversationError && !messagesError;
+  const title = conversation ? conversationTitle(conversation) : t('messages.thread');
+
   return (
-    <ScreenLayout
-      title="Message Thread"
-      subtitle={conversation ? conversationTitle(conversation) : 'Loading conversation...'}
-      refreshing={isFocused && (loadingConversation || loadingMessages)}
-      onRefresh={() => {
-        void refetchConversation();
-        void refetchMessages();
-      }}
-    >
-      {loadingConversation || loadingMessages ? (
-        <LoadingState label="Loading messages..." />
-      ) : null}
-
-      {!loadingConversation && !loadingMessages && (conversationError || messagesError) ? (
-        <ErrorState
-          message={getErrorMessage(conversationError ?? messagesError, 'Failed to load message thread.')}
-          onRetry={() => {
-            void refetchConversation();
-            void refetchMessages();
-          }}
-        />
-      ) : null}
-
-      {!loadingConversation && !loadingMessages && !conversationError && !messagesError ? (
-        <View style={styles.threadCard}>
-          <Text style={styles.participantsLabel}>
-            Participants:{' '}
-            {conversation?.participants.map((participant) => participant.user.fullName).join(', ')}
-          </Text>
-          {messages.length === 0 ? (
-            <EmptyState
-              title="No messages yet"
-              message="Write the first message below."
+    <SafeAreaView style={styles.page} edges={['bottom', 'left', 'right']}>
+      <Stack.Screen options={{ title }} />
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
+        <View style={styles.body}>
+          {loadingConversation || loadingMessages ? (
+            <LoadingState label={t('common.loading')} />
+          ) : null}
+          {!loadingConversation && !loadingMessages && (conversationError || messagesError) ? (
+            <ErrorState
+              message={getErrorMessage(conversationError ?? messagesError, t('messages.loadThreadError'))}
+              onRetry={() => {
+                void refetchConversation();
+                void refetchMessages();
+              }}
             />
-          ) : (
-            <View style={styles.messageList}>
-              {messages.map((item) => {
-                const mine = item.senderUserId === myUserId;
-                return (
-                  <View
+          ) : null}
+          {threadReady ? (
+            <ScrollView
+              style={styles.thread}
+              contentContainerStyle={styles.threadContent}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={
+                <RefreshControl
+                  refreshing={isFocused && (loadingConversation || loadingMessages)}
+                  onRefresh={() => {
+                    void refetchConversation();
+                    void refetchMessages();
+                  }}
+                  tintColor={colors.accent}
+                />
+              }
+            >
+              {messages.length === 0 ? (
+                <EmptyState
+                  title={t('messages.noMessages')}
+                  message={t('messages.noMessagesHint')}
+                  icon="message-circle"
+                />
+              ) : (
+                messages.map((item) => (
+                  <MessageBubble
                     key={item.id}
-                    style={[
-                      styles.messageBubble,
-                      mine ? styles.messageBubbleMine : styles.messageBubbleOther,
-                    ]}
-                  >
-                    <Text style={styles.sender}>{item.senderName}</Text>
-                    <Text style={styles.originalText}>{item.originalText}</Text>
-                    {item.translatedText ? (
-                      <Text style={styles.translatedText}>{item.translatedText}</Text>
-                    ) : null}
-                    {item.translationStatus === 'failed' ? (
-                      <Text style={styles.translationFailed}>Translation failed</Text>
-                    ) : null}
-                    <Text style={styles.timestamp}>{formatDateTime(item.createdAt)}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          )}
+                    message={item}
+                    mine={item.senderUserId === myUserId}
+                  />
+                ))
+              )}
+            </ScrollView>
+          ) : null}
         </View>
-      ) : null}
 
-      <View style={styles.composer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Type your message..."
-          value={messageText}
-          onChangeText={setMessageText}
-          editable={!sendMutation.isPending}
-          multiline
-        />
-        <Pressable
-          style={[styles.sendButton, (sendMutation.isPending || !messageText.trim()) && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={sendMutation.isPending || !messageText.trim()}
-        >
-          <Text style={styles.sendButtonText}>
-            {sendMutation.isPending ? 'Sending...' : 'Send'}
-          </Text>
-        </Pressable>
-      </View>
-    </ScreenLayout>
+        <View style={styles.composer}>
+          <TextInput
+            style={styles.input}
+            placeholder={t('messages.typePlaceholder')}
+            placeholderTextColor={colors.muted}
+            value={messageText}
+            onChangeText={setMessageText}
+            editable={!sendMutation.isPending && Boolean(conversationId)}
+            multiline
+          />
+          <Pressable
+            style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!canSend}
+            accessibilityLabel={t('common.send')}
+          >
+            {sendMutation.isPending ? (
+              <Text style={styles.sendLabel}>{t('common.sending')}</Text>
+            ) : (
+              <Feather name="send" size={20} color={colors.white} />
+            )}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  threadCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    padding: 12,
-    gap: 10,
+  page: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  participantsLabel: {
-    color: '#4B5563',
-    fontSize: 12,
-  },
-  messageList: {
-    gap: 8,
-  },
-  messageBubble: {
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 10,
-    gap: 4,
-    maxWidth: '90%',
-  },
-  messageBubbleMine: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#DBEAFE',
-    borderColor: '#93C5FD',
-  },
-  messageBubbleOther: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F9FAFB',
-    borderColor: '#E5E7EB',
-  },
-  sender: {
-    color: '#374151',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  originalText: {
-    color: '#111827',
-    fontSize: 14,
-  },
-  translatedText: {
-    color: '#4B5563',
-    fontSize: 13,
-  },
-  translationFailed: {
-    color: '#B45309',
-    fontSize: 12,
-  },
-  timestamp: {
-    color: '#6B7280',
-    fontSize: 11,
+  keyboardAvoid: { flex: 1 },
+  body: { flex: 1, minHeight: 0 },
+  thread: { flex: 1 },
+  threadContent: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   composer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    padding: 10,
-    gap: 8,
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
   input: {
-    minHeight: 80,
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    color: '#111827',
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.primary,
+    fontSize: 15,
+    backgroundColor: colors.background,
     textAlignVertical: 'top',
   },
   sendButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
-    paddingVertical: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.accent,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   sendButtonDisabled: {
+    backgroundColor: colors.muted,
     opacity: 0.6,
   },
-  sendButtonText: {
-    color: '#FFFFFF',
+  sendLabel: {
+    color: colors.white,
+    fontSize: 11,
     fontWeight: '600',
   },
 });

@@ -1,16 +1,25 @@
+import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Link, router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
 import { ScreenLayout } from '@/components/ScreenLayout';
-import { driverApi } from '@/api/endpoints';
-import { LoadingState } from '@/components/LoadingState';
+import { driverApi, messengerApi } from '@/api/endpoints';
+import { SkeletonCard } from '@/components/Skeleton';
 import { ErrorState } from '@/components/ErrorState';
 import { EmptyState } from '@/components/EmptyState';
+import { AssignmentCard } from '@/components/AssignmentCard';
+import { ActionButton } from '@/components/ActionButton';
+import { PendingTaskCard } from '@/components/PendingTaskCard';
+import { LocationTrackingCard } from '@/components/LocationTrackingCard';
+import { ListRow } from '@/components/ListRow';
+import { SectionHeader } from '@/components/SectionHeader';
+import { formatAppDate } from '@/i18n/format';
+import { useTranslation } from '@/i18n/useTranslation';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
-import { authStore } from '@/features/auth/store';
 
 export default function HomeTodayScreen() {
-  const clearSession = authStore((s) => s.clearSession);
+  const { t, locale } = useTranslation();
   const {
     data: assignments,
     isLoading,
@@ -21,33 +30,84 @@ export default function HomeTodayScreen() {
     queryKey: ['today-assignments'],
     queryFn: () => driverApi.todayAssignments(),
   });
+  const { data: me } = useQuery({
+    queryKey: ['driver-me'],
+    queryFn: () => driverApi.me(),
+  });
+  const { data: handovers } = useQuery({
+    queryKey: ['driver-handovers'],
+    queryFn: () => driverApi.listHandovers({ photoStatus: 'missing' }),
+  });
+  const { data: unreadMessages } = useQuery({
+    queryKey: ['messenger-unread-count'],
+    queryFn: () => messengerApi.getUnreadCount(),
+  });
+  const { data: unreadNotifications } = useQuery({
+    queryKey: ['notifications-unread'],
+    queryFn: () => driverApi.unreadNotifications(),
+  });
+  const { data: requests } = useQuery({
+    queryKey: ['driver-requests'],
+    queryFn: () => driverApi.listRequests(),
+  });
 
-  const handleLogout = async () => {
-    await clearSession();
-    router.replace('/(auth)/login');
-  };
+  const todayAssignments = assignments ?? [];
+  const pendingRequests = (requests ?? []).filter((item) => item.status === 'pending').length;
+  const greetingName = me?.driver.firstName ?? 'Driver';
+  const today = formatAppDate(locale);
 
   return (
     <ScreenLayout
-      title="Fleet Driver Today"
-      subtitle="Your assignments for today"
+      title={t('home.title')}
+      subtitle={t('home.subtitle')}
       refreshing={isRefetching}
       onRefresh={() => {
         void refetch();
       }}
     >
-      <View style={styles.summaryCard}>
-        <Text style={styles.cardTitle}>Assignments Today</Text>
-        <Text style={styles.cardValue}>{assignments?.length ?? 0}</Text>
-        <Pressable style={styles.logoutButton} onPress={() => void handleLogout()}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </Pressable>
+      <View style={styles.greetingCard}>
+        <View style={styles.greetingTop}>
+          <View>
+            <Text style={styles.greeting}>{t('home.greeting', { name: greetingName })}</Text>
+            <Text style={styles.greetingSub}>{today}</Text>
+          </View>
+          <View style={styles.brandMark}>
+            <Feather name="truck" size={22} color={colors.white} />
+          </View>
+        </View>
+        {me?.driver.status ? (
+          <Text style={styles.statusPill}>
+            {t('home.status')}: {me.driver.status.replaceAll('_', ' ')}
+          </Text>
+        ) : null}
       </View>
 
-      {isLoading ? <LoadingState label="Loading today assignments..." /> : null}
+      <View style={styles.summaryRow}>
+        <SummaryChip
+          icon="briefcase"
+          label={t('home.summaryMessages')}
+          value={unreadMessages?.total ?? 0}
+          onPress={() => router.push('/(app)/messages')}
+        />
+        <SummaryChip
+          icon="bell"
+          label={t('home.summaryNotifications')}
+          value={unreadNotifications?.count ?? 0}
+          onPress={() => router.push('/(app)/notifications')}
+        />
+      </View>
+
+      <LocationTrackingCard manageWatcher compact />
+
+      {isLoading ? (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
+      ) : null}
       {!isLoading && error ? (
         <ErrorState
-          message={getErrorMessage(error, 'Could not load assignments.')}
+          message={getErrorMessage(error, t('home.loadError'))}
           onRetry={() => {
             void refetch();
           }}
@@ -55,175 +115,153 @@ export default function HomeTodayScreen() {
       ) : null}
       {!isLoading && !error && assignments && assignments.length === 0 ? (
         <EmptyState
-          title="No assignments for today"
-          message="Pull down to refresh or check again later."
+          title={t('home.noAssignments')}
+          message={t('home.noAssignmentsHint')}
+          icon="calendar"
         />
       ) : null}
-      {!isLoading && !error && assignments && assignments.length > 0 ? (
-        <View style={styles.assignmentList}>
-          {assignments.map((assignment) => (
-            <View key={assignment.id} style={styles.assignmentCard}>
-              <View style={styles.assignmentHeaderRow}>
-                <Text style={styles.assignmentTitle}>{assignment.company.name}</Text>
-                <StatusBadge status={assignment.status} />
-              </View>
-              <Text style={styles.assignmentMeta}>Vehicle: {assignment.vehicle.plateNumber}</Text>
-              <Text style={styles.assignmentMeta}>Time: {assignment.startTime} - {assignment.endTime}</Text>
-              <Text style={styles.assignmentMeta}>Pickup: {assignment.pickupAddress}</Text>
-              <Text style={styles.assignmentMeta}>Delivery: {assignment.deliveryAddress}</Text>
-
-              <View style={styles.actionRow}>
-                <QuickLink href={`/(app)/today/assignment/${assignment.id}`} label="Open Detail" />
-                {isActiveAssignment(assignment.status) ? (
-                  <QuickLink href="/(app)/today/morning-checkin" label="Check-in" />
-                ) : null}
-                {needsHandoverAction(assignment.status) ? (
-                  <QuickLink
-                    href={`/(app)/today/handover-upload?assignmentId=${assignment.id}&vehicleId=${assignment.vehicle.id}`}
-                    label="Handover"
-                  />
-                ) : null}
-                {isActiveAssignment(assignment.status) ? (
-                  <>
-                    <QuickLink
-                      href={`/(app)/today/accident-report?assignmentId=${assignment.id}&vehicleId=${assignment.vehicle.id}`}
-                      label="Accident"
-                    />
-                    <QuickLink
-                      href={`/(app)/today/cargo-damage-report?assignmentId=${assignment.id}&vehicleId=${assignment.vehicle.id}`}
-                      label="Cargo"
-                    />
-                  </>
-                ) : null}
-              </View>
+      {!isLoading && !error && todayAssignments.length > 0 ? (
+        <>
+          <SectionHeader title={t('home.summaryAssignments')} />
+          {todayAssignments.map((assignment) => (
+            <View key={assignment.id} style={styles.assignmentBlock}>
+              <AssignmentCard assignment={assignment} />
+              <ActionButton
+                label={t('home.openAssignment')}
+                onPress={() => router.push(`/(app)/today/assignment/${assignment.id}`)}
+                variant="primary"
+              />
             </View>
           ))}
-        </View>
+
+          {todayAssignments[0] ? (
+            <>
+              <SectionHeader title={t('home.quickActions')} />
+              <View style={styles.actionGrid}>
+                <ActionButton label={t('home.morningCheckin')} onPress={() => router.push('/(app)/today/morning-checkin')} />
+                <ActionButton
+                  label={t('home.handoverPhoto')}
+                  onPress={() =>
+                    router.push(
+                      `/(app)/today/handover-upload?assignmentId=${todayAssignments[0].id}&vehicleId=${todayAssignments[0].vehicle.id}`,
+                    )
+                  }
+                />
+                <ActionButton
+                  label={t('home.reportAccident')}
+                  onPress={() =>
+                    router.push(
+                      `/(app)/today/accident-report?assignmentId=${todayAssignments[0].id}&vehicleId=${todayAssignments[0].vehicle.id}`,
+                    )
+                  }
+                  variant="danger"
+                />
+                <ActionButton
+                  label={t('home.reportCargo')}
+                  onPress={() =>
+                    router.push(
+                      `/(app)/today/cargo-damage-report?assignmentId=${todayAssignments[0].id}&vehicleId=${todayAssignments[0].vehicle.id}`,
+                    )
+                  }
+                  variant="danger"
+                />
+              </View>
+
+              <PendingTaskCard
+                missingHandover={handovers?.length ?? 0}
+                unreadMessages={unreadMessages?.total ?? 0}
+                unreadNotifications={unreadNotifications?.count ?? 0}
+                pendingRequests={pendingRequests}
+              />
+            </>
+          ) : null}
+        </>
       ) : null}
-      <View style={styles.globalActions}>
-        <QuickLink href="/(app)/today/leave-request" label="Leave / Sick Request" />
-      </View>
+
+      <ListRow
+        icon="file-text"
+        title={t('home.openRequests')}
+        subtitle={t('home.pendingCount', { count: pendingRequests })}
+        onPress={() => router.push('/(app)/requests')}
+        showChevron
+      />
     </ScreenLayout>
   );
 }
 
-function QuickLink({ href, label }: { href: string; label: string }) {
+function SummaryChip({
+  icon,
+  label,
+  value,
+  onPress,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  value: number;
+  onPress: () => void;
+}) {
   return (
-    <Link href={href as never} asChild>
-      <Pressable style={styles.linkButton}>
-        <Text style={styles.linkText}>{label}</Text>
-      </Pressable>
-    </Link>
+    <ListRow
+      icon={icon}
+      title={label}
+      subtitle={String(value)}
+      badge={value}
+      onPress={onPress}
+      showChevron
+    />
   );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <View style={styles.statusBadge}>
-      <Text style={styles.statusText}>{status.replaceAll('_', ' ')}</Text>
-    </View>
-  );
-}
-
-function isActiveAssignment(status: string) {
-  return status === 'planned' || status === 'confirmed' || status === 'in_progress';
-}
-
-function needsHandoverAction(status: string) {
-  return status === 'planned' || status === 'confirmed';
 }
 
 const styles = StyleSheet.create({
-  summaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 6,
+  assignmentBlock: {
+    gap: 8,
+    marginBottom: 8,
   },
-  cardTitle: {
-    color: '#4B5563',
-    fontSize: 14,
+  greetingCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    ...shadows.md,
   },
-  cardValue: {
-    color: '#111827',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  assignmentList: {
-    gap: 10,
-  },
-  actions: {
-    gap: 10,
-  },
-  linkButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  linkText: {
-    color: '#1F2937',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  assignmentCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    padding: 12,
-    gap: 4,
-  },
-  assignmentTitle: {
-    fontWeight: '700',
-    color: '#111827',
-  },
-  assignmentMeta: {
-    color: '#374151',
-    fontSize: 13,
-  },
-  assignmentHeaderRow: {
+  greetingTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  greeting: {
+    color: colors.white,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  greetingSub: {
+    color: '#94A3B8',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  brandMark: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  statusBadge: {
-    backgroundColor: '#E5E7EB',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  statusText: {
-    color: '#1F2937',
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  logoutButton: {
-    marginTop: 8,
+  statusPill: {
     alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#B91C1C',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  logoutText: {
-    color: '#B91C1C',
-    fontWeight: '600',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    color: '#E2E8F0',
     fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
   },
-  globalActions: {
-    gap: 10,
+  summaryRow: {
+    gap: spacing.sm,
+  },
+  actionGrid: {
+    gap: spacing.sm,
   },
 });

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { clearAuth, getUser } from '@/lib/auth';
 import { canManageSettings } from '@/lib/permissions';
 import { useRouter } from 'next/navigation';
@@ -71,10 +72,11 @@ export function Sidebar() {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-2 px-4 py-5 border-b border-gray-100">
-        <div className="w-8 h-8 rounded-md bg-blue-600 flex items-center justify-center">
-          <Truck className="w-5 h-5 text-white" />
-        </div>
-        <span className={cn('text-lg font-bold text-gray-900', tabletCollapsed ? 'hidden lg:inline' : 'inline')}>Fleet</span>
+        <MyFleetLogo
+          height={tabletCollapsed ? 32 : 36}
+          href={null}
+          className={cn(tabletCollapsed && 'lg:mx-auto')}
+        />
         <button
           type="button"
           onClick={() => setTabletCollapsed((current) => !current)}

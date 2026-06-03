@@ -1,8 +1,13 @@
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
-export type Role = 'admin' | 'boss' | 'accounting' | 'office';
+export type Role = 'admin' | 'boss' | 'accounting' | 'office' | 'customer';
 
 export type Department = 'executive' | 'fleet' | 'payroll' | 'accident' | 'hr' | 'driver_ops';
+
+export interface CustomerCompanySummary {
+  id: string;
+  name: string;
+}
 
 export interface AuthUser {
   id: string;
@@ -11,6 +16,9 @@ export interface AuthUser {
   role: Role;
   department?: Department;
   language?: string;
+  companyIds?: string[];
+  companyId?: string | null;
+  companies?: CustomerCompanySummary[];
 }
 
 export interface AuthResponse {
@@ -19,6 +27,55 @@ export interface AuthResponse {
   refresh_token?: string;
   expires_in?: number;
   user: AuthUser;
+}
+
+// ─── Customer Portal ────────────────────────────────────────────────────────
+
+export type CustomerAssignmentStatus =
+  | 'planned'
+  | 'confirmed'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
+
+export interface CustomerDashboardStats {
+  activeTransports: number;
+  inProgress: number;
+  completedToday: number;
+  upcoming: number;
+  pendingProofs: number;
+}
+
+export interface CustomerAssignment {
+  id: string;
+  status: CustomerAssignmentStatus;
+  workDate: string;
+  startTime: string;
+  endTime: string;
+  cargoName: string;
+  cargoOwner: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  routeName: string | null;
+  companyName: string;
+  vehiclePlateNumber: string;
+  driverDisplayName: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaginatedCustomerAssignments {
+  data: CustomerAssignment[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface CustomerPortalMe {
+  user: AuthUser;
+  companies: CustomerCompanySummary[];
+  primaryCompanyId: string | null;
 }
 
 // ─── Driver ─────────────────────────────────────────────────────────────────
@@ -39,6 +96,7 @@ export interface Driver {
   license_expiry_date?: string;
   passport_number?: string;
   passport_expiry_date?: string;
+  date_of_birth?: string | null;
   status: DriverStatus;
   risk_level: RiskLevel;
   created_at?: string;
@@ -481,7 +539,7 @@ export interface DashboardSummary {
 
 // ─── Messenger ─────────────────────────────────────────────────────────────
 
-export type MessengerLanguage = 'de' | 'tr' | 'en';
+export type MessengerLanguage = 'de' | 'tr' | 'en' | 'pl' | 'nl' | 'it' | 'es' | 'ru';
 export type MessageTranslationStatus = 'translated' | 'failed' | 'not_requested' | 'pending';
 
 export interface ConversationParticipant {
@@ -560,4 +618,26 @@ export interface MessengerUnreadCount {
     conversationId: string;
     count: number;
   }>;
+}
+
+// ─── Live Tracking ───────────────────────────────────────────────────────────
+
+export type LiveTrackingStatus = 'online' | 'stale' | 'offline';
+
+export interface LiveTrackingItem {
+  driverId: string;
+  driverName: string;
+  vehicleId: string | null;
+  plateNumber: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  speedKmh: number | null;
+  headingDeg: number | null;
+  accuracyM: number | null;
+  recordedAt: string | null;
+  receivedAt: string | null;
+  status: LiveTrackingStatus;
+  assignmentId: string | null;
+  companyName: string | null;
+  cargoName: string | null;
 }

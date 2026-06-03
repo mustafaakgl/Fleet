@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
 
@@ -37,6 +38,7 @@ export class RequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly driverNotify: DriverNotifyService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -376,6 +378,16 @@ export class RequestsService {
       },
     });
 
+    if (approved.driver?.userId) {
+      this.driverNotify.notifyUserSafely({
+        userId: approved.driver.userId,
+        key: 'request_approved',
+        type: 'request',
+        relatedEntityType: 'request',
+        relatedEntityId: approved.id,
+      });
+    }
+
     return approved;
   }
 
@@ -413,6 +425,16 @@ export class RequestsService {
         status: rejected.status,
       },
     });
+
+    if (rejected.driver?.userId) {
+      this.driverNotify.notifyUserSafely({
+        userId: rejected.driver.userId,
+        key: 'request_rejected',
+        type: 'request',
+        relatedEntityType: 'request',
+        relatedEntityId: rejected.id,
+      });
+    }
 
     return rejected;
   }

@@ -25,6 +25,7 @@ const schema = z.object({
   license_expiry_date: z.string().optional(),
   passport_number: z.string().optional(),
   passport_expiry_date: z.string().optional(),
+  date_of_birth: z.string().optional(),
   status: z.enum(['active', 'inactive', 'on_leave', 'sick', 'terminated']),
 });
 
@@ -102,6 +103,7 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
           license_expiry_date: toDateInputValue(driver.license_expiry_date),
           passport_number: driver.passport_number ?? '',
           passport_expiry_date: toDateInputValue(driver.passport_expiry_date),
+          date_of_birth: toDateInputValue(driver.date_of_birth ?? undefined),
           status: driver.status as DriverStatus,
         });
       })
@@ -175,6 +177,9 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
                 <Input {...register('phone')} />
               </Field>
             </div>
+            <Field label="Date of birth" error={errors.date_of_birth?.message}>
+              <Input type="date" {...register('date_of_birth')} />
+            </Field>
             <Field label="Status" error={errors.status?.message}>
               <Select {...register('status')}>
                 <option value="active">Active</option>
