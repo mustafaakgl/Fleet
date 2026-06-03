@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ChevronLeft, Pencil, Truck } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { vehiclesApi, documentsApi } from '@/lib/api';
 import type { VehicleDetail, Document } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 import { formatDate, statusColor } from '@/lib/utils';
+import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 
 interface VehicleAssignmentRow {
   id: string;
@@ -181,17 +182,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       <Card className="sticky top-3 z-20 border-purple-200 shadow-md">
         <CardContent className="p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-purple-100">
-                <Truck className="h-7 w-7 text-purple-600" />
-              </div>
+            <div className="flex items-center gap-4">
+              <VehiclePlateDisplay
+                vehicleId={vehicle.id}
+                plate={vehicle.plate_number}
+                photoUrl={vehicle.photo_url}
+                brand={vehicle.brand}
+                model={vehicle.model}
+                size="lg"
+                onPhotoUploaded={(photoUrl) =>
+                  setVehicle((prev) => (prev ? { ...prev, photo_url: photoUrl } : prev))
+                }
+              />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{vehicle.plate_number}</h1>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-700">
-                  <span>
-                    {vehicle.brand} {vehicle.model}
-                  </span>
-                  <span className="text-gray-400">|</span>
                   <Badge className={statusColor(vehicle.status)}>
                     {vehicle.status.replace('_', ' ')}
                   </Badge>

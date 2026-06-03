@@ -28,6 +28,7 @@ import {
   VehicleStatus,
   CompanyUserRole,
 } from '@prisma/client';
+import { photoUrlForVehicleBrand, VEHICLE_BRAND_PHOTOS } from '../src/vehicles/vehicle-brand-photos';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
@@ -195,7 +196,9 @@ async function upsertVehicle(params: {
   insuranceExpiryDate?: Date;
   currentDriverId?: string | null;
   notes?: string;
+  photoUrl?: string;
 }) {
+  const photoUrl = photoUrlForVehicleBrand(params.brand, params.photoUrl);
   return prisma.vehicle.upsert({
     where: { plateNumber: params.plateNumber },
     update: {
@@ -209,6 +212,7 @@ async function upsertVehicle(params: {
       insuranceExpiryDate: params.insuranceExpiryDate,
       currentDriverId: params.currentDriverId ?? null,
       notes: params.notes,
+      photoUrl,
     },
     create: {
       ...(params.id ? { id: params.id } : {}),
@@ -223,6 +227,7 @@ async function upsertVehicle(params: {
       insuranceExpiryDate: params.insuranceExpiryDate,
       currentDriverId: params.currentDriverId ?? null,
       notes: params.notes,
+      photoUrl,
     },
   });
 }
@@ -2233,6 +2238,13 @@ async function main(): Promise<void> {
 
   for (const c of morningCheckins) {
     await prisma.morningCheckin.create({ data: c });
+  }
+
+  for (const [brand, photoUrl] of Object.entries(VEHICLE_BRAND_PHOTOS)) {
+    await prisma.vehicle.updateMany({
+      where: { brand },
+      data: { photoUrl },
+    });
   }
 
   console.log('Fleet seed completed successfully.');

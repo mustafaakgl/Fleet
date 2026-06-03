@@ -8,7 +8,10 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
-import { DOCUMENT_UPLOAD_RELATIVE_DIR } from './storage/local-storage.service';
+import {
+  DOCUMENT_UPLOAD_RELATIVE_DIR,
+  VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR,
+} from './storage/local-storage.service';
 
 async function bootstrap() {
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
@@ -45,7 +48,9 @@ async function bootstrap() {
 
   const uploadsRoot = join(process.cwd(), 'uploads');
   const documentsRoot = join(process.cwd(), DOCUMENT_UPLOAD_RELATIVE_DIR);
+  const vehiclePhotosRoot = join(process.cwd(), VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR);
   mkdirSync(documentsRoot, { recursive: true });
+  mkdirSync(vehiclePhotosRoot, { recursive: true });
   app.useStaticAssets(uploadsRoot, {
     prefix: '/uploads',
   });

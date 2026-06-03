@@ -4,6 +4,10 @@ export function canViewFinancials(role: Role) {
   return role === 'admin' || role === 'boss' || role === 'accounting';
 }
 
+export function canViewCriticalAlerts(role: Role) {
+  return role === 'office';
+}
+
 export function canManageUsers(role: Role) {
   return role === 'admin';
 }

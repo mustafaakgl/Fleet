@@ -129,6 +129,7 @@ export interface Vehicle {
   tuv_expiry_date?: string;
   sp_expiry_date?: string;
   current_driver?: Pick<Driver, 'id' | 'first_name' | 'last_name'> | null;
+  photo_url?: string;
   created_at?: string;
 }
 

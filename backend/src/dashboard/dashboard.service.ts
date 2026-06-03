@@ -550,10 +550,12 @@ export class DashboardService {
   async getDashboard(date: string, currentUserRole?: UserRole | string) {
     const selectedDate = this.normalizeDate(date);
 
+    const includeCriticalAlerts = currentUserRole === 'office';
+
     const [kpis, criticalAlerts, todayOperations, tomorrowPlanning, vehicleHealth, driverRiskOverview, revenueAnalytics] =
       await Promise.all([
         this.getKpis(selectedDate),
-        this.getCriticalAlerts(selectedDate),
+        includeCriticalAlerts ? this.getCriticalAlerts(selectedDate) : Promise.resolve([]),
         this.getTodayOperations(selectedDate),
         this.getTomorrowPlanning(selectedDate),
         this.getVehicleHealth(),
@@ -563,7 +565,7 @@ export class DashboardService {
 
     const dashboardData = {
       kpis,
-      criticalAlerts,
+      criticalAlerts: includeCriticalAlerts ? criticalAlerts : [],
       todayOperations,
       tomorrowPlanning,
       vehicleHealth,

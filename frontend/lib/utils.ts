@@ -105,3 +105,19 @@ export function reminderStatusColor(status: ReminderStatus): string {
 export function fullName(first: string, last: string): string {
   return `${first} ${last}`.trim();
 }
+
+/** Resolves API-relative asset paths (e.g. /uploads/...) to an absolute URL for img/Image src. */
+export function resolveAssetUrl(fileUrl?: string | null): string | null {
+  if (!fileUrl) return null;
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+    return fileUrl;
+  }
+
+  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+  try {
+    const origin = new URL(base).origin;
+    return `${origin}${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`;
+  } catch {
+    return fileUrl;
+  }
+}

@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { vehiclesApi } from '@/lib/api';
 import type { Vehicle } from '@/lib/types';
 import { formatDate, statusColor } from '@/lib/utils';
+import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 
 export default function VehiclesPage() {
   const { t } = useTranslation();
@@ -137,13 +138,27 @@ export default function VehiclesPage() {
           <>
           <div className="space-y-3 p-3 md:hidden">
             {vehicles.map((v) => (
-              <div key={`vehicle-card-${v.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
-                <p className="font-semibold text-slate-900">{v.plate_number}</p>
-                <p className="text-xs text-slate-600">{v.brand} {v.model}</p>
-                <p className="text-xs text-slate-600">Status: {v.status.replace('_', ' ')}</p>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href={`/vehicles/${v.id}`}>View</Link>
-                </Button>
+              <div key={`vehicle-card-${v.id}`} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                <VehiclePlateDisplay
+                  vehicleId={v.id}
+                  plate={v.plate_number}
+                  photoUrl={v.photo_url}
+                  brand={v.brand}
+                  model={v.model}
+                  href={`/vehicles/${v.id}`}
+                  size="md"
+                  onPhotoUploaded={(photoUrl) =>
+                    setVehicles((prev) =>
+                      prev.map((row) => (row.id === v.id ? { ...row, photo_url: photoUrl } : row)),
+                    )
+                  }
+                />
+                <div className="flex flex-col items-end gap-2">
+                  <Badge className={statusColor(v.status)}>{v.status.replace('_', ' ')}</Badge>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/vehicles/${v.id}`}>View</Link>
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -163,7 +178,20 @@ export default function VehiclesPage() {
             <TableBody>
               {vehicles.map((v) => (
                 <TableRow key={v.id}>
-                  <TableCell className="font-semibold text-gray-900">{v.plate_number}</TableCell>
+                  <TableCell>
+                    <VehiclePlateDisplay
+                      vehicleId={v.id}
+                      plate={v.plate_number}
+                      photoUrl={v.photo_url}
+                      href={`/vehicles/${v.id}`}
+                      size="sm"
+                      onPhotoUploaded={(photoUrl) =>
+                        setVehicles((prev) =>
+                          prev.map((row) => (row.id === v.id ? { ...row, photo_url: photoUrl } : row)),
+                        )
+                      }
+                    />
+                  </TableCell>
                   <TableCell>{v.brand} {v.model}</TableCell>
                   <TableCell>{v.year ?? '—'}</TableCell>
                   <TableCell>{formatDate(v.tuv_expiry_date)}</TableCell>

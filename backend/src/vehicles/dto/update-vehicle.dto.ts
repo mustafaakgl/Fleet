@@ -58,4 +58,8 @@ export class UpdateVehicleDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  photo_url?: string;
 }

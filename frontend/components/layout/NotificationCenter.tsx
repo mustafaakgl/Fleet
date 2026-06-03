@@ -3,8 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { useFleetData } from '@/context/FleetDataContext';
+import { getUser } from '@/lib/auth';
 import { dashboardApi, notificationsApi } from '@/lib/api';
+import { canViewCriticalAlerts } from '@/lib/permissions';
+import { cn } from '@/lib/utils';
 import type { DashboardCriticalAlert } from '@/lib/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -87,17 +91,52 @@ function alertRoute(alert: DashboardCriticalAlert): string {
   return '/dashboard';
 }
 
+type OfficeNotifFilter = 'all' | 'action' | 'handover' | 'documents' | 'requests';
+
+const ACTION_TYPES: NotificationType[] = [
+  'missing_handover',
+  'expiring_document',
+  'expired_document',
+  'accident',
+  'cargo_damage',
+  'company_email',
+];
+
+function matchesOfficeFilter(type: NotificationType, filter: OfficeNotifFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'action') return ACTION_TYPES.includes(type);
+  if (filter === 'handover') return type === 'missing_handover';
+  if (filter === 'documents') return type === 'expiring_document' || type === 'expired_document';
+  if (filter === 'requests') {
+    return type === 'transport_request' || type === 'absence_request';
+  }
+  return true;
+}
+
 export function NotificationCenter() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { requests, transportRequests, companyEmailDrafts } = useFleetData();
+  const [user] = useState(() => getUser());
+  const isOffice = user?.role === 'office';
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [alerts, setAlerts] = useState<DashboardCriticalAlert[]>([]);
   const [readIds, setReadIds] = useState<string[]>([]);
+  const [filter, setFilter] = useState<OfficeNotifFilter>('action');
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const user = getUser();
+    if (!user || !canViewCriticalAlerts(user.role)) {
+      setAlerts([]);
+      setIsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     dashboardApi
       .getSummary()
       .then((data) => {
@@ -203,7 +242,20 @@ export function NotificationCenter() {
     [notifications, readIds],
   );
 
-  const unreadCount = notificationsWithStatus.filter((item) => item.status === 'unread').length;
+  const filteredNotifications = useMemo(() => {
+    if (!isOffice || filter === 'all') return notificationsWithStatus;
+    return notificationsWithStatus.filter((item) => matchesOfficeFilter(item.type, filter));
+  }, [filter, isOffice, notificationsWithStatus]);
+
+  const unreadCount = filteredNotifications.filter((item) => item.status === 'unread').length;
+
+  const officeFilters: { id: OfficeNotifFilter; labelKey: string }[] = [
+    { id: 'action', labelKey: 'notifications.filter.action' },
+    { id: 'handover', labelKey: 'notifications.filter.handover' },
+    { id: 'documents', labelKey: 'notifications.filter.documents' },
+    { id: 'requests', labelKey: 'notifications.filter.requests' },
+    { id: 'all', labelKey: 'notifications.filter.all' },
+  ];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -257,15 +309,35 @@ export function NotificationCenter() {
       {isOpen && (
         <div className="absolute right-0 top-full z-50 mt-2 w-[360px] rounded-xl border border-slate-200 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{t('header.notifications')}</h3>
             <button
               type="button"
               onClick={markAllAsRead}
               className="text-xs font-medium text-blue-700 hover:text-blue-800"
             >
-              Mark all as read
+              {t('notifications.markAllRead', 'Mark all as read')}
             </button>
           </div>
+
+          {isOffice ? (
+            <div className="flex flex-wrap gap-1 border-b border-slate-100 px-3 py-2">
+              {officeFilters.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    'rounded-full px-2.5 py-1 text-[11px] font-medium transition',
+                    filter === f.id
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                  )}
+                >
+                  {t(f.labelKey)}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="max-h-[420px] overflow-y-auto">
             {isLoading ? (
@@ -278,12 +350,16 @@ export function NotificationCenter() {
                   </div>
                 ))}
               </div>
-            ) : notificationsWithStatus.length === 0 ? (
+            ) : filteredNotifications.length === 0 ? (
               <div className="p-3">
-                <EmptyState icon={Bell} title="No notifications" subtitle="You are all caught up." />
+                <EmptyState
+                  icon={Bell}
+                  title={t('notifications.emptyTitle', 'No notifications')}
+                  subtitle={t('notifications.emptySubtitle', 'You are all caught up.')}
+                />
               </div>
             ) : (
-              notificationsWithStatus.map((notification) => (
+              filteredNotifications.map((notification) => (
                 <button
                   key={notification.id}
                   type="button"

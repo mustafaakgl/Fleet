@@ -301,6 +301,7 @@ model Vehicle {
   spExpiryDate           DateTime?
   insuranceExpiryDate    DateTime?
   registrationExpiryDate DateTime?
+  photoUrl               String?
   notes                  String?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt

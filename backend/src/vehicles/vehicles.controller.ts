@@ -6,10 +6,13 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseFilePipeBuilder,
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
@@ -19,6 +22,11 @@ import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { VehiclesService } from './vehicles.service';
+import {
+  UploadedVehiclePhotoFile,
+  VEHICLE_PHOTO_MAX_BYTES,
+  VEHICLE_PHOTO_UPLOAD_INTERCEPTOR,
+} from './vehicle-photo-upload';
 
 @Controller('vehicles')
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
@@ -55,6 +63,23 @@ export class VehiclesController {
   @Patch(':id')
   updateVehicle(@Param('id') id: string, @Body() dto: UpdateVehicleDto) {
     return this.vehiclesService.update(id, dto);
+  }
+
+  @Post(':id/photo')
+  @UseInterceptors(VEHICLE_PHOTO_UPLOAD_INTERCEPTOR)
+  uploadVehiclePhoto(
+    @Param('id') id: string,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({ maxSize: VEHICLE_PHOTO_MAX_BYTES })
+        .build({
+          fileIsRequired: true,
+          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        }),
+    )
+    file: UploadedVehiclePhotoFile,
+  ) {
+    return this.vehiclesService.uploadPhoto(id, file);
   }
 
   @Delete(':id')

@@ -210,6 +210,9 @@ export const vehiclesApi = {
 
   getIncidents: (id: string) =>
     api.get<unknown[]>(`/vehicles/${id}/incidents`).then((r) => r.data),
+
+  uploadPhoto: (id: string, formData: FormData) =>
+    api.post<Vehicle>(`/vehicles/${id}/photo`, formData).then((r) => r.data),
 };
 
 // ─── Companies ───────────────────────────────────────────────────────────────

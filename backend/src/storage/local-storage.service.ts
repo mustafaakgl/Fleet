@@ -6,19 +6,25 @@ import { StorageBucket, StorageService } from './storage.service';
 
 export const DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'documents');
 export const DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), DOCUMENT_UPLOAD_RELATIVE_DIR);
+export const VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR = join('uploads', 'vehicles');
+export const VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR);
 
 @Injectable()
 export class LocalStorageService extends StorageService {
   constructor() {
     super();
     mkdirSync(DOCUMENT_UPLOAD_ABSOLUTE_DIR, { recursive: true });
+    mkdirSync(VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR, { recursive: true });
   }
 
   buildPublicUrl(bucket: StorageBucket, storedFileName: string): string {
-    if (bucket !== 'documents') {
-      throw new Error(`Unsupported storage bucket: ${bucket}`);
+    if (bucket === 'documents') {
+      return `/uploads/documents/${storedFileName}`;
     }
-    return `/uploads/documents/${storedFileName}`;
+    if (bucket === 'vehicles') {
+      return `/uploads/vehicles/${storedFileName}`;
+    }
+    throw new Error(`Unsupported storage bucket: ${bucket}`);
   }
 
   generateDocumentFileName(originalName: string): string {
