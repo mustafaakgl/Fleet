@@ -1,0 +1,22 @@
+{
+  "planning.title": "Günlük planlama",
+  "planning.titleOffice": "Sevkiyat",
+  "planning.subtitle": "Müsaitlik, check-in ve manuel planlama tek akışta.",
+  "subtab.dailyOverview": "Günlük özet",
+  "subtab.planning": "Günlük planlama",
+  "subtab.transportRequests": "Taşıma talepleri",
+  "subtab.morningCheckins": "Sabah check-in",
+  "subtab.vehicleHandovers": "Araç devirleri",
+  "subtab.companyEmails": "Firma e-postaları",
+  "office.tab.today": "Today",
+  "office.tab.tomorrow": "Tomorrow",
+  "office.tab.operations": "Operations",
+  "office.loading": "Planlama verileri yükleniyor…",
+  "office.partialLoad": "Bazı bölümler yüklenemedi: {{sections}}",
+  "office.prevDay": "Önceki gün",
+  "office.nextDay": "Sonraki gün",
+  "office.backToToday": "Bugün",
+  "office.tomorrowTitle": "Yarın — Einsatzplan",
+  "office.tomorrowHint": "Firmaya göre gruplandı.",
+  "office.tomorrowEmpty": "Yarın için henüz atama yok."
+}

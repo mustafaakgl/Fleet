@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Shield,
   ClipboardList,
+  ListTodo,
   Settings,
   Wrench,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ export type NavGroup = {
 
 const ALL_ITEMS: Record<string, NavItem> = {
   dashboard: { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  officeQueue: { href: '/office/queue', labelKey: 'nav.officeQueue', icon: ListTodo },
   assignments: { href: '/assignments', labelKey: 'nav.assignments', icon: CalendarDays },
   liveTracking: { href: '/live-tracking', labelKey: 'nav.liveTracking', icon: MapPinned },
   requests: { href: '/requests', labelKey: 'nav.requests', icon: ClipboardList },
@@ -56,6 +58,7 @@ function group(id: string, labelKey: string, keys: (keyof typeof ALL_ITEMS)[]): 
 const OFFICE_NAV: NavGroup[] = [
   group('daily', 'nav.group.daily', [
     'dashboard',
+    'officeQueue',
     'assignments',
     'liveTracking',
     'requests',

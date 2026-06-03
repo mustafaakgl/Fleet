@@ -57,7 +57,13 @@ export type DriverMorningCheckin = {
   notes?: string | null;
 };
 
-export type HandoverPhotoSlot = 'front' | 'right' | 'left' | 'rear';
+export type HandoverPhotoSlot =
+  | 'front'
+  | 'right'
+  | 'left'
+  | 'rear'
+  | 'tail_lift'
+  | 'interior';
 
 export type HandoverPhotoSummary = {
   id: string;
@@ -98,6 +104,12 @@ export type DriverHandoverPhotoUploadResponse = {
   };
 };
 
+export type RequestAttachment = {
+  id: string;
+  fileName: string;
+  fileUrl: string | null;
+};
+
 export type DriverRequest = {
   id: string;
   driverId: string;
@@ -107,6 +119,7 @@ export type DriverRequest = {
   reason?: string | null;
   status: RequestStatus;
   createdAt?: string;
+  attachments?: RequestAttachment[];
 };
 
 export type DriverTransportRequest = {
@@ -127,6 +140,7 @@ export type DriverTransportRequest = {
   conflictReason?: string | null;
   assignmentId?: string | null;
   createdAt?: string;
+  attachments?: RequestAttachment[];
 };
 
 export type TransportFormOptions = {
@@ -289,4 +303,25 @@ export type SubmitLocationResponse = {
   vehicleId: string | null;
   nextUploadAfterSec: number;
   lowAccuracy: boolean;
+};
+
+export type DriverDocumentStatus = 'valid' | 'expiring_soon' | 'expired' | 'missing' | 'archived';
+
+export type DriverDocumentItem = {
+  id: string;
+  documentType: string;
+  fileName: string;
+  fileUrl: string | null;
+  status: DriverDocumentStatus;
+  expiryDate: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DriverDocumentsResponse = {
+  uploadTypes: string[];
+  requiredTypes: string[];
+  missingRequired: string[];
+  items: DriverDocumentItem[];
 };

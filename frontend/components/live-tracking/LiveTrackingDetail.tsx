@@ -1,7 +1,11 @@
 'use client';
 
+import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { LiveTrackingItem } from '@/lib/types';
+import { einsatzplanHref, liveTrackingHref } from '@/lib/office-deep-links';
 import {
   formatSpeed,
   formatTrackingTimestamp,
@@ -13,19 +17,25 @@ interface LiveTrackingDetailProps {
 }
 
 export function LiveTrackingDetail({ item }: LiveTrackingDetailProps) {
+  const { t } = useTranslation();
+
   if (!item) {
     return (
       <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-        Select a driver or vehicle to view details.
+        {t('liveTracking.selectHint')}
       </div>
     );
   }
+
+  const sessionEnded = item.status === 'offline';
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-base font-semibold text-slate-900">{item.plateNumber ?? 'No vehicle'}</p>
+          <p className="text-base font-semibold text-slate-900">
+            {item.plateNumber ?? t('liveTracking.noVehicle')}
+          </p>
           <p className="text-sm text-slate-600">{item.driverName}</p>
         </div>
         <Badge variant={statusBadgeVariant(item.status)} className="capitalize">
@@ -33,9 +43,15 @@ export function LiveTrackingDetail({ item }: LiveTrackingDetailProps) {
         </Badge>
       </div>
 
+      {sessionEnded ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {t('liveTracking.sessionClosed')}
+        </p>
+      ) : null}
+
       <dl className="grid grid-cols-1 gap-2 text-sm">
         <div>
-          <dt className="text-slate-500">Company</dt>
+          <dt className="text-slate-500">{t('dashboard.company')}</dt>
           <dd className="font-medium text-slate-900">{item.companyName ?? '—'}</dd>
         </div>
         <div>
@@ -47,7 +63,7 @@ export function LiveTrackingDetail({ item }: LiveTrackingDetailProps) {
           <dd className="font-medium text-slate-900">{formatSpeed(item.speedKmh)}</dd>
         </div>
         <div>
-          <dt className="text-slate-500">Last update</dt>
+          <dt className="text-slate-500">{t('liveTracking.lastUpdate')}</dt>
           <dd className="font-medium text-slate-900">{formatTrackingTimestamp(item.receivedAt)}</dd>
         </div>
         <div>
@@ -61,6 +77,26 @@ export function LiveTrackingDetail({ item }: LiveTrackingDetailProps) {
           </div>
         ) : null}
       </dl>
+
+      <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+        {item.assignmentId ? (
+          <Button variant="outline" size="sm" asChild>
+            <Link
+              href={einsatzplanHref({
+                panel: 'tagesplanung',
+                view: 'daily-overview',
+              })}
+            >
+              {t('liveTracking.openAssignment')}
+            </Link>
+          </Button>
+        ) : null}
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={liveTrackingHref(item.driverId, item.assignmentId ?? undefined)}>
+            {t('liveTracking.openOnMap')}
+          </Link>
+        </Button>
+      </div>
     </div>
   );
 }

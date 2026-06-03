@@ -1,9 +1,25 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { MapPinned } from 'lucide-react';
 import type { MorningCheckin } from '@/context/FleetDataContext';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
+import { morningCheckinsApi } from '@/lib/api';
+import { liveTrackingHref } from '@/lib/office-deep-links';
 import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
+
+function formatApiError(error: unknown, fallback: string) {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const data = (error as { response?: { data?: { message?: string | string[] } } }).response?.data;
+    const message = data?.message;
+    if (Array.isArray(message)) return message.join(', ');
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
+}
 
 function statusPill(status: MorningCheckin['status']) {
   switch (status) {
@@ -40,15 +56,20 @@ function SummaryCard({ label, value, tone }: SummaryCardProps) {
 }
 
 export function MorningCheckins() {
+  const { t } = useTranslation();
   const {
     morningCheckins,
     drivers,
     assignments,
-    addCheckinToEinsatzplan,
     rejectMorningCheckin,
     updateMorningCheckin,
     validateMorningCheckin,
+    refetchHydrate,
   } = useFleetData();
+
+  useEffect(() => {
+    refetchHydrate();
+  }, [refetchHydrate]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -56,6 +77,7 @@ export function MorningCheckins() {
   const [editCompany, setEditCompany] = useState('');
   const [autoAddEnabled, setAutoAddEnabled] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const autoAddInFlightRef = useRef<Set<string>>(new Set());
 
   const today = getTodayDate();
 
@@ -70,7 +92,10 @@ export function MorningCheckins() {
   );
 
   useEffect(() => {
-    if (!autoAddEnabled) return;
+    if (!autoAddEnabled) {
+      autoAddInFlightRef.current.clear();
+      return;
+    }
 
     const validPending = todaysCheckins.filter((checkin) => {
       if (checkin.status === 'Added to Einsatzplan' || checkin.status === 'Rejected') return false;
@@ -78,13 +103,14 @@ export function MorningCheckins() {
       return validation.status === 'Confirmed';
     });
 
-    validPending.forEach((checkin) => {
-      const result = addCheckinToEinsatzplan(checkin.id);
-      if (!result.success) {
-        setToastMessage(result.message);
-      }
-    });
-  }, [autoAddEnabled, todaysCheckins, validateMorningCheckin, addCheckinToEinsatzplan]);
+    for (const checkin of validPending) {
+      if (autoAddInFlightRef.current.has(checkin.id)) continue;
+      autoAddInFlightRef.current.add(checkin.id);
+      void handleAdd(checkin.id).finally(() => {
+        autoAddInFlightRef.current.delete(checkin.id);
+      });
+    }
+  }, [autoAddEnabled, todaysCheckins, validateMorningCheckin]);
 
   function showToast(message: string) {
     setToastMessage(message);
@@ -110,9 +136,28 @@ export function MorningCheckins() {
     showToast('Check-in rejected.');
   }
 
-  function handleAdd(checkinId: string) {
-    const result = addCheckinToEinsatzplan(checkinId);
-    showToast(result.message);
+  async function handleAdd(checkinId: string) {
+    const checkin = todaysCheckins.find((item) => item.id === checkinId);
+    if (!checkin) {
+      showToast('Check-in not found.');
+      return;
+    }
+    if (checkin.status === 'Added to Einsatzplan') {
+      return;
+    }
+    const validation = validateMorningCheckin(checkin);
+    if (validation.status !== 'Confirmed') {
+      showToast(validation.conflictReason ?? 'Check-in needs review before adding.');
+      return;
+    }
+    try {
+      await morningCheckinsApi.addToEinsatzplan(checkinId);
+      await refetchHydrate();
+      showToast(`${t('office.checkin.addedToast')} ${t('office.checkin.trackingHint')}`);
+    } catch (error) {
+      await refetchHydrate();
+      showToast(formatApiError(error, 'Failed to add check-in to Einsatzplan.'));
+    }
   }
 
   function handleSaveEdit() {
@@ -232,6 +277,15 @@ export function MorningCheckins() {
                         >
                           Reject
                         </button>
+                        {checkin.status === 'Added to Einsatzplan' || checkin.assignmentId ? (
+                          <Link
+                            href={liveTrackingHref(checkin.driverId, checkin.assignmentId)}
+                            className="inline-flex items-center gap-1 rounded-md border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
+                          >
+                            <MapPinned className="h-3.5 w-3.5" />
+                            {t('office.checkin.openOnMap')}
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -324,11 +378,23 @@ export function MorningCheckins() {
             <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-slate-200 bg-white px-5 py-4">
               <button
                 type="button"
-                onClick={() => selectedCheckin && handleAdd(selectedCheckin.id)}
+                onClick={() => {
+                  if (selectedCheckin) void handleAdd(selectedCheckin.id);
+                }}
                 className="rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
               >
                 Add to Einsatzplan
               </button>
+              {selectedCheckin &&
+              (selectedCheckin.status === 'Added to Einsatzplan' || selectedCheckin.assignmentId) ? (
+                <Link
+                  href={liveTrackingHref(selectedCheckin.driverId, selectedCheckin.assignmentId)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50"
+                >
+                  <MapPinned className="h-4 w-4" />
+                  {t('office.checkin.openOnMap')}
+                </Link>
+              ) : null}
               {editMode ? (
                 <button
                   type="button"

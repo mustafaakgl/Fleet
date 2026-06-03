@@ -94,6 +94,14 @@ export default function ProfileSettingsScreen() {
               onPress={() => router.push('/(app)/notifications')}
             />
 
+            <ListRow
+              icon="file-text"
+              title={t('profile.openDocuments')}
+              subtitle={t('profile.openDocumentsHint')}
+              onPress={() => router.push('/(app)/documents')}
+              showChevron
+            />
+
             <SectionHeader title={t('profile.language')} />
             <Text style={styles.hint}>{t('profile.languageHint')}</Text>
             <View style={styles.languageRow}>
@@ -120,6 +128,13 @@ export default function ProfileSettingsScreen() {
             </View>
 
             <SectionHeader title={t('profile.location')} />
+            <ListRow
+              icon="navigation"
+              title={t('profile.openTodayGps')}
+              subtitle={t('profile.openTodayGpsHint')}
+              onPress={() => router.push('/(app)/today')}
+              showChevron
+            />
             <LocationTrackingCard />
           </>
         ) : null}

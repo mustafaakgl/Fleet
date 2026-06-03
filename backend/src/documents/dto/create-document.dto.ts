@@ -5,6 +5,7 @@ const DOCUMENT_OWNER_TYPES = [
   'vehicle',
   'company',
   'request',
+  'transport_request',
   'accident',
   'cargo_damage',
   'vehicle_handover',

@@ -20,6 +20,10 @@ function navigateFromPushData(data: Record<string, unknown> | undefined) {
     router.push(`/(app)/today/assignment/${relatedId}`);
     return;
   }
+  if (relatedType === 'morning_checkin') {
+    router.push('/(app)/today');
+    return;
+  }
   if (relatedType === 'request' || relatedType === 'transport_request') {
     router.push('/(app)/requests');
     return;

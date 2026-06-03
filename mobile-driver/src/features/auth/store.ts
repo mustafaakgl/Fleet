@@ -70,7 +70,16 @@ export const authStore = create<AuthState>((set) => ({
     } catch {
       // ignore when offline or already logged out
     }
-    await stopForegroundLocationWatcher();
+    try {
+      const tracking = locationTrackingStore.getState();
+      if (tracking.status?.sharingActive) {
+        await tracking.endSharing();
+      } else {
+        await stopForegroundLocationWatcher();
+      }
+    } catch {
+      await stopForegroundLocationWatcher();
+    }
     locationTrackingStore.setState({
       status: null,
       loading: false,

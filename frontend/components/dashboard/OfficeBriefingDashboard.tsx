@@ -24,7 +24,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageError } from '@/components/ui/page-error';
-import { dashboardApi } from '@/lib/api';
+import { dashboardApi, trackingApi } from '@/lib/api';
+import { fetchOfficeQueueItems } from '@/lib/office-queue';
+import { einsatzplanHref, liveTrackingHref, officeQueueHref } from '@/lib/office-deep-links';
 import { formatDate, statusColor } from '@/lib/utils';
 import type { DashboardCriticalAlert, DashboardSummary } from '@/lib/types';
 
@@ -39,17 +41,26 @@ function alertHref(alert: DashboardCriticalAlert): string {
   if (alert.relatedEntityType === 'document') return '/documents?status=expiring_soon,expired';
   if (alert.relatedEntityType === 'accident') return '/cargo-damage?status=reported,under_review';
   if (alert.relatedEntityType === 'vehicle_handover') {
-    return '/assignments?panel=tagesplanung&view=vehicle-handovers';
+    return einsatzplanHref({ office: true, tab: 'betrieb', view: 'vehicle-handovers' });
   }
   if (alert.relatedEntityType === 'company_email') {
-    return '/assignments?panel=company_notifications&view=company-notifications';
+    return einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' });
+  }
+  if (alert.relatedEntityType === 'assignment') {
+    return einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' });
   }
   return '/dashboard';
 }
 
 const QUICK_ACTIONS = [
   {
-    href: '/assignments?panel=tagesplanung&view=daily-overview',
+    href: officeQueueHref(),
+    labelKey: 'office.quick.queue',
+    icon: ClipboardList,
+    color: 'bg-rose-50 text-rose-700 border-rose-100',
+  },
+  {
+    href: einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' }),
     labelKey: 'office.quick.einsatzplan',
     icon: CalendarDays,
     color: 'bg-blue-50 text-blue-700 border-blue-100',
@@ -67,7 +78,7 @@ const QUICK_ACTIONS = [
     color: 'bg-violet-50 text-violet-700 border-violet-100',
   },
   {
-    href: '/assignments?panel=tagesplanung&view=morning-checkins',
+    href: einsatzplanHref({ office: true, tab: 'betrieb', view: 'morning-checkins' }),
     labelKey: 'office.quick.checkins',
     icon: Sun,
     color: 'bg-amber-50 text-amber-700 border-amber-100',
@@ -94,21 +105,31 @@ export function OfficeBriefingDashboard() {
   const [error, setError] = useState<unknown>(null);
   const [showMore, setShowMore] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [openTaskCount, setOpenTaskCount] = useState<number | null>(null);
+  const [gpsActiveCount, setGpsActiveCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await dashboardApi.getSummary();
+      const [data, queueItems, liveDrivers] = await Promise.all([
+        dashboardApi.getSummary(),
+        fetchOfficeQueueItems(t).catch(() => []),
+        trackingApi.getLive({ staleAfterSec: 120, includeOffline: false }).catch(() => []),
+      ]);
       setSummary(data);
+      setOpenTaskCount(queueItems.length);
+      setGpsActiveCount(liveDrivers.filter((item) => item.status === 'online').length);
       setLastUpdated(new Date());
     } catch (e) {
       setError(e);
       setSummary(null);
+      setOpenTaskCount(null);
+      setGpsActiveCount(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -133,7 +154,7 @@ export function OfficeBriefingDashboard() {
           id: 'email',
           label: t('dashboard.unsentCompanyEmails'),
           value: summary.kpis.unsentCompanyEmails,
-          href: '/assignments?panel=company_notifications&view=company-notifications',
+          href: einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' }),
           urgent: summary.kpis.unsentCompanyEmails > 0,
         },
         {
@@ -147,8 +168,15 @@ export function OfficeBriefingDashboard() {
           id: 'missing',
           label: t('dashboard.missingAssignments'),
           value: summary.tomorrowPlanning.missingAssignments,
-          href: '/assignments?panel=tagesplanung&view=daily-overview',
+          href: einsatzplanHref({ office: true, tab: 'morgen' }),
           urgent: summary.tomorrowPlanning.missingAssignments > 0,
+        },
+        {
+          id: 'gps',
+          label: t('office.briefing.gpsSharing'),
+          value: gpsActiveCount ?? 0,
+          href: '/live-tracking',
+          urgent: false,
         },
       ]
     : [];
@@ -160,6 +188,15 @@ export function OfficeBriefingDashboard() {
           <p className="text-sm font-medium text-blue-600">{t('office.briefing.eyebrow')}</p>
           <h1 className="text-2xl font-bold text-slate-900">{t('office.briefing.title')}</h1>
           <p className="mt-1 text-sm text-slate-600">{todayLabel}</p>
+          {openTaskCount !== null && openTaskCount > 0 ? (
+            <Link
+              href={officeQueueHref()}
+              className="mt-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-200"
+            >
+              {t('office.briefing.openTasks', { count: openTaskCount })}
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           {lastUpdated ? (
@@ -202,6 +239,12 @@ export function OfficeBriefingDashboard() {
                 </CardContent>
               </Card>
             ) : (
+              <div className="space-y-2">
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={officeQueueHref()}>{t('office.briefing.viewQueue')}</Link>
+                </Button>
+              </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 {summary.criticalAlerts.map((alert) => (
                   <Link
@@ -218,6 +261,7 @@ export function OfficeBriefingDashboard() {
                     </div>
                   </Link>
                 ))}
+              </div>
               </div>
             )}
           </section>
@@ -264,7 +308,9 @@ export function OfficeBriefingDashboard() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.todayOperations')}</h2>
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/assignments?panel=tagesplanung&view=daily-overview">{t('common.view')}</Link>
+                <Link href={einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' })}>
+                  {t('common.view')}
+                </Link>
               </Button>
             </div>
             <Card>
@@ -297,7 +343,19 @@ export function OfficeBriefingDashboard() {
                     </TableHeader>
                     <TableBody>
                       {summary.todayOperations.slice(0, 8).map((row) => (
-                        <TableRow key={row.id}>
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer hover:bg-slate-50"
+                          onClick={() => {
+                            if (row.driverId) {
+                              router.push(liveTrackingHref(row.driverId));
+                            } else {
+                              router.push(
+                                einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' }),
+                              );
+                            }
+                          }}
+                        >
                           <TableCell className="font-medium">{row.driverName}</TableCell>
                           <TableCell>{row.vehiclePlate}</TableCell>
                           <TableCell>{row.companyName}</TableCell>
@@ -339,7 +397,7 @@ export function OfficeBriefingDashboard() {
                   </span>
                 </div>
                 <Button asChild>
-                  <Link href="/assignments?panel=tagesplanung&view=daily-overview">
+                  <Link href={einsatzplanHref({ office: true, tab: 'morgen' })}>
                     {t('dashboard.openEinsatzplan')}
                   </Link>
                 </Button>

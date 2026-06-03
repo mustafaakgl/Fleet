@@ -1,16 +1,15 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { getDriverRiskScore, type DriverRiskScore } from '@/lib/utils';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { USE_MOCK_FLEET_DATA } from '@/lib/fleet-data-config';
+import { hydrateFleetData } from '@/lib/fleet-hydration';
 import {
-  driversApi,
   assignmentsApi,
-  calendarApi,
-  transportRequestsApi,
   leaveRequestsApi,
   morningCheckinsApi,
-  companyEmailsApi,
+  transportRequestsApi,
 } from '@/lib/api';
+import { getDriverRiskScore, type DriverRiskScore } from '@/lib/utils';
 
 export type CalendarStatusCode = 'UT' | 'KT' | 'FT' | 'AT' | 'HO' | 'GR' | 'SCH';
 export type CalendarStatusSource = 'manual' | 'request' | 'assignment';
@@ -141,6 +140,7 @@ export interface MorningCheckin {
   source: 'mobile_app';
   notes?: string;
   phone?: string;
+  assignmentId?: string;
 }
 
 export interface MorningCheckinValidation {
@@ -203,6 +203,9 @@ interface FleetDataContextValue {
   approveTransportRequest: (requestId: string) => { success: boolean; message: string };
   rejectTransportRequest: (requestId: string) => void;
   getAssignmentById: (assignmentId: string) => FleetAssignment | undefined;
+  isHydrating: boolean;
+  hydrateError: string | null;
+  refetchHydrate: () => void;
 }
 
 const FleetDataContext = createContext<FleetDataContextValue | undefined>(undefined);
@@ -659,227 +662,67 @@ const initialRevenueData: RevenueData = {
 };
 
 export function FleetDataProvider({ children }: { children: React.ReactNode }) {
-  const [drivers, setDrivers] = useState<FleetDriver[]>(initialDrivers);
-  const [calendarStatuses, setCalendarStatuses] = useState<FleetCalendarStatus[]>(initialCalendarStatuses);
-  const [requests, setRequests] = useState<FleetRequest[]>(initialRequests);
-  const [assignments, setAssignments] = useState<FleetAssignment[]>(initialAssignments);
-  const [morningCheckins, setMorningCheckins] = useState<MorningCheckin[]>(initialMorningCheckins);
-  const [transportRequests, setTransportRequests] = useState<TransportRequest[]>(initialTransportRequests);
+  const [drivers, setDrivers] = useState<FleetDriver[]>(USE_MOCK_FLEET_DATA ? initialDrivers : []);
+  const [calendarStatuses, setCalendarStatuses] = useState<FleetCalendarStatus[]>(
+    USE_MOCK_FLEET_DATA ? initialCalendarStatuses : [],
+  );
+  const [requests, setRequests] = useState<FleetRequest[]>(USE_MOCK_FLEET_DATA ? initialRequests : []);
+  const [assignments, setAssignments] = useState<FleetAssignment[]>(
+    USE_MOCK_FLEET_DATA ? initialAssignments : [],
+  );
+  const [morningCheckins, setMorningCheckins] = useState<MorningCheckin[]>(
+    USE_MOCK_FLEET_DATA ? initialMorningCheckins : [],
+  );
+  const [transportRequests, setTransportRequests] = useState<TransportRequest[]>(
+    USE_MOCK_FLEET_DATA ? initialTransportRequests : [],
+  );
+  const [isHydrating, setIsHydrating] = useState(true);
+  const [hydrateError, setHydrateError] = useState<string | null>(null);
+  const [hydrateKey, setHydrateKey] = useState(0);
+  const refetchHydrate = useCallback(() => setHydrateKey((key) => key + 1), []);
   const [companyEmailDrafts, setCompanyEmailDrafts] = useState<CompanyEmailDraft[]>([]);
   const [driverAssignmentHistory, setDriverAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [vehicleAssignmentHistory, setVehicleAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [companyAssignmentHistory, setCompanyAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [revenueData] = useState<RevenueData>(initialRevenueData);
 
-  // Hydrate from backend on mount. Mock initial state remains as fallback.
   useEffect(() => {
     let cancelled = false;
-
-    // Build a lookup of driver department from the initial mock (backend has no department field).
     const departmentByDriverId = new Map<string, string>(
-      initialDrivers.map((d) => [d.id, d.department]),
+      (USE_MOCK_FLEET_DATA ? initialDrivers : []).map((d) => [d.id, d.department]),
     );
 
-    const mapAssignmentStatus = (s: string): PlanningStatus => {
-      if (s === 'in_progress') return 'In Progress';
-      if (s === 'cancelled' || s === 'completed') return 'Unavailable';
-      return 'Planned';
-    };
+    setIsHydrating(true);
+    setHydrateError(null);
 
     void (async () => {
-      try {
-        const driversPage = await driversApi.list({ limit: 200 });
-        if (cancelled) return;
-        const fleetDrivers: FleetDriver[] = driversPage.data.map((d) => ({
-          id: d.id,
-          name: `${d.first_name} ${d.last_name}`.trim(),
-          department: departmentByDriverId.get(d.id) ?? 'Operations',
-          accidentCount: d.accident_count ?? 0,
-          riskScore: getDriverRiskScore(d.accident_count ?? 0),
-        }));
-        setDrivers(fleetDrivers);
-      } catch {
-        // Keep mock fallback
-      }
+      const data = await hydrateFleetData(departmentByDriverId);
+      if (cancelled) return;
 
-      try {
-        const now = new Date();
-        const from = formatDate(addDays(now, -7));
-        const to = formatDate(addDays(now, 7));
-        const events = await calendarApi.list({ from, to });
-        if (cancelled) return;
-        const allowed = new Set(['UT', 'KT', 'FT', 'AT', 'HO', 'GR', 'SCH']);
-        const sourceMap: Record<string, CalendarStatusSource> = {
-          manual: 'manual',
-          leave: 'request',
-          assignment: 'assignment',
-        };
-        const fleetCalendar: FleetCalendarStatus[] = events
-          .filter((e) => allowed.has(e.status))
-          .map((e) => ({
-            id: e.id,
-            driverId: e.driverId,
-            date: (e.date ?? '').slice(0, 10),
-            status: e.status as CalendarStatusCode,
-            source: sourceMap[e.source] ?? 'manual',
-            requestId: e.requestId ?? undefined,
-            assignmentId: e.assignmentId ?? undefined,
-          }));
-        setCalendarStatuses(fleetCalendar);
-      } catch {
-        // Keep mock fallback
-      }
+      const apply = <T,>(key: string, setter: (value: T[]) => void, value: T[]) => {
+        if (!data.errors.includes(key)) {
+          setter(value);
+        } else if (!USE_MOCK_FLEET_DATA) {
+          setter([]);
+        }
+      };
 
-      try {
-        const apiAssignments = await assignmentsApi.list();
-        if (cancelled) return;
-        const fleetAssignments: FleetAssignment[] = apiAssignments.data.map((a) => ({
-          id: a.id,
-          date: (a.work_date ?? '').slice(0, 10),
-          driverId: a.driver.id,
-          department: departmentByDriverId.get(a.driver.id) ?? 'Operations',
-          availability: 'Available',
-          vehicle: a.vehicle.plate_number,
-          company: a.company_name,
-          routeJob: a.notes ?? 'Daily route',
-          startTime: a.start_time,
-          endTime: a.end_time,
-          notes: a.notes ?? '',
-          status: mapAssignmentStatus(a.status),
-          source: 'manual',
-          expectedRevenue: 0,
-        }));
-        setAssignments(fleetAssignments);
-      } catch {
-        // Keep mock fallback
-      }
+      apply('drivers', setDrivers, data.drivers);
+      apply('calendar', setCalendarStatuses, data.calendarStatuses);
+      apply('assignments', setAssignments, data.assignments);
+      apply('transportRequests', setTransportRequests, data.transportRequests);
+      apply('morningCheckins', setMorningCheckins, data.morningCheckins);
+      apply('requests', setRequests, data.requests);
+      apply('companyEmails', setCompanyEmailDrafts, data.companyEmailDrafts);
 
-      try {
-        const apiTransport = await transportRequestsApi.list();
-        if (cancelled) return;
-        const fleetTransport: TransportRequest[] = apiTransport.map((t) => ({
-          id: t.id,
-          driverId: t.driverId,
-          date: (t.requestedDate ?? '').slice(0, 10),
-          submittedAt: t.requestedDate ?? '',
-          vehicleId: t.vehicleId,
-          companyId: t.companyId,
-          cargoName: t.cargoName,
-          cargoOwner: t.cargoOwner,
-          pickupAddress: t.pickupAddress,
-          deliveryAddress: t.deliveryAddress,
-          startTime: t.startTime,
-          endTime: t.endTime,
-          routeName: undefined,
-          notes: t.notes ?? undefined,
-          status: t.status,
-          conflictReason: t.conflictReason ?? undefined,
-          source: 'mobile_app',
-        }));
-        setTransportRequests(fleetTransport);
-      } catch {
-        // Keep mock fallback
-      }
-
-      try {
-        const apiCheckins = await morningCheckinsApi.list({ date: formatDate(now) });
-        if (cancelled) return;
-        const statusMap: Record<string, MorningCheckinStatus> = {
-          confirmed: 'Confirmed',
-          waiting_for_review: 'Waiting for Review',
-          missing_vehicle_plate: 'Missing Vehicle Plate',
-          missing_company: 'Missing Company',
-          conflict: 'Conflict',
-          added_to_einsatzplan: 'Added to Einsatzplan',
-          rejected: 'Rejected',
-        };
-        const fleetCheckins: MorningCheckin[] = apiCheckins.map((c) => ({
-          id: c.id,
-          driverId: c.driver_id,
-          date: (c.date ?? '').slice(0, 10),
-          submittedAt: c.submitted_at ?? '',
-          vehiclePlate: c.vehicle_plate ?? '',
-          company: c.company_name ?? '',
-          status: statusMap[c.status] ?? 'Waiting for Review',
-          conflictReason: c.conflict_reason ?? undefined,
-          source: 'mobile_app',
-          notes: c.notes,
-        }));
-        setMorningCheckins(fleetCheckins);
-      } catch {
-        // Keep mock fallback
-      }
-
-      try {
-        const apiLeave = await leaveRequestsApi.list();
-        if (cancelled) return;
-        const reqStatusMap: Record<string, RequestStatus> = {
-          pending: 'Pending',
-          approved: 'Approved',
-          rejected: 'Rejected',
-          cancelled: 'Cancelled',
-          needs_review: 'Needs Review',
-        };
-        const typeMap: Record<string, RequestType> = {
-          vacation: 'Urlaub beantragen',
-          sick_leave: 'Krankheit melden',
-          training: 'Sonstige Abwesenheit',
-          business_trip: 'Sonstige Abwesenheit',
-          doctor_appointment: 'Sonstige Abwesenheit',
-          special_leave: 'Sonstige Abwesenheit',
-          overtime_compensation: 'Sonstige Abwesenheit',
-          free_day: 'Sonstige Abwesenheit',
-          other: 'Sonstige Abwesenheit',
-        };
-        const fleetRequests: FleetRequest[] = apiLeave.map((r) => ({
-          id: r.id,
-          driverId: r.driverId,
-          driverName: r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : r.driverId,
-          department: departmentByDriverId.get(r.driverId) ?? 'Operations',
-          type: typeMap[r.type] ?? 'Sonstige Abwesenheit',
-          dateFrom: (r.startDate ?? '').slice(0, 10),
-          dateTo: (r.endDate ?? '').slice(0, 10),
-          status: reqStatusMap[r.status] ?? 'Pending',
-          responsibleDepartment: 'HR',
-          submittedAt: r.createdAt ?? new Date().toISOString(),
-          notes: r.reason ?? '',
-          uploadedDocument: '',
-        }));
-        setRequests(fleetRequests);
-      } catch {
-        // Keep mock fallback
-      }
-
-      try {
-        const apiEmails = await companyEmailsApi.list();
-        if (cancelled) return;
-        const draftStatusMap: Record<string, CompanyEmailDraft['status']> = {
-          draft_ready: 'draft_ready',
-          needs_review: 'needs_review',
-          draft: 'needs_review',
-        };
-        const fleetEmails: CompanyEmailDraft[] = apiEmails
-          .filter((e) => e.status === 'draft_ready' || e.status === 'needs_review' || e.status === 'draft')
-          .map((e) => ({
-            id: e.id,
-            companyId: e.companyId,
-            date: (e.date ?? '').slice(0, 10),
-            subject: e.subject,
-            body: e.body,
-            status: draftStatusMap[e.status] ?? 'needs_review',
-            lastUpdatedAt: e.lastSentAt ?? new Date().toISOString(),
-          }));
-        setCompanyEmailDrafts(fleetEmails);
-      } catch {
-        // Keep mock fallback
-      }
+      setHydrateError(data.errors.length > 0 ? data.errors.join(', ') : null);
+      setIsHydrating(false);
     })();
 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hydrateKey]);
 
   function toMinutes(value: string | undefined) {
     if (!value || !/^\d{2}:\d{2}$/.test(value)) return null;
@@ -1470,6 +1313,9 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       approveTransportRequest,
       rejectTransportRequest,
       getAssignmentById,
+      isHydrating,
+      hydrateError,
+      refetchHydrate,
     }),
     [
       assignments,
@@ -1478,7 +1324,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       companyEmailDrafts,
       driverAssignmentHistory,
       drivers,
+      hydrateError,
+      isHydrating,
       morningCheckins,
+      refetchHydrate,
       requests,
       revenueData,
       transportRequests,

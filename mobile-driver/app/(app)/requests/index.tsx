@@ -10,6 +10,10 @@ import { LoadingState } from '@/components/LoadingState';
 import { ErrorState } from '@/components/ErrorState';
 import { RequestTypeCard } from '@/components/RequestTypeCard';
 import { ActionButton } from '@/components/ActionButton';
+import {
+  RequestAttachmentsPicker,
+  type PickedAttachment,
+} from '@/components/RequestAttachmentsPicker';
 import { colors } from '@/theme/colors';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
@@ -51,6 +55,8 @@ export default function RequestsScreen() {
   const [routeDate, setRouteDate] = useState('');
   const [routeStartTime, setRouteStartTime] = useState('');
   const [routeEndTime, setRouteEndTime] = useState('');
+  const [leaveAttachments, setLeaveAttachments] = useState<PickedAttachment[]>([]);
+  const [transportAttachments, setTransportAttachments] = useState<PickedAttachment[]>([]);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['driver-requests'],
@@ -68,11 +74,22 @@ export default function RequestsScreen() {
   });
 
   const mutation = useMutation({
-    mutationFn: () => driverApi.createRequest({ type, startDate, endDate, reason }),
+    mutationFn: async () => {
+      const created = await driverApi.createRequest({ type, startDate, endDate, reason });
+      for (const file of leaveAttachments) {
+        try {
+          await driverApi.uploadLeaveRequestAttachment(created.id, file);
+        } catch {
+          throw new Error(t('requests.attachments.uploadFailed'));
+        }
+      }
+      return created;
+    },
     onSuccess: () => {
       setStartDate('');
       setEndDate('');
       setReason('');
+      setLeaveAttachments([]);
       void queryClient.invalidateQueries({ queryKey: ['driver-requests'] });
       showSuccess(t('requests.submitted'));
     },
@@ -82,8 +99,8 @@ export default function RequestsScreen() {
   });
 
   const routeMutation = useMutation({
-    mutationFn: () =>
-      driverApi.createTransportRequest({
+    mutationFn: async () => {
+      const created = await driverApi.createTransportRequest({
         vehicleId,
         companyId,
         cargoName,
@@ -93,7 +110,16 @@ export default function RequestsScreen() {
         requestedDate: routeDate,
         startTime: routeStartTime,
         endTime: routeEndTime,
-      }),
+      });
+      for (const file of transportAttachments) {
+        try {
+          await driverApi.uploadTransportRequestAttachment(created.id, file);
+        } catch {
+          throw new Error(t('requests.attachments.uploadFailed'));
+        }
+      }
+      return created;
+    },
     onSuccess: () => {
       setCargoName('');
       setCargoOwner('');
@@ -102,6 +128,7 @@ export default function RequestsScreen() {
       setRouteDate('');
       setRouteStartTime('');
       setRouteEndTime('');
+      setTransportAttachments([]);
       void queryClient.invalidateQueries({ queryKey: ['driver-transport-requests'] });
       showSuccess(t('requests.routeSubmitted'));
     },
@@ -186,6 +213,7 @@ export default function RequestsScreen() {
           <TextInput style={styles.input} placeholder={t('requests.startDate')} value={startDate} onChangeText={setStartDate} />
           <TextInput style={styles.input} placeholder={t('requests.endDate')} value={endDate} onChangeText={setEndDate} />
           <TextInput style={styles.input} placeholder={t('requests.reason')} value={reason} onChangeText={setReason} />
+          <RequestAttachmentsPicker files={leaveAttachments} onChange={setLeaveAttachments} />
           <ActionButton
             label={mutation.isPending ? t('requests.submitting') : t('requests.submit')}
             onPress={onSubmit}
@@ -256,6 +284,7 @@ export default function RequestsScreen() {
           <TextInput style={styles.input} placeholder={t('requests.routeDate')} value={routeDate} onChangeText={setRouteDate} />
           <TextInput style={styles.input} placeholder={t('requests.routeStart')} value={routeStartTime} onChangeText={setRouteStartTime} />
           <TextInput style={styles.input} placeholder={t('requests.routeEnd')} value={routeEndTime} onChangeText={setRouteEndTime} />
+          <RequestAttachmentsPicker files={transportAttachments} onChange={setTransportAttachments} />
           <ActionButton
             label={routeMutation.isPending ? t('requests.submitting') : t('requests.submitRoute')}
             onPress={onSubmitRoute}
@@ -286,6 +315,11 @@ export default function RequestsScreen() {
                   {formatShortDate(item.startDate)} → {formatShortDate(item.endDate)}
                 </Text>
                 <Text style={styles.requestMeta}>{statusLabel(item.status, 'status')}</Text>
+                {item.attachments?.length ? (
+                  <Text style={styles.requestMeta}>
+                    {t('requests.attachments.count', { count: item.attachments.length })}
+                  </Text>
+                ) : null}
               </View>
             ))}
           </View>
@@ -304,6 +338,11 @@ export default function RequestsScreen() {
                 </Text>
                 <Text style={styles.requestMeta}>{statusLabel(item.status, 'transportStatus')}</Text>
                 {item.conflictReason ? <Text style={styles.requestMeta}>{item.conflictReason}</Text> : null}
+                {item.attachments?.length ? (
+                  <Text style={styles.requestMeta}>
+                    {t('requests.attachments.count', { count: item.attachments.length })}
+                  </Text>
+                ) : null}
               </View>
             ))}
           </View>

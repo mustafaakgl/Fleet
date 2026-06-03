@@ -485,6 +485,7 @@ export interface DashboardCriticalAlert {
 
 export interface DashboardTodayOperation {
   id: string;
+  driverId?: string;
   driverName: string;
   vehiclePlate: string;
   companyName: string;

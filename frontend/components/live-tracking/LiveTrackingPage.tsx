@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { MapPinned, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ const STALE_AFTER_SEC = 300;
 
 export function LiveTrackingPage() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<LiveTrackingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,6 +47,13 @@ export function LiveTrackingPage() {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(timeout);
   }, [search]);
+
+  useEffect(() => {
+    const driverId = searchParams.get('driver');
+    if (driverId) {
+      setSelectedDriverId(driverId);
+    }
+  }, [searchParams]);
 
   const fetchLiveTracking = useCallback(
     async (options?: { manual?: boolean; fitMap?: boolean; initial?: boolean }) => {

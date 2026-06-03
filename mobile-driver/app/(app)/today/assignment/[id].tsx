@@ -1,17 +1,22 @@
+import axios from 'axios';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { StyleSheet, Text, View } from 'react-native';
 import { ScreenLayout } from '@/components/ScreenLayout';
 import { driverApi } from '@/api/endpoints';
+import { localTodayDate } from '@/lib/calendar-date';
 import { SkeletonCard } from '@/components/Skeleton';
 import { ErrorState } from '@/components/ErrorState';
 import { getErrorMessage } from '@/utils/errors';
 import { colors, spacing, typography } from '@/theme';
 import { ActionButton } from '@/components/ActionButton';
+import { LocationTrackingCard } from '@/components/LocationTrackingCard';
 import { RouteTimeline } from '@/components/RouteTimeline';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Card } from '@/components/ui/Card';
 import { useTranslation } from '@/i18n/useTranslation';
+import { showError } from '@/utils/feedback';
 
 function assignmentTone(status: string): 'neutral' | 'success' | 'warning' | 'danger' {
   if (status === 'completed') return 'success';
@@ -22,13 +27,29 @@ function assignmentTone(status: string): 'neutral' | 'success' | 'warning' | 'da
 
 export default function AssignmentDetailScreen() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ id: string }>();
   const assignmentId = typeof params.id === 'string' ? params.id : '';
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['assignment', assignmentId],
     queryFn: () => driverApi.assignmentById(assignmentId),
     enabled: Boolean(assignmentId),
+    retry: false,
   });
+  const { data: todayCheckins } = useQuery({
+    queryKey: ['morning-checkins', localTodayDate()],
+    queryFn: () => driverApi.listMorningCheckins(localTodayDate()),
+  });
+  const hasCheckinToday = (todayCheckins?.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (!error || !axios.isAxiosError(error) || error.response?.status !== 404) {
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ['today-assignments'] });
+    showError(t('assignment.notFound'));
+    router.replace('/(app)/today');
+  }, [error, queryClient, t]);
 
   return (
     <>
@@ -46,6 +67,9 @@ export default function AssignmentDetailScreen() {
         ) : null}
         {assignmentId && data ? (
           <>
+            {['planned', 'confirmed', 'in_progress'].includes(data.status) ? (
+              <LocationTrackingCard />
+            ) : null}
             <Card>
               <View style={styles.rowBetween}>
                 <Text style={styles.title}>{data.company.name}</Text>
@@ -73,7 +97,13 @@ export default function AssignmentDetailScreen() {
             ) : null}
             <View style={styles.actions}>
               <Text style={styles.section}>{t('assignment.actions')}</Text>
-              <ActionButton label={t('home.morningCheckin')} onPress={() => router.push('/(app)/today/morning-checkin')} variant="primary" />
+              {!hasCheckinToday ? (
+                <ActionButton
+                  label={t('home.morningCheckin')}
+                  onPress={() => router.push('/(app)/today/morning-checkin')}
+                  variant="primary"
+                />
+              ) : null}
               <ActionButton
                 label={t('home.handoverPhoto')}
                 onPress={() =>

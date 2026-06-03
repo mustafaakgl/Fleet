@@ -8,6 +8,7 @@ import { useFleetData } from '@/context/FleetDataContext';
 import { getUser } from '@/lib/auth';
 import { dashboardApi, notificationsApi } from '@/lib/api';
 import { canViewCriticalAlerts } from '@/lib/permissions';
+import { einsatzplanHref, officeQueueHref } from '@/lib/office-deep-links';
 import { cn } from '@/lib/utils';
 import type { DashboardCriticalAlert } from '@/lib/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -81,14 +82,20 @@ function mapAlertType(type: string): NotificationType {
   return 'other';
 }
 
-function alertRoute(alert: DashboardCriticalAlert): string {
+function alertRoute(alert: DashboardCriticalAlert, office = false): string {
   if (alert.relatedEntityType === 'document') return '/documents?status=expiring_soon,expired';
   if (alert.relatedEntityType === 'accident') return '/cargo-damage';
-  if (alert.relatedEntityType === 'vehicle_handover')
-    return '/assignments?panel=tagesplanung&view=vehicle-handovers';
-  if (alert.relatedEntityType === 'company_email')
-    return '/assignments?panel=company_notifications&view=company-notifications';
-  return '/dashboard';
+  if (alert.relatedEntityType === 'vehicle_handover') {
+    return office
+      ? einsatzplanHref({ office: true, tab: 'betrieb', view: 'vehicle-handovers' })
+      : '/assignments?panel=tagesplanung&view=vehicle-handovers';
+  }
+  if (alert.relatedEntityType === 'company_email') {
+    return office
+      ? einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' })
+      : '/assignments?panel=company_notifications&view=company-notifications';
+  }
+  return office ? officeQueueHref() : '/dashboard';
 }
 
 type OfficeNotifFilter = 'all' | 'action' | 'handover' | 'documents' | 'requests';
@@ -166,7 +173,7 @@ export function NotificationCenter() {
         priority: a.priority,
         status: 'unread',
         createdAt: new Date().toISOString(),
-        relatedPage: alertRoute(a),
+        relatedPage: alertRoute(a, isOffice),
         relatedEntityId: a.relatedEntityId,
       });
     }
@@ -182,7 +189,14 @@ export function NotificationCenter() {
         priority: 'high',
         status: 'unread',
         createdAt: pendingTransport.submittedAt,
-        relatedPage: '/assignments?panel=tagesplanung&view=daily-overview',
+        relatedPage: isOffice
+          ? einsatzplanHref({
+              office: true,
+              tab: 'betrieb',
+              view: 'planning',
+              transportId: pendingTransport.id,
+            })
+          : '/assignments?panel=tagesplanung&view=planning',
         relatedEntityId: pendingTransport.id,
       });
     }
@@ -203,7 +217,7 @@ export function NotificationCenter() {
         priority: isSick ? 'high' : 'medium',
         status: 'unread',
         createdAt: pendingAbsence.submittedAt,
-        relatedPage: '/assignments?panel=urlaubsplaner&view=abteilungskalender',
+        relatedPage: isOffice ? '/requests' : '/assignments?panel=urlaubsplaner&view=abteilungskalender',
         relatedEntityId: pendingAbsence.id,
       });
     }
@@ -221,7 +235,9 @@ export function NotificationCenter() {
         priority: 'medium',
         status: 'unread',
         createdAt: unsentEmail.lastUpdatedAt,
-        relatedPage: '/assignments?panel=company_notifications&view=company-notifications',
+        relatedPage: isOffice
+          ? einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' })
+          : '/assignments?panel=company_notifications&view=company-notifications',
         relatedEntityId: unsentEmail.id,
       });
     }
@@ -231,7 +247,7 @@ export function NotificationCenter() {
       const dateB = parseDate(b.createdAt)?.getTime() ?? 0;
       return dateB - dateA;
     });
-  }, [alerts, companyEmailDrafts, requests, transportRequests]);
+  }, [alerts, companyEmailDrafts, isOffice, requests, transportRequests]);
 
   const notificationsWithStatus = useMemo(
     () =>
@@ -397,6 +413,21 @@ export function NotificationCenter() {
               ))
             )}
           </div>
+
+          {isOffice ? (
+            <div className="border-t border-slate-200 px-4 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  router.push(officeQueueHref());
+                }}
+                className="w-full text-center text-xs font-semibold text-blue-700 hover:text-blue-800"
+              >
+                {t('office.briefing.viewQueue')}
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

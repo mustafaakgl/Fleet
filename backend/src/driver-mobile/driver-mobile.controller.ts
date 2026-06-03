@@ -29,9 +29,14 @@ import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
 import { UpdateDriverLanguageDto } from './dto/update-driver-language.dto';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
+import { UploadDriverDocumentDto } from './dto/upload-driver-document.dto';
 import { DriverMobileService } from './driver-mobile.service';
+import {
+  DRIVER_FILE_UPLOAD_INTERCEPTOR,
+  MAX_DRIVER_UPLOAD_BYTES,
+} from './driver-upload.config';
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = MAX_DRIVER_UPLOAD_BYTES;
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 const HANDOVER_PHOTO_UPLOAD_INTERCEPTOR = FileInterceptor('file', {
@@ -165,6 +170,31 @@ export class DriverMobileController {
     return this.driverMobile.getHandover(userId, handoverId);
   }
 
+  @Get('documents')
+  listDriverDocuments(@CurrentUser('id') userId: string) {
+    return this.driverMobile.listDriverDocuments(userId);
+  }
+
+  @Post('documents')
+  @UseInterceptors(HANDOVER_PHOTO_UPLOAD_INTERCEPTOR)
+  uploadDriverDocument(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UploadDriverDocumentDto,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({
+          maxSize: MAX_FILE_SIZE_BYTES,
+        })
+        .build({
+          fileIsRequired: true,
+          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        }),
+    )
+    file: UploadedImageFile,
+  ) {
+    return this.driverMobile.uploadDriverDocument(userId, dto, file);
+  }
+
   @Post('vehicle-handovers/:id/photo')
   @UseInterceptors(HANDOVER_PHOTO_UPLOAD_INTERCEPTOR)
   uploadHandoverPhoto(
@@ -200,6 +230,26 @@ export class DriverMobileController {
     return this.driverMobile.createRequest(userId, dto);
   }
 
+  @Post('requests/:id/attachments')
+  @UseInterceptors(DRIVER_FILE_UPLOAD_INTERCEPTOR)
+  uploadLeaveRequestAttachment(
+    @CurrentUser('id') userId: string,
+    @Param('id') requestId: string,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({
+          maxSize: MAX_FILE_SIZE_BYTES,
+        })
+        .build({
+          fileIsRequired: true,
+          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        }),
+    )
+    file: UploadedImageFile,
+  ) {
+    return this.driverMobile.uploadLeaveRequestAttachment(userId, requestId, file);
+  }
+
   @Get('transport-requests')
   listTransportRequests(
     @CurrentUser('id') userId: string,
@@ -219,6 +269,26 @@ export class DriverMobileController {
     @Body() dto: CreateDriverTransportRequestDto,
   ) {
     return this.driverMobile.createTransportRequest(userId, dto);
+  }
+
+  @Post('transport-requests/:id/attachments')
+  @UseInterceptors(DRIVER_FILE_UPLOAD_INTERCEPTOR)
+  uploadTransportRequestAttachment(
+    @CurrentUser('id') userId: string,
+    @Param('id') transportRequestId: string,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({
+          maxSize: MAX_FILE_SIZE_BYTES,
+        })
+        .build({
+          fileIsRequired: true,
+          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        }),
+    )
+    file: UploadedImageFile,
+  ) {
+    return this.driverMobile.uploadTransportRequestAttachment(userId, transportRequestId, file);
   }
 
   @Get('accidents')

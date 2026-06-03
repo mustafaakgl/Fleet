@@ -1,10 +1,13 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import deCommon from './locales/de/common.json';
+import deEinsatzplan from './locales/de/einsatzplan.json';
 import deLanding from './locales/de/landing.json';
 import enCommon from './locales/en/common.json';
+import enEinsatzplan from './locales/en/einsatzplan.json';
 import enLanding from './locales/en/landing.json';
 import trCommon from './locales/tr/common.json';
+import trEinsatzplan from './locales/tr/einsatzplan.json';
 import trLanding from './locales/tr/landing.json';
 
 export const LANG_STORAGE_KEY = 'fleet_language';
@@ -37,15 +40,15 @@ if (!i18n.isInitialized) {
     .use(initReactI18next)
     .init({
       resources: {
-        de: { common: deCommon, landing: deLanding },
-        en: { common: enCommon, landing: enLanding },
-        tr: { common: trCommon, landing: trLanding },
+        de: { common: deCommon, landing: deLanding, einsatzplan: deEinsatzplan },
+        en: { common: enCommon, landing: enLanding, einsatzplan: enEinsatzplan },
+        tr: { common: trCommon, landing: trLanding, einsatzplan: trEinsatzplan },
       },
       lng: detectLanguage(),
       fallbackLng: 'de',
       supportedLngs: SUPPORTED_LANGUAGES,
       defaultNS: 'common',
-      ns: ['common', 'landing'],
+      ns: ['common', 'landing', 'einsatzplan'],
       interpolation: {
         escapeValue: false,
       },

@@ -7,20 +7,37 @@ import {
   MorningCheckinStatus,
   Prisma,
 } from '@prisma/client';
+import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMorningCheckinDto } from './dto/create-morning-checkin.dto';
 import { UpdateMorningCheckinDto } from './dto/update-morning-checkin.dto';
+import { dedupeDriverDayAssignments } from '../assignments/assignment-dedupe';
 
 type MorningCheckinWithDriver = MorningCheckin & {
   driver: { id: string; firstName: string; lastName: string };
 };
+
+function toCalendarDateString(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function dayRange(date: Date): { start: Date; end: Date } {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+}
 
 function toClient(row: MorningCheckinWithDriver) {
   return {
     id: row.id,
     driver_id: row.driverId,
     driver_name: `${row.driver.firstName} ${row.driver.lastName}`.trim(),
-    date: row.date.toISOString(),
+    date: toCalendarDateString(row.date),
     submitted_at: row.submittedAt.toISOString(),
     vehicle_plate: row.vehiclePlate ?? null,
     company_name: row.companyName ?? null,
@@ -37,7 +54,10 @@ const includeDriver = {
 
 @Injectable()
 export class MorningCheckinsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly driverNotify: DriverNotifyService,
+  ) {}
 
   async list(query: { date?: string; driver_id?: string; status?: string }) {
     const where: Prisma.MorningCheckinWhereInput = {};
@@ -109,6 +129,16 @@ export class MorningCheckinsService {
     const checkin = await this.prisma.morningCheckin.findUnique({ where: { id } });
     if (!checkin) throw new NotFoundException('Morning check-in not found');
     if (checkin.status === MorningCheckinStatus.added_to_einsatzplan) {
+      if (checkin.assignmentId) {
+        const assignment = await this.prisma.assignment.findUnique({
+          where: { id: checkin.assignmentId },
+        });
+        const row = await this.prisma.morningCheckin.findUniqueOrThrow({
+          where: { id },
+          include: includeDriver,
+        });
+        return { checkin: toClient(row), assignment, alreadyAdded: true };
+      }
       throw new BadRequestException('Check-in already added to Einsatzplan');
     }
     if (!checkin.vehiclePlate) {
@@ -125,50 +155,130 @@ export class MorningCheckinsService {
     if (!vehicle) throw new BadRequestException(`Vehicle "${checkin.vehiclePlate}" not found`);
     if (!company) throw new BadRequestException(`Company "${checkin.companyName}" not found`);
 
+    const { start, end } = dayRange(checkin.date);
+
     const result = await this.prisma.$transaction(async (tx) => {
-      const assignment = await tx.assignment.create({
-        data: {
-          driverId: checkin.driverId,
-          vehicleId: vehicle.id,
-          companyId: company.id,
-          cargoName: 'Mobile check-in',
-          cargoOwner: checkin.companyName!,
-          pickupAddress: 'TBD',
-          deliveryAddress: 'TBD',
-          workDate: checkin.date,
-          startTime: '07:00',
-          endTime: '15:00',
-          status: AssignmentStatus.planned,
-          createdById: currentUserId,
-          notes: 'Created from morning check-in',
+      const locked = await tx.morningCheckin.updateMany({
+        where: {
+          id,
+          status: {
+            notIn: [MorningCheckinStatus.added_to_einsatzplan, MorningCheckinStatus.rejected],
+          },
         },
+        data: { status: MorningCheckinStatus.added_to_einsatzplan },
+      });
+      if (locked.count === 0) {
+        const current = await tx.morningCheckin.findUniqueOrThrow({
+          where: { id },
+          include: includeDriver,
+        });
+        if (current.assignmentId) {
+          const assignment = await tx.assignment.findUniqueOrThrow({
+            where: { id: current.assignmentId },
+          });
+          return { checkin: current, assignment, created: false };
+        }
+        throw new BadRequestException('Check-in already added to Einsatzplan');
+      }
+
+      let assignment = await tx.assignment.findFirst({
+        where: {
+          driverId: checkin.driverId,
+          workDate: { gte: start, lt: end },
+          status: { not: AssignmentStatus.cancelled },
+        },
+        orderBy: { createdAt: 'asc' },
       });
 
-      await tx.calendarEvent.create({
-        data: {
+      let created = false;
+      if (assignment) {
+        assignment = await tx.assignment.update({
+          where: { id: assignment.id },
+          data: {
+            vehicleId: vehicle.id,
+            companyId: company.id,
+            cargoOwner: checkin.companyName!,
+            notes: assignment.notes ?? 'Updated from morning check-in',
+          },
+        });
+      } else {
+        created = true;
+        assignment = await tx.assignment.create({
+          data: {
+            driverId: checkin.driverId,
+            vehicleId: vehicle.id,
+            companyId: company.id,
+            cargoName: 'Mobile check-in',
+            cargoOwner: checkin.companyName!,
+            pickupAddress: 'TBD',
+            deliveryAddress: 'TBD',
+            workDate: checkin.date,
+            startTime: '07:00',
+            endTime: '15:00',
+            status: AssignmentStatus.planned,
+            createdById: currentUserId,
+            notes: 'Created from morning check-in',
+          },
+        });
+      }
+
+      const calendarExists = await tx.calendarEvent.findFirst({
+        where: {
           driverId: checkin.driverId,
           assignmentId: assignment.id,
-          date: checkin.date,
-          status: CalendarStatus.AT,
-          source: CalendarSource.assignment,
+          date: { gte: start, lt: end },
         },
+        select: { id: true },
       });
+      if (!calendarExists) {
+        await tx.calendarEvent.create({
+          data: {
+            driverId: checkin.driverId,
+            assignmentId: assignment.id,
+            date: checkin.date,
+            status: CalendarStatus.AT,
+            source: CalendarSource.assignment,
+          },
+        });
+      }
 
       const updated = await tx.morningCheckin.update({
         where: { id },
-        data: {
-          status: MorningCheckinStatus.added_to_einsatzplan,
-          assignmentId: assignment.id,
-        },
+        data: { assignmentId: assignment.id },
         include: includeDriver,
       });
 
-      return { checkin: updated, assignment };
+      return { checkin: updated, assignment, created };
     });
+
+    await dedupeDriverDayAssignments(this.prisma, {
+      driverId: checkin.driverId,
+      date: toCalendarDateString(checkin.date),
+    });
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: checkin.driverId },
+      select: { userId: true },
+    });
+    if (result.created && driver?.userId) {
+      this.driverNotify.notifyUserSafely({
+        userId: driver.userId,
+        key: 'checkin_added_to_einsatzplan',
+        params: {
+          date: toCalendarDateString(result.checkin.date),
+          company: checkin.companyName ?? '',
+        },
+        type: 'system',
+        priority: 'high',
+        relatedEntityType: 'assignment',
+        relatedEntityId: result.assignment.id,
+      });
+    }
 
     return {
       checkin: toClient(result.checkin),
       assignment: result.assignment,
+      alreadyAdded: !result.created,
     };
   }
 

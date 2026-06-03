@@ -21,6 +21,8 @@ import type {
   LocationStatusResponse,
   SubmitLocationPayload,
   SubmitLocationResponse,
+  DriverDocumentsResponse,
+  DriverDocumentItem,
 } from './types';
 
 type LoginResponse = {
@@ -129,6 +131,30 @@ export const driverApi = {
     const { data } = await apiClient.post<DriverHandover>('/driver/vehicle-handovers', payload);
     return data;
   },
+  async listDocuments() {
+    const { data } = await apiClient.get<DriverDocumentsResponse>('/driver/documents');
+    return data;
+  },
+  async uploadDocument(payload: {
+    documentType: string;
+    expiryDate?: string;
+    notes?: string;
+    file: { uri: string; name: string; type: string };
+  }) {
+    const formData = new FormData();
+    formData.append('file', payload.file as unknown as Blob);
+    formData.append('documentType', payload.documentType);
+    if (payload.expiryDate) {
+      formData.append('expiryDate', payload.expiryDate);
+    }
+    if (payload.notes) {
+      formData.append('notes', payload.notes);
+    }
+    const { data } = await apiClient.post<DriverDocumentItem>('/driver/documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
   async uploadHandoverPhoto(
     handoverId: string,
     slot: HandoverPhotoSlot,
@@ -154,6 +180,32 @@ export const driverApi = {
   },
   async listRequests(params?: { status?: string; type?: string }) {
     const { data } = await apiClient.get<DriverRequest[]>('/driver/requests', { params });
+    return data;
+  },
+  async uploadLeaveRequestAttachment(
+    requestId: string,
+    file: { uri: string; name: string; type: string },
+  ) {
+    const formData = new FormData();
+    formData.append('file', file as unknown as Blob);
+    const { data } = await apiClient.post<{ id: string; fileName: string; fileUrl: string | null }>(
+      `/driver/requests/${requestId}/attachments`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data;
+  },
+  async uploadTransportRequestAttachment(
+    transportRequestId: string,
+    file: { uri: string; name: string; type: string },
+  ) {
+    const formData = new FormData();
+    formData.append('file', file as unknown as Blob);
+    const { data } = await apiClient.post<{ id: string; fileName: string; fileUrl: string | null }>(
+      `/driver/transport-requests/${transportRequestId}/attachments`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
     return data;
   },
   async createRequest(payload: {

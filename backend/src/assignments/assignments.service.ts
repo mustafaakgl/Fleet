@@ -15,6 +15,7 @@ import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { AssignmentTransitionTarget } from './dto/transition-assignment.dto';
+import { dedupeDriverDayAssignments } from './assignment-dedupe';
 
 type DayRange = { start: Date; end: Date };
 
@@ -164,6 +165,11 @@ export class AssignmentsService {
   }
 
   async list(query: { date?: string; driver_id?: string; vehicle_id?: string; status?: string }) {
+    await dedupeDriverDayAssignments(this.prisma, {
+      date: query.date,
+      driverId: query.driver_id,
+    });
+
     const where: Prisma.AssignmentWhereInput = {};
 
     if (query.date) {

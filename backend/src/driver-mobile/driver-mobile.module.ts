@@ -6,6 +6,7 @@ import { StorageModule } from '../storage/storage.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { TrackingModule } from '../tracking/tracking.module';
+import { DocumentsModule } from '../documents/documents.module';
 import { DriverMobileController } from './driver-mobile.controller';
 import { DriverMobileService } from './driver-mobile.service';
 
@@ -14,6 +15,7 @@ import { DriverMobileService } from './driver-mobile.service';
     PrismaModule,
     StorageModule,
     AuditModule,
+    DocumentsModule,
     NotificationsModule,
     PushNotificationsModule,
     TrackingModule,

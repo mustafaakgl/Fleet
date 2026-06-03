@@ -273,6 +273,7 @@ export class DashboardService {
 
     return assignments.map((assignment: any) => ({
       id: assignment.id,
+      driverId: assignment.driverId,
       driverName: `${assignment.driver.firstName} ${assignment.driver.lastName}`,
       vehiclePlate: assignment.vehicle.plateNumber,
       companyName: assignment.company.name,

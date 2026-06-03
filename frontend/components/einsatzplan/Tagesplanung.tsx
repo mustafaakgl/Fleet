@@ -1,6 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Mail, Save } from 'lucide-react';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { MorningCheckins } from './MorningCheckins';
@@ -26,9 +28,17 @@ function currency(value: number) {
 
 export function Tagesplanung({
   initialSubTab,
+  planningDate: planningDateProp,
+  officeMode = false,
+  operationsOnly = false,
 }: {
   initialSubTab?: PlanSubTab;
+  planningDate?: string;
+  officeMode?: boolean;
+  operationsOnly?: boolean;
 }) {
+  const { t } = useTranslation('einsatzplan');
+  const searchParams = useSearchParams();
   const {
     assignments,
     drivers,
@@ -40,10 +50,21 @@ export function Tagesplanung({
     rejectTransportRequest,
   } = useFleetData();
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<PlanSubTab>(initialSubTab ?? 'daily-overview');
+  const defaultSubTab: PlanSubTab = operationsOnly
+    ? (initialSubTab && initialSubTab !== 'daily-overview' ? initialSubTab : 'morning-checkins')
+    : (initialSubTab ?? 'daily-overview');
+  const [activeSubTab, setActiveSubTab] = useState<PlanSubTab>(defaultSubTab);
   const [companyEmailAttentionCount, setCompanyEmailAttentionCount] = useState(0);
   const [selectedTransportRequestId, setSelectedTransportRequestId] = useState<string | null>(null);
-  const planningDate = getTodayDate();
+  const planningDate = planningDateProp ?? getTodayDate();
+
+  useEffect(() => {
+    const transportId = searchParams.get('transport');
+    if (transportId) {
+      setSelectedTransportRequestId(transportId);
+      setActiveSubTab('planning');
+    }
+  }, [searchParams]);
 
   const selectedTransportRequest = useMemo(
     () => transportRequests.find((request) => request.id === selectedTransportRequestId) ?? null,
@@ -79,12 +100,17 @@ export function Tagesplanung({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">Tagesplanung</h2>
-        <p className="text-sm text-slate-600">Disposition based on live availability, check-ins, and manual planning.</p>
-      </div>
+      {!operationsOnly ? (
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">
+            {officeMode ? t('planning.titleOffice') : t('planning.title')}
+          </h2>
+          <p className="text-sm text-slate-600">{t('planning.subtitle')}</p>
+        </div>
+      ) : null}
 
-      <div className="flex gap-2 border-b border-slate-200">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200">
+        {!operationsOnly ? (
         <button
           type="button"
           onClick={() => setActiveSubTab('daily-overview')}
@@ -94,8 +120,10 @@ export function Tagesplanung({
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
-          Tagesuebersicht
+          {t('subtab.dailyOverview')}
         </button>
+        ) : null}
+        {!operationsOnly ? (
         <button
           type="button"
           onClick={() => setActiveSubTab('planning')}
@@ -105,8 +133,21 @@ export function Tagesplanung({
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
-          Tagesplanung
+          {t('subtab.planning')}
         </button>
+        ) : (
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('planning')}
+          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
+            activeSubTab === 'planning'
+              ? 'border-blue-700 bg-blue-700 text-white'
+              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          {t('subtab.transportRequests')}
+        </button>
+        )}
         <button
           type="button"
           onClick={() => setActiveSubTab('morning-checkins')}
@@ -116,7 +157,7 @@ export function Tagesplanung({
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
-          Morning Check-ins
+          {t('subtab.morningCheckins')}
         </button>
         <button
           type="button"
@@ -127,7 +168,7 @@ export function Tagesplanung({
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
-          Vehicle Handovers
+          {t('subtab.vehicleHandovers')}
         </button>
         <button
           type="button"
@@ -139,7 +180,7 @@ export function Tagesplanung({
           }`}
         >
           <span className="inline-flex items-center gap-2">
-            Company Emails
+            {t('subtab.companyEmails')}
             {companyEmailAttentionCount > 0 && (
               <span
                 className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold ${
@@ -158,7 +199,7 @@ export function Tagesplanung({
       </section>
 
       <section className={activeSubTab === 'daily-overview' ? 'block' : 'hidden'}>
-        <TagesuebersichtTab />
+        <TagesuebersichtTab planningDate={planningDate} />
       </section>
 
       <section className={activeSubTab === 'planning' ? 'block' : 'hidden'}>

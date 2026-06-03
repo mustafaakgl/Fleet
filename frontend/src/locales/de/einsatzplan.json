@@ -1,0 +1,22 @@
+{
+  "planning.title": "Tagesplanung",
+  "planning.titleOffice": "Disposition",
+  "planning.subtitle": "Verfügbarkeit, Check-ins und manuelle Planung in einem Ablauf.",
+  "subtab.dailyOverview": "Tagesübersicht",
+  "subtab.planning": "Tagesplanung",
+  "subtab.transportRequests": "Transportanfragen",
+  "subtab.morningCheckins": "Morgen-Check-ins",
+  "subtab.vehicleHandovers": "Fahrzeugübergaben",
+  "subtab.companyEmails": "Firmen-E-Mails",
+  "office.tab.today": "Today",
+  "office.tab.tomorrow": "Tomorrow",
+  "office.tab.operations": "Operations",
+  "office.loading": "Planungsdaten werden geladen…",
+  "office.partialLoad": "Einige Bereiche konnten nicht geladen werden: {{sections}}",
+  "office.prevDay": "Vorheriger Tag",
+  "office.nextDay": "Nächster Tag",
+  "office.backToToday": "Heute",
+  "office.tomorrowTitle": "Morgen im Einsatzplan",
+  "office.tomorrowHint": "Nach Firma gruppiert — gleiche Firma steht zusammen.",
+  "office.tomorrowEmpty": "Für morgen sind noch keine Einsätze geplant."
+}

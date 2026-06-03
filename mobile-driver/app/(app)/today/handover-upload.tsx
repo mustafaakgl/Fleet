@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { ScreenLayout } from '@/components/ScreenLayout';
 import { driverApi } from '@/api/endpoints';
@@ -13,19 +14,24 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
 import { colors, radius, spacing, typography } from '@/theme';
-
-const HANDOVER_SLOTS: HandoverPhotoSlot[] = ['front', 'right', 'left', 'rear'];
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { localTodayDate } from '@/lib/calendar-date';
+import { resolveHandoverSlots } from '@/lib/handover-photos';
+import {
+  ensureScannerCameraPermission,
+  isDocumentScannerNativeAvailable,
+  scanDocumentImage,
+} from '@/lib/document-scanner';
 
 function slotLabel(t: (key: string) => string, slot: HandoverPhotoSlot): string {
   if (slot === 'front') return t('handover.slotFront');
   if (slot === 'right') return t('handover.slotRight');
   if (slot === 'left') return t('handover.slotLeft');
-  return t('handover.slotRear');
+  if (slot === 'rear') return t('handover.slotRear');
+  if (slot === 'tail_lift') return t('handover.slotTailLift');
+  return t('handover.slotInterior');
 }
+
+type PickedImage = { uri: string; name: string; type: string };
 
 export default function VehicleHandoverUploadScreen() {
   const { t } = useTranslation();
@@ -41,26 +47,55 @@ export default function VehicleHandoverUploadScreen() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['driver-handover', vehicleId, assignmentId, todayIsoDate()],
+    queryKey: ['driver-handover', vehicleId, assignmentId, localTodayDate()],
     enabled: Boolean(vehicleId),
     queryFn: async () => {
-      const list = await driverApi.listHandovers({ date: todayIsoDate() });
+      const list = await driverApi.listHandovers({ date: localTodayDate() });
       const existing = list.find(
         (row) => row.vehicleId === vehicleId && row.assignmentId === (assignmentId || null),
       );
       if (existing) {
         return driverApi.getHandover(existing.id);
       }
-      return driverApi.createHandover({
-        vehicleId,
-        assignmentId: assignmentId || undefined,
-        handoverType: 'pickup',
-      });
+      try {
+        return await driverApi.createHandover({
+          vehicleId,
+          assignmentId: assignmentId || undefined,
+          handoverType: 'pickup',
+        });
+      } catch (createError) {
+        if (
+          assignmentId &&
+          axios.isAxiosError(createError) &&
+          createError.response?.status === 404
+        ) {
+          return driverApi.createHandover({
+            vehicleId,
+            handoverType: 'pickup',
+          });
+        }
+        throw createError;
+      }
     },
   });
 
+  const requiredSlots = useMemo(
+    () => resolveHandoverSlots(handover?.requiredPhotoSlots),
+    [handover?.requiredPhotoSlots],
+  );
+
   const uploadMutation = useMutation({
-    mutationFn: async ({ slot, uri, name, type }: { slot: HandoverPhotoSlot; uri: string; name: string; type: string }) => {
+    mutationFn: async ({
+      slot,
+      uri,
+      name,
+      type,
+    }: {
+      slot: HandoverPhotoSlot;
+      uri: string;
+      name: string;
+      type: string;
+    }) => {
       if (!handover?.id) {
         throw new Error('Handover not ready');
       }
@@ -83,10 +118,20 @@ export default function VehicleHandoverUploadScreen() {
     if (!handover?.photoRequired) {
       return 0;
     }
-    return HANDOVER_SLOTS.filter((slot) => handover.photos?.[slot]).length;
-  }, [handover]);
+    return requiredSlots.filter((slot) => handover.photos?.[slot]).length;
+  }, [handover, requiredSlots]);
 
-  const pickAndUpload = async (slot: HandoverPhotoSlot) => {
+  const uploadAsset = (slot: HandoverPhotoSlot, asset: PickedImage) => {
+    setUploadingSlot(slot);
+    uploadMutation.mutate({
+      slot,
+      uri: asset.uri,
+      name: asset.name,
+      type: asset.type,
+    });
+  };
+
+  const pickFromGallery = async (slot: HandoverPhotoSlot) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       showError(t('handover.permissionRequired'));
@@ -102,13 +147,71 @@ export default function VehicleHandoverUploadScreen() {
     }
 
     const asset = result.assets[0];
-    setUploadingSlot(slot);
-    uploadMutation.mutate({
-      slot,
+    uploadAsset(slot, {
       uri: asset.uri,
       name: asset.fileName ?? `handover-${slot}-${Date.now()}.jpg`,
       type: asset.mimeType ?? 'image/jpeg',
     });
+  };
+
+  const pickFromCamera = async (slot: HandoverPhotoSlot) => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      showError(t('handover.cameraPermissionRequired'));
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    uploadAsset(slot, {
+      uri: asset.uri,
+      name: asset.fileName ?? `handover-${slot}-${Date.now()}.jpg`,
+      type: asset.mimeType ?? 'image/jpeg',
+    });
+  };
+
+  const pickFromScanner = async (slot: HandoverPhotoSlot) => {
+    if (!isDocumentScannerNativeAvailable()) {
+      showError(t('handover.scanUnavailable'));
+      return;
+    }
+    const permitted = await ensureScannerCameraPermission();
+    if (!permitted) {
+      showError(t('handover.cameraPermissionRequired'));
+      return;
+    }
+
+    const result = await scanDocumentImage({ maxNumDocuments: 1, quality: 90 });
+    if (!result.ok) {
+      if (result.reason === 'cancelled') {
+        return;
+      }
+      showError(result.message ?? t('handover.scanFailed'));
+      return;
+    }
+
+    uploadAsset(slot, {
+      uri: result.uri,
+      name: `handover-${slot}-${result.fileName}`,
+      type: result.mimeType,
+    });
+  };
+
+  const pickAndUpload = (slot: HandoverPhotoSlot) => {
+    const actions: Array<{ text: string; onPress?: () => void; style?: 'cancel' }> = [
+      { text: t('handover.scanDocument'), onPress: () => void pickFromScanner(slot) },
+      { text: t('handover.takePhoto'), onPress: () => void pickFromCamera(slot) },
+      { text: t('handover.chooseGallery'), onPress: () => void pickFromGallery(slot) },
+      { text: t('common.cancel'), style: 'cancel' },
+    ];
+    Alert.alert(t('handover.pickSourceTitle'), slotLabel(t, slot), actions);
   };
 
   if (!vehicleId) {
@@ -141,13 +244,14 @@ export default function VehicleHandoverUploadScreen() {
 
           {handover.photoRequired ? (
             <>
+              <Text style={styles.scanHint}>{t('handover.scanHint')}</Text>
               <Text style={styles.progress}>
                 {handover.photosComplete
                   ? t('handover.allComplete')
-                  : t('handover.progress', { done: uploadedCount, total: HANDOVER_SLOTS.length })}
+                  : t('handover.progress', { done: uploadedCount, total: requiredSlots.length })}
               </Text>
               <View style={styles.grid}>
-                {HANDOVER_SLOTS.map((slot) => {
+                {requiredSlots.map((slot) => {
                   const photo = handover.photos?.[slot];
                   const isUploading = uploadingSlot === slot && uploadMutation.isPending;
 
@@ -163,9 +267,7 @@ export default function VehicleHandoverUploadScreen() {
                       )}
                       <Pressable
                         style={[styles.slotButton, isUploading && styles.slotButtonDisabled]}
-                        onPress={() => {
-                          void pickAndUpload(slot);
-                        }}
+                        onPress={() => pickAndUpload(slot)}
                         disabled={isUploading}
                       >
                         <Text style={styles.slotButtonText}>
@@ -201,41 +303,40 @@ const styles = StyleSheet.create({
   plate: {
     ...typography.h3,
   },
-  progress: {
+  scanHint: {
+    fontSize: 12,
+    lineHeight: 18,
     color: colors.subtext,
-    fontSize: 14,
   },
-  doneHint: {
+  progress: {
+    ...typography.caption,
+    textTransform: 'none',
     color: colors.subtext,
-    fontSize: 14,
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.md,
   },
   slotCard: {
-    width: '47%',
-    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
+    backgroundColor: colors.card,
   },
   slotTitle: {
-    ...typography.bodyMedium,
-    fontWeight: '600',
+    ...typography.h3,
+    fontSize: 15,
   },
   preview: {
     width: '100%',
-    height: 100,
+    height: 160,
     borderRadius: radius.md,
     backgroundColor: colors.background,
   },
   previewPlaceholder: {
     width: '100%',
-    height: 100,
+    height: 160,
     borderRadius: radius.md,
     backgroundColor: colors.background,
     alignItems: 'center',
@@ -244,7 +345,7 @@ const styles = StyleSheet.create({
   slotButton: {
     backgroundColor: colors.accent,
     borderRadius: radius.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   slotButtonDisabled: {
@@ -253,7 +354,10 @@ const styles = StyleSheet.create({
   slotButtonText: {
     color: colors.white,
     fontWeight: '600',
-    fontSize: 13,
-    textAlign: 'center',
+    fontSize: 14,
+  },
+  doneHint: {
+    color: colors.subtext,
+    fontSize: 14,
   },
 });

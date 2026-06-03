@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { getTodayDate, type FleetAssignment, useFleetData } from '@/context/FleetDataContext';
 import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
@@ -29,24 +29,12 @@ interface TagesuebersichtExportAssignment {
   notes: string;
 }
 
-const STATUS_BLOCKS: Record<'urlaub' | 'kuendigung' | 'krank', StatusBlockItem[]> = {
-  urlaub: [
-    { name: 'Sita', until: '29.05' },
-    { name: 'Gregor', until: '15.05' },
-    { name: 'Saidou', until: '15.05' },
-    { name: 'Kosching', until: '18.05' },
-  ],
-  kuendigung: [
-    { name: 'Mario', until: '01.06' },
-    { name: 'Peter', until: '20.05' },
-  ],
-  krank: [
-    { name: 'Babis', until: '22.05' },
-    { name: 'Mateusz', until: '31.05' },
-    { name: 'Ivona', until: '06.06' },
-    { name: 'Gundrum', until: '15.05' },
-  ],
-};
+function formatShortDate(value: string) {
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}`;
+}
 
 function toDate(value: string) {
   return new Date(`${value}T00:00:00`);
@@ -113,10 +101,43 @@ export async function exportCurrentTagesuebersichtToExcel({
   XLSX.writeFile(workbook, `tagesuebersicht_${selectedDate}.xlsx`);
 }
 
-export function TagesuebersichtTab() {
-  const { assignments, drivers, getDriverAvailability, updateAssignment } = useFleetData();
+export function TagesuebersichtTab({ planningDate }: { planningDate?: string }) {
+  const { assignments, drivers, requests, getDriverAvailability, updateAssignment } = useFleetData();
 
-  const [selectedDate, setSelectedDate] = useState(getTodayDate());
+  const [selectedDate, setSelectedDate] = useState(planningDate ?? getTodayDate());
+
+  useEffect(() => {
+    if (planningDate) setSelectedDate(planningDate);
+  }, [planningDate]);
+
+  const absenceBlocks = useMemo<TagesuebersichtAbsences>(() => {
+    const urlaub: StatusBlockItem[] = [];
+    const krank: StatusBlockItem[] = [];
+
+    for (const driver of drivers) {
+      const availability = getDriverAvailability(driver.id, selectedDate);
+      if (availability !== 'Urlaub' && availability !== 'Krank') continue;
+
+      const matchingRequest = requests.find(
+        (request) =>
+          request.driverId === driver.id
+          && request.dateFrom
+          && request.dateTo
+          && request.dateFrom <= selectedDate
+          && request.dateTo >= selectedDate,
+      );
+      const until = matchingRequest?.dateTo
+        ? formatShortDate(matchingRequest.dateTo)
+        : formatShortDate(selectedDate);
+      const shortName = driver.name.split(' ')[0] ?? driver.name;
+      const item = { name: shortName, until };
+
+      if (availability === 'Urlaub') urlaub.push(item);
+      else krank.push(item);
+    }
+
+    return { urlaub, kuendigung: [], krank };
+  }, [drivers, getDriverAvailability, requests, selectedDate]);
   const [driverSearch, setDriverSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
@@ -305,11 +326,7 @@ export function TagesuebersichtTab() {
               try {
                 await exportCurrentTagesuebersichtToExcel({
                   selectedDate,
-                  absences: {
-                    urlaub: STATUS_BLOCKS.urlaub,
-                    kuendigung: STATUS_BLOCKS.kuendigung,
-                    krank: STATUS_BLOCKS.krank,
-                  },
+                  absences: absenceBlocks,
                   assignments: exportAssignments,
                 });
                 showToast('Tagesübersicht exported.');
@@ -327,9 +344,9 @@ export function TagesuebersichtTab() {
       </div>
 
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
-        <StatusBlock title="Urlaub" rows={STATUS_BLOCKS.urlaub} className="border-emerald-300" titleClassName="text-emerald-700" />
-        <StatusBlock title="Kuendigung" rows={STATUS_BLOCKS.kuendigung} className="border-amber-300" titleClassName="text-amber-700" />
-        <StatusBlock title="Krank" rows={STATUS_BLOCKS.krank} className="border-rose-300" titleClassName="text-rose-700" />
+        <StatusBlock title="Urlaub" rows={absenceBlocks.urlaub} className="border-emerald-300" titleClassName="text-emerald-700" />
+        <StatusBlock title="Kuendigung" rows={absenceBlocks.kuendigung} className="border-amber-300" titleClassName="text-amber-700" />
+        <StatusBlock title="Krank" rows={absenceBlocks.krank} className="border-rose-300" titleClassName="text-rose-700" />
       </div>
 
       <div className="max-h-[58vh] overflow-auto rounded-md border border-slate-300 bg-white p-2">

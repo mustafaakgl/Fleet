@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { ScreenLayout } from '@/components/ScreenLayout';
 import { driverApi, messengerApi } from '@/api/endpoints';
@@ -10,6 +11,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { AssignmentCard } from '@/components/AssignmentCard';
 import { ActionButton } from '@/components/ActionButton';
 import { PendingTaskCard } from '@/components/PendingTaskCard';
+import { DayStatusBanner } from '@/components/DayStatusBanner';
 import { LocationTrackingCard } from '@/components/LocationTrackingCard';
 import { ListRow } from '@/components/ListRow';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -17,6 +19,7 @@ import { formatAppDate } from '@/i18n/format';
 import { useTranslation } from '@/i18n/useTranslation';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
+import { localTodayDate } from '@/lib/calendar-date';
 
 export default function HomeTodayScreen() {
   const { t, locale } = useTranslation();
@@ -27,9 +30,16 @@ export default function HomeTodayScreen() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['today-assignments'],
-    queryFn: () => driverApi.todayAssignments(),
+    queryKey: ['today-assignments', localTodayDate()],
+    queryFn: () => driverApi.todayAssignments(localTodayDate()),
+    staleTime: 0,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
   const { data: me } = useQuery({
     queryKey: ['driver-me'],
     queryFn: () => driverApi.me(),
@@ -82,6 +92,11 @@ export default function HomeTodayScreen() {
         ) : null}
       </View>
 
+      <DayStatusBanner />
+
+      <SectionHeader title={t('home.locationSection')} />
+      <LocationTrackingCard />
+
       <View style={styles.summaryRow}>
         <SummaryChip
           icon="briefcase"
@@ -96,8 +111,6 @@ export default function HomeTodayScreen() {
           onPress={() => router.push('/(app)/notifications')}
         />
       </View>
-
-      <LocationTrackingCard manageWatcher compact />
 
       {isLoading ? (
         <>

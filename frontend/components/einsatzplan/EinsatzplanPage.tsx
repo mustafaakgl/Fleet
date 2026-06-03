@@ -13,7 +13,9 @@ import {
   X,
   Plus,
 } from 'lucide-react';
+import { getUser } from '@/lib/auth';
 import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
+import { EinsatzplanOfficeView } from './EinsatzplanOfficeView';
 import { Benutzerverwaltung } from './Benutzerverwaltung';
 import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
 import { groupAssignmentsByCompany } from './companyBoard';
@@ -76,6 +78,14 @@ function badgeClasses(status: DocStatus) {
 }
 
 export function EinsatzplanPage() {
+  const user = getUser();
+  if (user?.role === 'office') {
+    return <EinsatzplanOfficeView />;
+  }
+  return <EinsatzplanFullView />;
+}
+
+function EinsatzplanFullView() {
   const { t } = useTranslation();
   const { assignments, drivers } = useFleetData();
   const searchParams = useSearchParams();

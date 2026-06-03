@@ -1,7 +1,15 @@
 import { AssignmentStatus } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 
-export const HANDOVER_PHOTO_SLOTS = ['front', 'right', 'left', 'rear'] as const;
+/** Required when the driver’s vehicle changed since yesterday (exterior + tail lift + interior). */
+export const HANDOVER_PHOTO_SLOTS = [
+  'front',
+  'right',
+  'left',
+  'rear',
+  'tail_lift',
+  'interior',
+] as const;
 
 export type HandoverPhotoSlot = (typeof HANDOVER_PHOTO_SLOTS)[number];
 

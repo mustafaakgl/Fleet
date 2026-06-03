@@ -11,6 +11,7 @@ type DocumentOwnerType =
   | 'vehicle'
   | 'company'
   | 'request'
+  | 'transport_request'
   | 'accident'
   | 'cargo_damage'
   | 'vehicle_handover'
@@ -24,6 +25,7 @@ const DOCUMENT_OWNER_TYPES: DocumentOwnerType[] = [
   'vehicle',
   'company',
   'request',
+  'transport_request',
   'accident',
   'cargo_damage',
   'vehicle_handover',

@@ -1,6 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { einsatzplanHref } from '@/lib/office-deep-links';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import type { LiveTrackingItem } from '@/lib/types';
@@ -26,11 +29,11 @@ interface LiveTrackingSidebarProps {
   lastFetchedAt: Date | null;
 }
 
-const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'online', label: 'Online' },
-  { value: 'stale', label: 'Stale' },
-  { value: 'offline', label: 'Offline' },
+const STATUS_FILTER_KEYS: Array<{ value: StatusFilter; labelKey: string }> = [
+  { value: 'all', labelKey: 'liveTracking.filter.all' },
+  { value: 'online', labelKey: 'liveTracking.filter.online' },
+  { value: 'stale', labelKey: 'liveTracking.filter.stale' },
+  { value: 'offline', labelKey: 'liveTracking.filter.offline' },
 ];
 
 export function LiveTrackingSidebar({
@@ -45,6 +48,7 @@ export function LiveTrackingSidebar({
   onSelect,
   lastFetchedAt,
 }: LiveTrackingSidebarProps) {
+  const { t } = useTranslation();
   const selectedItem = items.find((item) => item.driverId === selectedDriverId) ?? null;
 
   return (
@@ -55,13 +59,13 @@ export function LiveTrackingSidebar({
           <Input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search driver, plate, company..."
+            placeholder={t('liveTracking.searchPlaceholder')}
             className="pl-9"
           />
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {STATUS_FILTERS.map((filter) => (
+          {STATUS_FILTER_KEYS.map((filter) => (
             <button
               key={filter.value}
               type="button"
@@ -73,7 +77,7 @@ export function LiveTrackingSidebar({
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
               )}
             >
-              {filter.label}
+              {t(filter.labelKey)}
             </button>
           ))}
         </div>
@@ -85,11 +89,11 @@ export function LiveTrackingSidebar({
             onChange={(event) => onIncludeOfflineChange(event.target.checked)}
             className="rounded border-slate-300"
           />
-          Include offline drivers
+          {t('liveTracking.includeOffline')}
         </label>
 
         <p className="text-xs text-slate-500">
-          Last update:{' '}
+          {t('liveTracking.lastUpdate')}:{' '}
           {lastFetchedAt
             ? new Intl.DateTimeFormat(undefined, { timeStyle: 'medium' }).format(lastFetchedAt)
             : '—'}
@@ -99,7 +103,7 @@ export function LiveTrackingSidebar({
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {items.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
-            No vehicles match the current filters.
+            {t('liveTracking.noMatches')}
           </div>
         ) : (
           items.map((item) => (
@@ -116,7 +120,9 @@ export function LiveTrackingSidebar({
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-semibold text-slate-900">{item.plateNumber ?? 'No vehicle'}</p>
+                  <p className="font-semibold text-slate-900">
+                    {item.plateNumber ?? t('liveTracking.noVehicle')}
+                  </p>
                   <p className="text-sm text-slate-600">{item.driverName}</p>
                   {item.companyName ? (
                     <p className="mt-1 text-xs text-slate-500">{item.companyName}</p>
@@ -126,9 +132,18 @@ export function LiveTrackingSidebar({
                   {item.status}
                 </Badge>
               </div>
-              <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                 <span>{formatSpeed(item.speedKmh)}</span>
                 <span>{formatTrackingTimestamp(item.receivedAt)}</span>
+                {item.assignmentId ? (
+                  <Link
+                    href={einsatzplanHref({ panel: 'tagesplanung', view: 'daily-overview' })}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-medium text-blue-700 hover:underline"
+                  >
+                    {t('liveTracking.openAssignment')}
+                  </Link>
+                ) : null}
               </div>
             </button>
           ))

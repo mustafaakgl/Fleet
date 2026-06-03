@@ -54,7 +54,9 @@ cd mobile-driver
 npm run android
 ```
 
-### Physical Phone (Expo Go)
+### Physical Phone
+
+**Expo Go** (quick UI testing, no native modules):
 
 ```bash
 cd mobile-driver
@@ -63,6 +65,17 @@ npm run start
 
 - Scan the QR code with Expo Go.
 - Keep your phone and dev machine on the same Wi-Fi network.
+- **Document scan** (handover “Belge tara”) and some GPS features require a **development build**, not Expo Go.
+
+**Development build** (VisionKit / ML Kit scan, full native stack):
+
+```bash
+cd mobile-driver
+npx expo prebuild
+npm run ios    # or: npm run android
+```
+
+Install the built app on your device (same Wi-Fi; set API URL in app settings if needed).
 
 ## QA Credentials
 

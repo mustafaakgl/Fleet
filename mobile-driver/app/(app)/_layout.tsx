@@ -1,6 +1,8 @@
 import { Redirect, Tabs } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import { Fragment } from 'react';
+import { LocationSessionHost } from '@/components/LocationSessionHost';
 import { authStore } from '@/features/auth/store';
 import { messengerApi } from '@/api/endpoints';
 import { useTranslation } from '@/i18n/useTranslation';
@@ -34,6 +36,8 @@ export default function AppLayout() {
   const messageBadge = unread?.total ? unread.total : undefined;
 
   return (
+    <Fragment>
+      <LocationSessionHost />
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.card },
@@ -84,6 +88,8 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="documents" options={{ href: null }} />
     </Tabs>
+    </Fragment>
   );
 }

@@ -32,6 +32,19 @@ import {
   missingHandoverPhotoSlots,
   parseHandoverPhotoSlot,
 } from '../vehicle-handovers/handover-photo.util';
+import { dedupeDriverDayAssignments } from '../assignments/assignment-dedupe';
+import { MAX_REQUEST_ATTACHMENTS } from './driver-upload.config';
+import {
+  loadRequestAttachmentsByOwner,
+  requestAttachmentDocumentType,
+} from './request-attachments.util';
+import { DocumentsService } from '../documents/documents.service';
+import { UploadDriverDocumentDto } from './dto/upload-driver-document.dto';
+import {
+  DRIVER_REQUIRED_DOCUMENT_TYPES,
+  DRIVER_UPLOAD_DOCUMENT_TYPES,
+  isDriverUploadDocumentType,
+} from './driver-document-types';
 
 const assignmentInclude = {
   driver: { select: { id: true, firstName: true, lastName: true } },
@@ -68,6 +81,7 @@ export class DriverMobileService {
     private readonly pushNotifications: PushNotificationsService,
     private readonly operationalNotify: OperationalNotifyService,
     private readonly tracking: TrackingService,
+    private readonly documentsService: DocumentsService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -96,6 +110,13 @@ export class DriverMobileService {
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
     return { start, end };
+  }
+
+  private localCalendarDateString(base = new Date()): string {
+    const year = base.getFullYear();
+    const month = String(base.getMonth() + 1).padStart(2, '0');
+    const day = String(base.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   private ensureDateTime(value: string): Date {
@@ -273,13 +294,19 @@ export class DriverMobileService {
 
   async listTodayAssignments(userId: string, date?: string) {
     const { driver } = await this.resolveDriver(userId);
-    const baseDate = date ?? new Date().toISOString();
+    const baseDate = date ?? this.localCalendarDateString();
     const { start, end } = this.dayRange(baseDate);
+
+    await dedupeDriverDayAssignments(this.prisma, {
+      driverId: driver.id,
+      date: baseDate,
+    });
 
     const rows = await this.prisma.assignment.findMany({
       where: {
         driverId: driver.id,
         workDate: { gte: start, lt: end },
+        status: { not: AssignmentStatus.cancelled },
       },
       include: assignmentInclude,
       orderBy: [{ workDate: 'asc' }, { startTime: 'asc' }],
@@ -653,11 +680,26 @@ export class DriverMobileService {
       where.type = type as RequestType;
     }
 
-    return this.prisma.request.findMany({
+    const rows = await this.prisma.request.findMany({
       where,
       include: requestInclude,
       orderBy: { createdAt: 'desc' },
     });
+
+    const attachmentMap = await loadRequestAttachmentsByOwner(
+      this.prisma,
+      'request',
+      rows.map((row) => row.id),
+    );
+
+    return rows.map((row) => ({
+      ...row,
+      startDate: row.startDate.toISOString(),
+      endDate: row.endDate.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      attachments: attachmentMap.get(row.id) ?? [],
+    }));
   }
 
   async createRequest(userId: string, dto: CreateDriverRequestDto) {
@@ -705,7 +747,74 @@ export class DriverMobileService {
       excludeUserId: userId,
     });
 
-    return created;
+    return {
+      ...created,
+      startDate: created.startDate.toISOString(),
+      endDate: created.endDate.toISOString(),
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString(),
+      attachments: [],
+    };
+  }
+
+  async uploadLeaveRequestAttachment(
+    userId: string,
+    requestId: string,
+    file: { originalname: string; filename: string },
+  ) {
+    const { user, driver } = await this.resolveDriver(userId);
+    const request = await this.prisma.request.findUnique({
+      where: { id: requestId },
+      select: { id: true, driverId: true, type: true },
+    });
+    if (!request) {
+      throw new NotFoundException('Request not found');
+    }
+    if (request.driverId !== driver.id) {
+      throw new ForbiddenException('You can only upload files for your own requests');
+    }
+
+    const existingCount = await this.prisma.document.count({
+      where: {
+        ownerType: 'request',
+        ownerId: requestId,
+        status: { not: 'archived' },
+      },
+    });
+    if (existingCount >= MAX_REQUEST_ATTACHMENTS) {
+      throw new BadRequestException(`Maximum ${MAX_REQUEST_ATTACHMENTS} attachments per request`);
+    }
+
+    const document = await this.documentsService.createUploadedDocument(
+      {
+        ownerType: 'request',
+        ownerId: requestId,
+        documentType: requestAttachmentDocumentType(existingCount),
+        notes: `Attachment for ${request.type} request`,
+      },
+      {
+        originalName: file.originalname,
+        storedFileName: file.filename,
+        fileUrl: this.storage.buildPublicUrl('documents', file.filename),
+      },
+      user.id,
+    );
+
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.request_attachment_uploaded',
+      entityType: 'request',
+      entityId: requestId,
+      summary: 'Driver uploaded leave request attachment',
+      metadata: { documentId: document.id, fileName: document.fileName },
+    });
+
+    return {
+      id: document.id,
+      fileName: document.fileName,
+      fileUrl: document.fileUrl,
+      attachmentCount: existingCount + 1,
+    };
   }
 
   async listTransportRequests(userId: string, status?: string) {
@@ -723,6 +832,12 @@ export class DriverMobileService {
       },
       orderBy: [{ requestedDate: 'desc' }, { createdAt: 'desc' }],
     });
+
+    const attachmentMap = await loadRequestAttachmentsByOwner(
+      this.prisma,
+      'transport_request',
+      rows.map((row) => row.id),
+    );
 
     return rows.map((row) => ({
       id: row.id,
@@ -742,13 +857,13 @@ export class DriverMobileService {
       conflictReason: row.conflictReason,
       assignmentId: row.assignmentId,
       createdAt: row.createdAt.toISOString(),
+      attachments: attachmentMap.get(row.id) ?? [],
     }));
   }
 
   async getTransportFormOptions(userId: string) {
     const { driver } = await this.resolveDriver(userId);
-    const baseDate = new Date().toISOString();
-    const { start, end } = this.dayRange(baseDate);
+    const { start, end } = this.dayRange(this.localCalendarDateString());
 
     const assignments = await this.prisma.assignment.findMany({
       where: {
@@ -852,7 +967,86 @@ export class DriverMobileService {
       excludeUserId: userId,
     });
 
-    return created;
+    return {
+      id: created.id,
+      driverId: created.driverId,
+      vehicleId: created.vehicleId,
+      companyId: created.companyId,
+      vehicle: created.vehicle,
+      company: created.company,
+      cargoName: created.cargoName,
+      cargoOwner: created.cargoOwner,
+      pickupAddress: created.pickupAddress,
+      deliveryAddress: created.deliveryAddress,
+      requestedDate: created.requestedDate.toISOString().slice(0, 10),
+      startTime: created.startTime,
+      endTime: created.endTime,
+      status: created.status,
+      conflictReason: created.conflictReason,
+      assignmentId: created.assignmentId,
+      createdAt: created.createdAt.toISOString(),
+      attachments: [],
+    };
+  }
+
+  async uploadTransportRequestAttachment(
+    userId: string,
+    transportRequestId: string,
+    file: { originalname: string; filename: string },
+  ) {
+    const { user, driver } = await this.resolveDriver(userId);
+    const transportRequest = await this.prisma.transportRequest.findUnique({
+      where: { id: transportRequestId },
+      select: { id: true, driverId: true },
+    });
+    if (!transportRequest) {
+      throw new NotFoundException('Transport request not found');
+    }
+    if (transportRequest.driverId !== driver.id) {
+      throw new ForbiddenException('You can only upload files for your own transport requests');
+    }
+
+    const existingCount = await this.prisma.document.count({
+      where: {
+        ownerType: 'transport_request',
+        ownerId: transportRequestId,
+        status: { not: 'archived' },
+      },
+    });
+    if (existingCount >= MAX_REQUEST_ATTACHMENTS) {
+      throw new BadRequestException(`Maximum ${MAX_REQUEST_ATTACHMENTS} attachments per request`);
+    }
+
+    const document = await this.documentsService.createUploadedDocument(
+      {
+        ownerType: 'transport_request',
+        ownerId: transportRequestId,
+        documentType: requestAttachmentDocumentType(existingCount),
+        notes: 'Attachment for transport request',
+      },
+      {
+        originalName: file.originalname,
+        storedFileName: file.filename,
+        fileUrl: this.storage.buildPublicUrl('documents', file.filename),
+      },
+      user.id,
+    );
+
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.transport_request_attachment_uploaded',
+      entityType: 'transport_request',
+      entityId: transportRequestId,
+      summary: 'Driver uploaded transport request attachment',
+      metadata: { documentId: document.id, fileName: document.fileName },
+    });
+
+    return {
+      id: document.id,
+      fileName: document.fileName,
+      fileUrl: document.fileUrl,
+      attachmentCount: existingCount + 1,
+    };
   }
 
   async listAccidents(userId: string, type?: string, status?: string) {
@@ -990,5 +1184,106 @@ export class DriverMobileService {
         status: NotificationStatus.read,
       },
     });
+  }
+
+  private mapDriverDocument(row: {
+    id: string;
+    documentType: string;
+    fileName: string;
+    fileUrl: string | null;
+    status: string;
+    expiryDate: Date | null;
+    notes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: row.id,
+      documentType: row.documentType,
+      fileName: row.fileName,
+      fileUrl: row.fileUrl,
+      status: row.status,
+      expiryDate: row.expiryDate?.toISOString() ?? null,
+      notes: row.notes,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  async listDriverDocuments(userId: string) {
+    const { driver } = await this.resolveDriver(userId);
+    const rows = await this.prisma.document.findMany({
+      where: {
+        ownerType: 'driver',
+        ownerId: driver.id,
+        status: { not: 'archived' },
+      },
+      orderBy: [{ documentType: 'asc' }, { updatedAt: 'desc' }],
+    });
+
+    const items = rows.map((row) => this.mapDriverDocument(row));
+    const presentTypes = new Set(items.map((item) => item.documentType));
+    const missingRequired = DRIVER_REQUIRED_DOCUMENT_TYPES.filter(
+      (documentType) => !presentTypes.has(documentType),
+    );
+
+    return {
+      uploadTypes: [...DRIVER_UPLOAD_DOCUMENT_TYPES],
+      requiredTypes: [...DRIVER_REQUIRED_DOCUMENT_TYPES],
+      missingRequired,
+      items,
+    };
+  }
+
+  async uploadDriverDocument(
+    userId: string,
+    dto: UploadDriverDocumentDto,
+    file: { originalname: string; filename: string },
+  ) {
+    const { user, driver } = await this.resolveDriver(userId);
+    if (!isDriverUploadDocumentType(dto.documentType)) {
+      throw new BadRequestException(
+        `Invalid document type. Allowed: ${DRIVER_UPLOAD_DOCUMENT_TYPES.join(', ')}`,
+      );
+    }
+
+    await this.prisma.document.deleteMany({
+      where: {
+        ownerType: 'driver',
+        ownerId: driver.id,
+        documentType: dto.documentType,
+        status: { not: 'archived' },
+      },
+    });
+
+    const created = await this.documentsService.createUploadedDocument(
+      {
+        ownerType: 'driver',
+        ownerId: driver.id,
+        documentType: dto.documentType,
+        expiryDate: dto.expiryDate,
+        notes: dto.notes,
+      },
+      {
+        originalName: file.originalname,
+        storedFileName: file.filename,
+        fileUrl: this.storage.buildPublicUrl('documents', file.filename),
+      },
+      user.id,
+    );
+
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.document_uploaded',
+      entityType: 'document',
+      entityId: created.id,
+      summary: 'Driver uploaded personal document',
+      metadata: {
+        driverId: driver.id,
+        documentType: dto.documentType,
+      },
+    });
+
+    return this.mapDriverDocument(created);
   }
 }

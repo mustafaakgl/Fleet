@@ -8,6 +8,10 @@ export function canViewCriticalAlerts(role: Role) {
   return role === 'office';
 }
 
+export function canViewOfficeQueue(role: Role) {
+  return role === 'office';
+}
+
 export function canManageUsers(role: Role) {
   return role === 'admin';
 }

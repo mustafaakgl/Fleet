@@ -2,6 +2,7 @@ export type DriverNotifyKey =
   | 'request_approved'
   | 'request_rejected'
   | 'assignment_created'
+  | 'checkin_added_to_einsatzplan'
   | 'messenger_message'
   | 'transport_approved'
   | 'transport_rejected';
@@ -24,6 +25,13 @@ const COPY: Record<string, Record<DriverNotifyKey, CopyTemplate>> = {
     assignment_created: {
       title: 'Yeni einsatz',
       message: (p) => `${p.date} tarihinde yeni bir einsatzın var.`,
+    },
+    checkin_added_to_einsatzplan: {
+      title: 'Check-in onaylandı',
+      message: (p) =>
+        p.company
+          ? `${p.company} einsatzın hazır. Yola çıkınca «Yola çıktım»a bas.`
+          : 'Sabah check-in\'in onaylandı. Yola çıkınca «Yola çıktım»a bas.',
     },
     messenger_message: {
       title: 'Yeni mesaj',
@@ -54,6 +62,13 @@ const COPY: Record<string, Record<DriverNotifyKey, CopyTemplate>> = {
       title: 'Neuer Einsatz',
       message: (p) => `Du hast einen neuen Einsatz am ${p.date}.`,
     },
+    checkin_added_to_einsatzplan: {
+      title: 'Check-in freigegeben',
+      message: (p) =>
+        p.company
+          ? `Dein Check-in (${p.company}) ist im Einsatzplan. Tippe „Fahrt starten“, wenn du losfährst.`
+          : 'Dein Morgen-Check-in ist freigegeben. Tippe „Fahrt starten“, wenn du losfährst.',
+    },
     messenger_message: {
       title: 'Neue Nachricht',
       message: (p) => p.preview || 'Du hast eine neue Nachricht erhalten.',
@@ -82,6 +97,13 @@ const COPY: Record<string, Record<DriverNotifyKey, CopyTemplate>> = {
     assignment_created: {
       title: 'New assignment',
       message: (p) => `You have a new assignment on ${p.date}.`,
+    },
+    checkin_added_to_einsatzplan: {
+      title: 'Check-in approved',
+      message: (p) =>
+        p.company
+          ? `Your ${p.company} assignment is ready. Tap Start journey when you leave.`
+          : 'Your morning check-in was approved. Tap Start journey when you leave.',
     },
     messenger_message: {
       title: 'New message',

@@ -1,0 +1,22 @@
+{
+  "planning.title": "Daily planning",
+  "planning.titleOffice": "Dispatch",
+  "planning.subtitle": "Availability, check-ins, and manual planning in one flow.",
+  "subtab.dailyOverview": "Daily overview",
+  "subtab.planning": "Daily planning",
+  "subtab.transportRequests": "Transport requests",
+  "subtab.morningCheckins": "Morning check-ins",
+  "subtab.vehicleHandovers": "Vehicle handovers",
+  "subtab.companyEmails": "Company emails",
+  "office.tab.today": "Today",
+  "office.tab.tomorrow": "Tomorrow",
+  "office.tab.operations": "Operations",
+  "office.loading": "Loading planning data…",
+  "office.partialLoad": "Some sections could not be loaded: {{sections}}",
+  "office.prevDay": "Previous day",
+  "office.nextDay": "Next day",
+  "office.backToToday": "Today",
+  "office.tomorrowTitle": "Tomorrow in Einsatzplan",
+  "office.tomorrowHint": "Grouped by company — same company assignments are listed together.",
+  "office.tomorrowEmpty": "No assignments planned for tomorrow yet."
+}

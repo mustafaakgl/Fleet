@@ -11,12 +11,20 @@
     },
     "userInterfaceStyle": "automatic",
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       "expo-secure-store",
       [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "Fleet Driver uses the camera to scan vehicle handover photos and documents (VisionKit / ML Kit)."
+        }
+      ],
+      [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Fleet Driver to access photos for handover uploads."
+          "photosPermission": "Allow Fleet Driver to access photos for handover uploads.",
+          "cameraPermission": "Allow Fleet Driver to take handover and document photos with the camera."
         }
       ],
       "expo-asset",
