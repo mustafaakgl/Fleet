@@ -8,8 +8,10 @@ import { LoadingState } from '@/components/LoadingState';
 import { ErrorState } from '@/components/ErrorState';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
+import { useTranslation } from '@/i18n/useTranslation';
 
 export default function AccidentReportScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ assignmentId?: string; vehicleId?: string }>();
   const queryClient = useQueryClient();
   const [vehicleId, setVehicleId] = useState(params.vehicleId ?? '');
@@ -44,20 +46,20 @@ export default function AccidentReportScreen() {
       setDescription('');
       setLocation('');
       void queryClient.invalidateQueries({ queryKey: ['driver-accidents', 'vehicle_accident'] });
-      showSuccess('Accident report submitted.');
+      showSuccess(t('accidentReport.success'));
     },
     onError: (mutationError) => {
-      showError(getErrorMessage(mutationError, 'Failed to submit accident report.'));
+      showError(getErrorMessage(mutationError, t('accidentReport.submitFailed')));
     },
   });
 
   const onSubmit = () => {
     if (!vehicleId.trim()) {
-      setValidationError('Vehicle ID is required.');
+      setValidationError(t('accidentReport.validationVehicle'));
       return;
     }
     if (!description.trim()) {
-      setValidationError('Description is required.');
+      setValidationError(t('accidentReport.validationDescription'));
       return;
     }
     setValidationError(null);
@@ -65,36 +67,55 @@ export default function AccidentReportScreen() {
   };
 
   return (
-    <ScreenLayout title="Accident Report" subtitle="Submit a vehicle accident report">
+    <ScreenLayout title={t('accidentReport.title')} subtitle={t('accidentReport.subtitle')}>
       <View style={styles.form}>
         <TextInput
           style={styles.input}
-          placeholder="Assignment ID (if available)"
+          placeholder={t('accidentReport.assignmentId')}
           value={assignmentId}
           onChangeText={setAssignmentId}
         />
-        <TextInput style={styles.input} placeholder="Vehicle ID" value={vehicleId} onChangeText={setVehicleId} />
-        <TextInput style={styles.input} placeholder="Location" value={location} onChangeText={setLocation} />
-        <TextInput style={styles.input} placeholder="Description" value={description} onChangeText={setDescription} />
+        <TextInput
+          style={styles.input}
+          placeholder={t('accidentReport.vehicleId')}
+          value={vehicleId}
+          onChangeText={setVehicleId}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder={t('accidentReport.location')}
+          value={location}
+          onChangeText={setLocation}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder={t('accidentReport.description')}
+          value={description}
+          onChangeText={setDescription}
+        />
         {validationError ? <Text style={styles.error}>{validationError}</Text> : null}
         <Pressable
           style={[styles.button, mutation.isPending && styles.buttonDisabled]}
           onPress={onSubmit}
           disabled={mutation.isPending}
         >
-          <Text style={styles.buttonText}>{mutation.isPending ? 'Submitting...' : 'Submit Accident'}</Text>
+          <Text style={styles.buttonText}>
+            {mutation.isPending ? t('accidentReport.submitting') : t('accidentReport.submit')}
+          </Text>
         </Pressable>
       </View>
-      {isLoading ? <LoadingState label="Loading reported accidents..." /> : null}
+      {isLoading ? <LoadingState label={t('accidentReport.loading')} /> : null}
       {!isLoading && error ? (
         <ErrorState
-          message={getErrorMessage(error, 'Failed to load accidents.')}
+          message={getErrorMessage(error, t('accidentReport.loadFailed'))}
           onRetry={() => {
             void refetch();
           }}
         />
       ) : null}
-      {!isLoading && !error ? <Text>Reported accidents: {Array.isArray(data) ? data.length : 0}</Text> : null}
+      {!isLoading && !error ? (
+        <Text>{t('accidentReport.count', { count: Array.isArray(data) ? data.length : 0 })}</Text>
+      ) : null}
     </ScreenLayout>
   );
 }

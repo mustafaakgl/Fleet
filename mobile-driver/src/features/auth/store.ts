@@ -74,7 +74,7 @@ export const authStore = create<AuthState>((set) => ({
     locationTrackingStore.setState({
       status: null,
       loading: false,
-      enabling: false,
+      busy: false,
       lastLocalUploadAt: null,
       permissionDenied: false,
       uploadError: null,

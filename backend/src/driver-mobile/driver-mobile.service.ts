@@ -18,9 +18,20 @@ import { CreateDriverTransportRequestDto } from './dto/create-driver-transport-r
 import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
 import { StorageService } from '../storage/storage.service';
+import { OperationalNotifyService } from '../notifications/operational-notify.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { TrackingService } from '../tracking/tracking.service';
 import type { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
+import {
+  allRequiredHandoverPhotosUploaded,
+  findYesterdayVehicleId,
+  calculatePhotoRequirement,
+  handoverPhotoDocumentType,
+  HANDOVER_PHOTO_SLOTS,
+  loadHandoverPhotosBySlot,
+  missingHandoverPhotoSlots,
+  parseHandoverPhotoSlot,
+} from '../vehicle-handovers/handover-photo.util';
 
 const assignmentInclude = {
   driver: { select: { id: true, firstName: true, lastName: true } },
@@ -55,6 +66,7 @@ export class DriverMobileService {
     private readonly storage: StorageService,
     private readonly auditService: AuditService,
     private readonly pushNotifications: PushNotificationsService,
+    private readonly operationalNotify: OperationalNotifyService,
     private readonly tracking: TrackingService,
   ) {}
 
@@ -122,6 +134,8 @@ export class DriverMobileService {
         riskLevel: true,
         locationTrackingConsentAt: true,
         locationTrackingStatus: true,
+        locationSharingStartedAt: true,
+        locationSharingEndedAt: true,
       },
     });
     if (!driver) {
@@ -210,6 +224,32 @@ export class DriverMobileService {
   async getLocationStatus(userId: string) {
     const { driver } = await this.resolveDriver(userId);
     return this.tracking.getLocationStatus(driver);
+  }
+
+  async startLocationSharing(userId: string) {
+    const { user, driver } = await this.resolveDriver(userId);
+    const result = await this.tracking.startLocationSharing(driver.id);
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.location_sharing_started',
+      entityType: 'driver',
+      entityId: driver.id,
+      summary: 'Driver started location sharing session',
+    });
+    return result;
+  }
+
+  async endLocationSharing(userId: string) {
+    const { user, driver } = await this.resolveDriver(userId);
+    const result = await this.tracking.endLocationSharing(driver.id);
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.location_sharing_ended',
+      entityType: 'driver',
+      entityId: driver.id,
+      summary: 'Driver ended location sharing session',
+    });
+    return result;
   }
 
   async submitLocation(userId: string, dto: SubmitLocationDto) {
@@ -340,6 +380,10 @@ export class DriverMobileService {
 
   async createMorningCheckin(userId: string, dto: CreateDriverMorningCheckinDto) {
     const { driver } = await this.resolveDriver(userId);
+    const driverWithConsent = await this.prisma.driver.findUniqueOrThrow({
+      where: { id: driver.id },
+      select: { id: true, locationTrackingConsentAt: true },
+    });
     const { start, end } = this.dayRange(dto.date);
     const existing = await this.prisma.morningCheckin.findFirst({
       where: { driverId: driver.id, date: { gte: start, lt: end } },
@@ -373,6 +417,15 @@ export class DriverMobileService {
       },
     });
 
+    let locationSharing: Awaited<ReturnType<TrackingService['startLocationSharing']>> | null = null;
+    if (driverWithConsent.locationTrackingConsentAt) {
+      try {
+        locationSharing = await this.tracking.startLocationSharing(driver.id);
+      } catch {
+        locationSharing = null;
+      }
+    }
+
     return {
       id: row.id,
       date: row.date.toISOString(),
@@ -383,6 +436,7 @@ export class DriverMobileService {
       conflictReason: row.conflictReason,
       assignmentId: row.assignmentId,
       notes: row.notes,
+      locationSharingStarted: locationSharing?.sharingActive ?? false,
     };
   }
 
@@ -405,11 +459,45 @@ export class DriverMobileService {
       where.handoverDateTime = { gte: start, lt: end };
     }
 
-    return this.prisma.vehicleHandover.findMany({
+    const rows = await this.prisma.vehicleHandover.findMany({
       where,
       include: handoverInclude,
       orderBy: { handoverDateTime: 'desc' },
     });
+
+    return Promise.all(rows.map((row) => this.enrichHandover(row)));
+  }
+
+  async getHandover(userId: string, handoverId: string) {
+    const { driver } = await this.resolveDriver(userId);
+    const handover = await this.prisma.vehicleHandover.findUnique({
+      where: { id: handoverId },
+      include: handoverInclude,
+    });
+    if (!handover) {
+      throw new NotFoundException('Vehicle handover not found');
+    }
+    if (handover.driverId !== driver.id) {
+      throw new ForbiddenException('You can only view your own handovers');
+    }
+
+    return this.enrichHandover(handover);
+  }
+
+  private async enrichHandover(
+    handover: Prisma.VehicleHandoverGetPayload<{ include: typeof handoverInclude }>,
+  ) {
+    const photos = await loadHandoverPhotosBySlot(this.prisma, handover.id);
+    const missingSlots = missingHandoverPhotoSlots(handover.photoRequired, photos);
+
+    return {
+      ...handover,
+      handoverDateTime: handover.handoverDateTime.toISOString(),
+      requiredPhotoSlots: handover.photoRequired ? [...HANDOVER_PHOTO_SLOTS] : [],
+      photos,
+      missingSlots,
+      photosComplete: allRequiredHandoverPhotosUploaded(handover.photoRequired, photos),
+    };
   }
 
   async createHandover(userId: string, dto: CreateDriverHandoverDto) {
@@ -438,50 +526,51 @@ export class DriverMobileService {
       ? this.ensureDateTime(dto.handoverDateTime)
       : new Date();
 
-    const previousAssignment = await this.prisma.assignment.findFirst({
-      where: {
-        driverId: driver.id,
-        workDate: { lt: handoverDateTime },
-      },
-      orderBy: [{ workDate: 'desc' }, { createdAt: 'desc' }],
-      select: { vehicleId: true },
-    });
+    const yesterdayVehicleId =
+      dto.previousVehicleId ?? (await findYesterdayVehicleId(this.prisma, driver.id, handoverDateTime));
+    const rule = calculatePhotoRequirement(yesterdayVehicleId, dto.vehicleId);
 
-    const previousVehicleId = dto.previousVehicleId ?? previousAssignment?.vehicleId ?? null;
-    const sameVehicle = previousVehicleId === dto.vehicleId && previousVehicleId !== null;
-    const photoRequired = !sameVehicle;
-
-    return this.prisma.vehicleHandover.create({
+    const created = await this.prisma.vehicleHandover.create({
       data: {
         driverId: driver.id,
         vehicleId: dto.vehicleId,
-        previousVehicleId,
+        previousVehicleId: yesterdayVehicleId,
         assignmentId: dto.assignmentId,
         handoverType: dto.handoverType ?? 'pickup',
         handoverDateTime,
         damageDetected: dto.damageDetected ?? false,
         damageNotes: dto.damageNotes,
         notes: dto.notes,
-        photoRequired,
-        photoStatus: photoRequired ? 'missing' : 'not_required',
-        status: photoRequired ? 'pending' : 'completed',
+        photoRequired: rule.photoRequired,
+        photoStatus: rule.photoStatus,
+        status: rule.status,
       },
       include: handoverInclude,
     });
+
+    return this.enrichHandover(created);
   }
 
   async uploadHandoverPhoto(
     userId: string,
     handoverId: string,
+    slotValue: string,
     file: {
       originalname: string;
       filename: string;
     },
   ) {
     const { user, driver } = await this.resolveDriver(userId);
+    const slot = parseHandoverPhotoSlot(slotValue);
+    if (!slot) {
+      throw new BadRequestException(
+        `Invalid photo slot. Expected one of: ${HANDOVER_PHOTO_SLOTS.join(', ')}`,
+      );
+    }
+
     const handover = await this.prisma.vehicleHandover.findUnique({
       where: { id: handoverId },
-      select: { id: true, driverId: true },
+      select: { id: true, driverId: true, photoRequired: true, photoStatus: true },
     });
     if (!handover) {
       throw new NotFoundException('Vehicle handover not found');
@@ -489,22 +578,38 @@ export class DriverMobileService {
     if (handover.driverId !== driver.id) {
       throw new ForbiddenException('You can only upload photo for your own handovers');
     }
+    if (!handover.photoRequired) {
+      throw new BadRequestException('Photos are not required for this handover');
+    }
+
+    const documentType = handoverPhotoDocumentType(slot);
+
+    await this.prisma.document.deleteMany({
+      where: {
+        ownerType: 'vehicle_handover',
+        ownerId: handoverId,
+        documentType,
+      },
+    });
 
     const document = await this.prisma.document.create({
       data: {
         ownerType: 'vehicle_handover',
         ownerId: handoverId,
-        documentType: 'handover_photo',
+        documentType,
         fileName: file.originalname,
         fileUrl: this.storage.buildPublicUrl('documents', file.filename),
         uploadedById: user.id,
       },
     });
 
+    const photos = await loadHandoverPhotosBySlot(this.prisma, handoverId);
+    const photosComplete = allRequiredHandoverPhotosUploaded(handover.photoRequired, photos);
+
     const updatedHandover = await this.prisma.vehicleHandover.update({
       where: { id: handoverId },
       data: {
-        photoStatus: 'uploaded',
+        photoStatus: photosComplete ? 'uploaded' : 'missing',
         status: 'pending',
       },
       include: handoverInclude,
@@ -518,13 +623,18 @@ export class DriverMobileService {
       summary: 'Driver uploaded handover photo',
       metadata: {
         handoverId,
+        slot,
         photoDocumentId: document.id,
         photoStatus: updatedHandover.photoStatus,
+        photosComplete,
       },
     });
 
+    const enriched = await this.enrichHandover(updatedHandover);
+
     return {
-      handover: updatedHandover,
+      handover: enriched,
+      slot,
       photo: {
         id: document.id,
         fileName: document.fileName,
@@ -580,6 +690,19 @@ export class DriverMobileService {
         type: created.type,
         status: created.status,
       },
+    });
+
+    const driverName = `${driver.firstName} ${driver.lastName}`.trim();
+    this.operationalNotify.notifyOperationalUsersSafely({
+      key: 'driver_request_created',
+      params: {
+        driverName,
+        requestType: created.type.replaceAll('_', ' '),
+      },
+      type: 'request',
+      relatedEntityType: 'request',
+      relatedEntityId: created.id,
+      excludeUserId: userId,
     });
 
     return created;
@@ -713,6 +836,20 @@ export class DriverMobileService {
         driverId: driver.id,
         status: created.status,
       },
+    });
+
+    const driverName = `${created.driver.firstName} ${created.driver.lastName}`.trim();
+    this.operationalNotify.notifyOperationalUsersSafely({
+      key: 'transport_request_created',
+      params: {
+        driverName,
+        companyName: created.company.name,
+        date: created.requestedDate.toISOString().slice(0, 10),
+      },
+      type: 'transport_request',
+      relatedEntityType: 'transport_request',
+      relatedEntityId: created.id,
+      excludeUserId: userId,
     });
 
     return created;

@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CompanyEmailsService } from '../company-emails/company-emails.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
+import { OperationalNotifyService } from '../notifications/operational-notify.service';
 
 type DayRange = {
   start: Date;
@@ -31,6 +32,7 @@ export class TransportRequestsService {
     private readonly companyEmailsService: CompanyEmailsService,
     private readonly auditService: AuditService,
     private readonly driverNotify: DriverNotifyService,
+    private readonly operationalNotify: OperationalNotifyService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -260,7 +262,6 @@ export class TransportRequestsService {
       });
 
       if (conflictReason) {
-        // TODO(notifications): create notification when request moves to needs_review.
         const conflictedRequest = await tx.transportRequest.update({
           where: { id: request.id },
           data: {
@@ -333,6 +334,21 @@ export class TransportRequestsService {
     });
 
     if (!result.ok) {
+      const driverName = result.request.driver
+        ? `${result.request.driver.firstName} ${result.request.driver.lastName}`.trim()
+        : 'Driver';
+      this.operationalNotify.notifyOperationalUsersSafely({
+        key: 'transport_request_needs_review',
+        params: {
+          driverName,
+          companyName: result.request.company?.name ?? 'Company',
+          reason: result.conflictReason,
+        },
+        type: 'transport_request',
+        relatedEntityType: 'transport_request',
+        relatedEntityId: result.request.id,
+        excludeUserId: currentUserId,
+      });
       throw new BadRequestException(result.conflictReason);
     }
 

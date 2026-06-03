@@ -107,6 +107,18 @@ export class DriverMobileController {
     return this.driverMobile.getLocationStatus(userId);
   }
 
+  @Post('me/location-sharing/start')
+  @HttpCode(HttpStatus.OK)
+  startLocationSharing(@CurrentUser('id') userId: string) {
+    return this.driverMobile.startLocationSharing(userId);
+  }
+
+  @Post('me/location-sharing/end')
+  @HttpCode(HttpStatus.OK)
+  endLocationSharing(@CurrentUser('id') userId: string) {
+    return this.driverMobile.endLocationSharing(userId);
+  }
+
   @Post('location')
   @HttpCode(HttpStatus.OK)
   submitLocation(@CurrentUser('id') userId: string, @Body() dto: SubmitLocationDto) {
@@ -148,11 +160,17 @@ export class DriverMobileController {
     return this.driverMobile.createHandover(userId, dto);
   }
 
+  @Get('vehicle-handovers/:id')
+  getHandover(@CurrentUser('id') userId: string, @Param('id') handoverId: string) {
+    return this.driverMobile.getHandover(userId, handoverId);
+  }
+
   @Post('vehicle-handovers/:id/photo')
   @UseInterceptors(HANDOVER_PHOTO_UPLOAD_INTERCEPTOR)
   uploadHandoverPhoto(
     @CurrentUser('id') userId: string,
     @Param('id') handoverId: string,
+    @Query('slot') slot: string,
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addMaxSizeValidator({
@@ -165,7 +183,7 @@ export class DriverMobileController {
     )
     file: UploadedImageFile,
   ) {
-    return this.driverMobile.uploadHandoverPhoto(userId, handoverId, file);
+    return this.driverMobile.uploadHandoverPhoto(userId, handoverId, slot, file);
   }
 
   @Get('requests')

@@ -57,6 +57,14 @@ export type DriverMorningCheckin = {
   notes?: string | null;
 };
 
+export type HandoverPhotoSlot = 'front' | 'right' | 'left' | 'rear';
+
+export type HandoverPhotoSummary = {
+  id: string;
+  fileName: string;
+  fileUrl?: string | null;
+};
+
 export type DriverHandover = {
   id: string;
   driverId: string;
@@ -71,6 +79,10 @@ export type DriverHandover = {
   damageNotes?: string | null;
   status: 'pending' | 'completed';
   notes?: string | null;
+  requiredPhotoSlots?: HandoverPhotoSlot[];
+  photos?: Partial<Record<HandoverPhotoSlot, HandoverPhotoSummary>>;
+  missingSlots?: HandoverPhotoSlot[];
+  photosComplete?: boolean;
   driver?: { id: string; firstName: string; lastName: string };
   vehicle?: { id: string; plateNumber: string };
   assignment?: { id: string; workDate: string; startTime: string; endTime: string } | null;
@@ -78,6 +90,7 @@ export type DriverHandover = {
 
 export type DriverHandoverPhotoUploadResponse = {
   handover: DriverHandover;
+  slot: HandoverPhotoSlot;
   photo: {
     id: string;
     fileName: string;
@@ -248,6 +261,9 @@ export type LocationStatusResponse = {
   consentGranted: boolean;
   consentAt: string | null;
   trackingStatus: LocationTrackingStatus;
+  sharingActive: boolean;
+  sharingStartedAt: string | null;
+  sharingEndedAt: string | null;
   hasTrackableAssignmentToday: boolean;
   trackingAllowed: boolean;
   lastUpload: {

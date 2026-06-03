@@ -12,9 +12,11 @@ All endpoints enforce JWT + `role=driver` and ownership scoping from the authent
 - `POST /me/language` — body: `{ language }` (`de|tr|en|pl|nl|it|es|ru`)
 - `POST /me/push-token` — body: `{ token }` (Expo push token)
 - `DELETE /me/push-token` — clear token on logout
-- `POST /me/location-consent`
-- `GET /me/location-status`
-- `POST /location` — submit GPS payload
+- `POST /me/location-consent` — permission/consent only (does not start sharing)
+- `POST /me/location-sharing/start` — manual “on the road” session
+- `POST /me/location-sharing/end` — manual stop; hidden on live map after end
+- `GET /me/location-status` — `sharingActive`, `trackingAllowed`
+- `POST /location` — submit GPS payload (requires active sharing session + today assignment)
 
 ## Assignments
 
@@ -24,13 +26,14 @@ All endpoints enforce JWT + `role=driver` and ownership scoping from the authent
 ## Morning check-ins
 
 - `GET /morning-checkins?date=YYYY-MM-DD`
-- `POST /morning-checkins` — body: `date`, optional `vehiclePlate`, `companyName`, `notes`
+- `POST /morning-checkins` — body: `date`, optional `vehiclePlate`, `companyName`, `notes`; starts location sharing when consent already granted
 
 ## Vehicle handovers
 
 - `GET /vehicle-handovers` — filters: `status`, `photoStatus`, `date`
-- `POST /vehicle-handovers`
-- `POST /vehicle-handovers/:id/photo` (multipart, field `file`)
+- `GET /vehicle-handovers/:id` — includes `photos`, `missingSlots`, `photosComplete`
+- `POST /vehicle-handovers` — compares today vehicle to **yesterday’s** assignment vehicle
+- `POST /vehicle-handovers/:id/photo?slot=front|right|left|rear` (multipart, field `file`) — all four required when vehicle changed
 
 ## Leave / absence requests
 

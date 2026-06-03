@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, RequestStatus, RequestType } from '@prisma/client';
 import { CalendarService } from '../calendar/calendar.service';
+import { DriverNotifyService } from '../notifications/driver-notify.service';
+import { OperationalNotifyService } from '../notifications/operational-notify.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type RequestRecord = {
@@ -11,7 +13,7 @@ type RequestRecord = {
   endDate: Date;
   status: RequestStatus;
   approvedById: string | null;
-  driver: { id: string } | null;
+  driver: { id: string; userId: string | null; firstName: string; lastName: string } | null;
 };
 
 @Injectable()
@@ -19,6 +21,8 @@ export class LeaveRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly calendarService: CalendarService,
+    private readonly driverNotify: DriverNotifyService,
+    private readonly operationalNotify: OperationalNotifyService,
   ) {}
 
   async list(query: { driver_id?: string; status?: string; type?: string }) {
@@ -65,7 +69,7 @@ export class LeaveRequestsService {
     });
     if (!driver) throw new NotFoundException('Driver not found');
 
-    return this.prisma.request.create({
+    const created = await this.prisma.request.create({
       data: {
         driverId: input.driverId,
         type: input.type,
@@ -74,8 +78,27 @@ export class LeaveRequestsService {
         reason: input.reason,
         status: RequestStatus.pending,
       },
-      include: { driver: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        driver: { select: { id: true, firstName: true, lastName: true, userId: true } },
+      },
     });
+
+    const driverName = created.driver
+      ? `${created.driver.firstName} ${created.driver.lastName}`.trim()
+      : 'Driver';
+
+    this.operationalNotify.notifyOperationalUsersSafely({
+      key: 'driver_request_created',
+      params: {
+        driverName,
+        requestType: created.type.replaceAll('_', ' '),
+      },
+      type: 'request',
+      relatedEntityType: 'request',
+      relatedEntityId: created.id,
+    });
+
+    return created;
   }
 
   async moveToNeedsReview(requestId: string) {
@@ -175,6 +198,17 @@ export class LeaveRequestsService {
       };
     });
 
+    const driverUserId = result.request.driver?.userId;
+    if (driverUserId) {
+      this.driverNotify.notifyUserSafely({
+        userId: driverUserId,
+        key: 'request_approved',
+        type: 'request',
+        relatedEntityType: 'request',
+        relatedEntityId: result.request.id,
+      });
+    }
+
     return result;
   }
 
@@ -208,6 +242,17 @@ export class LeaveRequestsService {
         include: { driver: true },
       });
     });
+
+    const driverUserId = result.driver?.userId;
+    if (driverUserId) {
+      this.driverNotify.notifyUserSafely({
+        userId: driverUserId,
+        key: 'request_rejected',
+        type: 'request',
+        relatedEntityType: 'request',
+        relatedEntityId: result.id,
+      });
+    }
 
     return result;
   }

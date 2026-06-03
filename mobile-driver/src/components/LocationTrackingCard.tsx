@@ -5,7 +5,7 @@ import { ActionButton } from '@/components/ActionButton';
 import { LoadingState } from '@/components/LoadingState';
 import { locationTrackingStore } from '@/features/tracking/store';
 import { useTranslation } from '@/i18n/useTranslation';
-import { formatLocationTimestamp, syncForegroundLocationWatcher } from '@/lib/location-tracking';
+import { formatLocationTimestamp } from '@/lib/location-tracking';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 
 type LocationTrackingCardProps = {
@@ -17,11 +17,13 @@ export function LocationTrackingCard({ manageWatcher = false, compact = false }:
   const { t } = useTranslation();
   const initialize = locationTrackingStore((state) => state.initialize);
   const refreshStatus = locationTrackingStore((state) => state.refreshStatus);
-  const enableTracking = locationTrackingStore((state) => state.enableTracking);
-  const stopTracking = locationTrackingStore((state) => state.stopTracking);
+  const grantConsent = locationTrackingStore((state) => state.grantConsent);
+  const endSharing = locationTrackingStore((state) => state.endSharing);
+  const stopWatcher = locationTrackingStore((state) => state.stopWatcher);
+  const syncWatcherFromStatus = locationTrackingStore((state) => state.syncWatcherFromStatus);
   const status = locationTrackingStore((state) => state.status);
   const loading = locationTrackingStore((state) => state.loading);
-  const enabling = locationTrackingStore((state) => state.enabling);
+  const busy = locationTrackingStore((state) => state.busy);
   const lastLocalUploadAt = locationTrackingStore((state) => state.lastLocalUploadAt);
   const permissionDenied = locationTrackingStore((state) => state.permissionDenied);
   const uploadError = locationTrackingStore((state) => state.uploadError);
@@ -31,36 +33,39 @@ export function LocationTrackingCard({ manageWatcher = false, compact = false }:
     initialize();
     void (async () => {
       const nextStatus = await refreshStatus();
-      if (manageWatcher && nextStatus?.trackingAllowed) {
-        await syncForegroundLocationWatcher(true);
+      if (manageWatcher) {
+        await syncWatcherFromStatus(nextStatus);
       }
     })();
     return () => {
-      if (manageWatcher) void stopTracking();
+      if (manageWatcher) void stopWatcher();
     };
-  }, [initialize, manageWatcher, refreshStatus, stopTracking]);
+  }, [initialize, manageWatcher, refreshStatus, stopWatcher, syncWatcherFromStatus]);
 
   if (Platform.OS === 'web') return null;
 
-  const showEnableButton = !status?.consentGranted || permissionDenied;
-  const trackingActive = Boolean(status?.trackingAllowed && watcherActive);
+  const needsConsent = !status?.consentGranted || permissionDenied;
+  const sharingActive = Boolean(status?.sharingActive && status.trackingAllowed);
+  const trackingActive = sharingActive && watcherActive;
   const lastUploadLabel = formatLocationTimestamp(lastLocalUploadAt ?? status?.lastUpload?.receivedAt);
 
   const statusColor = trackingActive
     ? colors.success
     : permissionDenied
       ? colors.danger
-      : colors.warning;
+      : sharingActive
+        ? colors.warning
+        : colors.muted;
 
   const statusText = trackingActive
     ? t('location.active')
-    : permissionDenied
-      ? t('location.permissionDenied')
-      : showEnableButton
-        ? t('location.enable')
-        : status?.trackingAllowed
-          ? t('location.readyOnHome')
-          : t('location.unavailable');
+    : sharingActive
+      ? t('location.sharingWaitingGps')
+      : permissionDenied
+        ? t('location.permissionDenied')
+        : needsConsent
+          ? t('location.consentNeeded')
+          : t('location.sharingStoppedCheckin');
 
   return (
     <View style={styles.card}>
@@ -74,29 +79,33 @@ export function LocationTrackingCard({ manageWatcher = false, compact = false }:
       {loading && !status ? <LoadingState label={t('common.loading')} /> : null}
       {!loading || status ? (
         <>
-          {!compact ? (
-            <Text style={styles.row}>
-              {t('location.consent')}: {status?.consentGranted ? t('location.granted') : t('location.notGranted')}
-            </Text>
-          ) : null}
+          {!compact ? <Text style={styles.hint}>{t('location.checkinHint')}</Text> : null}
           <Text style={styles.status}>{statusText}</Text>
           <Text style={styles.meta}>
             {t('location.lastUpload')}: {lastUploadLabel ?? t('location.never')}
           </Text>
+          {status && !status.hasTrackableAssignmentToday && status.consentGranted ? (
+            <Text style={styles.warn}>{t('location.noAssignmentToday')}</Text>
+          ) : null}
           {uploadError ? <Text style={styles.error}>{uploadError}</Text> : null}
-          {showEnableButton ? (
+          {needsConsent ? (
             <ActionButton
-              label={enabling ? t('common.loading') : t('location.enable')}
+              label={busy ? t('common.loading') : t('location.grantConsent')}
               onPress={() => {
-                void (async () => {
-                  const result = await enableTracking();
-                  if (manageWatcher && result === 'enabled') {
-                    await syncForegroundLocationWatcher(true);
-                  }
-                })();
+                void grantConsent();
               }}
-              disabled={enabling}
-              variant="primary"
+              disabled={busy}
+              variant="secondary"
+            />
+          ) : null}
+          {sharingActive ? (
+            <ActionButton
+              label={busy ? t('common.loading') : t('location.endJourney')}
+              onPress={() => {
+                void endSharing();
+              }}
+              disabled={busy}
+              variant="danger"
             />
           ) : null}
         </>
@@ -129,8 +138,13 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  row: { color: colors.subtext, fontSize: 13 },
+  hint: {
+    color: colors.subtext,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   status: { ...typography.bodyMedium, color: colors.primary },
   meta: { ...typography.caption, textTransform: 'none' },
+  warn: { color: colors.warning, fontSize: 12 },
   error: { color: colors.danger, fontSize: 12 },
 });

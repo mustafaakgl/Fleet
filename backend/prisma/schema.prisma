@@ -267,6 +267,8 @@ model Driver {
   locationTrackingConsentAt DateTime?
   locationTrackingStatus    LocationTrackingStatus @default(paused)
   locationTrackingEnabledAt DateTime?
+  locationSharingStartedAt  DateTime?
+  locationSharingEndedAt    DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 

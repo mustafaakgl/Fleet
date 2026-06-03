@@ -4,6 +4,10 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVehicleHandoverDto } from './dto/create-vehicle-handover.dto';
 import { UpdateVehicleHandoverDto } from './dto/update-vehicle-handover.dto';
+import {
+  calculatePhotoRequirement,
+  findYesterdayVehicleId,
+} from './handover-photo.util';
 
 type HandoverType = 'pickup' | 'return';
 type HandoverPhotoStatus = 'not_required' | 'missing' | 'uploaded' | 'approved' | 'rejected';
@@ -79,26 +83,12 @@ export class VehicleHandoversService {
     return datePart;
   }
 
-  calculatePhotoRequirement(previousVehicleId: string | null | undefined, currentVehicleId: string): {
+  calculatePhotoRequirement(yesterdayVehicleId: string | null, currentVehicleId: string): {
     photoRequired: boolean;
     photoStatus: HandoverPhotoStatus;
     status: HandoverStatus;
   } {
-    const sameVehicle = Boolean(previousVehicleId) && previousVehicleId === currentVehicleId;
-
-    if (sameVehicle) {
-      return {
-        photoRequired: false,
-        photoStatus: 'not_required',
-        status: 'completed',
-      };
-    }
-
-    return {
-      photoRequired: true,
-      photoStatus: 'missing',
-      status: 'pending',
-    };
+    return calculatePhotoRequirement(yesterdayVehicleId, currentVehicleId);
   }
 
   async createHandover(dto: CreateVehicleHandoverDto, actorUserId?: string) {
@@ -141,14 +131,16 @@ export class VehicleHandoversService {
       }
     }
 
-    const rule = this.calculatePhotoRequirement(dto.previousVehicleId ?? null, dto.vehicleId);
+    const yesterdayVehicleId =
+      dto.previousVehicleId ?? (await findYesterdayVehicleId(this.prisma, dto.driverId));
+    const rule = this.calculatePhotoRequirement(yesterdayVehicleId, dto.vehicleId);
 
     const db = this.prisma as any;
     const created = await db.vehicleHandover.create({
       data: {
         driverId: dto.driverId,
         vehicleId: dto.vehicleId,
-        previousVehicleId: dto.previousVehicleId ?? null,
+        previousVehicleId: yesterdayVehicleId,
         assignmentId: dto.assignmentId ?? null,
         handoverType,
         handoverDateTime,
@@ -199,28 +191,19 @@ export class VehicleHandoversService {
         throw new NotFoundException('Assignment not found');
       }
 
-      const previousAssignment = await db.assignment.findFirst({
-        where: {
-          driverId: assignment.driverId,
-          workDate: {
-            lt: assignment.workDate,
-          },
-        },
-        orderBy: [
-          { workDate: 'desc' },
-          { createdAt: 'desc' },
-        ],
-      });
-
-      const previousVehicleId = previousAssignment?.vehicleId ?? null;
-      const rule = this.calculatePhotoRequirement(previousVehicleId, assignment.vehicleId);
+      const yesterdayVehicleId = await findYesterdayVehicleId(
+        this.prisma,
+        assignment.driverId,
+        assignment.workDate,
+      );
+      const rule = this.calculatePhotoRequirement(yesterdayVehicleId, assignment.vehicleId);
       const handoverDateTime = this.parseAssignmentDateTime(assignment.workDate, assignment.startTime);
 
       return db.vehicleHandover.create({
         data: {
           driverId: assignment.driverId,
           vehicleId: assignment.vehicleId,
-          previousVehicleId,
+          previousVehicleId: yesterdayVehicleId,
           assignmentId: assignment.id,
           handoverType: 'pickup',
           handoverDateTime,

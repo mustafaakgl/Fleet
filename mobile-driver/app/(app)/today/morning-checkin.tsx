@@ -1,56 +1,51 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ScreenLayout } from '@/components/ScreenLayout';
 import { driverApi } from '@/api/endpoints';
-import { LoadingState } from '@/components/LoadingState';
-import { ErrorState } from '@/components/ErrorState';
+import { locationTrackingStore } from '@/features/tracking/store';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
+import { useTranslation } from '@/i18n/useTranslation';
 
 export default function MorningCheckinScreen() {
-  const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [notes, setNotes] = useState('');
-
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const {
-    data,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ['morning-checkins'],
-    queryFn: () => driverApi.listMorningCheckins(),
-  });
-
   const createMutation = useMutation({
-    mutationFn: () =>
-      driverApi.createMorningCheckin({
+    mutationFn: async () => {
+      const store = locationTrackingStore.getState();
+      const consentReady = await store.prepareLocationConsent();
+      const checkin = await driverApi.createMorningCheckin({
         date: new Date().toISOString(),
         vehiclePlate,
         companyName,
         notes,
-      }),
-    onSuccess: () => {
+      });
+      const sharingStarted = consentReady ? await store.activateLocationSharing() : false;
+      return { checkin, sharingStarted };
+    },
+    onSuccess: ({ sharingStarted }) => {
       setVehiclePlate('');
       setCompanyName('');
       setNotes('');
-      void queryClient.invalidateQueries({ queryKey: ['morning-checkins'] });
-      showSuccess('Morning check-in submitted.');
+      showSuccess(
+        sharingStarted ? t('morningCheckin.successWithLocation') : t('morningCheckin.success'),
+      );
       router.back();
     },
     onError: (mutationError) => {
-      showError(getErrorMessage(mutationError, 'Failed to submit check-in.'));
+      showError(getErrorMessage(mutationError, t('morningCheckin.submitFailed')));
     },
   });
 
   const onSubmit = () => {
     if (!vehiclePlate.trim() || !companyName.trim()) {
-      setValidationError('Vehicle plate and company name are required.');
+      setValidationError(t('morningCheckin.validationRequired'));
       return;
     }
     setValidationError(null);
@@ -58,40 +53,38 @@ export default function MorningCheckinScreen() {
   };
 
   return (
-    <ScreenLayout title="Morning Check-in" subtitle="Submit today check-in">
+    <ScreenLayout title={t('morningCheckin.title')} subtitle={t('morningCheckin.subtitle')}>
       <View style={styles.form}>
+        <Text style={styles.info}>{t('morningCheckin.locationHint')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="Vehicle plate"
+          placeholder={t('morningCheckin.vehiclePlate')}
           value={vehiclePlate}
           onChangeText={(value) => setVehiclePlate(value)}
         />
         <TextInput
           style={styles.input}
-          placeholder="Company name"
+          placeholder={t('morningCheckin.companyName')}
           value={companyName}
           onChangeText={(value) => setCompanyName(value)}
         />
-        <TextInput style={styles.input} placeholder="Notes" value={notes} onChangeText={setNotes} />
+        <TextInput
+          style={styles.input}
+          placeholder={t('morningCheckin.notes')}
+          value={notes}
+          onChangeText={setNotes}
+        />
         {validationError ? <Text style={styles.error}>{validationError}</Text> : null}
         <Pressable
           style={[styles.button, createMutation.isPending && styles.buttonDisabled]}
           onPress={onSubmit}
           disabled={createMutation.isPending}
         >
-          <Text style={styles.buttonText}>{createMutation.isPending ? 'Submitting...' : 'Submit Check-in'}</Text>
+          <Text style={styles.buttonText}>
+            {createMutation.isPending ? t('morningCheckin.submitting') : t('morningCheckin.submit')}
+          </Text>
         </Pressable>
       </View>
-      {isLoading ? <LoadingState label="Loading recent check-ins..." /> : null}
-      {!isLoading && error ? (
-        <ErrorState
-          message={getErrorMessage(error, 'Failed to load recent check-ins.')}
-          onRetry={() => {
-            void refetch();
-          }}
-        />
-      ) : null}
-      {!isLoading && !error ? <Text>Latest check-ins: {Array.isArray(data) ? data.length : 0}</Text> : null}
     </ScreenLayout>
   );
 }
@@ -99,6 +92,11 @@ export default function MorningCheckinScreen() {
 const styles = StyleSheet.create({
   form: {
     gap: 10,
+  },
+  info: {
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 18,
   },
   input: {
     backgroundColor: '#FFFFFF',

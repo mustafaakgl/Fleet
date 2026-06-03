@@ -40,11 +40,14 @@ const OFFLINE_THRESHOLD_SEC = 30 * 60;
 const DEFAULT_HISTORY_LIMIT = 500;
 const MAX_HISTORY_LIMIT = 5000;
 const DEFAULT_HISTORY_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+const MAX_SHARING_SESSION_MS = 12 * 60 * 60 * 1000;
 
 type ResolvedDriver = {
   id: string;
   locationTrackingConsentAt: Date | null;
   locationTrackingStatus: LocationTrackingStatus;
+  locationSharingStartedAt: Date | null;
+  locationSharingEndedAt: Date | null;
 };
 
 @Injectable()
@@ -62,21 +65,74 @@ export class TrackingService {
       data: {
         locationTrackingConsentAt: now,
         locationTrackingEnabledAt: now,
-        locationTrackingStatus: LocationTrackingStatus.active,
+        locationTrackingStatus: LocationTrackingStatus.paused,
       },
     });
 
     return {
       consentGranted: true,
       consentAt: now.toISOString(),
-      trackingStatus: LocationTrackingStatus.active,
+      trackingStatus: LocationTrackingStatus.paused,
+      sharingActive: false,
     };
   }
 
+  async startLocationSharing(driverId: string) {
+    const driver = await this.loadResolvedDriver(driverId);
+    await this.expireSharingSessionIfNeeded(driver);
+
+    if (!driver.locationTrackingConsentAt) {
+      throw new ForbiddenException('Location tracking consent is required before sharing');
+    }
+
+    if (this.isSharingSessionActive(driver)) {
+      return this.getLocationStatus(driver);
+    }
+
+    const now = new Date();
+    await this.prisma.driver.update({
+      where: { id: driverId },
+      data: {
+        locationSharingStartedAt: now,
+        locationSharingEndedAt: null,
+        locationTrackingStatus: LocationTrackingStatus.active,
+      },
+    });
+
+    return this.getLocationStatus({
+      ...driver,
+      locationSharingStartedAt: now,
+      locationSharingEndedAt: null,
+      locationTrackingStatus: LocationTrackingStatus.active,
+    });
+  }
+
+  async endLocationSharing(driverId: string) {
+    const driver = await this.loadResolvedDriver(driverId);
+    const now = new Date();
+
+    await this.prisma.driver.update({
+      where: { id: driverId },
+      data: {
+        locationSharingStartedAt: null,
+        locationSharingEndedAt: now,
+        locationTrackingStatus: LocationTrackingStatus.paused,
+      },
+    });
+
+    return this.getLocationStatus({
+      ...driver,
+      locationSharingStartedAt: null,
+      locationSharingEndedAt: now,
+      locationTrackingStatus: LocationTrackingStatus.paused,
+    });
+  }
+
   async getLocationStatus(driver: ResolvedDriver) {
-    const hasTrackableAssignmentToday = await this.hasTrackableAssignmentToday(driver.id);
+    const refreshed = await this.expireSharingSessionIfNeeded(driver);
+    const hasTrackableAssignmentToday = await this.hasTrackableAssignmentToday(refreshed.id);
     const latest = await this.prisma.driverLocationLatest.findUnique({
-      where: { driverId: driver.id },
+      where: { driverId: refreshed.id },
       select: {
         recordedAt: true,
         receivedAt: true,
@@ -84,16 +140,18 @@ export class TrackingService {
       },
     });
 
-    const consentGranted = driver.locationTrackingConsentAt !== null;
+    const consentGranted = refreshed.locationTrackingConsentAt !== null;
+    const sharingActive = this.isSharingSessionActive(refreshed);
     const trackingAllowed =
-      consentGranted &&
-      driver.locationTrackingStatus === LocationTrackingStatus.active &&
-      hasTrackableAssignmentToday;
+      consentGranted && sharingActive && hasTrackableAssignmentToday;
 
     return {
       consentGranted,
-      consentAt: driver.locationTrackingConsentAt?.toISOString() ?? null,
-      trackingStatus: driver.locationTrackingStatus,
+      consentAt: refreshed.locationTrackingConsentAt?.toISOString() ?? null,
+      trackingStatus: refreshed.locationTrackingStatus,
+      sharingActive,
+      sharingStartedAt: refreshed.locationSharingStartedAt?.toISOString() ?? null,
+      sharingEndedAt: refreshed.locationSharingEndedAt?.toISOString() ?? null,
       hasTrackableAssignmentToday,
       trackingAllowed,
       lastUpload: latest
@@ -107,9 +165,11 @@ export class TrackingService {
   }
 
   async submitLocation(driver: ResolvedDriver, dto: SubmitLocationDto) {
-    this.assertTrackingConsent(driver);
+    const refreshed = await this.expireSharingSessionIfNeeded(driver);
+    this.assertTrackingConsent(refreshed);
+    this.assertSharingSessionActive(refreshed);
 
-    const hasTrackableAssignmentToday = await this.hasTrackableAssignmentToday(driver.id);
+    const hasTrackableAssignmentToday = await this.hasTrackableAssignmentToday(refreshed.id);
     if (!hasTrackableAssignmentToday) {
       throw new ForbiddenException(
         'Location tracking is only allowed when you have an active assignment today',
@@ -117,8 +177,8 @@ export class TrackingService {
     }
 
     const recordedAt = this.parseRecordedAt(dto.recordedAt);
-    const vehicleId = await this.resolveVehicleIdForToday(driver.id);
-    const deduplicated = await this.shouldDeduplicate(driver.id, dto, recordedAt);
+    const vehicleId = await this.resolveVehicleIdForToday(refreshed.id);
+    const deduplicated = await this.shouldDeduplicate(refreshed.id, dto, recordedAt);
 
     const locationData = {
       latitude: new Prisma.Decimal(dto.latitude),
@@ -133,9 +193,9 @@ export class TrackingService {
     };
 
     await this.prisma.driverLocationLatest.upsert({
-      where: { driverId: driver.id },
+      where: { driverId: refreshed.id },
       create: {
-        driverId: driver.id,
+        driverId: refreshed.id,
         ...locationData,
       },
       update: locationData,
@@ -144,7 +204,7 @@ export class TrackingService {
     if (!deduplicated) {
       await this.prisma.driverLocationHistory.create({
         data: {
-          driverId: driver.id,
+          driverId: refreshed.id,
           ...locationData,
         },
       });
@@ -163,8 +223,15 @@ export class TrackingService {
 
   async getLiveTracking(params: LiveTrackingParams): Promise<LiveTrackingItem[]> {
     const now = new Date();
+    await this.expireAllStaleSharingSessions();
+    const sharingDriverIds = await this.listActiveSharingDriverIds();
+    if (sharingDriverIds.length === 0) {
+      return [];
+    }
+
     const assignmentMap = await this.loadCurrentAssignmentsByDriver();
     const latestRows = await this.prisma.driverLocationLatest.findMany({
+      where: { driverId: { in: sharingDriverIds } },
       include: {
         driver: {
           select: {
@@ -191,8 +258,9 @@ export class TrackingService {
       const driversWithLatest = new Set(latestRows.map((row) => row.driverId));
       const offlineDrivers = await this.prisma.driver.findMany({
         where: {
-          status: DriverStatus.active,
-          id: { notIn: Array.from(driversWithLatest) },
+          id: {
+            in: sharingDriverIds.filter((id) => !driversWithLatest.has(id)),
+          },
         },
         select: {
           id: true,
@@ -225,6 +293,12 @@ export class TrackingService {
 
   async getDriverLatest(driverId: string): Promise<LiveTrackingItem> {
     await this.assertDriverExists(driverId);
+    const driver = await this.loadResolvedDriver(driverId);
+    await this.expireSharingSessionIfNeeded(driver);
+
+    if (!this.isSharingSessionActive(driver)) {
+      throw new NotFoundException('Driver is not sharing location');
+    }
 
     const latest = await this.prisma.driverLocationLatest.findUnique({
       where: { driverId },
@@ -345,6 +419,93 @@ export class TrackingService {
     return null;
   }
 
+  private async loadResolvedDriver(driverId: string): Promise<ResolvedDriver> {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+      select: {
+        id: true,
+        locationTrackingConsentAt: true,
+        locationTrackingStatus: true,
+        locationSharingStartedAt: true,
+        locationSharingEndedAt: true,
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    return driver;
+  }
+
+  private isSharingSessionActive(driver: ResolvedDriver, now = new Date()): boolean {
+    if (!driver.locationSharingStartedAt) {
+      return false;
+    }
+
+    if (driver.locationTrackingStatus !== LocationTrackingStatus.active) {
+      return false;
+    }
+
+    const ageMs = now.getTime() - driver.locationSharingStartedAt.getTime();
+    return ageMs >= 0 && ageMs <= MAX_SHARING_SESSION_MS;
+  }
+
+  private async expireSharingSessionIfNeeded(driver: ResolvedDriver): Promise<ResolvedDriver> {
+    if (!driver.locationSharingStartedAt) {
+      return driver;
+    }
+
+    if (this.isSharingSessionActive(driver)) {
+      return driver;
+    }
+
+    const now = new Date();
+    await this.prisma.driver.update({
+      where: { id: driver.id },
+      data: {
+        locationSharingStartedAt: null,
+        locationSharingEndedAt: now,
+        locationTrackingStatus: LocationTrackingStatus.paused,
+      },
+    });
+
+    return {
+      ...driver,
+      locationSharingStartedAt: null,
+      locationSharingEndedAt: now,
+      locationTrackingStatus: LocationTrackingStatus.paused,
+    };
+  }
+
+  private async expireAllStaleSharingSessions(): Promise<void> {
+    const cutoff = new Date(Date.now() - MAX_SHARING_SESSION_MS);
+    await this.prisma.driver.updateMany({
+      where: {
+        locationSharingStartedAt: { not: null, lt: cutoff },
+        locationTrackingStatus: LocationTrackingStatus.active,
+      },
+      data: {
+        locationSharingStartedAt: null,
+        locationSharingEndedAt: new Date(),
+        locationTrackingStatus: LocationTrackingStatus.paused,
+      },
+    });
+  }
+
+  private async listActiveSharingDriverIds(): Promise<string[]> {
+    const cutoff = new Date(Date.now() - MAX_SHARING_SESSION_MS);
+    const drivers = await this.prisma.driver.findMany({
+      where: {
+        locationSharingStartedAt: { not: null, gte: cutoff },
+        locationTrackingStatus: LocationTrackingStatus.active,
+      },
+      select: { id: true },
+    });
+
+    return drivers.map((driver) => driver.id);
+  }
+
   private assertTrackingConsent(driver: ResolvedDriver) {
     if (!driver.locationTrackingConsentAt) {
       throw new ForbiddenException('Location tracking consent is required');
@@ -353,9 +514,11 @@ export class TrackingService {
     if (driver.locationTrackingStatus === LocationTrackingStatus.denied) {
       throw new ForbiddenException('Location tracking has been denied');
     }
+  }
 
-    if (driver.locationTrackingStatus === LocationTrackingStatus.paused) {
-      throw new ForbiddenException('Location tracking is paused');
+  private assertSharingSessionActive(driver: ResolvedDriver) {
+    if (!this.isSharingSessionActive(driver)) {
+      throw new ForbiddenException('Start location sharing before uploading coordinates');
     }
   }
 

@@ -49,7 +49,8 @@ export async function requestForegroundLocationPermission(): Promise<boolean> {
   return requested.status === Location.PermissionStatus.GRANTED;
 }
 
-export async function enableLocationTracking(): Promise<'enabled' | 'denied' | 'unsupported' | 'failed'> {
+/** Records consent on the server only; does not start a sharing session. */
+export async function grantLocationConsentOnServer(): Promise<'granted' | 'denied' | 'unsupported' | 'failed'> {
   if (Platform.OS === 'web') {
     return 'unsupported';
   }
@@ -63,9 +64,9 @@ export async function enableLocationTracking(): Promise<'enabled' | 'denied' | '
 
   try {
     await driverApi.grantLocationConsent();
-    return 'enabled';
+    return 'granted';
   } catch (error) {
-    uploadError = error instanceof Error ? error.message : 'Failed to enable location tracking.';
+    uploadError = error instanceof Error ? error.message : 'Failed to grant location consent.';
     if (!hasReportedUploadError) {
       hasReportedUploadError = true;
       listeners.onUploadError?.(uploadError);

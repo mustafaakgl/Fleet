@@ -4,6 +4,7 @@ import type {
   DriverAssignment,
   DriverHandover,
   DriverHandoverPhotoUploadResponse,
+  HandoverPhotoSlot,
   DriverIncident,
   DriverMeResponse,
   DriverMorningCheckin,
@@ -70,7 +71,16 @@ export const driverApi = {
       consentGranted: boolean;
       consentAt: string;
       trackingStatus: LocationStatusResponse['trackingStatus'];
+      sharingActive?: boolean;
     }>('/driver/me/location-consent');
+    return data;
+  },
+  async startLocationSharing() {
+    const { data } = await apiClient.post<LocationStatusResponse>('/driver/me/location-sharing/start');
+    return data;
+  },
+  async endLocationSharing() {
+    const { data } = await apiClient.post<LocationStatusResponse>('/driver/me/location-sharing/end');
     return data;
   },
   async submitLocation(payload: SubmitLocationPayload) {
@@ -102,6 +112,10 @@ export const driverApi = {
     const { data } = await apiClient.get<DriverHandover[]>('/driver/vehicle-handovers', { params });
     return data;
   },
+  async getHandover(handoverId: string) {
+    const { data } = await apiClient.get<DriverHandover>(`/driver/vehicle-handovers/${handoverId}`);
+    return data;
+  },
   async createHandover(payload: {
     vehicleId: string;
     previousVehicleId?: string;
@@ -117,13 +131,14 @@ export const driverApi = {
   },
   async uploadHandoverPhoto(
     handoverId: string,
+    slot: HandoverPhotoSlot,
     file: { uri: string; name: string; type: string },
     onProgress?: (progress: number) => void,
   ) {
     const formData = new FormData();
     formData.append('file', file as unknown as Blob);
     const { data } = await apiClient.post<DriverHandoverPhotoUploadResponse>(
-      `/driver/vehicle-handovers/${handoverId}/photo`,
+      `/driver/vehicle-handovers/${handoverId}/photo?slot=${slot}`,
       formData,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
