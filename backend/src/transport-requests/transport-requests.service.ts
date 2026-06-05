@@ -198,7 +198,6 @@ export class TransportRequestsService {
         requestedDate: input.requestedDate,
         startTime: input.startTime,
         endTime: input.endTime,
-        notes: input.notes,
         status: TransportRequestStatus.pending,
       },
       include: { driver: true, vehicle: true, company: true },

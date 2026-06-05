@@ -300,10 +300,10 @@ Train reps to run this **live** in 5 minutes during the second demo visit:
 
 > Goal: One deployment serves 100+ customers. Per-customer single-tenant deployments collapse operationally after ~20–30 customers.
 
-- [ ] **4.1** Schema: add `tenantId` to all models; convert global unique constraints (email, plateNumber, employeeNumber, internalCode, company name) to per-tenant
-- [ ] **4.2** Prisma client extension / middleware for automatic tenant scoping on every query
-- [ ] **4.3** Tenant context resolution from JWT; tenant-aware guards
-- [ ] **4.4** Data migration + isolation tests
+- [x] **4.1** Schema: add `tenantId` to all models; convert global unique constraints (email, plateNumber, employeeNumber, internalCode, company name) to per-tenant
+- [x] **4.2** Prisma client extension / middleware for automatic tenant scoping on every query
+- [x] **4.3** Tenant context resolution from JWT; tenant-aware guards
+- [x] **4.4** Data migration + isolation tests
 
 ---
 

@@ -89,7 +89,9 @@ export class AuthService {
     user: AuthUserPayload;
   }> {
     const normalizedEmail = email.trim().toLowerCase();
-    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await this.prisma.unscoped.user.findFirst({
+      where: { email: normalizedEmail },
+    });
     if (!user || user.status !== 'active') {
       await this.safeAuditLog({
         action: 'auth.login_failed',

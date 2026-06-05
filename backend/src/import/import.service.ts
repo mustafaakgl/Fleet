@@ -67,7 +67,7 @@ export class ImportService {
         const status = DRIVER_STATUS_VALUES.has(statusRaw) ? (statusRaw as DriverStatus) : 'active';
 
         if (employeeNumber) {
-          const existing = await this.prisma.driver.findUnique({
+          const existing = await this.prisma.driver.findFirst({
             where: { employeeNumber },
             select: { id: true },
           });

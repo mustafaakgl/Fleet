@@ -75,8 +75,8 @@ export class InvitationsService {
     }
 
     const normalizedEmail = dto.email.trim().toLowerCase();
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
+    const existingUser = await this.prisma.user.findFirst({
+      where: { email: normalizedEmail, tenantId },
       select: { id: true },
     });
     if (existingUser) {
@@ -151,7 +151,7 @@ export class InvitationsService {
 
   async validateToken(token: string) {
     const tokenHash = hashToken(token.trim());
-    const row = await this.prisma.userInvitation.findFirst({
+    const row = await this.prisma.unscoped.userInvitation.findFirst({
       where: {
         tokenHash,
         status: UserInvitationStatus.pending,
@@ -174,7 +174,7 @@ export class InvitationsService {
 
   async accept(token: string, password: string) {
     const tokenHash = hashToken(token.trim());
-    const row = await this.prisma.userInvitation.findFirst({
+    const row = await this.prisma.unscoped.userInvitation.findFirst({
       where: {
         tokenHash,
         status: UserInvitationStatus.pending,
@@ -190,8 +190,8 @@ export class InvitationsService {
       await this.billingService.assertCanAddSeat(row.tenantId);
     }
 
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: row.email },
+    const existingUser = await this.prisma.unscoped.user.findFirst({
+      where: { email: row.email, tenantId: row.tenantId },
       select: { id: true },
     });
     if (existingUser) {

@@ -32,6 +32,7 @@ import { photoUrlForVehicleBrand, VEHICLE_BRAND_PHOTOS } from '../src/vehicles/v
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
+const SEED_TENANT_ID = 'default-tenant';
 
 function startOfDay(date = new Date()): Date {
   const d = new Date(date);
@@ -62,7 +63,12 @@ async function upsertUser(params: {
   const passwordHash = await bcrypt.hash(params.password, SALT_ROUNDS);
 
   return prisma.user.upsert({
-    where: { email: params.email },
+    where: {
+      tenantId_email: {
+        tenantId: SEED_TENANT_ID,
+        email: params.email,
+      },
+    },
     update: {
       fullName: params.fullName,
       passwordHash,
@@ -71,6 +77,7 @@ async function upsertUser(params: {
       language: params.language ?? 'de',
     },
     create: {
+      tenantId: SEED_TENANT_ID,
       fullName: params.fullName,
       email: params.email,
       passwordHash,
@@ -149,7 +156,12 @@ async function upsertDriver(params: {
   userId?: string | null;
 }) {
   return prisma.driver.upsert({
-    where: { employeeNumber: params.employeeNumber },
+    where: {
+      tenantId_employeeNumber: {
+        tenantId: SEED_TENANT_ID,
+        employeeNumber: params.employeeNumber,
+      },
+    },
     update: {
       firstName: params.firstName,
       lastName: params.lastName,
@@ -166,6 +178,7 @@ async function upsertDriver(params: {
     },
     create: {
       ...(params.id ? { id: params.id } : {}),
+      tenantId: SEED_TENANT_ID,
       employeeNumber: params.employeeNumber,
       firstName: params.firstName,
       lastName: params.lastName,
@@ -200,7 +213,12 @@ async function upsertVehicle(params: {
 }) {
   const photoUrl = photoUrlForVehicleBrand(params.brand, params.photoUrl);
   return prisma.vehicle.upsert({
-    where: { plateNumber: params.plateNumber },
+    where: {
+      tenantId_plateNumber: {
+        tenantId: SEED_TENANT_ID,
+        plateNumber: params.plateNumber,
+      },
+    },
     update: {
       internalCode: params.internalCode,
       brand: params.brand,
@@ -216,6 +234,7 @@ async function upsertVehicle(params: {
     },
     create: {
       ...(params.id ? { id: params.id } : {}),
+      tenantId: SEED_TENANT_ID,
       plateNumber: params.plateNumber,
       internalCode: params.internalCode,
       brand: params.brand,
@@ -243,7 +262,12 @@ async function upsertCompany(params: {
   notes?: string;
 }) {
   return prisma.company.upsert({
-    where: { name: params.name },
+    where: {
+      tenantId_name: {
+        tenantId: SEED_TENANT_ID,
+        name: params.name,
+      },
+    },
     update: {
       email: params.email,
       phone: params.phone,
@@ -254,6 +278,7 @@ async function upsertCompany(params: {
     },
     create: {
       ...(params.id ? { id: params.id } : {}),
+      tenantId: SEED_TENANT_ID,
       name: params.name,
       email: params.email,
       phone: params.phone,
@@ -311,6 +336,7 @@ async function upsertAssignment(params: {
 
   return prisma.assignment.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       driverId: params.driverId,
       vehicleId: params.vehicleId,
       companyId: params.companyId,
@@ -365,6 +391,7 @@ async function upsertDocument(params: {
 
   return prisma.document.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       ownerType: params.ownerType,
       ownerId: params.ownerId,
       documentType: params.documentType,
@@ -408,6 +435,7 @@ async function upsertCalendarEvent(params: {
 
   return prisma.calendarEvent.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       driverId: params.driverId,
       date: params.date,
       status: params.status,
@@ -450,6 +478,7 @@ async function upsertRequest(params: {
 
   return prisma.request.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       driverId: params.driverId,
       type: params.type,
       startDate: params.startDate,
@@ -505,6 +534,7 @@ async function upsertTransportRequest(params: {
 
   return prisma.transportRequest.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       driverId: params.driverId,
       vehicleId: params.vehicleId,
       companyId: params.companyId,
@@ -564,6 +594,7 @@ async function upsertVehicleHandover(params: {
 
   return prisma.vehicleHandover.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       driverId: params.driverId,
       vehicleId: params.vehicleId,
       previousVehicleId: params.previousVehicleId,
@@ -622,6 +653,7 @@ async function upsertAccident(params: {
 
   return prisma.accident.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       type: params.type,
       driverId: params.driverId,
       vehicleId: params.vehicleId,
@@ -672,6 +704,7 @@ async function upsertNotification(params: {
 
   return prisma.notification.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       userId: params.userId,
       title: params.title,
       message: params.message,
@@ -718,6 +751,7 @@ async function upsertReminder(params: {
 
   return prisma.reminder.create({
     data: {
+      tenantId: SEED_TENANT_ID,
       targetType: params.targetType,
       targetId: params.targetId,
       reminderType: params.reminderType,
@@ -731,6 +765,18 @@ async function upsertReminder(params: {
 }
 
 async function main(): Promise<void> {
+  await prisma.tenant.upsert({
+    where: { id: SEED_TENANT_ID },
+    update: {},
+    create: {
+      id: SEED_TENANT_ID,
+      name: 'MyFleet Demo',
+      slug: 'demo',
+      status: 'active',
+      language: 'de',
+    },
+  });
+
   const today = startOfDay(new Date());
   const tomorrow = addDays(today, 1);
 
@@ -1228,6 +1274,7 @@ async function main(): Promise<void> {
     },
     create: {
       id: 'conv_office_driver_ilker',
+      tenantId: SEED_TENANT_ID,
       driverId: ilker.id,
       createdById: officeUser.id,
       subject: 'Today route updates',
@@ -1245,6 +1292,7 @@ async function main(): Promise<void> {
     },
     create: {
       id: 'conv_admin_driver_ilker',
+      tenantId: SEED_TENANT_ID,
       driverId: ilker.id,
       createdById: adminUser.id,
       subject: 'Invoice and document follow-up',
@@ -1930,6 +1978,7 @@ async function main(): Promise<void> {
       lastSentAt: null,
     },
     create: {
+      tenantId: SEED_TENANT_ID,
       companyId: dhl.id,
       date: today,
       subject: `Daily Dispatch Overview ${today.toISOString().slice(0, 10)}`,
@@ -1955,6 +2004,7 @@ async function main(): Promise<void> {
       lastSentAt: null,
     },
     create: {
+      tenantId: SEED_TENANT_ID,
       companyId: amazon.id,
       date: tomorrow,
       subject: `Route Change Confirmation ${tomorrow.toISOString().slice(0, 10)}`,
@@ -1980,6 +2030,7 @@ async function main(): Promise<void> {
       lastSentAt: atTime(addDays(today, 2), 8, 45),
     },
     create: {
+      tenantId: SEED_TENANT_ID,
       companyId: dbSchenker.id,
       date: addDays(today, 2),
       subject: 'Approved Request Dispatch',
@@ -2005,6 +2056,7 @@ async function main(): Promise<void> {
       lastSentAt: atTime(addDays(today, 3), 9, 15),
     },
     create: {
+      tenantId: SEED_TENANT_ID,
       companyId: penny.id,
       date: addDays(today, 3),
       subject: 'Delivery Slot Update',
@@ -2197,7 +2249,7 @@ async function main(): Promise<void> {
   ];
 
   for (const rec of serviceRecords) {
-    await prisma.serviceRecord.create({ data: rec });
+    await prisma.serviceRecord.create({ data: { ...rec, tenantId: SEED_TENANT_ID } });
   }
 
   const morningCheckins = [
@@ -2237,7 +2289,7 @@ async function main(): Promise<void> {
   ];
 
   for (const c of morningCheckins) {
-    await prisma.morningCheckin.create({ data: c });
+    await prisma.morningCheckin.create({ data: { ...c, tenantId: SEED_TENANT_ID } });
   }
 
   for (const [brand, photoUrl] of Object.entries(VEHICLE_BRAND_PHOTOS)) {

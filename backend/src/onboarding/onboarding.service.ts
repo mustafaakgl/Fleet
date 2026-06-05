@@ -85,7 +85,9 @@ export class OnboardingService {
     }
 
     const normalizedEmail = dto.admin_email.trim().toLowerCase();
-    const emailTaken = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const emailTaken = await this.prisma.unscoped.user.findFirst({
+      where: { email: normalizedEmail },
+    });
     if (emailTaken) {
       throw new BadRequestException('Admin email is already registered');
     }

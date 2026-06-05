@@ -36,6 +36,7 @@ import { OnboardingModule } from './onboarding/onboarding.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { ImportModule } from './import/import.module';
 import { BillingModule } from './billing/billing.module';
+import { TenantModule } from './tenant/tenant.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { BillingModule } from './billing/billing.module';
     InvitationsModule,
     ImportModule,
     BillingModule,
+    TenantModule,
   ],
   providers: [
     {

@@ -268,9 +268,27 @@ model Tenant {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  users        User[]
-  invitations  UserInvitation[]
-  subscription TenantSubscription?
+  users                 User[]
+  invitations           UserInvitation[]
+  subscription          TenantSubscription?
+  drivers               Driver[]
+  vehicles              Vehicle[]
+  companies             Company[]
+  assignments           Assignment[]
+  transportRequests     TransportRequest[]
+  calendarEvents        CalendarEvent[]
+  requests              Request[]
+  documents             Document[]
+  vehicleHandovers      VehicleHandover[]
+  accidents             Accident[]
+  companyEmails         CompanyEmail[]
+  notifications         Notification[]
+  reminders             Reminder[]
+  morningCheckins       MorningCheckin[]
+  serviceRecords        ServiceRecord[]
+  conversations         Conversation[]
+  auditLogs             AuditLog[]
+  driverLocationHistory DriverLocationHistory[]
 }
 
 model TenantSubscription {
@@ -301,10 +319,10 @@ model TenantSubscription {
 
 model User {
   id           String     @id @default(cuid())
-  tenantId     String?
-  tenant       Tenant?    @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  tenantId     String     @default("default-tenant")
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   fullName     String
-  email        String     @unique
+  email        String
   passwordHash String
   role         UserRole
   status       UserStatus @default(active)
@@ -328,6 +346,7 @@ model User {
   createdPasswordResets PasswordResetToken[] @relation("PasswordResetCreatedBy")
   sentInvitations   UserInvitation[] @relation("InvitationSentBy")
 
+  @@unique([tenantId, email])
   @@index([tenantId])
 }
 
@@ -369,8 +388,10 @@ model PasswordResetToken {
 
 model Driver {
   id                 String       @id @default(cuid())
+  tenantId           String       @default("default-tenant")
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId             String?      @unique
-  employeeNumber     String       @unique
+  employeeNumber     String
   firstName          String
   lastName           String
   phone              String?
@@ -405,16 +426,21 @@ model Driver {
   conversations     Conversation[]
   locationLatest    DriverLocationLatest?
   locationHistory   DriverLocationHistory[]
+
+  @@unique([tenantId, employeeNumber])
+  @@index([tenantId])
 }
 
 model Vehicle {
   id                     String        @id @default(cuid())
-  plateNumber            String        @unique
-  internalCode           String        @unique
+  tenantId               String        @default("default-tenant")
+  tenant                 Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  plateNumber            String
+  internalCode           String
   brand                  String
   model                  String
   year                   Int?
-  vin                    String?       @unique
+  vin                    String?
   status                 VehicleStatus @default(active)
   currentDriverId        String?
   tuvExpiryDate          DateTime?
@@ -435,11 +461,18 @@ model Vehicle {
   serviceRecords    ServiceRecord[]
   locationLatestSnapshots DriverLocationLatest[]
   locationHistory   DriverLocationHistory[]
+
+  @@unique([tenantId, plateNumber])
+  @@unique([tenantId, internalCode])
+  @@unique([tenantId, vin])
+  @@index([tenantId])
 }
 
 model Company {
   id                  String   @id @default(cuid())
-  name                String   @unique
+  tenantId            String   @default("default-tenant")
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name                String
   email               String?
   phone               String?
   address             String?
@@ -455,6 +488,9 @@ model Company {
   companyEmails     CompanyEmail[]
   companyUsers      CompanyUser[]
   portalSettings    CompanyPortalSettings?
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model CompanyUser {
@@ -488,6 +524,8 @@ model CompanyPortalSettings {
 
 model Assignment {
   id              String           @id @default(cuid())
+  tenantId        String           @default("default-tenant")
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId        String
   vehicleId       String
   companyId       String
@@ -516,6 +554,7 @@ model Assignment {
   accidents        Accident[]
   morningCheckins  MorningCheckin[]
 
+  @@index([tenantId])
   @@index([driverId, workDate])
   @@index([vehicleId, workDate])
   @@index([companyId, workDate])
@@ -543,6 +582,8 @@ model DriverLocationLatest {
 
 model DriverLocationHistory {
   id         String         @id @default(cuid())
+  tenantId   String         @default("default-tenant")
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId   String
   vehicleId  String?
   latitude   Decimal        @db.Decimal(10, 7)
@@ -558,6 +599,7 @@ model DriverLocationHistory {
   driver  Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
   vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([driverId, recordedAt])
   @@index([vehicleId, recordedAt])
   @@index([recordedAt])
@@ -565,6 +607,8 @@ model DriverLocationHistory {
 
 model TransportRequest {
   id              String                 @id @default(cuid())
+  tenantId        String                 @default("default-tenant")
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId        String
   vehicleId       String
   companyId       String
@@ -586,6 +630,7 @@ model TransportRequest {
   company    Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
   assignment Assignment? @relation("TransportRequestAssignment", fields: [assignmentId], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([driverId, requestedDate])
   @@index([vehicleId, requestedDate])
   @@index([companyId, requestedDate])
@@ -593,6 +638,8 @@ model TransportRequest {
 
 model CalendarEvent {
   id           String         @id @default(cuid())
+  tenantId     String         @default("default-tenant")
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId     String
   assignmentId String?
   requestId    String?
@@ -605,12 +652,15 @@ model CalendarEvent {
   assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   request    Request?    @relation(fields: [requestId], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([driverId, date])
   @@index([requestId])
 }
 
 model Request {
   id           String        @id @default(uuid())
+  tenantId     String        @default("default-tenant")
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId     String
   type         RequestType
   startDate    DateTime
@@ -625,11 +675,14 @@ model Request {
   approvedBy     User?           @relation("ApprovedRequests", fields: [approvedById], references: [id], onDelete: SetNull)
   calendarEvents CalendarEvent[]
 
+  @@index([tenantId])
   @@index([driverId, startDate, endDate])
 }
 
 model Document {
   id           String            @id @default(uuid())
+  tenantId     String            @default("default-tenant")
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ownerType    DocumentOwnerType
   ownerId      String
   documentType String
@@ -644,6 +697,7 @@ model Document {
 
   uploadedBy User? @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([ownerType, ownerId])
   @@index([status])
   @@index([documentType])
@@ -652,6 +706,8 @@ model Document {
 
 model VehicleHandover {
   id                String              @id @default(uuid())
+  tenantId          String              @default("default-tenant")
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId          String
   vehicleId         String
   previousVehicleId String?
@@ -671,6 +727,7 @@ model VehicleHandover {
   vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([driverId, handoverDateTime])
   @@index([vehicleId, handoverDateTime])
   @@index([assignmentId])
@@ -678,6 +735,8 @@ model VehicleHandover {
 
 model Accident {
   id               String         @id @default(uuid())
+  tenantId         String         @default("default-tenant")
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   type             IncidentType
   driverId         String
   vehicleId        String
@@ -698,6 +757,7 @@ model Accident {
   company    Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
   assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([driverId, incidentDateTime])
   @@index([vehicleId, incidentDateTime])
   @@index([companyId, incidentDateTime])
@@ -707,6 +767,8 @@ model Accident {
 
 model CompanyEmail {
   id             String             @id @default(uuid())
+  tenantId       String             @default("default-tenant")
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId      String
   date           DateTime
   subject        String
@@ -719,12 +781,15 @@ model CompanyEmail {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@unique([companyId, date])
   @@index([companyId, date])
 }
 
 model Notification {
   id                String               @id @default(uuid())
+  tenantId          String               @default("default-tenant")
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId            String
   title             String
   message           String
@@ -738,12 +803,15 @@ model Notification {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@index([userId, status, createdAt])
   @@index([type, createdAt])
 }
 
 model Reminder {
   id               String         @id @default(uuid())
+  tenantId         String         @default("default-tenant")
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   targetType       String
   targetId         String
   reminderType     ReminderType
@@ -755,7 +823,8 @@ model Reminder {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  @@unique([targetType, targetId, reminderType, dueDate, notifyBeforeDays])
+  @@unique([tenantId, targetType, targetId, reminderType, dueDate, notifyBeforeDays])
+  @@index([tenantId])
   @@index([status, dueDate])
   @@index([targetType, targetId])
 }
@@ -772,6 +841,8 @@ enum MorningCheckinStatus {
 
 model MorningCheckin {
   id             String               @id @default(cuid())
+  tenantId       String               @default("default-tenant")
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId       String
   date           DateTime
   submittedAt    DateTime             @default(now())
@@ -789,12 +860,15 @@ model MorningCheckin {
   driver     Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
   assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([driverId, date])
   @@index([status, date])
 }
 
 model ServiceRecord {
   id            String   @id @default(cuid())
+  tenantId      String   @default("default-tenant")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   vehicleId     String
   date          DateTime
   serviceType   String
@@ -807,12 +881,15 @@ model ServiceRecord {
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@index([vehicleId, date])
   @@index([repairCompany])
 }
 
 model Conversation {
   id            String    @id @default(cuid())
+  tenantId      String    @default("default-tenant")
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId      String
   createdById   String
   subject       String?
@@ -825,6 +902,7 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
 
+  @@index([tenantId])
   @@index([driverId, updatedAt])
   @@index([lastMessageAt])
 }
@@ -881,6 +959,8 @@ model MessageRead {
 
 model AuditLog {
   id          String @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   actorUserId String?
   actorUser   User?  @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
@@ -896,6 +976,7 @@ model AuditLog {
 
   createdAt DateTime @default(now())
 
+  @@index([tenantId])
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
   @@index([action, createdAt])
