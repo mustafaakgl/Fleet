@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -29,6 +31,7 @@ export class RemindersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditService,
   ) {}
 
   private readonly reminderWindows = [90, 60, 30, 7];
@@ -338,7 +341,7 @@ export class RemindersService {
     });
   }
 
-  async generateReminders() {
+  async generateReminders(actorUserId?: string) {
     const dueDrivers = await this.getDueDrivers();
     const dueVehicles = await this.getDueVehicles();
     const dueDocuments = await this.getDueDocuments();
@@ -371,11 +374,26 @@ export class RemindersService {
       }
     }
 
-    return {
+    const result = {
       totalCandidates: candidates.length,
       created: createdReminders.length,
       reminders: createdReminders,
     };
+
+    if (createdReminders.length > 0) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'reminders.generated',
+        entityType: 'reminder',
+        summary: 'Reminders generated from due items',
+        metadata: {
+          totalCandidates: result.totalCandidates,
+          created: result.created,
+        },
+      });
+    }
+
+    return result;
   }
 
   async listReminders(filters: {
@@ -402,33 +420,53 @@ export class RemindersService {
     });
   }
 
-  async resolveReminder(id: string) {
+  async resolveReminder(id: string, actorUserId?: string) {
     const db = this.prisma as any;
     const reminder = await db.reminder.findUnique({ where: { id } });
     if (!reminder) {
       throw new NotFoundException('Reminder not found');
     }
 
-    return db.reminder.update({
+    const updated = await db.reminder.update({
       where: { id },
       data: {
         status: 'resolved' as ReminderStatus,
       },
     });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'reminder.resolved',
+      entityType: 'reminder',
+      entityId: id,
+      summary: 'Reminder resolved',
+    });
+
+    return updated;
   }
 
-  async ignoreReminder(id: string) {
+  async ignoreReminder(id: string, actorUserId?: string) {
     const db = this.prisma as any;
     const reminder = await db.reminder.findUnique({ where: { id } });
     if (!reminder) {
       throw new NotFoundException('Reminder not found');
     }
 
-    return db.reminder.update({
+    const updated = await db.reminder.update({
       where: { id },
       data: {
         status: 'ignored' as ReminderStatus,
       },
     });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'reminder.ignored',
+      entityType: 'reminder',
+      entityId: id,
+      summary: 'Reminder ignored',
+    });
+
+    return updated;
   }
 }

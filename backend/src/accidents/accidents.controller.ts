@@ -1,5 +1,6 @@
 import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -55,6 +56,7 @@ export class AccidentsController {
   }
 
   @Post('recalculate-risk/:driverId')
+  @RequiresWrite()
   recalculateDriverRisk(@Param('driverId') driverId: string) {
     return this.accidentsService.recalculateDriverRisk(driverId);
   }
@@ -65,6 +67,7 @@ export class AccidentsController {
   }
 
   @Post()
+  @RequiresWrite()
   createIncident(
     @Body() data: CreateAccidentDto,
     @CurrentUser('role') role?: string,
@@ -79,6 +82,7 @@ export class AccidentsController {
   }
 
   @Patch(':id')
+  @RequiresWrite()
   updateIncident(@Param('id') id: string, @Body() data: UpdateAccidentDto, @CurrentUser('role') role?: string) {
     if (!canViewFinancialFields(role) && data.damageValue !== undefined) {
       throw new ForbiddenException('You do not have permission to update damage value');
@@ -87,6 +91,7 @@ export class AccidentsController {
   }
 
   @Patch(':id/status')
+  @RequiresWrite()
   updateIncidentStatus(
     @Param('id') id: string,
     @Body('status') status: 'reported' | 'under_review' | 'resolved' | 'rejected',

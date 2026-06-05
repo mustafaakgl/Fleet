@@ -13,11 +13,12 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { OPERATIONAL_ROLES, OPERATIONAL_WRITE_ROLES } from '../common/utils/permissions';
+import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { MorningCheckinsService } from './morning-checkins.service';
 import { CreateMorningCheckinDto } from './dto/create-morning-checkin.dto';
 import { UpdateMorningCheckinDto } from './dto/update-morning-checkin.dto';
@@ -47,14 +48,14 @@ export class MorningCheckinsController {
   }
 
   @Post()
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateMorningCheckinDto, @CurrentUser('id') actorUserId: string) {
     return this.morningCheckins.create(dto, actorUserId);
   }
 
   @Patch(':id')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   update(
     @Param('id') id: string,
     @Body() dto: UpdateMorningCheckinDto,
@@ -64,7 +65,7 @@ export class MorningCheckinsController {
   }
 
   @Post(':id/add-to-einsatzplan')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   @HttpCode(HttpStatus.OK)
   addToEinsatzplan(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.morningCheckins.addToEinsatzplan(id, req.user.id);

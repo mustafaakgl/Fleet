@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, ServiceRecord } from '@prisma/client';
+import { safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceRecordDto } from './dto/create-service-record.dto';
 import { UpdateServiceRecordDto } from './dto/update-service-record.dto';
@@ -30,7 +32,10 @@ const vehicleInclude = {
 
 @Injectable()
 export class ServiceRecordsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async list(query: { vehicle_id?: string; from?: string; to?: string; repair_company?: string }) {
     const where: Prisma.ServiceRecordWhereInput = {};
@@ -81,7 +86,7 @@ export class ServiceRecordsService {
     return rows.map((r) => r.repairCompany);
   }
 
-  async create(dto: CreateServiceRecordDto) {
+  async create(dto: CreateServiceRecordDto, actorUserId?: string) {
     const record = await this.prisma.serviceRecord.create({
       data: {
         vehicleId: dto.vehicle_id,
@@ -94,10 +99,17 @@ export class ServiceRecordsService {
       },
       include: vehicleInclude,
     });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'service_record.created',
+      entityType: 'service_record',
+      entityId: record.id,
+      summary: 'Service record created',
+    });
     return toClient(record);
   }
 
-  async update(id: string, dto: UpdateServiceRecordDto) {
+  async update(id: string, dto: UpdateServiceRecordDto, actorUserId?: string) {
     await this.assertExists(id);
     const data: Prisma.ServiceRecordUpdateInput = {};
     if (dto.date !== undefined) data.date = new Date(dto.date);
@@ -112,12 +124,26 @@ export class ServiceRecordsService {
       data,
       include: vehicleInclude,
     });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'service_record.updated',
+      entityType: 'service_record',
+      entityId: id,
+      summary: 'Service record updated',
+    });
     return toClient(record);
   }
 
-  async remove(id: string) {
+  async remove(id: string, actorUserId?: string) {
     await this.assertExists(id);
     await this.prisma.serviceRecord.delete({ where: { id } });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'service_record.deleted',
+      entityType: 'service_record',
+      entityId: id,
+      summary: 'Service record deleted',
+    });
     return { id, deleted: true };
   }
 

@@ -9,10 +9,12 @@ import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { OPERATIONAL_ROLES, type UserRole } from '../common/utils/permissions';
 import { PrismaService } from '../prisma/prisma.service';
-import { mimeTypeFromFileName, resolveAbsolutePathFromStoredUrl } from '../storage/file-path.util';
+import { mimeTypeFromFileName } from '../storage/file-path.util';
+import { ObjectStorageService } from '../storage/object-storage.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { StorageService } from '../storage/storage.service';
+import type { Readable } from 'node:stream';
 
 type DocumentOwnerType =
   | 'driver'
@@ -48,6 +50,7 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
+    private readonly objectStorage: ObjectStorageService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -150,20 +153,29 @@ export class DocumentsService {
   async resolveDocumentDownload(
     id: string,
     actor: { userId: string; role: string },
-  ): Promise<{ absolutePath: string; fileName: string; mimeType: string }> {
+  ): Promise<{ stream: Readable; fileName: string; mimeType: string }> {
     const document = await this.getDocumentById(id);
     await this.assertCanDownloadDocument(document, actor);
 
-    const absolutePath = resolveAbsolutePathFromStoredUrl(document.fileUrl ?? '');
-    if (!absolutePath || !existsSync(absolutePath)) {
+    if (!document.fileUrl) {
+      throw new NotFoundException('Document file not found');
+    }
+
+    const opened = await this.objectStorage.openStoredFile(document.fileUrl);
+    if (!opened) {
       throw new NotFoundException('Document file not found');
     }
 
     return {
-      absolutePath,
+      stream: opened.stream,
       fileName: document.fileName,
-      mimeType: mimeTypeFromFileName(document.fileName),
+      mimeType: opened.contentType ?? mimeTypeFromFileName(document.fileName),
     };
+  }
+
+  async syncUploadedFile(fileUrl: string | null | undefined): Promise<void> {
+    if (!fileUrl) return;
+    await this.objectStorage.syncLocalFile(fileUrl);
   }
 
   private async safeAuditLog(params: {

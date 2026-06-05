@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { OPERATIONAL_ROLES, OPERATIONAL_WRITE_ROLES } from '../common/utils/permissions';
+import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CreateVehicleHandoverDto } from './dto/create-vehicle-handover.dto';
 import { UpdateVehicleHandoverDto } from './dto/update-vehicle-handover.dto';
 import { VehicleHandoversService } from './vehicle-handovers.service';
@@ -40,13 +41,13 @@ export class VehicleHandoversController {
   }
 
   @Post()
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   createHandover(@Body() dto: CreateVehicleHandoverDto, @CurrentUser('id') currentUserId?: string) {
     return this.vehicleHandoversService.createHandover(dto, currentUserId);
   }
 
   @Post('from-assignment/:assignmentId')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   createHandoverFromAssignment(
     @Param('assignmentId') assignmentId: string,
     @CurrentUser('id') currentUserId?: string,
@@ -55,25 +56,25 @@ export class VehicleHandoversController {
   }
 
   @Patch(':id')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   updateHandover(@Param('id') id: string, @Body() dto: UpdateVehicleHandoverDto) {
     return this.vehicleHandoversService.updateHandover(id, dto);
   }
 
   @Post(':id/approve-photo')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   approvePhoto(@Param('id') id: string) {
     return this.vehicleHandoversService.approvePhoto(id);
   }
 
   @Post(':id/reject-photo')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   rejectPhoto(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.vehicleHandoversService.rejectPhoto(id, currentUserId);
   }
 
   @Post(':id/complete')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   markCompleted(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.vehicleHandoversService.markCompleted(id, currentUserId);
   }

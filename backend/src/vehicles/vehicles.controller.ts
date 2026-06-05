@@ -15,8 +15,9 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { createReadStream } from 'node:fs';
 import type { Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
@@ -54,8 +55,13 @@ export class VehiclesController {
   }
 
   @Get(':id/photo')
-  async downloadVehiclePhoto(@Param('id') id: string, @Res() res: Response) {
+  async downloadVehiclePhoto(
+    @Param('id') id: string,
+    @CurrentUser('id') actorUserId: string,
+    @Res() res: Response,
+  ) {
     const file = await this.vehiclesService.resolveVehiclePhotoDownload(id);
+    await this.vehiclesService.recordVehiclePhotoDownload(id, actorUserId);
 
     res.set({
       'Content-Type': file.mimeType,
@@ -63,7 +69,7 @@ export class VehiclesController {
       'Cache-Control': 'private, no-store',
     });
 
-    createReadStream(file.absolutePath).pipe(res);
+    file.stream.pipe(res);
   }
 
   @Get(':id')
@@ -72,6 +78,7 @@ export class VehiclesController {
   }
 
   @Post()
+  @RequiresWrite()
   @HttpCode(HttpStatus.CREATED)
   createVehicle(
     @Body() dto: CreateVehicleDto,
@@ -82,6 +89,7 @@ export class VehiclesController {
   }
 
   @Patch(':id')
+  @RequiresWrite()
   updateVehicle(
     @Param('id') id: string,
     @Body() dto: UpdateVehicleDto,
@@ -91,6 +99,8 @@ export class VehiclesController {
   }
 
   @Post(':id/photo')
+  @RequiresWrite()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(VEHICLE_PHOTO_UPLOAD_INTERCEPTOR)
   uploadVehiclePhoto(
     @Param('id') id: string,
@@ -109,6 +119,7 @@ export class VehiclesController {
   }
 
   @Delete(':id')
+  @RequiresWrite()
   deactivateVehicle(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
     return this.vehiclesService.deactivate(id, actorUserId);
   }

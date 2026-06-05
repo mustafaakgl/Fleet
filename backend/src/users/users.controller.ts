@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -42,6 +43,7 @@ export class UsersController {
   }
 
   @Post()
+  @RequiresWrite()
   @HttpCode(HttpStatus.CREATED)
   create(
     @Body() dto: CreateUserDto,
@@ -52,6 +54,7 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @RequiresWrite()
   update(
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,
@@ -61,6 +64,7 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @RequiresWrite()
   deactivate(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
     return this.users.deactivate(id, actorUserId);
   }

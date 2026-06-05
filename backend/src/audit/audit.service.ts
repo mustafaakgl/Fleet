@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantContext } from '../tenant/tenant-context';
 
 type LogActionParams = {
   actorUserId?: string | null;
@@ -27,8 +28,10 @@ export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
   async logAction(params: LogActionParams) {
+    const tenantId = TenantContext.getTenantId();
     return this.prisma.auditLog.create({
       data: {
+        tenantId: tenantId ?? null,
         actorUserId: params.actorUserId ?? null,
         action: params.action,
         entityType: params.entityType,

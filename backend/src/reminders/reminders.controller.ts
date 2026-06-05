@@ -3,7 +3,9 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RemindersService } from './reminders.service';
 
 @Controller('reminders')
@@ -26,17 +28,20 @@ export class RemindersController {
   }
 
   @Post('generate')
-  generateReminders() {
-    return this.remindersService.generateReminders();
+  @RequiresWrite()
+  generateReminders(@CurrentUser('id') actorUserId?: string) {
+    return this.remindersService.generateReminders(actorUserId);
   }
 
   @Post(':id/resolve')
-  resolveReminder(@Param('id') id: string) {
-    return this.remindersService.resolveReminder(id);
+  @RequiresWrite()
+  resolveReminder(@Param('id') id: string, @CurrentUser('id') actorUserId?: string) {
+    return this.remindersService.resolveReminder(id, actorUserId);
   }
 
   @Post(':id/ignore')
-  ignoreReminder(@Param('id') id: string) {
-    return this.remindersService.ignoreReminder(id);
+  @RequiresWrite()
+  ignoreReminder(@Param('id') id: string, @CurrentUser('id') actorUserId?: string) {
+    return this.remindersService.ignoreReminder(id, actorUserId);
   }
 }

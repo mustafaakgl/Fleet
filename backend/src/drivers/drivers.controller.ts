@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -32,6 +33,7 @@ export class DriversController {
   ) {}
 
   @Post('birthdays/send-today')
+  @RequiresWrite()
   sendTodayBirthdayNotifications() {
     return this.driverBirthdaysService.sendTodayBirthdayNotifications();
   }
@@ -57,12 +59,14 @@ export class DriversController {
   }
 
   @Post()
+  @RequiresWrite()
   @HttpCode(HttpStatus.CREATED)
   createDriver(@Body() dto: CreateDriverDto, @CurrentUser('id') actorUserId: string) {
     return this.driversService.create(dto, actorUserId);
   }
 
   @Patch(':id')
+  @RequiresWrite()
   updateDriver(
     @Param('id') id: string,
     @Body() dto: UpdateDriverDto,
@@ -72,6 +76,7 @@ export class DriversController {
   }
 
   @Delete(':id')
+  @RequiresWrite()
   deactivateDriver(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
     return this.driversService.deactivate(id, actorUserId);
   }

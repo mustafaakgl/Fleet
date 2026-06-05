@@ -3,13 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createReadStream, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import type { Response } from 'express';
 import archiver from 'archiver';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 import { resolveAbsolutePathFromStoredUrl } from '../storage/file-path.util';
 
 function jsonLine(value: unknown): string {
@@ -66,6 +67,7 @@ export class PrivacyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly objectStorage: ObjectStorageService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -187,9 +189,15 @@ export class PrivacyService {
 
     for (const document of documents) {
       if (!document.fileUrl) continue;
+      const safeName = document.fileName.replace(/[^\w.\-()+\s]/g, '_');
+      const stored = await this.objectStorage.openStoredFile(document.fileUrl);
+      if (stored) {
+        archive.append(stored.stream, { name: `documents/${document.id}_${safeName}` });
+        continue;
+      }
       const absolutePath = resolveAbsolutePathFromStoredUrl(document.fileUrl);
       if (!absolutePath || !existsSync(absolutePath)) continue;
-      const safeName = document.fileName.replace(/[^\w.\-()+\s]/g, '_');
+      const { createReadStream } = await import('node:fs');
       archive.append(createReadStream(absolutePath), {
         name: `documents/${document.id}_${safeName}`,
       });
@@ -395,5 +403,124 @@ export class PrivacyService {
     }
 
     return { deleted: result.count, cutoff: cutoff.toISOString() };
+  }
+
+  async purgeOldAuditLogs(): Promise<{ deleted: number; cutoff: string }> {
+    const retentionDays = Number(process.env.AUDIT_LOG_RETENTION_DAYS ?? 730);
+    const days = Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : 730;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const result = await this.prisma.auditLog.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+
+    if (result.count > 0) {
+      await this.safeAuditLog({
+        action: 'privacy.retention_purge',
+        entityType: 'audit_log',
+        summary: 'Audit log retention purge',
+        metadata: { deletedCount: result.count, retentionDays: days, cutoff: cutoff.toISOString() },
+      });
+    }
+
+    return { deleted: result.count, cutoff: cutoff.toISOString() };
+  }
+
+  async purgeOldNotifications(): Promise<{ deleted: number; cutoff: string }> {
+    const retentionDays = Number(process.env.NOTIFICATION_RETENTION_DAYS ?? 730);
+    const days = Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : 730;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const result = await this.prisma.notification.deleteMany({
+      where: { createdAt: { lt: cutoff } },
+    });
+
+    if (result.count > 0) {
+      await this.safeAuditLog({
+        action: 'privacy.retention_purge',
+        entityType: 'notification',
+        summary: 'Notification retention purge',
+        metadata: { deletedCount: result.count, retentionDays: days, cutoff: cutoff.toISOString() },
+      });
+    }
+
+    return { deleted: result.count, cutoff: cutoff.toISOString() };
+  }
+
+  async purgeOldMessages(): Promise<{ deleted: number; cutoff: string }> {
+    const retentionDays = Number(process.env.MESSAGE_RETENTION_DAYS ?? 730);
+    const days = Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : 730;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const staleMessages = await this.prisma.message.findMany({
+      where: { createdAt: { lt: cutoff } },
+      select: { id: true },
+      take: 10_000,
+    });
+
+    if (staleMessages.length === 0) {
+      return { deleted: 0, cutoff: cutoff.toISOString() };
+    }
+
+    const ids = staleMessages.map((row) => row.id);
+    await this.prisma.messageRead.deleteMany({ where: { messageId: { in: ids } } });
+    const result = await this.prisma.message.deleteMany({ where: { id: { in: ids } } });
+
+    if (result.count > 0) {
+      await this.safeAuditLog({
+        action: 'privacy.retention_purge',
+        entityType: 'message',
+        summary: 'Messenger message retention purge',
+        metadata: { deletedCount: result.count, retentionDays: days, cutoff: cutoff.toISOString() },
+      });
+    }
+
+    return { deleted: result.count, cutoff: cutoff.toISOString() };
+  }
+
+  async purgeExpiredDocuments(): Promise<{ deleted: number; cutoff: string }> {
+    const graceDays = Number(process.env.DOCUMENT_EXPIRY_GRACE_DAYS ?? 30);
+    const days = Number.isFinite(graceDays) && graceDays >= 0 ? graceDays : 30;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const expired = await this.prisma.document.findMany({
+      where: {
+        expiryDate: { not: null, lt: cutoff },
+      },
+      select: { id: true, fileUrl: true },
+      take: 500,
+    });
+
+    let deleted = 0;
+    for (const document of expired) {
+      if (document.fileUrl) {
+        await this.objectStorage.deleteStoredFile(document.fileUrl);
+        const absolutePath = resolveAbsolutePathFromStoredUrl(document.fileUrl);
+        if (absolutePath && existsSync(absolutePath)) {
+          await unlink(absolutePath).catch(() => undefined);
+        }
+      }
+      await this.prisma.document.delete({ where: { id: document.id } });
+      deleted += 1;
+    }
+
+    if (deleted > 0) {
+      await this.safeAuditLog({
+        action: 'privacy.retention_purge',
+        entityType: 'document',
+        summary: 'Expired document purge',
+        metadata: {
+          deletedCount: deleted,
+          graceDays: days,
+          cutoff: cutoff.toISOString(),
+        },
+      });
+    }
+
+    return { deleted, cutoff: cutoff.toISOString() };
   }
 }

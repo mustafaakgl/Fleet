@@ -289,6 +289,7 @@ model Tenant {
   conversations         Conversation[]
   auditLogs             AuditLog[]
   driverLocationHistory DriverLocationHistory[]
+  driverLocationLatest  DriverLocationLatest[]
 }
 
 model TenantSubscription {
@@ -562,6 +563,7 @@ model Assignment {
 
 model DriverLocationLatest {
   driverId   String         @id
+  tenantId   String         @default("default-tenant")
   latitude   Decimal        @db.Decimal(10, 7)
   longitude  Decimal        @db.Decimal(10, 7)
   accuracyM  Float?
@@ -573,9 +575,11 @@ model DriverLocationLatest {
   source     LocationSource @default(mobile)
   vehicleId  String?
 
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driver  Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
   vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
 
+  @@index([tenantId])
   @@index([receivedAt])
   @@index([vehicleId])
 }

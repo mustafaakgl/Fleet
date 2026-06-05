@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
+import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -29,6 +30,7 @@ interface AuthenticatedRequest extends Request {
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -57,6 +59,7 @@ export class AuthController {
     return this.auth.requestPasswordReset(adminUserId, dto.user_id);
   }
 
+  @Public()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Get('password-reset/validate')
   validatePasswordReset(@Query('token') token?: string) {
@@ -66,6 +69,7 @@ export class AuthController {
     return this.auth.validatePasswordResetToken(token);
   }
 
+  @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('password-reset/confirm')
   @HttpCode(HttpStatus.OK)

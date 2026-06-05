@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CalendarSource, CalendarStatus, Prisma } from '@prisma/client';
+import { safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type CreateCalendarEventInput = {
@@ -12,7 +14,10 @@ type CreateCalendarEventInput = {
 
 @Injectable()
 export class CalendarService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private enumerateDatesInclusive(startDate: Date, endDate: Date): Date[] {
     const start = new Date(startDate);
@@ -36,7 +41,7 @@ export class CalendarService {
     return tx ?? this.prisma;
   }
 
-  async createCalendarEvent(input: CreateCalendarEventInput) {
+  async createCalendarEvent(input: CreateCalendarEventInput, actorUserId?: string) {
     const driver = await this.prisma.driver.findUnique({
       where: { id: input.driverId },
       select: { id: true },
@@ -46,7 +51,7 @@ export class CalendarService {
       throw new NotFoundException('Driver not found');
     }
 
-    return this.prisma.calendarEvent.create({
+    const event = await this.prisma.calendarEvent.create({
       data: {
         driverId: input.driverId,
         assignmentId: input.assignmentId,
@@ -55,6 +60,16 @@ export class CalendarService {
         source: input.source,
       },
     });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'calendar_event.created',
+      entityType: 'calendar_event',
+      entityId: event.id,
+      summary: 'Manual calendar event created',
+    });
+
+    return event;
   }
 
   async listCalendarEvents(query?: { driver_id?: string; from?: string; to?: string }) {
@@ -107,7 +122,7 @@ export class CalendarService {
     });
   }
 
-  async deleteCalendarEvent(id: string) {
+  async deleteCalendarEvent(id: string, actorUserId?: string) {
     const existing = await this.prisma.calendarEvent.findUnique({
       where: { id },
       select: { id: true, source: true },
@@ -119,6 +134,13 @@ export class CalendarService {
       );
     }
     await this.prisma.calendarEvent.delete({ where: { id } });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'calendar_event.deleted',
+      entityType: 'calendar_event',
+      entityId: id,
+      summary: 'Manual calendar event deleted',
+    });
     return { id, deleted: true };
   }
 

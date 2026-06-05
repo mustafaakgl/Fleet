@@ -7,6 +7,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -26,6 +27,7 @@ export class ImportController {
   constructor(private readonly importService: ImportService) {}
 
   @Post('drivers')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file'))
   importDrivers(
@@ -37,6 +39,7 @@ export class ImportController {
   }
 
   @Post('vehicles')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file'))
   importVehicles(

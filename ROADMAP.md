@@ -12,12 +12,12 @@
 
 > Goal: A German fleet owner can click around the live product during a demo without ever seeing anything fake, broken, or non-German.
 
-- [ ] **0.1** Hide/feature-flag demoware modules from nav: `Flottenmonitor` (mock telematics), `DSGVO` stub, `Settings` stub — `frontend/lib/navigation.ts`, `frontend/components/layout/Sidebar.tsx`
-- [ ] **0.2** Remove/replace hardcoded KPIs in Einsatzplan admin "Dashboard" & "Statusübersicht" tabs (42/31/58/124) — wire to real data or remove tabs — `frontend/components/einsatzplan/EinsatzplanPage.tsx`
-- [ ] **0.3** Fix `Benutzerverwaltung` (in-memory user CRUD): wire to `usersApi` or remove from Einsatzplan
-- [ ] **0.4** Remove the dev role-switcher from the production `Header.tsx`
-- [ ] **0.5** Fix broken assignment create flow: dead "Neue Planung" button + `/assignments/new` raw-UUID form → coherent create UX
-- [ ] **0.6** German i18n completeness pass on all demo-path screens (no mixed EN/DE/TR)
+- [x] **0.1** Hide/feature-flag demoware modules from nav: `Flottenmonitor` (mock telematics), `DSGVO` stub, `Settings` stub — `frontend/lib/navigation.ts`, `frontend/components/layout/Sidebar.tsx`
+- [x] **0.2** Remove/replace hardcoded KPIs in Einsatzplan admin "Dashboard" & "Statusübersicht" tabs (42/31/58/124) — wire to real data or remove tabs — `frontend/components/einsatzplan/EinsatzplanPage.tsx`
+- [x] **0.3** Fix `Benutzerverwaltung` (in-memory user CRUD): wire to `usersApi` or remove from Einsatzplan
+- [x] **0.4** Remove the dev role-switcher from the production `Header.tsx`
+- [x] **0.5** Fix broken assignment create flow: dead "Neue Planung" button + `/assignments/new` raw-UUID form → coherent create UX
+- [x] **0.6** German i18n completeness pass on all demo-path screens (no mixed EN/DE/TR)
 
 ## Phase 1 — Legal & Trust to take money (DSGVO) — Weeks 3–4
 
@@ -105,7 +105,7 @@
 - [x] Global: 100 req/min per IP (tune for API)
 - [x] `@Throttle({ default: { limit: 5, ttl: 60000 } })` on `POST /auth/login`
 - [x] Return `429 Too Many Requests` with `Retry-After`
-- [ ] Audit log: `auth.login_rate_limited` (no email in metadata — privacy) — deferred
+- [x] Audit log: `auth.login_rate_limited` (no email in metadata — privacy)
 - **Files:** `app.module.ts`, `auth.controller.ts`
 
 #### 1.2.3 Password policy
@@ -259,15 +259,15 @@ Train reps to run this **live** in 5 minutes during the second demo visit:
 
 ### Phase 1 — Definition of Done
 
-- [ ] No unauthenticated file access anywhere (web + mobile)
-- [ ] Production boot fails without strong `JWT_SECRET`
-- [ ] Login rate-limited; password policy ≥10 chars enforced
-- [ ] Admin can reset user password via one-time link
-- [ ] Admin can export + anonymize driver data with audit trail
-- [ ] Datenschutz page in nav (admin) with DE content
-- [ ] AVV + TOMs + sub-processor docs in `docs/legal/`
+- [x] No unauthenticated file access anywhere (web + mobile)
+- [x] Production boot fails without strong `JWT_SECRET`
+- [x] Login rate-limited; password policy ≥10 chars enforced
+- [x] Admin can reset user password via one-time link
+- [x] Admin can export + anonymize driver data with audit trail
+- [x] Datenschutz page in nav (admin) with DE content
+- [x] AVV + TOMs + sub-processor docs in `docs/legal/`
 - [x] Master-data CRUD + morning check-ins appear in audit log
-- [ ] Location history retention cron running
+- [x] Location history retention cron running
 - [ ] `npm run dev:full` + manual QA pass on demo script above
 
 ---
@@ -304,6 +304,41 @@ Train reps to run this **live** in 5 minutes during the second demo visit:
 - [x] **4.2** Prisma client extension / middleware for automatic tenant scoping on every query
 - [x] **4.3** Tenant context resolution from JWT; tenant-aware guards
 - [x] **4.4** Data migration + isolation tests
+
+## Phase 5 — Production Hardening & Go-Live — Weeks 9–10
+
+> Goal: Deploy one shared production stack with observability, health probes, and ops-ready logging — without changing product scope.
+
+- [x] **5.1** Health endpoints: `GET /api/v1/health` (liveness), `GET /api/v1/health/ready` (DB readiness)
+- [x] **5.2** Structured JSON request logging (method, path, status, duration, tenant/user; skips `/health`)
+- [x] **5.3** Login rate-limit audit (`auth.login_rate_limited`) + `Retry-After` on 429
+- [x] **5.4** Graceful shutdown hooks (`enableShutdownHooks`)
+- [x] **5.5** Public route markers (`@Public`) on auth + health; ROADMAP Phase 0 completion sync
+
+### Phase 5 — Deliberately out of scope (post-revenue)
+
+- Centralised log aggregation (Datadog/ELK) — use JSON stdout + host agent later
+- Virus scanning on uploads (SEC-8)
+- Uptime alerting (PagerDuty/Opsgenie)
+
+## Phase 6 — Infrastructure & Security Hardening — Weeks 11–12
+
+> Goal: Production ops checklist (RBAC, audit, storage, observability, backups, GDPR retention, CI) is demonstrable to enterprise buyers.
+
+- [x] **6.1** RBAC: `PERMISSION_MATRIX`, global `WriteRoleGuard`, `@RequiresWrite()` on all operational write endpoints
+- [x] **6.2** Audit: `safeAuditLog` on reminders, calendar, service-records, vehicle photos; tenant-scoped audit rows
+- [x] **6.3** S3/MinIO: `ObjectStorageService` (`STORAGE_DRIVER=local|s3`), document/photo sync + stream download
+- [x] **6.4** Rate limiting: per-endpoint throttles on uploads, privacy export, CSV import, search
+- [x] **6.5** Prometheus: `GET /api/v1/metrics`, `fleet_http_requests_total` + duration histogram via request interceptor
+- [x] **6.6** Sentry: backend bootstrap + `@sentry/nextjs` frontend (optional via `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`)
+- [x] **6.7** Daily backup script: `scripts/backup-daily.sh` (pg_dump + uploads tarball)
+- [x] **6.8** GDPR retention cron: location history, audit logs, notifications, messages, expired documents
+- [x] **6.9** Load testing: `scripts/load/k6-smoke.js` (health/ready smoke)
+- [x] **6.10** Pentest prep: `docs/security/PENTEST-CHECKLIST.md` + `npm audit` in CI
+- [x] **6.11** Multi-tenant: `DriverLocationLatest.tenantId` migration + extended isolation check in CI
+- [x] **6.12** API versioning: `X-API-Version` + `X-API-Deprecation-Policy` response headers
+- [x] **6.13** CI/CD: `.github/workflows/ci.yml` (build, migrate, tenant isolation, audit)
+- [x] **6.14** DR documentation: `docs/ops/DISASTER-RECOVERY.md`
 
 ---
 

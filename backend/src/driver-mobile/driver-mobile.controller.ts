@@ -15,7 +15,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { createReadStream } from 'node:fs';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -192,7 +191,7 @@ export class DriverMobileController {
       'Cache-Control': 'private, no-store',
     });
 
-    createReadStream(file.absolutePath).pipe(res);
+    file.stream.pipe(res);
   }
 
   @Post('documents')

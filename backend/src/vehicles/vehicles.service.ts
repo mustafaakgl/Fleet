@@ -1,13 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Vehicle, VehicleStatus } from '@prisma/client';
-import { existsSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Readable } from 'node:stream';
 import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { BillingService } from '../billing/billing.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { mimeTypeFromFileName, resolveAbsolutePathFromStoredUrl } from '../storage/file-path.util';
+import { mimeTypeFromFileName } from '../storage/file-path.util';
+import { ObjectStorageService } from '../storage/object-storage.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -60,6 +61,7 @@ export class VehiclesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
+    private readonly objectStorage: ObjectStorageService,
     private readonly auditService: AuditService,
     private readonly billingService: BillingService,
   ) {}
@@ -253,7 +255,7 @@ export class VehiclesService {
 
   async resolveVehiclePhotoDownload(
     id: string,
-  ): Promise<{ absolutePath: string; fileName: string; mimeType: string }> {
+  ): Promise<{ stream: Readable; fileName: string; mimeType: string }> {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id },
       select: { photoUrl: true, plateNumber: true },
@@ -262,17 +264,27 @@ export class VehiclesService {
       throw new NotFoundException('Vehicle photo not found');
     }
 
-    const absolutePath = resolveAbsolutePathFromStoredUrl(vehicle.photoUrl);
-    if (!absolutePath || !existsSync(absolutePath)) {
+    const opened = await this.objectStorage.openStoredFile(vehicle.photoUrl);
+    if (!opened) {
       throw new NotFoundException('Vehicle photo file not found');
     }
 
     const fileName = `${vehicle.plateNumber.replace(/\s+/g, '-')}-photo.jpg`;
     return {
-      absolutePath,
+      stream: opened.stream,
       fileName,
-      mimeType: mimeTypeFromFileName(fileName),
+      mimeType: opened.contentType ?? mimeTypeFromFileName(fileName),
     };
+  }
+
+  async recordVehiclePhotoDownload(vehicleId: string, actorUserId?: string): Promise<void> {
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'vehicle_photo.download',
+      entityType: 'vehicle',
+      entityId: vehicleId,
+      summary: 'Vehicle photo downloaded',
+    });
   }
 
   async uploadPhoto(id: string, file: UploadedVehiclePhotoFile, actorUserId?: string) {
@@ -289,6 +301,7 @@ export class VehiclesService {
     });
 
     await this.removeStoredPhotoIfLocal(existing.photoUrl);
+    await this.objectStorage.syncLocalFile(photoUrl);
 
     await safeAuditLog(this.auditService, {
       actorUserId,

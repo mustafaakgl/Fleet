@@ -19,6 +19,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'Conversation',
   'AuditLog',
   'DriverLocationHistory',
+  'DriverLocationLatest',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

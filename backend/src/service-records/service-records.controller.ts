@@ -17,6 +17,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { canViewFinancialFields, maskFinancialFields, OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { ServiceRecordsService } from './service-records.service';
 import { CreateServiceRecordDto } from './dto/create-service-record.dto';
@@ -52,24 +53,36 @@ export class ServiceRecordsController {
   }
 
   @Post()
+  @RequiresWrite()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateServiceRecordDto, @CurrentUser('role') role?: string) {
+  create(
+    @Body() dto: CreateServiceRecordDto,
+    @CurrentUser('role') role?: string,
+    @CurrentUser('id') actorUserId?: string,
+  ) {
     if (!canViewFinancialFields(role) && dto.cost_amount !== undefined) {
       throw new ForbiddenException('You do not have permission to set service cost');
     }
-    return this.serviceRecords.create(dto).then((data) => maskFinancialFields(data, role));
+    return this.serviceRecords.create(dto, actorUserId).then((data) => maskFinancialFields(data, role));
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateServiceRecordDto, @CurrentUser('role') role?: string) {
+  @RequiresWrite()
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateServiceRecordDto,
+    @CurrentUser('role') role?: string,
+    @CurrentUser('id') actorUserId?: string,
+  ) {
     if (!canViewFinancialFields(role) && dto.cost_amount !== undefined) {
       throw new ForbiddenException('You do not have permission to update service cost');
     }
-    return this.serviceRecords.update(id, dto).then((data) => maskFinancialFields(data, role));
+    return this.serviceRecords.update(id, dto, actorUserId).then((data) => maskFinancialFields(data, role));
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.serviceRecords.remove(id);
+  @RequiresWrite()
+  remove(@Param('id') id: string, @CurrentUser('id') actorUserId?: string) {
+    return this.serviceRecords.remove(id, actorUserId);
   }
 }

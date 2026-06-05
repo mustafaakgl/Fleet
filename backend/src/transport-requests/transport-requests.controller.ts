@@ -12,11 +12,12 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { OPERATIONAL_ROLES, OPERATIONAL_WRITE_ROLES } from '../common/utils/permissions';
+import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { TransportRequestsService } from './transport-requests.service';
 import { CreateTransportRequestDto } from './dto/create-transport-request.dto';
 import { RejectTransportRequestDto } from './dto/reject-transport-request.dto';
@@ -46,7 +47,7 @@ export class TransportRequestsController {
   }
 
   @Post()
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateTransportRequestDto, @CurrentUser('id') currentUserId?: string) {
     return this.transport.createRequest({
@@ -65,14 +66,14 @@ export class TransportRequestsController {
   }
 
   @Post(':id/approve')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   @HttpCode(HttpStatus.OK)
   approve(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.transport.approveRequest(id, req.user.id);
   }
 
   @Post(':id/reject')
-  @Roles(...OPERATIONAL_WRITE_ROLES)
+  @RequiresWrite()
   @HttpCode(HttpStatus.OK)
   reject(
     @Param('id') id: string,

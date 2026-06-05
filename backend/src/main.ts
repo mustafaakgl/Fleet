@@ -1,5 +1,8 @@
 import 'dotenv/config';
 import './config/env.bootstrap';
+import { initSentry } from './config/sentry.bootstrap';
+
+initSentry();
 import 'reflect-metadata';
 import './prisma-enum-polyfill';
 import { mkdirSync } from 'node:fs';
@@ -20,6 +23,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
+  app.enableShutdownHooks();
 
   app.setGlobalPrefix('api/v1');
 

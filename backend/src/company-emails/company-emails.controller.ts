@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -33,6 +34,7 @@ export class CompanyEmailsController {
   }
 
   @Post('generate')
+  @RequiresWrite()
   generateDraftForCompany(
     @Body() body: { date: string; companyId: string },
     @CurrentUser('id') currentUserId?: string,
@@ -41,11 +43,13 @@ export class CompanyEmailsController {
   }
 
   @Post('generate-for-date')
+  @RequiresWrite()
   generateDraftsForDate(@Body() body: { date: string }, @CurrentUser('id') currentUserId?: string) {
     return this.companyEmailsService.generateDraftsForDate(body.date, currentUserId);
   }
 
   @Patch(':id')
+  @RequiresWrite()
   updateDraft(
     @Param('id') id: string,
     @Body() body: UpdateCompanyEmailDto,
@@ -55,21 +59,25 @@ export class CompanyEmailsController {
   }
 
   @Post(':id/mark-draft-ready')
+  @RequiresWrite()
   markAsDraftReady(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.companyEmailsService.markAsDraftReady(id, currentUserId);
   }
 
   @Post(':id/send')
+  @RequiresWrite()
   sendEmail(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.companyEmailsService.sendEmail(id, currentUserId);
   }
 
   @Post(':id/mark-sent')
+  @RequiresWrite()
   markAsSent(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.companyEmailsService.markAsSent(id, currentUserId);
   }
 
   @Post(':id/mark-failed')
+  @RequiresWrite()
   markAsFailed(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.companyEmailsService.markAsFailed(id, currentUserId);
   }

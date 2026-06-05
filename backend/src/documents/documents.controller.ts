@@ -15,9 +15,10 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { createReadStream } from 'node:fs';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { diskStorage } from 'multer';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -135,7 +136,7 @@ export class DocumentsController {
       'Cache-Control': 'private, no-store',
     });
 
-    createReadStream(file.absolutePath).pipe(res);
+    file.stream.pipe(res);
   }
 
   @Get(':id')
@@ -144,6 +145,7 @@ export class DocumentsController {
   }
 
   @Post()
+  @RequiresWrite()
   async createDocument(@Body() dto: CreateDocumentDto, @CurrentUser('id') userId?: string, @Query('uploadedById') uploadedById?: string) {
     const finalUploadedById = userId ?? uploadedById;
     const created = await this.documentsService.createDocument(dto, finalUploadedById);
@@ -151,6 +153,8 @@ export class DocumentsController {
   }
 
   @Post('upload')
+  @RequiresWrite()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(DOCUMENT_UPLOAD_INTERCEPTOR)
   async uploadDocument(
     @UploadedFile(
@@ -191,10 +195,15 @@ export class DocumentsController {
       },
       userId ?? uploadedById,
     );
+    await this.documentsService.syncUploadedFile(
+      this.storageService.buildStoredPath('documents', file.filename),
+    );
     return this.documentsService.mapDocumentToClient(created);
   }
 
   @Post(':id/replace-upload')
+  @RequiresWrite()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(DOCUMENT_UPLOAD_INTERCEPTOR)
   async replaceUploadDocument(
     @Param('id') id: string,
@@ -233,10 +242,14 @@ export class DocumentsController {
       },
       userId ?? uploadedById,
     );
+    await this.documentsService.syncUploadedFile(
+      this.storageService.buildStoredPath('documents', file.filename),
+    );
     return this.documentsService.mapDocumentToClient(replaced);
   }
 
   @Patch(':id')
+  @RequiresWrite()
   updateDocument(@Param('id') id: string, @Body() dto: UpdateDocumentDto) {
     return this.documentsService.updateDocument(id, dto);
   }

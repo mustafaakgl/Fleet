@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
@@ -37,6 +37,14 @@ import { InvitationsModule } from './invitations/invitations.module';
 import { ImportModule } from './import/import.module';
 import { BillingModule } from './billing/billing.module';
 import { TenantModule } from './tenant/tenant.module';
+import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { StorageModule } from './storage/storage.module';
+import { ThrottlerAuditFilter } from './common/filters/throttler-audit.filter';
+import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
+import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
+import { ApiVersionInterceptor } from './common/interceptors/api-version.interceptor';
+import { WriteRoleGuard } from './common/guards/write-role.guard';
 
 @Module({
   imports: [
@@ -82,11 +90,34 @@ import { TenantModule } from './tenant/tenant.module';
     ImportModule,
     BillingModule,
     TenantModule,
+    HealthModule,
+    MetricsModule,
+    StorageModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: WriteRoleGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestLoggingInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ApiVersionInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: ThrottlerAuditFilter,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: SentryExceptionFilter,
     },
   ],
 })

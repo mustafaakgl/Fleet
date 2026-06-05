@@ -17,6 +17,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { canViewFinancialFields, maskFinancialFields, OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -48,6 +49,7 @@ export class CompaniesController {
   }
 
   @Post()
+  @RequiresWrite()
   @HttpCode(HttpStatus.CREATED)
   create(
     @Body() dto: CreateCompanyDto,
@@ -61,6 +63,7 @@ export class CompaniesController {
   }
 
   @Patch(':id')
+  @RequiresWrite()
   update(
     @Param('id') id: string,
     @Body() dto: UpdateCompanyDto,
@@ -74,6 +77,7 @@ export class CompaniesController {
   }
 
   @Delete(':id')
+  @RequiresWrite()
   remove(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
     return this.companies.remove(id, actorUserId);
   }

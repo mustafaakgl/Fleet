@@ -53,6 +53,23 @@ async function main() {
     );
     console.log(`Default tenant drivers: ${defaultTenantDrivers}`);
 
+    const totalLatest = await base.driverLocationLatest.count();
+    const scopedLatestA = await TenantContext.run(tenantA, () =>
+      scoped.driverLocationLatest.count(),
+    );
+    console.log(`DriverLocationLatest total: ${totalLatest}, tenant A scoped: ${scopedLatestA}`);
+
+    if (tenantA !== tenantB) {
+      const crossLatest = await TenantContext.run(tenantA, () =>
+        scoped.driverLocationLatest.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossLatest) {
+        throw new Error('Isolation failure: tenant A context read tenant B location latest');
+      }
+    }
+
     console.log('Tenant isolation check passed.');
   } finally {
     await base.$disconnect();

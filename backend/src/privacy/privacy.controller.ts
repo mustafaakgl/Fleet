@@ -9,6 +9,8 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import type { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -26,6 +28,7 @@ export class PrivacyController {
   constructor(private readonly privacyService: PrivacyService) {}
 
   @Get('export/driver/:id')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async exportDriver(
     @Param('id') id: string,
     @CurrentUser('id') actorUserId: string,
@@ -41,6 +44,7 @@ export class PrivacyController {
   }
 
   @Get('export/user/:id')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async exportUser(
     @Param('id') id: string,
     @CurrentUser('id') actorUserId: string,
@@ -56,6 +60,8 @@ export class PrivacyController {
   }
 
   @Post('delete/driver/:id')
+  @RequiresWrite()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   anonymizeDriver(
     @Param('id') id: string,
