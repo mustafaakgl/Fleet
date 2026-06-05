@@ -38,6 +38,9 @@ export class StripeService {
     const frontendUrl = getFrontendUrl().replace(/\/$/, '');
     const stripe = this.getClient();
 
+    const automaticTax =
+      (process.env.STRIPE_AUTOMATIC_TAX ?? '').toLowerCase() === 'true';
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       locale: 'de',
@@ -58,7 +61,27 @@ export class StripeService {
         },
       },
       billing_address_collection: 'required',
-      tax_id_collection: { enabled: true },
+      tax_id_collection: {
+        enabled: true,
+        required: 'if_supported',
+      },
+      invoice_creation: {
+        enabled: true,
+        invoice_data: {
+          description: 'MyFleet SaaS-Abonnement',
+          metadata: {
+            tenantId: params.tenantId,
+            plan: params.plan,
+          },
+        },
+      },
+      automatic_tax: automaticTax ? { enabled: true } : undefined,
+      custom_text: {
+        submit: {
+          message:
+            'Mit Abschluss stimmen Sie der monatlichen Abrechnung per SEPA-Lastschrift oder Karte zu. USt-IdNr. wird bei B2B-Kunden abgefragt.',
+        },
+      },
       customer_update: params.stripeCustomerId
         ? { address: 'auto', name: 'auto' }
         : undefined,
@@ -78,6 +101,7 @@ export class StripeService {
     const session = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
       return_url: `${frontendUrl}/billing`,
+      locale: 'de',
     });
 
     return { url: session.url };

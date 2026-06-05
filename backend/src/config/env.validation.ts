@@ -54,6 +54,14 @@ export function validateEnv(): void {
       console.warn('[boot] S3 credentials incomplete — file storage may fail in production.');
     }
 
+    if ((process.env.STRIPE_ENABLED ?? '').toLowerCase() === 'true') {
+      requireProductionEnv('STRIPE_SECRET_KEY');
+      requireProductionEnv('STRIPE_WEBHOOK_SECRET');
+      if (!process.env.STRIPE_PRICE_BASIC?.trim()) {
+        console.warn('[boot] STRIPE_PRICE_BASIC not set — Basic plan checkout unavailable.');
+      }
+    }
+
     return;
   }
 

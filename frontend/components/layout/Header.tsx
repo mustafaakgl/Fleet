@@ -1,6 +1,7 @@
 'use client';
 
-import { Globe } from 'lucide-react';
+import Link from 'next/link';
+import { CircleHelp, Globe } from 'lucide-react';
 import { getUser } from '@/lib/auth';
 import { useState } from 'react';
 import type { AuthUser } from '@/lib/types';
@@ -48,6 +49,14 @@ export function Header({ title }: HeaderProps) {
             <option value="tr">{t('language.turkish')}</option>
           </select>
         </div>
+
+        <Link
+          href="/hilfe"
+          className="hidden items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:inline-flex"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+          {t('nav.help')}
+        </Link>
 
         <NotificationCenter />
 

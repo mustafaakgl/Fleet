@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { CreditCard, ExternalLink, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { billingApi, onboardingApi, type BillingPlanInfo, type BillingStatusResponse } from '@/lib/api';
@@ -11,8 +12,10 @@ import { Label } from '@/components/ui/label';
 
 export default function BillingPage() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<BillingStatusResponse | null>(null);
   const [plans, setPlans] = useState<BillingPlanInfo[]>([]);
   const [billingEmail, setBillingEmail] = useState('');
@@ -46,6 +49,15 @@ export default function BillingPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const checkout = searchParams.get('checkout');
+    if (checkout === 'success') {
+      setNotice(t('billing.checkoutSuccess'));
+    } else if (checkout === 'canceled') {
+      setNotice(t('billing.checkoutCanceled'));
+    }
+  }, [searchParams, t]);
 
   async function startCheckout(planId: string) {
     if (!billingEmail.trim()) {
@@ -110,6 +122,13 @@ export default function BillingPage() {
       </div>
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
+      {notice && (
+        <p className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {notice}
+        </p>
+      )}
+
+      <p className="text-sm text-slate-600">{t('billing.sepaHint')}</p>
 
       {sub && (
         <Card>

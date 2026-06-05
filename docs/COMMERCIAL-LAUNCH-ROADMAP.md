@@ -169,13 +169,13 @@ Woche 1–2          Woche 2–3          Woche 3–4
 |---|---------|--------|-------------------|
 | 3.1.1 | Stripe Checkout + Portal | ✅ | Code vorhanden |
 | 3.1.2 | Pläne Basic/Pro/Enterprise | ✅ | |
-| 3.1.3 | SEPA Lastschrift (Stripe) | 🟡 | **Live-Testzahlung** |
+| 3.1.3 | SEPA Lastschrift (Stripe) | ✅ Code · 🟡 Live-Test | `sepa_debit` + DE Checkout |
 | 3.1.4 | Vehicle/Seat Limits | ✅ | |
 | 3.1.5 | Manual-Invoice Fallback | ✅ | |
 | 3.1.6 | `/billing` UI (DE) | ✅ | |
-| 3.1.7 | Deutsche Rechnungs-PDF (Stripe DE) | 🟡 | DE-Rechnung per E-Mail |
-| 3.1.8 | USt-IdNr. im B2B Checkout | ❌ | Pflichtfeld DE |
-| 3.1.9 | Webhook Prod | 🟡 | Subscription sync |
+| 3.1.7 | Deutsche Rechnungs-PDF (Stripe DE) | ✅ Code · 🟡 Stripe-Konto | `invoice_creation` + Portal `locale: de` |
+| 3.1.8 | USt-IdNr. im B2B Checkout | ✅ | `tax_id_collection.required: if_supported` |
+| 3.1.9 | Webhook Prod | ✅ Code · 🟡 Live-Endpoint | `docs/ops/STRIPE-GO-LIVE.md` |
 
 **Aufwand:** ~2 Dev-Tage + Stripe Live Setup
 
@@ -186,10 +186,10 @@ Woche 1–2          Woche 2–3          Woche 3–4
 | # | Aufgabe | Status |
 |---|---------|--------|
 | 3.2.1 | UI-Sprache DE primär | ✅ |
-| 3.2.2 | Support-Kontakt in App (E-Mail + Zeiten) | ❌ |
-| 3.2.3 | Hilfe/FAQ Seite (DE) | ❌ |
+| 3.2.2 | Support-Kontakt in App (E-Mail + Zeiten) | ✅ | `/hilfe` + `NEXT_PUBLIC_SUPPORT_*` |
+| 3.2.3 | Hilfe/FAQ Seite (DE) | ✅ | `/hilfe` |
 | 3.2.4 | `support@myfleet.app` Mailbox + SLA | ❌ Ops |
-| 3.2.5 | „Hilfe“ Link im Header/Footer | ❌ |
+| 3.2.5 | „Hilfe“ Link im Header/Footer | ✅ | Sidebar + Header |
 
 **Aufwand:** ~1–2 Dev-Tage + Ops Mailbox
 
