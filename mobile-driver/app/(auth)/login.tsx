@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi, driverApi } from '@/api/endpoints';
+import { env } from '@/config/env';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { authStore } from '@/features/auth/store';
@@ -48,9 +49,26 @@ export default function LoginScreen() {
         driver: driverProfile.driver,
       });
       void registerPushTokenAfterLogin();
-      router.replace('/(app)/today');
+      const docs = await driverApi.listDocuments().catch(() => null);
+      if (docs && docs.missingRequired.length > 0) {
+        router.replace('/(app)/document-onboarding');
+      } else {
+        router.replace('/(app)/today');
+      }
     } catch (submitError) {
-      setError(getErrorMessage(submitError, t('login.failed')));
+      const raw = getErrorMessage(submitError, t('login.failed'));
+      if (raw === 'Cannot connect to Fleet ERP backend.') {
+        setError(t('login.networkError'));
+      } else if (raw === 'Invalid credentials') {
+        setError(t('login.invalidCredentials'));
+      } else if (
+        raw.includes('No driver profile linked') ||
+        raw.includes('Insufficient role')
+      ) {
+        setError(t('login.notDriver'));
+      } else {
+        setError(raw);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -96,6 +114,12 @@ export default function LoginScreen() {
           loading={submitting}
           variant="primary"
         />
+        {__DEV__ ? (
+          <View style={styles.devHints}>
+            <Text style={styles.devHint}>{t('login.devApiHint', { url: env.apiBaseUrl })}</Text>
+            <Text style={styles.devHint}>{t('login.devCredentialsHint')}</Text>
+          </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -140,4 +164,6 @@ const styles = StyleSheet.create({
   },
   validation: { color: colors.warning, fontSize: 12 },
   error: { color: colors.danger, fontSize: 13, textAlign: 'center' },
+  devHints: { marginTop: spacing.sm, gap: 4 },
+  devHint: { color: colors.muted, fontSize: 11, textAlign: 'center' },
 });

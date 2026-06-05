@@ -5,7 +5,7 @@ import { getUser, setDevelopmentRole } from '@/lib/auth';
 import { useState } from 'react';
 import type { AuthUser } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
-import i18n from '@/src/i18n';
+import i18n from '@/src/i18n.client';
 import { NotificationCenter } from './NotificationCenter';
 import { GlobalSearch } from './GlobalSearch';
 

@@ -47,14 +47,19 @@ const CANCELLABLE_FROM: AssignmentStatus[] = [
 const clientInclude = {
   driver: { select: { id: true, firstName: true, lastName: true } },
   vehicle: { select: { id: true, plateNumber: true } },
-  company: { select: { name: true } },
+  company: { select: { id: true, name: true, defaultDailyRevenue: true } },
 } satisfies Prisma.AssignmentInclude;
 
 type AssignmentWithRels = Assignment & {
   driver: { id: string; firstName: string; lastName: string };
   vehicle: { id: string; plateNumber: string };
-  company: { name: string };
+  company: { id: string; name: string; defaultDailyRevenue: Prisma.Decimal | null };
 };
+
+function toDecimalNumber(value: Prisma.Decimal | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  return Number(value.toString());
+}
 
 function toClientAssignment(a: AssignmentWithRels) {
   return {
@@ -64,10 +69,18 @@ function toClientAssignment(a: AssignmentWithRels) {
       name: `${a.driver.firstName} ${a.driver.lastName}`.trim(),
     },
     vehicle: { id: a.vehicle.id, plate_number: a.vehicle.plateNumber },
+    company_id: a.company.id,
     company_name: a.company.name,
     work_date: a.workDate.toISOString(),
     start_time: a.startTime,
     end_time: a.endTime,
+    route_name: a.routeName ?? undefined,
+    expected_daily_revenue: toDecimalNumber(a.expectedDailyRevenue),
+    company_default_daily_revenue: toDecimalNumber(a.company.defaultDailyRevenue),
+    cargo_name: a.cargoName,
+    cargo_owner: a.cargoOwner,
+    pickup_address: a.pickupAddress,
+    delivery_address: a.deliveryAddress,
     notes: a.notes ?? undefined,
     status: a.status,
   };
@@ -95,6 +108,56 @@ export class AssignmentsService {
     } catch (error) {
       console.warn('Audit log failed:', error);
     }
+  }
+
+  private async resolveCompanyId(companyId?: string, companyName?: string): Promise<string> {
+    if (companyId?.trim()) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId.trim() },
+        select: { id: true },
+      });
+      if (!company) throw new NotFoundException('Company not found');
+      return company.id;
+    }
+
+    const normalizedName = companyName?.trim();
+    if (normalizedName) {
+      const company = await this.prisma.company.findFirst({
+        where: { name: normalizedName },
+        select: { id: true },
+      });
+      if (!company) {
+        throw new BadRequestException(`Company "${normalizedName}" not found`);
+      }
+      return company.id;
+    }
+
+    throw new BadRequestException('company_id or company_name is required');
+  }
+
+  private async resolveVehicleId(vehicleId?: string, vehiclePlate?: string): Promise<string> {
+    if (vehicleId?.trim()) {
+      const vehicle = await this.prisma.vehicle.findUnique({
+        where: { id: vehicleId.trim() },
+        select: { id: true },
+      });
+      if (!vehicle) throw new NotFoundException('Vehicle not found');
+      return vehicle.id;
+    }
+
+    const normalizedPlate = vehiclePlate?.trim();
+    if (normalizedPlate) {
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { plateNumber: normalizedPlate },
+        select: { id: true },
+      });
+      if (!vehicle) {
+        throw new BadRequestException(`Vehicle "${normalizedPlate}" not found`);
+      }
+      return vehicle.id;
+    }
+
+    throw new BadRequestException('vehicle_id or vehicle_plate is required');
   }
 
   private getDayRange(date: Date): DayRange {
@@ -217,10 +280,19 @@ export class AssignmentsService {
       throw new BadRequestException('Invalid work_date');
     }
 
+    const companyId = await this.resolveCompanyId(dto.company_id, dto.company_name);
+    const vehicleId = await this.resolveVehicleId(dto.vehicle_id, dto.vehicle_plate);
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { defaultDailyRevenue: true },
+    });
+    const expectedDailyRevenue =
+      dto.expected_daily_revenue ?? toDecimalNumber(company?.defaultDailyRevenue ?? null) ?? undefined;
+
     const created = await this.prisma.$transaction(async (tx) => {
       const conflict = await this.validateAvailability(tx, {
         driverId: dto.driver_id,
-        vehicleId: dto.vehicle_id,
+        vehicleId,
         date: workDate,
       });
       if (conflict) throw new BadRequestException(conflict);
@@ -228,8 +300,8 @@ export class AssignmentsService {
       const assignment = await tx.assignment.create({
         data: {
           driverId: dto.driver_id,
-          vehicleId: dto.vehicle_id,
-          companyId: dto.company_id,
+          vehicleId,
+          companyId,
           cargoName: dto.cargo_name,
           cargoOwner: dto.cargo_owner,
           pickupAddress: dto.pickup_address,
@@ -238,6 +310,7 @@ export class AssignmentsService {
           startTime: dto.start_time,
           endTime: dto.end_time,
           routeName: dto.route_name,
+          expectedDailyRevenue,
           status: AssignmentStatus.planned,
           notes: dto.notes,
           createdById: currentUserId,
@@ -323,16 +396,31 @@ export class AssignmentsService {
       throw new BadRequestException('Invalid work_date');
     }
 
+    let nextVehicleId = existing.vehicleId;
+    if (dto.vehicle_id !== undefined || dto.vehicle_plate !== undefined) {
+      nextVehicleId = await this.resolveVehicleId(dto.vehicle_id, dto.vehicle_plate);
+    }
+
+    let nextCompanyId = existing.companyId;
+    if (dto.company_id !== undefined || dto.company_name !== undefined) {
+      nextCompanyId = await this.resolveCompanyId(dto.company_id, dto.company_name);
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
-      if (dto.work_date && newDate.getTime() !== existing.workDate.getTime()) {
+      const dateChanged = dto.work_date && newDate.getTime() !== existing.workDate.getTime();
+      const vehicleChanged = nextVehicleId !== existing.vehicleId;
+
+      if (dateChanged || vehicleChanged) {
         const conflict = await this.validateAvailability(tx, {
           driverId: existing.driverId,
-          vehicleId: existing.vehicleId,
+          vehicleId: nextVehicleId,
           date: newDate,
           excludeAssignmentId: id,
         });
         if (conflict) throw new BadRequestException(conflict);
+      }
 
+      if (dateChanged) {
         await tx.calendarEvent.updateMany({
           where: { assignmentId: id, source: CalendarSource.assignment },
           data: { date: newDate },
@@ -348,7 +436,16 @@ export class AssignmentsService {
       if (dto.start_time !== undefined) data.startTime = dto.start_time;
       if (dto.end_time !== undefined) data.endTime = dto.end_time;
       if (dto.route_name !== undefined) data.routeName = dto.route_name;
+      if (dto.expected_daily_revenue !== undefined) {
+        data.expectedDailyRevenue = dto.expected_daily_revenue;
+      }
       if (dto.notes !== undefined) data.notes = dto.notes;
+      if (nextVehicleId !== existing.vehicleId) {
+        data.vehicle = { connect: { id: nextVehicleId } };
+      }
+      if (nextCompanyId !== existing.companyId) {
+        data.company = { connect: { id: nextCompanyId } };
+      }
 
       return tx.assignment.update({
         where: { id },

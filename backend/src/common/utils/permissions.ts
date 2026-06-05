@@ -7,6 +7,9 @@ export const ADMIN_ONLY_ROLES: UserRole[] = ['admin'];
 
 const SENSITIVE_FINANCIAL_KEYS = new Set([
   'revenueAnalytics',
+  'chartAnalytics',
+  'dailyRevenue',
+  'monthlyRevenue',
   'todayRevenue',
   'weeklyRevenue',
   'monthlyRevenue',

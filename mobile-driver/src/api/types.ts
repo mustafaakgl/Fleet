@@ -51,6 +51,8 @@ export type DriverMorningCheckin = {
   submittedAt: string;
   vehiclePlate?: string | null;
   companyName?: string | null;
+  cargoName?: string | null;
+  cargoQuantity?: string | null;
   status: MorningCheckinStatus;
   conflictReason?: string | null;
   assignmentId?: string | null;

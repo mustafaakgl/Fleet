@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Mail, Save } from 'lucide-react';
+import { Mail, Save, Search, X } from 'lucide-react';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
+import { createPlanningPlaceholder } from '@/lib/planning-assignment';
 import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
 import { TagesuebersichtTab } from './TagesuebersichtTab';
-import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
 
 const COMPANY_REVENUE_MAP: Record<string, number> = {
   DHL: 850,
@@ -56,6 +56,7 @@ export function Tagesplanung({
   const [activeSubTab, setActiveSubTab] = useState<PlanSubTab>(defaultSubTab);
   const [companyEmailAttentionCount, setCompanyEmailAttentionCount] = useState(0);
   const [selectedTransportRequestId, setSelectedTransportRequestId] = useState<string | null>(null);
+  const [driverSearch, setDriverSearch] = useState('');
   const planningDate = planningDateProp ?? getTodayDate();
 
   useEffect(() => {
@@ -72,20 +73,30 @@ export function Tagesplanung({
   );
 
   const planningRows = useMemo(() => {
-    return assignments
-      .filter((assignment) => assignment.date === planningDate)
-      .map((assignment) => {
-        const driver = drivers.find((item) => item.id === assignment.driverId);
-        const calendarAvailability = getDriverAvailability(assignment.driverId, planningDate);
-        return {
-          assignment,
-          driverName: driver?.name ?? assignment.driverId,
-          effectiveAvailability: calendarAvailability,
-          accidentCount: driver?.accidentCount ?? 0,
-          riskScore: driver?.riskScore ?? 'green',
-        };
-      });
+    const assignmentsForDate = assignments.filter((assignment) => assignment.date === planningDate);
+    const assignmentByDriverId = new Map(
+      assignmentsForDate.map((assignment) => [assignment.driverId, assignment]),
+    );
+
+    return drivers.map((driver) => {
+      const assignment =
+        assignmentByDriverId.get(driver.id)
+        ?? createPlanningPlaceholder(driver.id, planningDate, driver.department);
+      const calendarAvailability = getDriverAvailability(driver.id, planningDate);
+
+      return {
+        assignment,
+        driverName: driver.name,
+        effectiveAvailability: calendarAvailability,
+      };
+    });
   }, [assignments, drivers, getDriverAvailability, planningDate]);
+
+  const filteredPlanningRows = useMemo(() => {
+    const needle = driverSearch.trim().toLowerCase();
+    if (!needle) return planningRows;
+    return planningRows.filter((row) => row.driverName.toLowerCase().includes(needle));
+  }, [driverSearch, planningRows]);
 
   const availableCount = planningRows.filter((row) => row.effectiveAvailability === 'Available').length;
   const vacationCount = planningRows.filter((row) => row.effectiveAvailability === 'Urlaub').length;
@@ -216,8 +227,55 @@ export function Tagesplanung({
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-semibold text-slate-800">Planning Date: {planningDate}</p>
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <p className="text-sm font-semibold text-slate-800 sm:pb-2">
+              Planning Date: {planningDate}
+            </p>
+            <div className="min-w-[220px] flex-1 sm:max-w-md">
+              <label
+                htmlFor="planning-driver-search"
+                className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+              >
+                {t('planning.driverSearchLabel')}
+              </label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  id="planning-driver-search"
+                  type="search"
+                  list="planning-driver-suggestions"
+                  value={driverSearch}
+                  onChange={(event) => setDriverSearch(event.target.value)}
+                  placeholder={t('planning.driverSearchPlaceholder')}
+                  className="h-9 w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-900 outline-none focus:border-blue-500"
+                />
+                {driverSearch.trim().length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setDriverSearch('')}
+                    className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+                    aria-label={t('planning.driverSearchClear')}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              <datalist id="planning-driver-suggestions">
+                {drivers.map((driver) => (
+                  <option key={driver.id} value={driver.name} />
+                ))}
+              </datalist>
+              <p className="mt-1 text-xs text-slate-500">
+                {driverSearch.trim().length > 0
+                  ? t('planning.driverSearchCount', {
+                      shown: filteredPlanningRows.length,
+                      total: planningRows.length,
+                    })
+                  : t('planning.driverSearchHint', { total: planningRows.length })}
+              </p>
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
@@ -249,34 +307,35 @@ export function Tagesplanung({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1940px] text-sm">
+          <table className="min-w-[1400px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="border-b border-slate-200 px-3 py-3">Driver</th>
-                <th className="border-b border-slate-200 px-3 py-3">Department</th>
                 <th className="border-b border-slate-200 px-3 py-3">Availability</th>
                 <th className="border-b border-slate-200 px-3 py-3">Vehicle</th>
                 <th className="border-b border-slate-200 px-3 py-3">Company</th>
-                <th className="border-b border-slate-200 px-3 py-3">Route / Job</th>
+                <th className="border-b border-slate-200 px-3 py-3">From</th>
+                <th className="border-b border-slate-200 px-3 py-3">To</th>
                 <th className="border-b border-slate-200 px-3 py-3">Start Time</th>
                 <th className="border-b border-slate-200 px-3 py-3">End Time</th>
                 <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Source</th>
-                <th className="border-b border-slate-200 px-3 py-3">Accidents</th>
-                <th className="border-b border-slate-200 px-3 py-3">Risk</th>
-                <th className="border-b border-slate-200 px-3 py-3">Handover</th>
                 <th className="border-b border-slate-200 px-3 py-3">Expected Revenue</th>
-                <th className="border-b border-slate-200 px-3 py-3">Notes</th>
                 <th className="border-b border-slate-200 px-3 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {planningRows.map((row) => {
+              {filteredPlanningRows.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">
+                    {t('planning.driverSearchEmpty')}
+                  </td>
+                </tr>
+              ) : null}
+              {filteredPlanningRows.map((row) => {
                 const disabled = row.effectiveAvailability !== 'Available';
                 return (
                   <tr key={row.assignment.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-3 py-2.5 font-medium text-slate-900">{row.driverName}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.assignment.department}</td>
                     <td className="px-3 py-2.5">
                       <select
                         value={row.effectiveAvailability}
@@ -320,10 +379,24 @@ export function Tagesplanung({
                     </td>
                     <td className="px-3 py-2.5">
                       <input
-                        value={row.assignment.routeJob}
+                        value={row.assignment.pickupAddress ?? ''}
                         disabled={disabled}
-                        onChange={(event) => updateAssignment(row.assignment.id, { routeJob: event.target.value })}
-                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        placeholder="Pickup / origin"
+                        onChange={(event) =>
+                          updateAssignment(row.assignment.id, { pickupAddress: event.target.value })
+                        }
+                        className="h-9 w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                      />
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <input
+                        value={row.assignment.deliveryAddress ?? ''}
+                        disabled={disabled}
+                        placeholder="Delivery / destination"
+                        onChange={(event) =>
+                          updateAssignment(row.assignment.id, { deliveryAddress: event.target.value })
+                        }
+                        className="h-9 w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
                       />
                     </td>
                     <td className="px-3 py-2.5">
@@ -356,55 +429,18 @@ export function Tagesplanung({
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                          row.assignment.source === 'mobile_checkin'
-                            ? 'border-blue-200 bg-blue-100 text-blue-700'
-                            : row.assignment.source === 'transport_request'
-                            ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
-                            : 'border-slate-200 bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {row.assignment.source === 'mobile_checkin'
-                          ? 'Mobile Check-in'
-                          : row.assignment.source === 'transport_request'
-                          ? 'Transport Request'
-                          : 'Manual'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-700">{formatAccidentCountLabel(row.accidentCount)}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="inline-flex items-center gap-2">
-                        <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getDriverRiskBadgeClass(
-                            row.riskScore,
-                          )}`}
-                        >
-                          {getDriverRiskLabel(row.riskScore)}
-                        </span>
-                        {row.riskScore === 'red' && (
-                          <span
-                            className="inline-flex items-center text-red-600"
-                            title="High risk driver — review before assigning."
-                          >
-                            <AlertTriangle className="h-4 w-4" />
-                          </span>
-                        )}
-                      </div>
-                      {row.riskScore === 'red' && (
-                        <p className="mt-1 text-xs text-red-600">High risk driver - review before assigning.</p>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-700">
-                      {row.assignment.vehicle ? 'Required' : 'Not Required'}
-                    </td>
-                    <td className="px-3 py-2.5 font-semibold text-slate-900">{currency(disabled ? 0 : row.assignment.expectedRevenue)}</td>
-                    <td className="px-3 py-2.5">
                       <input
-                        value={row.assignment.notes}
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={disabled ? 0 : row.assignment.expectedRevenue}
                         disabled={disabled}
-                        onChange={(event) => updateAssignment(row.assignment.id, { notes: event.target.value })}
-                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        onChange={(event) => {
+                          const nextRevenue = Math.max(0, Number.parseFloat(event.target.value) || 0);
+                          updateAssignment(row.assignment.id, { expectedRevenue: nextRevenue });
+                        }}
+                        className="h-9 w-full min-w-[100px] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        aria-label={`Expected revenue for ${row.driverName}`}
                       />
                     </td>
                     <td className="px-3 py-2.5">

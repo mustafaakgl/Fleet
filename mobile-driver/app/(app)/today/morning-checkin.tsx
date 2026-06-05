@@ -15,7 +15,8 @@ export default function MorningCheckinScreen() {
   const { t } = useTranslation();
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [notes, setNotes] = useState('');
+  const [cargoName, setCargoName] = useState('');
+  const [cargoQuantity, setCargoQuantity] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const { data: existingCheckins, isLoading: loadingExisting } = useQuery({
@@ -28,14 +29,16 @@ export default function MorningCheckinScreen() {
     mutationFn: () =>
       driverApi.createMorningCheckin({
         date: localTodayDate(),
-        vehiclePlate,
-        companyName,
-        notes,
+        vehiclePlate: vehiclePlate.trim(),
+        companyName: companyName.trim(),
+        cargoName: cargoName.trim(),
+        cargoQuantity: cargoQuantity.trim(),
       }),
     onSuccess: () => {
       setVehiclePlate('');
       setCompanyName('');
-      setNotes('');
+      setCargoName('');
+      setCargoQuantity('');
       showSuccess(t('morningCheckin.success'));
       router.back();
     },
@@ -45,7 +48,12 @@ export default function MorningCheckinScreen() {
   });
 
   const onSubmit = () => {
-    if (!vehiclePlate.trim() || !companyName.trim()) {
+    if (
+      !vehiclePlate.trim() ||
+      !companyName.trim() ||
+      !cargoName.trim() ||
+      !cargoQuantity.trim()
+    ) {
       setValidationError(t('morningCheckin.validationRequired'));
       return;
     }
@@ -71,16 +79,20 @@ export default function MorningCheckinScreen() {
           : latest?.status === 'rejected'
             ? 'morningCheckin.statusRejected'
             : 'morningCheckin.statusOther';
+    const metaParts = [
+      latest?.vehiclePlate,
+      latest?.companyName,
+      latest?.cargoName,
+      latest?.cargoQuantity,
+    ].filter(Boolean);
     return (
       <ScreenLayout title={t('morningCheckin.title')} subtitle={t('morningCheckin.subtitle')}>
         <View style={styles.doneCard}>
           <Text style={styles.doneTitle}>{t('morningCheckin.alreadyExistsTitle')}</Text>
           <Text style={styles.statusPill}>{t(statusKey)}</Text>
           <Text style={styles.doneBody}>{t('morningCheckin.alreadyExistsBody')}</Text>
-          {latest?.vehiclePlate || latest?.companyName ? (
-            <Text style={styles.doneMeta}>
-              {[latest.vehiclePlate, latest.companyName].filter(Boolean).join(' · ')}
-            </Text>
+          {metaParts.length > 0 ? (
+            <Text style={styles.doneMeta}>{metaParts.join(' · ')}</Text>
           ) : null}
           <ActionButton
             label={t('morningCheckin.goToTodayForGps')}
@@ -100,19 +112,26 @@ export default function MorningCheckinScreen() {
           style={styles.input}
           placeholder={t('morningCheckin.vehiclePlate')}
           value={vehiclePlate}
-          onChangeText={(value) => setVehiclePlate(value)}
+          onChangeText={setVehiclePlate}
         />
         <TextInput
           style={styles.input}
           placeholder={t('morningCheckin.companyName')}
           value={companyName}
-          onChangeText={(value) => setCompanyName(value)}
+          onChangeText={setCompanyName}
         />
         <TextInput
           style={styles.input}
-          placeholder={t('morningCheckin.notes')}
-          value={notes}
-          onChangeText={setNotes}
+          placeholder={t('morningCheckin.cargoName')}
+          value={cargoName}
+          onChangeText={setCargoName}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder={t('morningCheckin.cargoQuantity')}
+          value={cargoQuantity}
+          onChangeText={setCargoQuantity}
+          keyboardType="default"
         />
         {validationError ? <Text style={styles.error}>{validationError}</Text> : null}
         <Pressable

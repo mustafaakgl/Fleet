@@ -11,6 +11,7 @@ import type {
   VehicleDetail,
   PaginatedVehicles,
   Assignment,
+  AssignmentWritePayload,
   PaginatedAssignments,
   Company,
   CompanyDetail,
@@ -273,10 +274,10 @@ export const assignmentsApi = {
   getById: (id: string) =>
     api.get<Assignment>(`/assignments/${id}`).then((r) => r.data),
 
-  create: (data: Partial<Assignment>) =>
+  create: (data: AssignmentWritePayload) =>
     api.post<Assignment>('/assignments', data).then((r) => r.data),
 
-  update: (id: string, data: Partial<Assignment>) =>
+  update: (id: string, data: AssignmentWritePayload) =>
     api.patch<Assignment>(`/assignments/${id}`, data).then((r) => r.data),
 
   cancel: (id: string) =>

@@ -24,4 +24,12 @@ export class CreateMorningCheckinDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  cargo_name?: string;
+
+  @IsOptional()
+  @IsString()
+  cargo_quantity?: string;
 }

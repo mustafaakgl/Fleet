@@ -9,6 +9,11 @@ export const DRIVER_UPLOAD_DOCUMENT_TYPES = [
 
 export type DriverUploadDocumentType = (typeof DRIVER_UPLOAD_DOCUMENT_TYPES)[number];
 
+/** Must be uploaded before using the app (matches backend). */
+export const DRIVER_REQUIRED_DOCUMENT_TYPES = ['Driving License', 'Passport'] as const;
+
+export type DriverRequiredDocumentType = (typeof DRIVER_REQUIRED_DOCUMENT_TYPES)[number];
+
 export function documentTypeLabelKey(type: string): string {
   const slug = type
     .toLowerCase()

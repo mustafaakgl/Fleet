@@ -11,6 +11,14 @@ export class UpdateMorningCheckinDto {
   company_name?: string;
 
   @IsOptional()
+  @IsString()
+  cargo_name?: string;
+
+  @IsOptional()
+  @IsString()
+  cargo_quantity?: string;
+
+  @IsOptional()
   @IsEnum(MorningCheckinStatus)
   status?: MorningCheckinStatus;
 

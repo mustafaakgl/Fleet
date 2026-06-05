@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslation } from 'react-i18next';
-import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/src/i18n';
+import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/src/language';
 
 const labels: Record<SupportedLanguage, string> = {
   de: 'DE',

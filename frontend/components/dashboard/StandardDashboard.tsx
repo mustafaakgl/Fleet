@@ -15,6 +15,7 @@ import { getUser } from '@/lib/auth';
 import { dashboardApi } from '@/lib/api';
 import { canViewFinancials } from '@/lib/permissions';
 import { formatDate, statusColor } from '@/lib/utils';
+import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import type {
   AuthUser,
   DashboardSummary,
@@ -187,6 +188,10 @@ export function StandardDashboard() {
         )}
       </section>
 
+      {showFinancials && summary?.chartAnalytics ? (
+        <DashboardCharts analytics={summary.chartAnalytics} />
+      ) : null}
+
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.todayOperations')}</h2>
         <Card>
@@ -310,7 +315,7 @@ export function StandardDashboard() {
 
       {showFinancials && summary?.revenueAnalytics && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-slate-900">Revenue Analytics</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.revenueAnalytics')}</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <RevenueCard title="Today" value={currency(summary.revenueAnalytics.todayRevenue)} />
             <RevenueCard title="This week" value={currency(summary.revenueAnalytics.weeklyRevenue)} />

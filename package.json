@@ -21,7 +21,9 @@
     "qa:mobile-driver": "node scripts/qa-mobile-driver.mjs"
   },
   "dependencies": {
-    "multer": "^2.1.1"
+    "md-to-pdf": "^5.2.5",
+    "multer": "^2.1.1",
+    "puppeteer": "^25.1.0"
   },
   "devDependencies": {
     "@types/multer": "^2.1.0"

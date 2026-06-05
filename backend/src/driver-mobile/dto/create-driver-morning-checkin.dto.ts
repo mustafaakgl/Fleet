@@ -15,4 +15,12 @@ export class CreateDriverMorningCheckinDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  cargoName?: string;
+
+  @IsOptional()
+  @IsString()
+  cargoQuantity?: string;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Lock, RefreshCw, X } from 'lucide-react';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
@@ -298,6 +298,10 @@ const driverCalendars: DriverCalendarData[] = [
   },
 ];
 
+function cloneDriverCalendars(): DriverCalendarData[] {
+  return JSON.parse(JSON.stringify(driverCalendars)) as DriverCalendarData[];
+}
+
 function calculateVacationOverview(driver: Driver, selectedYear: YearOption): VacationOverview {
   const yearEntries = driverCalendars.find((calendar) => calendar.driverId === driver.id)?.years[selectedYear] ?? {};
 
@@ -388,8 +392,14 @@ function isWeekend(year: number, monthIndex: number, day: number) {
 }
 
 export function Jahreskalender() {
-  const { getCalendarStatusEntry, getAssignmentById } = useFleetData();
-  const [calendarState, setCalendarState] = useState<DriverCalendarData[]>(driverCalendars);
+  const {
+    getCalendarStatusEntry,
+    getAssignmentById,
+    drivers: fleetDrivers,
+    refetchHydrate,
+    isHydrating,
+  } = useFleetData();
+  const [calendarState, setCalendarState] = useState<DriverCalendarData[]>(cloneDriverCalendars);
   const [selectedDriverId, setSelectedDriverId] = useState<string>('ozdemir-hakan');
   const [selectedYear, setSelectedYear] = useState<YearOption>(2026);
   const [workTimeMode, setWorkTimeMode] = useState<WorkTimeMode>('inklusive Arbeitszeiten');
@@ -399,10 +409,37 @@ export function Jahreskalender() {
   const [hoveredStatusCell, setHoveredStatusCell] = useState<HoveredStatusCell | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedEmptyCell, setSelectedEmptyCell] = useState<SelectedEmptyCell | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const driverOptions = useMemo<Driver[]>(() => {
+    if (fleetDrivers.length > 0) {
+      return fleetDrivers.map((driver) => ({
+        id: driver.id,
+        name: driver.name,
+        annualVacationEntitlement: 24,
+        carryOverFromPreviousPeriod: 0,
+      }));
+    }
+    return drivers;
+  }, [fleetDrivers]);
+
+  useEffect(() => {
+    if (driverOptions.length === 0) return;
+    if (!driverOptions.some((driver) => driver.id === selectedDriverId)) {
+      setSelectedDriverId(driverOptions[0].id);
+    }
+  }, [driverOptions, selectedDriverId]);
+
+  useEffect(() => {
+    if (!isRefreshing) return;
+    if (!isHydrating) {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, isHydrating]);
 
   const selectedDriver = useMemo(() => {
-    return drivers.find((driver) => driver.id === selectedDriverId) ?? drivers[0];
-  }, [selectedDriverId]);
+    return driverOptions.find((driver) => driver.id === selectedDriverId) ?? driverOptions[0];
+  }, [driverOptions, selectedDriverId]);
 
   const selectedCalendar = useMemo(() => {
     return calendarState.find((calendar) => calendar.driverId === selectedDriverId)?.years[selectedYear] ?? {};
@@ -520,6 +557,17 @@ export function Jahreskalender() {
     closeContextMenu();
   };
 
+  const handleRefresh = () => {
+    setCalendarState(cloneDriverCalendars());
+    setSelectedDay(null);
+    setPendingAbsenceSelection(null);
+    setSelectedAbsenceTypeId(null);
+    setHoveredStatusCell(null);
+    closeContextMenu();
+    setIsRefreshing(true);
+    refetchHydrate();
+  };
+
   return (
     <div className="space-y-5">
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -543,7 +591,7 @@ export function Jahreskalender() {
                 }}
                 className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
               >
-                {drivers.map((driver) => (
+                {driverOptions.map((driver) => (
                   <option key={driver.id} value={driver.id}>
                     {driver.name}
                   </option>
@@ -561,16 +609,13 @@ export function Jahreskalender() {
 
             <button
               type="button"
-              className="mt-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-              onClick={() => {
-                setSelectedYear(2026);
-                setWorkTimeMode('inklusive Arbeitszeiten');
-                setSelectedDay(null);
-                setPendingAbsenceSelection(null);
-              }}
-              aria-label="Refresh selection"
+              className="mt-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleRefresh}
+              disabled={isRefreshing || isHydrating}
+              aria-label="Refresh calendar data"
+              title="Kalenderdaten neu laden"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${isRefreshing || isHydrating ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>

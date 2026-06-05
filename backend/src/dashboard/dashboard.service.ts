@@ -42,6 +42,50 @@ export class DashboardService {
     return { start, end };
   }
 
+  private assignmentRevenue(row: {
+    expectedDailyRevenue?: unknown;
+    company?: { defaultDailyRevenue?: unknown } | null;
+  }): number {
+    const expected = this.toCurrencyNumber(row.expectedDailyRevenue);
+    if (expected > 0) return expected;
+    return this.toCurrencyNumber(row.company?.defaultDailyRevenue);
+  }
+
+  private toDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private toMonthKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
+
+  private buildDailySeries(days: number, endDate: Date): string[] {
+    const keys: string[] = [];
+    const cursor = new Date(endDate);
+    cursor.setHours(0, 0, 0, 0);
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const d = new Date(cursor);
+      d.setDate(cursor.getDate() - i);
+      keys.push(this.toDateKey(d));
+    }
+    return keys;
+  }
+
+  private buildMonthlySeries(months: number, endDate: Date): string[] {
+    const keys: string[] = [];
+    const cursor = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    for (let i = months - 1; i >= 0; i -= 1) {
+      const d = new Date(cursor.getFullYear(), cursor.getMonth() - i, 1);
+      keys.push(this.toMonthKey(d));
+    }
+    return keys;
+  }
+
   private toCurrencyNumber(value: unknown): number {
     if (value === null || value === undefined) return 0;
     if (typeof value === 'number') return value;
@@ -494,7 +538,7 @@ export class DashboardService {
         },
       });
 
-      return rows.reduce((sum: number, row: any) => sum + this.toCurrencyNumber(row.company?.defaultDailyRevenue), 0);
+      return rows.reduce((sum: number, row: any) => sum + this.assignmentRevenue(row), 0);
     };
 
     const day = this.getDayRange(date);
@@ -525,7 +569,7 @@ export class DashboardService {
     const byCompanyMap = new Map<string, { companyId: string; companyName: string; assignments: number; revenue: number }>();
     for (const row of dayRows) {
       const companyId = row.company.id;
-      const increment = this.toCurrencyNumber(row.company.defaultDailyRevenue);
+      const increment = this.assignmentRevenue(row);
       const existing = byCompanyMap.get(companyId);
       if (existing) {
         existing.assignments += 1;
@@ -548,12 +592,92 @@ export class DashboardService {
     };
   }
 
+  async getChartAnalytics(date: Date, currentUserRole?: UserRole | string) {
+    if (!this.canViewFinancials(currentUserRole)) {
+      return null;
+    }
+
+    const end = this.normalizeDate(date);
+    const dayAfterEnd = new Date(end);
+    dayAfterEnd.setDate(dayAfterEnd.getDate() + 1);
+
+    const dailyKeys = this.buildDailySeries(30, end);
+    const monthlyKeys = this.buildMonthlySeries(12, end);
+
+    const monthlyStart = new Date(end.getFullYear(), end.getMonth() - 11, 1);
+
+    const db = this.prisma as any;
+    const assignmentStatuses = ['planned', 'confirmed', 'in_progress', 'completed'];
+
+    const [assignments, accidents] = await Promise.all([
+      db.assignment.findMany({
+        where: {
+          workDate: { gte: monthlyStart, lt: dayAfterEnd },
+          status: { in: assignmentStatuses },
+        },
+        select: {
+          workDate: true,
+          expectedDailyRevenue: true,
+          company: { select: { defaultDailyRevenue: true } },
+        },
+      }),
+      db.accident.findMany({
+        where: {
+          type: 'vehicle_accident',
+          status: { not: 'rejected' },
+          incidentDateTime: { gte: monthlyStart, lt: dayAfterEnd },
+        },
+        select: { incidentDateTime: true },
+      }),
+    ]);
+
+    const dailyRevenueMap = new Map(dailyKeys.map((key) => [key, 0]));
+    const monthlyRevenueMap = new Map(monthlyKeys.map((key) => [key, 0]));
+    const dailyAccidentsMap = new Map(dailyKeys.map((key) => [key, 0]));
+    const monthlyAccidentsMap = new Map(monthlyKeys.map((key) => [key, 0]));
+
+    for (const row of assignments) {
+      const workDate = new Date(row.workDate);
+      const dayKey = this.toDateKey(workDate);
+      const monthKey = this.toMonthKey(workDate);
+      const revenue = this.assignmentRevenue(row);
+      if (dailyRevenueMap.has(dayKey)) {
+        dailyRevenueMap.set(dayKey, (dailyRevenueMap.get(dayKey) ?? 0) + revenue);
+      }
+      if (monthlyRevenueMap.has(monthKey)) {
+        monthlyRevenueMap.set(monthKey, (monthlyRevenueMap.get(monthKey) ?? 0) + revenue);
+      }
+    }
+
+    for (const row of accidents) {
+      const incidentDate = new Date(row.incidentDateTime);
+      const dayKey = this.toDateKey(incidentDate);
+      const monthKey = this.toMonthKey(incidentDate);
+      if (dailyAccidentsMap.has(dayKey)) {
+        dailyAccidentsMap.set(dayKey, (dailyAccidentsMap.get(dayKey) ?? 0) + 1);
+      }
+      if (monthlyAccidentsMap.has(monthKey)) {
+        monthlyAccidentsMap.set(monthKey, (monthlyAccidentsMap.get(monthKey) ?? 0) + 1);
+      }
+    }
+
+    const toSeries = (keys: string[], map: Map<string, number>) =>
+      keys.map((label) => ({ label, value: map.get(label) ?? 0 }));
+
+    return {
+      dailyRevenue: toSeries(dailyKeys, dailyRevenueMap),
+      monthlyRevenue: toSeries(monthlyKeys, monthlyRevenueMap),
+      dailyAccidents: toSeries(dailyKeys, dailyAccidentsMap),
+      monthlyAccidents: toSeries(monthlyKeys, monthlyAccidentsMap),
+    };
+  }
+
   async getDashboard(date: string, currentUserRole?: UserRole | string) {
     const selectedDate = this.normalizeDate(date);
 
     const includeCriticalAlerts = currentUserRole === 'office';
 
-    const [kpis, criticalAlerts, todayOperations, tomorrowPlanning, vehicleHealth, driverRiskOverview, revenueAnalytics] =
+    const [kpis, criticalAlerts, todayOperations, tomorrowPlanning, vehicleHealth, driverRiskOverview, revenueAnalytics, chartAnalytics] =
       await Promise.all([
         this.getKpis(selectedDate),
         includeCriticalAlerts ? this.getCriticalAlerts(selectedDate) : Promise.resolve([]),
@@ -562,6 +686,7 @@ export class DashboardService {
         this.getVehicleHealth(),
         this.getDriverRiskOverview(),
         this.getRevenueAnalytics(selectedDate, currentUserRole ?? 'office'),
+        this.getChartAnalytics(selectedDate, currentUserRole ?? 'office'),
       ]);
 
     const dashboardData = {
@@ -572,6 +697,7 @@ export class DashboardService {
       vehicleHealth,
       driverRiskOverview,
       revenueAnalytics,
+      chartAnalytics,
     };
 
     return maskFinancialFields(dashboardData, currentUserRole);

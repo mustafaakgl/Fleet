@@ -94,8 +94,8 @@ npm run qa:mobile-driver
 
 ## API Base URL Behavior
 
-- Default API base URL comes from `app.json` (`expo.extra.apiBaseUrl`).
-- If not explicitly set, the app resolves backend URL from Expo host IP at runtime:
-  - `http://<expo-host-ip>:3000/api/v1`
-- This makes physical-device demos work without code changes.
-- If your backend runs on a different host/port, set `expo.extra.apiBaseUrl` accordingly.
+- By default the app picks the dev machine IP from Expo Metro (`hostUri`), e.g. `http://192.168.x.x:3000/api/v1`.
+- Android emulator without a LAN host uses `http://10.0.2.2:3000/api/v1`.
+- iOS simulator uses `http://localhost:3000/api/v1`.
+- Override only when needed: set `expo.extra.apiBaseUrl` in `app.json` to a **non-localhost** URL (localhost in config is ignored when Expo provides a LAN host).
+- In dev builds the login screen shows the resolved API URL at the bottom.

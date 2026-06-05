@@ -26,7 +26,9 @@ All endpoints enforce JWT + `role=driver` and ownership scoping from the authent
 ## Morning check-ins
 
 - `GET /morning-checkins?date=YYYY-MM-DD`
-- `POST /morning-checkins` — body: `date`, optional `vehiclePlate`, `companyName`, `notes`; starts location sharing when consent already granted
+- `POST /morning-checkins` — body: `date`, optional `vehiclePlate`, `companyName`, `cargoName`, `cargoQuantity`, `notes`; starts location sharing when consent already granted
+- `GET /documents` — returns `requiredTypes` (`Driving License`, `Passport`), `missingRequired`, and uploaded `items`
+- `POST /documents` — upload driver document (multipart); replaces existing doc of same type
 
 ## Vehicle handovers
 

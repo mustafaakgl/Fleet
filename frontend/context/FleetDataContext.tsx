@@ -1,8 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { USE_MOCK_FLEET_DATA } from '@/lib/fleet-data-config';
 import { hydrateFleetData } from '@/lib/fleet-hydration';
+import {
+  createPlanningPlaceholder,
+  isPlanningDraftAssignmentId,
+  parsePlanningDraftId,
+} from '@/lib/planning-assignment';
+import type { AssignmentWritePayload } from '@/lib/types';
 import {
   assignmentsApi,
   leaveRequestsApi,
@@ -130,6 +136,8 @@ export interface MorningCheckin {
   submittedAt: string;
   vehiclePlate?: string;
   company?: string;
+  cargoName?: string;
+  cargoQuantity?: string;
   startLocation?: string;
   gps?: {
     lat: number;
@@ -680,6 +688,7 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const [hydrateKey, setHydrateKey] = useState(0);
   const refetchHydrate = useCallback(() => setHydrateKey((key) => key + 1), []);
+  const persistAssignmentTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [companyEmailDrafts, setCompanyEmailDrafts] = useState<CompanyEmailDraft[]>([]);
   const [driverAssignmentHistory, setDriverAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [vehicleAssignmentHistory, setVehicleAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
@@ -1094,9 +1103,96 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       .reduce((total, item) => total + item.expectedRevenue, 0);
   }
 
+  function buildAssignmentPatch(assignment: FleetAssignment): AssignmentWritePayload {
+    const patch: AssignmentWritePayload = {};
+    const company = assignment.company.trim();
+    const vehicle = assignment.vehicle.trim();
+    const from = assignment.pickupAddress?.trim();
+    const to = assignment.deliveryAddress?.trim();
+    const route = assignment.routeJob?.trim();
+
+    if (company) patch.company_name = company;
+    if (vehicle) patch.vehicle_plate = vehicle;
+    if (from) patch.pickup_address = from;
+    if (to) patch.delivery_address = to;
+    if (from && to) patch.route_name = `${from} → ${to}`;
+    else if (route) patch.route_name = route;
+    if (Number.isFinite(assignment.expectedRevenue)) {
+      patch.expected_daily_revenue = Math.max(0, Math.round(assignment.expectedRevenue * 100) / 100);
+    }
+    if (assignment.startTime) patch.start_time = assignment.startTime;
+    if (assignment.endTime) patch.end_time = assignment.endTime;
+    if (assignment.notes !== undefined) patch.notes = assignment.notes;
+    if (assignment.cargoName?.trim()) patch.cargo_name = assignment.cargoName.trim();
+    if (assignment.cargoOwner?.trim()) patch.cargo_owner = assignment.cargoOwner.trim();
+    return patch;
+  }
+
+  async function persistAssignmentToApi(assignment: FleetAssignment) {
+    const company = assignment.company.trim();
+    const vehicle = assignment.vehicle.trim();
+
+    if (isPlanningDraftAssignmentId(assignment.id)) {
+      if (!company || !vehicle) return;
+      const parsed = parsePlanningDraftId(assignment.id);
+      if (!parsed) return;
+
+      await assignmentsApi.create({
+        driver_id: parsed.driverId,
+        company_name: company,
+        vehicle_plate: vehicle,
+        work_date: parsed.date,
+        start_time: assignment.startTime || '07:00',
+        end_time: assignment.endTime || '15:00',
+        route_name:
+          assignment.pickupAddress?.trim() && assignment.deliveryAddress?.trim()
+            ? `${assignment.pickupAddress.trim()} → ${assignment.deliveryAddress.trim()}`
+            : assignment.routeJob?.trim() || undefined,
+        expected_daily_revenue: Math.max(0, Math.round((assignment.expectedRevenue || 0) * 100) / 100),
+        cargo_name: assignment.cargoName?.trim() || 'Office planning',
+        cargo_owner: assignment.cargoOwner?.trim() || company,
+        pickup_address: assignment.pickupAddress?.trim() || 'TBD',
+        delivery_address: assignment.deliveryAddress?.trim() || 'TBD',
+        notes: assignment.notes?.trim() || 'Created from office planning',
+      });
+      refetchHydrate();
+      return;
+    }
+
+    const patch = buildAssignmentPatch(assignment);
+    if (Object.keys(patch).length === 0) return;
+    await assignmentsApi.update(assignment.id, patch);
+  }
+
+  function scheduleAssignmentPersist(assignment: FleetAssignment) {
+    const existingTimer = persistAssignmentTimersRef.current.get(assignment.id);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    persistAssignmentTimersRef.current.set(
+      assignment.id,
+      setTimeout(() => {
+        void persistAssignmentToApi(assignment).catch((error) => {
+          console.error('Failed to persist assignment', error);
+        });
+      }, 600),
+    );
+  }
+
   function updateAssignment(assignmentId: string, updates: Partial<FleetAssignment>) {
-    setAssignments((current) =>
-      current.map((item) => {
+    setAssignments((current) => {
+      let working = current;
+      if (!working.some((item) => item.id === assignmentId) && isPlanningDraftAssignmentId(assignmentId)) {
+        const parsed = parsePlanningDraftId(assignmentId);
+        const driver = parsed ? drivers.find((item) => item.id === parsed.driverId) : undefined;
+        if (parsed && driver) {
+          working = [
+            ...working,
+            createPlanningPlaceholder(parsed.driverId, parsed.date, driver.department),
+          ];
+        }
+      }
+
+      const next = working.map((item) => {
         if (item.id !== assignmentId) return item;
 
         const merged = { ...item, ...updates };
@@ -1106,6 +1202,8 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
             vehicle: '',
             company: '',
             routeJob: '',
+            pickupAddress: '',
+            deliveryAddress: '',
             startTime: '',
             endTime: '',
             status: 'Unavailable',
@@ -1113,28 +1211,25 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
+        const pickup = merged.pickupAddress?.trim();
+        const delivery = merged.deliveryAddress?.trim();
+        const routeJob = pickup && delivery ? `${pickup} → ${delivery}` : merged.routeJob;
+
         return {
           ...merged,
+          routeJob,
           status: merged.status === 'In Progress' ? 'In Progress' : 'Planned',
           source: merged.source ?? 'manual',
         };
-      }),
-    );
-
-    // Persist a minimal subset of fields to backend.
-    const patch: Record<string, unknown> = {};
-    if (updates.notes !== undefined) patch.notes = updates.notes;
-    if (updates.startTime !== undefined) patch.start_time = updates.startTime;
-    if (updates.endTime !== undefined) patch.end_time = updates.endTime;
-    if (updates.cargoName !== undefined) patch.cargo_name = updates.cargoName;
-    if (updates.cargoOwner !== undefined) patch.cargo_owner = updates.cargoOwner;
-    if (updates.pickupAddress !== undefined) patch.pickup_address = updates.pickupAddress;
-    if (updates.deliveryAddress !== undefined) patch.delivery_address = updates.deliveryAddress;
-    if (Object.keys(patch).length > 0) {
-      void assignmentsApi.update(assignmentId, patch).catch((e) => {
-        console.error('Failed to persist updateAssignment', e);
       });
-    }
+
+      const merged = next.find((item) => item.id === assignmentId);
+      if (merged) {
+        scheduleAssignmentPersist(merged);
+      }
+
+      return next;
+    });
   }
 
   function validateMorningCheckin(checkin: MorningCheckin) {

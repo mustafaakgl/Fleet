@@ -183,13 +183,39 @@ export interface Assignment {
   id: string;
   driver: { id: string; name: string };
   vehicle: { id: string; plate_number: string };
+  company_id?: string;
   company_name: string;
   work_date: string;
   start_time: string;
   end_time: string;
+  route_name?: string;
+  expected_daily_revenue?: number | null;
+  company_default_daily_revenue?: number | null;
+  cargo_name?: string;
+  cargo_owner?: string;
+  pickup_address?: string;
+  delivery_address?: string;
   notes?: string;
   status: AssignmentStatus;
 }
+
+export type AssignmentWritePayload = {
+  driver_id?: string;
+  vehicle_id?: string;
+  vehicle_plate?: string;
+  company_id?: string;
+  company_name?: string;
+  cargo_name?: string;
+  cargo_owner?: string;
+  pickup_address?: string;
+  delivery_address?: string;
+  work_date?: string;
+  start_time?: string;
+  end_time?: string;
+  route_name?: string;
+  expected_daily_revenue?: number;
+  notes?: string;
+};
 
 // ─── Vehicle Handover ──────────────────────────────────────────────────────
 
@@ -358,6 +384,8 @@ export interface MorningCheckin {
   submitted_at: string;
   vehicle_plate?: string | null;
   company_name?: string | null;
+  cargo_name?: string | null;
+  cargo_quantity?: string | null;
   status: MorningCheckinBackendStatus;
   conflict_reason?: string | null;
   assignment_id?: string | null;
@@ -529,6 +557,18 @@ export interface DashboardRevenueAnalytics {
   }>;
 }
 
+export interface DashboardChartPoint {
+  label: string;
+  value: number;
+}
+
+export interface DashboardChartAnalytics {
+  dailyRevenue: DashboardChartPoint[];
+  monthlyRevenue: DashboardChartPoint[];
+  dailyAccidents: DashboardChartPoint[];
+  monthlyAccidents: DashboardChartPoint[];
+}
+
 export interface DashboardSummary {
   kpis: DashboardKpis;
   criticalAlerts: DashboardCriticalAlert[];
@@ -537,6 +577,7 @@ export interface DashboardSummary {
   vehicleHealth: DashboardVehicleHealthRow[];
   driverRiskOverview: DashboardDriverRiskRow[];
   revenueAnalytics?: DashboardRevenueAnalytics;
+  chartAnalytics?: DashboardChartAnalytics | null;
 }
 
 // ─── Messenger ─────────────────────────────────────────────────────────────

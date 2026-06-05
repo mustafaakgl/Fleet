@@ -379,9 +379,10 @@ model Assignment {
   workDate        DateTime
   startTime       String
   endTime         String
-  routeName       String?
-  status          AssignmentStatus @default(planned)
-  notes           String?
+  routeName            String?
+  expectedDailyRevenue Decimal?         @db.Decimal(10, 2)
+  status               AssignmentStatus @default(planned)
+  notes                String?
   createdById     String
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -657,6 +658,8 @@ model MorningCheckin {
   submittedAt    DateTime             @default(now())
   vehiclePlate   String?
   companyName    String?
+  cargoName      String?
+  cargoQuantity  String?
   status         MorningCheckinStatus @default(waiting_for_review)
   conflictReason String?
   assignmentId   String?

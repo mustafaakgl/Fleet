@@ -105,6 +105,8 @@ export const driverApi = {
     date: string;
     vehiclePlate?: string;
     companyName?: string;
+    cargoName?: string;
+    cargoQuantity?: string;
     notes?: string;
   }) {
     const { data } = await apiClient.post<DriverMorningCheckin>('/driver/morning-checkins', payload);

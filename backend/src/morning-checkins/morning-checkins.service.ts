@@ -41,6 +41,8 @@ function toClient(row: MorningCheckinWithDriver) {
     submitted_at: row.submittedAt.toISOString(),
     vehicle_plate: row.vehiclePlate ?? null,
     company_name: row.companyName ?? null,
+    cargo_name: row.cargoName ?? null,
+    cargo_quantity: row.cargoQuantity ?? null,
     status: row.status,
     conflict_reason: row.conflictReason ?? null,
     assignment_id: row.assignmentId ?? null,
@@ -100,6 +102,8 @@ export class MorningCheckinsService {
         date: new Date(dto.date),
         vehiclePlate: dto.vehicle_plate,
         companyName: dto.company_name,
+        cargoName: dto.cargo_name,
+        cargoQuantity: dto.cargo_quantity,
         status: dto.status ?? MorningCheckinStatus.waiting_for_review,
         notes: dto.notes,
       },
@@ -113,6 +117,8 @@ export class MorningCheckinsService {
     const data: Prisma.MorningCheckinUpdateInput = {};
     if (dto.vehicle_plate !== undefined) data.vehiclePlate = dto.vehicle_plate;
     if (dto.company_name !== undefined) data.companyName = dto.company_name;
+    if (dto.cargo_name !== undefined) data.cargoName = dto.cargo_name;
+    if (dto.cargo_quantity !== undefined) data.cargoQuantity = dto.cargo_quantity;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.conflict_reason !== undefined) data.conflictReason = dto.conflict_reason;
     if (dto.notes !== undefined) data.notes = dto.notes;
@@ -198,6 +204,7 @@ export class MorningCheckinsService {
             vehicleId: vehicle.id,
             companyId: company.id,
             cargoOwner: checkin.companyName!,
+            cargoName: checkin.cargoName?.trim() || assignment.cargoName,
             notes: assignment.notes ?? 'Updated from morning check-in',
           },
         });
@@ -208,7 +215,7 @@ export class MorningCheckinsService {
             driverId: checkin.driverId,
             vehicleId: vehicle.id,
             companyId: company.id,
-            cargoName: 'Mobile check-in',
+            cargoName: checkin.cargoName?.trim() || 'Mobile check-in',
             cargoOwner: checkin.companyName!,
             pickupAddress: 'TBD',
             deliveryAddress: 'TBD',
@@ -217,7 +224,9 @@ export class MorningCheckinsService {
             endTime: '15:00',
             status: AssignmentStatus.planned,
             createdById: currentUserId,
-            notes: 'Created from morning check-in',
+            notes: checkin.cargoQuantity?.trim()
+              ? `Miktar: ${checkin.cargoQuantity.trim()}`
+              : 'Created from morning check-in',
           },
         });
       }

@@ -143,21 +143,37 @@ export async function hydrateFleetData(
     const activeRows = apiAssignments.data.filter((a) => a.status !== 'cancelled');
     assignments = dedupeAssignmentsByDriverDay(
       activeRows.map((a) => ({
-      id: a.id,
-      date: (a.work_date ?? '').slice(0, 10),
-      driverId: a.driver.id,
-      department: dept(a.driver.id),
-      availability: 'Available',
-      vehicle: a.vehicle.plate_number,
-      company: a.company_name,
-      routeJob: a.notes ?? 'Daily route',
-      startTime: a.start_time,
-      endTime: a.end_time,
-      notes: a.notes ?? '',
-      status: mapAssignmentStatus(a.status),
-      source: 'manual',
-      expectedRevenue: 0,
-    })),
+        id: a.id,
+        date: (a.work_date ?? '').slice(0, 10),
+        driverId: a.driver.id,
+        department: dept(a.driver.id),
+        availability: 'Available',
+        vehicle: a.vehicle.plate_number,
+        company: a.company_name,
+        routeJob:
+          [a.pickup_address, a.delivery_address].filter(Boolean).join(' → ')
+          || a.route_name
+          || '',
+        routeName: a.route_name,
+        cargoName: a.cargo_name,
+        cargoOwner: a.cargo_owner,
+        pickupAddress: a.pickup_address,
+        deliveryAddress: a.delivery_address,
+        startTime: a.start_time,
+        endTime: a.end_time,
+        notes: a.notes ?? '',
+        status: mapAssignmentStatus(a.status),
+        source:
+          a.notes?.includes('morning check-in')
+            ? 'mobile_checkin'
+            : a.notes?.includes('transport request')
+              ? 'transport_request'
+              : 'manual',
+        expectedRevenue:
+          a.expected_daily_revenue
+          ?? a.company_default_daily_revenue
+          ?? 0,
+      })),
     );
   } catch {
     errors.push('assignments');
@@ -209,6 +225,8 @@ export async function hydrateFleetData(
       submittedAt: c.submitted_at ?? '',
       vehiclePlate: c.vehicle_plate ?? '',
       company: c.company_name ?? '',
+      cargoName: c.cargo_name ?? undefined,
+      cargoQuantity: c.cargo_quantity ?? undefined,
       status: statusMap[c.status] ?? 'Waiting for Review',
       conflictReason: c.conflict_reason ?? undefined,
       source: 'mobile_app',

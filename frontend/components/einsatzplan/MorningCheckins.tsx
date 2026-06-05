@@ -224,6 +224,8 @@ export function MorningCheckins() {
                 <th className="border-b border-slate-200 px-3 py-3">Submitted At</th>
                 <th className="border-b border-slate-200 px-3 py-3">Vehicle Plate</th>
                 <th className="border-b border-slate-200 px-3 py-3">Company</th>
+                <th className="border-b border-slate-200 px-3 py-3">Cargo</th>
+                <th className="border-b border-slate-200 px-3 py-3">Quantity</th>
                 <th className="border-b border-slate-200 px-3 py-3">Start Location</th>
                 <th className="border-b border-slate-200 px-3 py-3">Status</th>
                 <th className="border-b border-slate-200 px-3 py-3">Conflict</th>
@@ -240,6 +242,8 @@ export function MorningCheckins() {
                     <td className="px-3 py-2.5 text-slate-700">{checkin.submittedAt}</td>
                     <td className="px-3 py-2.5 text-slate-700">{checkin.vehiclePlate || '-'}</td>
                     <td className="px-3 py-2.5 text-slate-700">{checkin.company || '-'}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{checkin.cargoName || '-'}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{checkin.cargoQuantity || '-'}</td>
                     <td className="px-3 py-2.5 text-slate-700">{checkin.startLocation || '-'}</td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusPill(checkin.status)}`}>
@@ -353,6 +357,8 @@ export function MorningCheckins() {
                       <>
                         <DetailRow label="Vehicle Plate" value={selectedCheckin.vehiclePlate || '-'} />
                         <DetailRow label="Company" value={selectedCheckin.company || '-'} />
+                        <DetailRow label="Cargo" value={selectedCheckin.cargoName || '-'} />
+                        <DetailRow label="Quantity" value={selectedCheckin.cargoQuantity || '-'} />
                       </>
                     )}
 

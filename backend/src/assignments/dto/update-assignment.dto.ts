@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsString, Matches, Min, MinLength } from 'class-validator';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -42,6 +42,31 @@ export class UpdateAssignmentDto {
   route_name?: string;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  expected_daily_revenue?: number;
+
+  @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  company_id?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  company_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  vehicle_id?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  vehicle_plate?: string;
 }
