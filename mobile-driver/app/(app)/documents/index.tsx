@@ -14,10 +14,12 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
 import { colors, radius, spacing, typography } from '@/theme';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import {
   DRIVER_UPLOAD_DOCUMENT_TYPES,
   documentTypeLabelKey,
 } from '@/lib/driver-documents';
+import { driverDocumentDownloadPath } from '@/lib/authenticated-files';
 import {
   ensureScannerCameraPermission,
   isDocumentScannerNativeAvailable,
@@ -276,8 +278,12 @@ export default function DriverDocumentsScreen() {
                     {new Date(item.expiryDate).toLocaleDateString()}
                   </Text>
                 ) : null}
-                {item.fileUrl ? (
-                  <Image source={{ uri: item.fileUrl }} style={styles.thumb} resizeMode="cover" />
+                {item.download_url || item.fileUrl ? (
+                  <AuthenticatedImage
+                    apiPath={item.download_url ?? driverDocumentDownloadPath(item.id)}
+                    style={styles.thumb}
+                    resizeMode="cover"
+                  />
                 ) : null}
               </View>
             ))}

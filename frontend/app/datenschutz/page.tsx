@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 const LEGAL_DOCS = [
   { href: '/legal/AVV-Vorlage-DE.md', labelKey: 'privacy.docs.avv' },
   { href: '/legal/AVV-Anlage-TOMs.md', labelKey: 'privacy.docs.toms' },
+  { href: '/legal/TOMs-Zusammenfassung-Vertrieb.md', labelKey: 'privacy.docs.tomsSummary' },
   { href: '/legal/Unterauftragsverarbeiter.md', labelKey: 'privacy.docs.subprocessors' },
   { href: '/legal/Datenaufbewahrung.md', labelKey: 'privacy.docs.retention' },
 ];

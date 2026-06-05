@@ -106,9 +106,15 @@ export function fullName(first: string, last: string): string {
   return `${first} ${last}`.trim();
 }
 
-/** Resolves API-relative asset paths (e.g. /uploads/...) to an absolute URL for img/Image src. */
+/**
+ * @deprecated Use `useAuthenticatedImageUrl` / `openAuthenticatedDocument` from `@/lib/file-access`.
+ * Internal `/uploads/...` paths are never publicly served.
+ */
 export function resolveAssetUrl(fileUrl?: string | null): string | null {
   if (!fileUrl) return null;
+  if (fileUrl.startsWith('/uploads/')) {
+    return null;
+  }
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
     return fileUrl;
   }

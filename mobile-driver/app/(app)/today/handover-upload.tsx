@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { ScreenLayout } from '@/components/ScreenLayout';
 import { driverApi } from '@/api/endpoints';
 import type { HandoverPhotoSlot } from '@/api/types';
@@ -258,8 +259,14 @@ export default function VehicleHandoverUploadScreen() {
                   return (
                     <View key={slot} style={styles.slotCard}>
                       <Text style={styles.slotTitle}>{slotLabel(t, slot)}</Text>
-                      {photo?.fileUrl ? (
-                        <Image source={{ uri: photo.fileUrl }} style={styles.preview} resizeMode="cover" />
+                      {photo?.download_url || photo?.id ? (
+                        <AuthenticatedImage
+                          apiPath={
+                            photo.download_url ?? `/driver/documents/${photo.id}/download`
+                          }
+                          style={styles.preview}
+                          resizeMode="cover"
+                        />
                       ) : (
                         <View style={styles.previewPlaceholder}>
                           <Feather name="camera" size={28} color={colors.subtext} />

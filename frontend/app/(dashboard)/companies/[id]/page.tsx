@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { companiesApi, documentsApi, accidentsApi, type CompanyStats } from '@/lib/api';
 import type {
   CompanyDetail,
@@ -516,7 +517,9 @@ export default function CompanyProfilePage({
                   documents.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell>{row.documentType}</TableCell>
-                      <TableCell>{row.fileName}</TableCell>
+                      <TableCell>
+                        <DocumentFileLink document={row} variant="link" />
+                      </TableCell>
                       <TableCell>{formatDate(row.expiryDate)}</TableCell>
                       <TableCell>
                         <Badge className={statusColor(row.status)}>{row.status}</Badge>

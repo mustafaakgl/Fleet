@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { TenantStatus, UserRole, UserStatus } from '@prisma/client';
+import { TenantStatus, UserInvitationStatus, UserRole, UserStatus } from '@prisma/client';
 import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
+import { getFrontendUrl } from '../config/env.validation';
 import { BillingService } from '../billing/billing.service';
+import { welcomeMail } from '../mail/mail-templates';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SetupTenantDto } from './dto/setup-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
@@ -51,6 +54,7 @@ export class OnboardingService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly billingService: BillingService,
+    private readonly mailService: MailService,
   ) {}
 
   async getStatus() {
@@ -135,6 +139,18 @@ export class OnboardingService {
       metadata: { slug: result.tenant.slug },
     });
 
+    const welcome = welcomeMail({
+      fullName: result.admin.fullName,
+      fleetName: result.tenant.name,
+      loginUrl: `${getFrontendUrl()}/login`,
+    });
+    const mailResult = await this.mailService.sendMail({
+      to: normalizedEmail,
+      subject: welcome.subject,
+      text: welcome.text,
+      html: welcome.html,
+    });
+
     return {
       tenant: toClientTenant(result.tenant),
       admin: {
@@ -143,6 +159,77 @@ export class OnboardingService {
         full_name: result.admin.fullName,
         role: result.admin.role,
       },
+      welcome_mail_sent: mailResult.sent,
+      mail_mode: mailResult.mode,
+    };
+  }
+
+  async getProgress(tenantId: string) {
+    const [
+      tenant,
+      userCount,
+      driverCount,
+      vehicleCount,
+      assignmentCount,
+      pendingInvites,
+    ] = await Promise.all([
+      this.prisma.tenant.findUnique({ where: { id: tenantId } }),
+      this.prisma.user.count({ where: { tenantId, status: UserStatus.active } }),
+      this.prisma.driver.count({ where: { tenantId } }),
+      this.prisma.vehicle.count({ where: { tenantId } }),
+      this.prisma.assignment.count({ where: { tenantId } }),
+      this.prisma.userInvitation.count({
+        where: { tenantId, status: UserInvitationStatus.pending },
+      }),
+    ]);
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    const steps = [
+      {
+        id: 'tenant_profile',
+        complete: Boolean(tenant.contactEmail?.trim() && tenant.name?.trim()),
+        href: '/getting-started#tenant',
+      },
+      {
+        id: 'invite_team',
+        complete: userCount > 1 || pendingInvites > 0,
+        href: '/einsatzplan',
+      },
+      {
+        id: 'import_data',
+        complete: driverCount > 0 && vehicleCount > 0,
+        href: '/import',
+      },
+      {
+        id: 'first_assignment',
+        complete: assignmentCount > 0,
+        href: '/assignments/new',
+      },
+      {
+        id: 'smtp_ready',
+        complete: this.mailService.isEnabled(),
+        href: '/getting-started#smtp',
+      },
+    ];
+
+    const completed = steps.filter((s) => s.complete).length;
+
+    return {
+      tenant: toClientTenant(tenant),
+      smtp_enabled: this.mailService.isEnabled(),
+      counts: {
+        users: userCount,
+        drivers: driverCount,
+        vehicles: vehicleCount,
+        assignments: assignmentCount,
+        pending_invitations: pendingInvites,
+      },
+      steps,
+      progress_percent: Math.round((completed / steps.length) * 100),
+      complete: completed === steps.length,
     };
   }
 

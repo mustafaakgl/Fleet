@@ -6,6 +6,7 @@ import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { getFrontendUrl } from '../config/env.validation';
 import { BillingService } from '../billing/billing.service';
+import { invitationMail } from '../mail/mail-templates';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvitationDto, INVITABLE_ROLES } from './dto/create-invitation.dto';
@@ -111,20 +112,16 @@ export class InvitationsService {
 
     const inviteUrl = `${getFrontendUrl()}/accept-invite?token=${rawToken}`;
 
+    const template = invitationMail({
+      fullName: dto.full_name.trim(),
+      inviteUrl,
+      expiresAt: expiresAt.toISOString(),
+    });
     const mailResult = await this.mailService.sendMail({
       to: normalizedEmail,
-      subject: 'Einladung zu MyFleet',
-      text: [
-        `Hallo ${dto.full_name.trim()},`,
-        '',
-        'Sie wurden zu MyFleet eingeladen. Bitte richten Sie Ihr Passwort über den folgenden Link ein:',
-        inviteUrl,
-        '',
-        `Der Link ist bis ${expiresAt.toISOString()} gültig.`,
-        '',
-        'Mit freundlichen Grüßen',
-        'MyFleet Team',
-      ].join('\n'),
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
     });
 
     await safeAuditLog(this.auditService, {

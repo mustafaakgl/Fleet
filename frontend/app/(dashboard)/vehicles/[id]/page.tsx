@@ -11,6 +11,7 @@ import { vehiclesApi, documentsApi } from '@/lib/api';
 import type { VehicleDetail, Document } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 import { formatDate, statusColor } from '@/lib/utils';
+import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 
 interface VehicleAssignmentRow {
@@ -276,7 +277,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   documents.map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell>{doc.documentType}</TableCell>
-                      <TableCell>{doc.fileName}</TableCell>
+                      <TableCell>
+                        <DocumentFileLink document={doc} variant="link" />
+                      </TableCell>
                       <TableCell>{formatDate(doc.expiryDate)}</TableCell>
                       <TableCell>
                         <Badge

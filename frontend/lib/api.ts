@@ -844,6 +844,31 @@ export const onboardingApi = {
     address?: string;
     language?: string;
   }) => api.patch<TenantProfile>('/onboarding/tenant', data).then((r) => r.data),
+
+  getProgress: () =>
+    api
+      .get<{
+        smtp_enabled: boolean;
+        progress_percent: number;
+        complete: boolean;
+        counts: {
+          users: number;
+          drivers: number;
+          vehicles: number;
+          assignments: number;
+          pending_invitations: number;
+        };
+        steps: Array<{ id: string; complete: boolean; href: string }>;
+        tenant: TenantProfile;
+      }>('/onboarding/progress')
+      .then((r) => r.data),
+};
+
+export const mailApi = {
+  sendTest: () =>
+    api
+      .post<{ sent: boolean; mode: string; to: string; smtp_enabled: boolean }>('/mail/test')
+      .then((r) => r.data),
 };
 
 // ─── Invitations ──────────────────────────────────────────────────────────────

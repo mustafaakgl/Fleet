@@ -14,6 +14,7 @@ import type { DriverDetail, Document, LeaveRequest } from '@/lib/types';
 import { getUser } from '@/lib/auth';
 import { canViewFinancials } from '@/lib/permissions';
 import { useTranslation } from 'react-i18next';
+import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { formatAccidentCountLabel, formatDate, fullName, statusColor } from '@/lib/utils';
 
 interface DriverHandoverRow {
@@ -438,7 +439,9 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                   documents.map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell>{doc.documentType}</TableCell>
-                      <TableCell>{doc.fileName}</TableCell>
+                      <TableCell>
+                        <DocumentFileLink document={doc} variant="link" />
+                      </TableCell>
                       <TableCell>{formatDate(doc.expiryDate)}</TableCell>
                       <TableCell>
                         <Badge

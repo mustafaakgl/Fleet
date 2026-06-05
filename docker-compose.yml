@@ -22,10 +22,31 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: fleet_backend
+    env_file:
+      - path: .env
+        required: false
     environment:
+      NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: ${DATABASE_URL:-postgresql://fleet:fleet123@postgres:5432/fleet}
       JWT_SECRET: ${JWT_SECRET:-secret}
       PORT: ${BACKEND_PORT:-3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      DATA_CONTROLLER_NAME: ${DATA_CONTROLLER_NAME:-[FIRMENNAME]}
+      PRIVACY_CONTACT_EMAIL: ${PRIVACY_CONTACT_EMAIL:-privacy@example.com}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-MyFleet <noreply@myfleet.app>}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
     depends_on:
       postgres:
         condition: service_healthy

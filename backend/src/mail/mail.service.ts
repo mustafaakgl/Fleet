@@ -48,6 +48,21 @@ export class MailService {
     return process.env.SMTP_FROM?.trim() || 'noreply@myfleet.app';
   }
 
+  async verifyConnection(): Promise<{ ok: boolean; error?: string }> {
+    if (!this.isEnabled()) {
+      return { ok: false, error: 'smtp_disabled' };
+    }
+
+    try {
+      await this.getTransporter().verify();
+      return { ok: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'smtp_verify_failed';
+      this.logger.error(`SMTP verify failed: ${message}`);
+      return { ok: false, error: message };
+    }
+  }
+
   async sendMail(params: SendMailParams): Promise<SendMailResult> {
     if (!this.isEnabled()) {
       this.logger.log(

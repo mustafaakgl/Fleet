@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../audit/audit.service';
 import { getFrontendUrl } from '../config/env.validation';
+import { passwordResetMail } from '../mail/mail-templates';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveCustomerCompanyContext } from './customer-company-context';
@@ -191,18 +192,15 @@ export class AuthService {
 
     const resetUrl = `${getFrontendUrl()}/reset-password?token=${rawToken}`;
 
+    const template = passwordResetMail({
+      resetUrl,
+      expiresAt: expiresAt.toISOString(),
+    });
     const mailResult = await this.mailService.sendMail({
       to: targetUser.email,
-      subject: 'MyFleet Passwort zurücksetzen',
-      text: [
-        'Sie haben eine Anfrage zum Zurücksetzen Ihres MyFleet-Passworts erhalten.',
-        '',
-        resetUrl,
-        '',
-        `Der Link ist bis ${expiresAt.toISOString()} gültig.`,
-        '',
-        'Wenn Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail.',
-      ].join('\n'),
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
     });
 
     await this.safeAuditLog({

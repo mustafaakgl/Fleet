@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { companyEmailMail } from '../mail/mail-templates';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyEmailDto } from './dto/update-company-email.dto';
@@ -359,10 +360,16 @@ export class CompanyEmailsService {
       throw new BadRequestException('Recipient email is required before sending');
     }
 
+    const template = companyEmailMail({
+      subject: row.subject,
+      body: row.body,
+      companyName: row.company?.name,
+    });
     const mailResult = await this.mailService.sendMail({
       to: recipient,
-      subject: row.subject,
-      text: row.body,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
     });
 
     const db = this.prisma as any;

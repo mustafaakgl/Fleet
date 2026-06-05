@@ -1203,8 +1203,7 @@ export class DriverMobileService {
     updatedAt: Date;
   }) {
     const downloadUrl =
-      row.download_url ??
-      (row.fileUrl ? this.storage.buildDocumentDownloadPath(row.id) : null);
+      row.download_url ?? (row.fileUrl ? `/driver/documents/${row.id}/download` : null);
 
     return {
       id: row.id,

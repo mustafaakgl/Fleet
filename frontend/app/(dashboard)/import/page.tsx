@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { importApi, type ImportResult } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,14 @@ export default function ImportPage() {
           <CardDescription>{t('import.driversHint')}</CardDescription>
         </CardHeader>
         <CardContent>
+          <a
+            href="/samples/drivers.csv"
+            download
+            className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:underline"
+          >
+            <Download className="h-4 w-4" />
+            {t('import.downloadSampleDrivers')}
+          </a>
           <input
             type="file"
             accept=".csv,text/csv"
@@ -103,6 +111,14 @@ export default function ImportPage() {
           <CardDescription>{t('import.vehiclesHint')}</CardDescription>
         </CardHeader>
         <CardContent>
+          <a
+            href="/samples/vehicles.csv"
+            download
+            className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-blue-700 hover:underline"
+          >
+            <Download className="h-4 w-4" />
+            {t('import.downloadSampleVehicles')}
+          </a>
           <input
             type="file"
             accept=".csv,text/csv"

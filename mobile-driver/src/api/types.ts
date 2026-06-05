@@ -70,7 +70,9 @@ export type HandoverPhotoSlot =
 export type HandoverPhotoSummary = {
   id: string;
   fileName: string;
+  /** @deprecated Use download_url — internal paths are not publicly served. */
   fileUrl?: string | null;
+  download_url?: string | null;
 };
 
 export type DriverHandover = {
@@ -109,7 +111,9 @@ export type DriverHandoverPhotoUploadResponse = {
 export type RequestAttachment = {
   id: string;
   fileName: string;
-  fileUrl: string | null;
+  /** @deprecated Use download_url */
+  fileUrl?: string | null;
+  download_url?: string | null;
 };
 
 export type DriverRequest = {
@@ -313,7 +317,9 @@ export type DriverDocumentItem = {
   id: string;
   documentType: string;
   fileName: string;
-  fileUrl: string | null;
+  /** @deprecated Use download_url */
+  fileUrl?: string | null;
+  download_url?: string | null;
   status: DriverDocumentStatus;
   expiryDate: string | null;
   notes: string | null;

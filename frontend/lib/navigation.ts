@@ -15,6 +15,7 @@ import {
   Shield,
   Upload,
   CreditCard,
+  Rocket,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -100,6 +101,12 @@ const BILLING_ITEM: NavItem = {
   icon: CreditCard,
 };
 
+const GETTING_STARTED_ITEM: NavItem = {
+  href: '/getting-started',
+  labelKey: 'nav.gettingStarted',
+  icon: Rocket,
+};
+
 export function getNavigationForRole(role: Role): NavGroup[] {
   const groups =
     role === 'office'
@@ -109,10 +116,12 @@ export function getNavigationForRole(role: Role): NavGroup[] {
   if (role === 'admin') {
     const complianceGroup = groups.find((group) => group.id === 'compliance');
     if (complianceGroup) {
+      complianceGroup.items.unshift(GETTING_STARTED_ITEM);
       complianceGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
     } else {
       const operationsGroup = groups.find((group) => group.id === 'operations');
       if (operationsGroup) {
+        operationsGroup.items.unshift(GETTING_STARTED_ITEM);
         operationsGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
       }
     }

@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -21,6 +31,16 @@ export class OnboardingController {
   @HttpCode(HttpStatus.CREATED)
   setup(@Body() dto: SetupTenantDto) {
     return this.onboarding.setup(dto);
+  }
+
+  @Get('progress')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...ADMIN_ONLY_ROLES)
+  getProgress(@CurrentUser('tenantId') tenantId: string | undefined) {
+    if (!tenantId) {
+      throw new BadRequestException('Tenant context required');
+    }
+    return this.onboarding.getProgress(tenantId);
   }
 
   @Get('tenant')
