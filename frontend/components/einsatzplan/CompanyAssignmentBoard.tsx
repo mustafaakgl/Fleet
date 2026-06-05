@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslation } from 'react-i18next';
 import type { FleetAssignment } from '@/context/FleetDataContext';
 import {
   assignmentStatusBadge,
@@ -18,12 +19,14 @@ export function CompanyAssignmentBoard({
   groups,
   drivers,
   onAssignmentClick,
-  emptyMessage = 'No assignments for this day.',
+  emptyMessage,
 }: CompanyAssignmentBoardProps) {
+  const { t } = useTranslation();
+  const resolvedEmptyMessage = emptyMessage ?? t('board.empty');
   if (groups.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-        {emptyMessage}
+        {resolvedEmptyMessage}
       </p>
     );
   }
@@ -41,11 +44,11 @@ export function CompanyAssignmentBoard({
             <table className="w-full min-w-[560px] border-collapse text-[11px]">
               <thead>
                 <tr className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
-                  <th className="border-b border-r border-slate-300 px-2 py-1">Driver</th>
-                  <th className="border-b border-r border-slate-300 px-2 py-1">Vehicle</th>
-                  <th className="border-b border-r border-slate-300 px-2 py-1">Trailer</th>
-                  <th className="border-b border-r border-slate-300 px-2 py-1">Start</th>
-                  <th className="border-b border-slate-300 px-2 py-1">Status</th>
+                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colDriver')}</th>
+                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colVehicle')}</th>
+                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colTrailer')}</th>
+                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colStart')}</th>
+                  <th className="border-b border-slate-300 px-2 py-1">{t('board.colStatus')}</th>
                 </tr>
               </thead>
               <tbody>

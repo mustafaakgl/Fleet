@@ -16,7 +16,7 @@ export type HandoverPhotoSlot = (typeof HANDOVER_PHOTO_SLOTS)[number];
 export type HandoverPhotoSummary = {
   id: string;
   fileName: string;
-  fileUrl: string | null;
+  download_url: string | null;
 };
 
 export type HandoverPhotosBySlot = Partial<Record<HandoverPhotoSlot, HandoverPhotoSummary>>;
@@ -134,7 +134,7 @@ export async function loadHandoverPhotosBySlot(
     photos[slot] = {
       id: document.id,
       fileName: document.fileName,
-      fileUrl: document.fileUrl,
+      download_url: document.fileUrl ? `/driver/documents/${document.id}/download` : null,
     };
   }
 

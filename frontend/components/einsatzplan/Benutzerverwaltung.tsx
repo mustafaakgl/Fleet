@@ -1,387 +1,369 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Copy, Mail, Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { KeyRound, Mail, Pencil, Power, UserPlus, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { authApi, invitationsApi, usersApi } from '@/lib/api';
+import { isPasswordStrong } from '@/lib/password-policy';
+import type { User, UserRole, UserStatus } from '@/lib/types';
 
-type Department =
-  | 'Office'
-  | 'Krage'
-  | 'Raben Trans'
-  | 'Weliver'
-  | 'Go'
-  | 'Kunzendorf'
-  | 'Penny'
-  | 'Securitas'
-  | 'Werkstatt'
-  | 'Netto'
-  | 'Schnellecke'
-  | 'Weidler'
-  | 'Lidl';
-
-type Role = 'Admin' | 'Manager' | 'Disponent' | 'Benutzer' | 'Fahrer';
-type Language = 'Deutsch' | 'Turkisch' | 'Englisch' | 'Polnisch' | 'Franzosisch' | 'Italienisch' | 'Spanisch' | 'Niederlandisch';
-type Workload = 'Vollzeit' | 'Teilzeit' | 'Minijob';
-type UserStatus = 'Aktiv' | 'Inaktiv';
-type DrawerMode = 'create' | 'copy' | 'edit';
-type SortDirection = 'asc' | 'desc';
-
-interface UserRecord {
-  id: string;
-  nachname: string;
-  vorname: string;
-  benutzername: string;
-  mitarbeiterNr: string;
-  email: string;
-  telefonnummer: string;
-  abteilung: Department;
-  abteilungGueltigAb: string;
-  benutzerrolle: Role;
-  sprache: Language;
-  workload: Workload;
-  status: UserStatus;
-}
+type DrawerMode = 'create' | 'edit' | 'invite';
 
 interface UserFormData {
-  nachname: string;
-  vorname: string;
-  benutzername: string;
-  mitarbeiterNr: string;
+  full_name: string;
   email: string;
-  telefonnummer: string;
-  abteilung: Department;
-  abteilungGueltigAb: string;
-  benutzerrolle: Role;
-  sprache: Language;
-  workload: Workload;
+  password: string;
+  role: UserRole;
   status: UserStatus;
+  language: string;
 }
 
-interface FilterState {
-  nachname: string;
-  vorname: string;
-  benutzername: string;
-  abteilung: string;
-  benutzerrolle: string;
-  sprache: string;
-}
-
-const departments: Department[] = [
-  'Office',
-  'Krage',
-  'Raben Trans',
-  'Weliver',
-  'Go',
-  'Kunzendorf',
-  'Penny',
-  'Securitas',
-  'Werkstatt',
-  'Netto',
-  'Schnellecke',
-  'Weidler',
-  'Lidl',
-];
-
-const roles: Role[] = ['Admin', 'Manager', 'Disponent', 'Benutzer', 'Fahrer'];
-const languages: Language[] = ['Deutsch', 'Turkisch', 'Englisch', 'Polnisch', 'Franzosisch', 'Italienisch', 'Spanisch', 'Niederlandisch'];
-const workloads: Workload[] = ['Vollzeit', 'Teilzeit', 'Minijob'];
-const userStatuses: UserStatus[] = ['Aktiv', 'Inaktiv'];
-
-const initialUsers: UserRecord[] = [
-  { id: '1001', nachname: 'Ahmed', vorname: 'Nevzat', benutzername: 'Nevzat', mitarbeiterNr: '1001', email: 'nevzat@fleet.com', telefonnummer: '+49 151 1001', abteilung: 'Penny', abteilungGueltigAb: '13.10.2025', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1002', nachname: 'Andreev', vorname: 'Andreas', benutzername: 'AndreasNeu', mitarbeiterNr: '1002', email: 'andreasneu@fleet.com', telefonnummer: '+49 151 1002', abteilung: 'Schnellecke', abteilungGueltigAb: '01.03.2026', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1003', nachname: 'Arican', vorname: 'Hasan', benutzername: 'Hasan', mitarbeiterNr: '1003', email: 'hasan@fleet.com', telefonnummer: '+49 151 1003', abteilung: 'Raben Trans', abteilungGueltigAb: '01.09.2021', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1004', nachname: 'Bach', vorname: 'Peter', benutzername: 'PeterB', mitarbeiterNr: '1004', email: 'peterb@fleet.com', telefonnummer: '+49 151 1004', abteilung: 'Raben Trans', abteilungGueltigAb: '01.10.2021', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Teilzeit', status: 'Aktiv' },
-  { id: '1005', nachname: 'Baumeister', vorname: 'Lutz', benutzername: 'Lutz', mitarbeiterNr: '1005', email: 'lutz@fleet.com', telefonnummer: '+49 151 1005', abteilung: 'Werkstatt', abteilungGueltigAb: '01.11.2024', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1006', nachname: 'Cukur', vorname: 'Ilker', benutzername: 'Ilker', mitarbeiterNr: '1006', email: 'ilker@fleet.com', telefonnummer: '+49 151 1006', abteilung: 'Go', abteilungGueltigAb: '14.11.2025', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1007', nachname: 'Diallo', vorname: 'Sita', benutzername: 'Sita', mitarbeiterNr: '1007', email: 'sita@fleet.com', telefonnummer: '+49 151 1007', abteilung: 'Krage', abteilungGueltigAb: '01.05.2025', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1008', nachname: 'Dogan', vorname: 'Burcu', benutzername: 'Burcu', mitarbeiterNr: '1008', email: 'burcu@fleet.com', telefonnummer: '+49 151 1008', abteilung: 'Office', abteilungGueltigAb: '01.02.2026', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Teilzeit', status: 'Aktiv' },
-  { id: '1009', nachname: 'Erdogan', vorname: 'Meryem', benutzername: 'manager', mitarbeiterNr: '1009', email: 'manager@fleet.com', telefonnummer: '+49 151 1009', abteilung: 'Office', abteilungGueltigAb: '02.07.2021', benutzerrolle: 'Manager', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1010', nachname: 'Feyzula', vorname: 'Nesrin', benutzername: 'Nesrin', mitarbeiterNr: '1010', email: 'nesrin@fleet.com', telefonnummer: '+49 151 1010', abteilung: 'Krage', abteilungGueltigAb: '01.10.2021', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-  { id: '1011', nachname: 'Gundrum', vorname: 'Andreas', benutzername: 'Andreas', mitarbeiterNr: '1011', email: 'andreas@fleet.com', telefonnummer: '+49 151 1011', abteilung: 'Krage', abteilungGueltigAb: '01.08.2021', benutzerrolle: 'Benutzer', sprache: 'Deutsch', workload: 'Vollzeit', status: 'Aktiv' },
-];
+const roleValues: UserRole[] = ['admin', 'boss', 'accounting', 'office', 'driver'];
+const statusValues: UserStatus[] = ['active', 'inactive'];
+const languageValues = ['de', 'en', 'tr'];
 
 const emptyForm: UserFormData = {
-  nachname: '',
-  vorname: '',
-  benutzername: '',
-  mitarbeiterNr: '',
+  full_name: '',
   email: '',
-  telefonnummer: '',
-  abteilung: 'Office',
-  abteilungGueltigAb: '',
-  benutzerrolle: 'Benutzer',
-  sprache: 'Deutsch',
-  workload: 'Vollzeit',
-  status: 'Aktiv',
+  password: '',
+  role: 'office',
+  status: 'active',
+  language: 'de',
 };
 
-function toInputDate(value: string) {
-  const [day, month, year] = value.split('.');
-  if (!day || !month || !year) return '';
-  return `${year}-${month}-${day}`;
-}
-
-function toDisplayDate(value: string) {
-  if (!value) return '';
-  const [year, month, day] = value.split('-');
-  if (!year || !month || !day) return value;
-  return `${day}.${month}.${year}`;
-}
-
 function statusBadgeClass(status: UserStatus) {
-  return status === 'Aktiv'
+  return status === 'active'
     ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
     : 'border-rose-200 bg-rose-100 text-rose-700';
 }
 
 export function Benutzerverwaltung() {
-  const [users, setUsers] = useState<UserRecord[]>(initialUsers);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [filters, setFilters] = useState<FilterState>({
-    nachname: '',
-    vorname: '',
-    benutzername: '',
-    abteilung: '',
-    benutzerrolle: '',
-    sprache: '',
-  });
+  const { t } = useTranslation();
+
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>('create');
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [formData, setFormData] = useState<UserFormData>(emptyForm);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const selectedUser = useMemo(
-    () => users.find((user) => user.id === selectedUserId) ?? null,
-    [selectedUserId, users],
+  const roleLabel = useCallback((role: UserRole) => t(`usersAdmin.roles.${role}`), [t]);
+  const languageLabel = useCallback(
+    (language: string) => (languageValues.includes(language) ? t(`usersAdmin.languages.${language}`) : language),
+    [t],
   );
 
-  const filteredUsers = useMemo(() => {
-    const normalized = users.filter((user) => {
-      return (
-        user.nachname.toLowerCase().includes(filters.nachname.toLowerCase()) &&
-        user.vorname.toLowerCase().includes(filters.vorname.toLowerCase()) &&
-        user.benutzername.toLowerCase().includes(filters.benutzername.toLowerCase()) &&
-        user.abteilung.toLowerCase().includes(filters.abteilung.toLowerCase()) &&
-        user.benutzerrolle.toLowerCase().includes(filters.benutzerrolle.toLowerCase()) &&
-        user.sprache.toLowerCase().includes(filters.sprache.toLowerCase())
-      );
-    });
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await usersApi.list({
+        search: search || undefined,
+        role: roleFilter || undefined,
+        status: statusFilter || undefined,
+      });
+      setUsers(res.data);
+    } catch {
+      setLoadError(t('usersAdmin.loadError'));
+    } finally {
+      setLoading(false);
+    }
+  }, [search, roleFilter, statusFilter, t]);
 
-    return normalized.sort((left, right) => {
-      const result = left.nachname.localeCompare(right.nachname, 'de');
-      return sortDirection === 'asc' ? result : -result;
-    });
-  }, [filters, sortDirection, users]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void load();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [load]);
+
+  const sortedUsers = useMemo(
+    () => [...users].sort((a, b) => a.full_name.localeCompare(b.full_name, 'de')),
+    [users],
+  );
 
   function openCreateDrawer() {
     setDrawerMode('create');
     setEditingUserId(null);
     setFormData(emptyForm);
+    setFormError(null);
     setDrawerOpen(true);
   }
 
-  function openCopyDrawer() {
-    if (!selectedUser) return;
-    setDrawerMode('copy');
-    setEditingUserId(null);
-    setFormData({
-      ...selectedUser,
-      mitarbeiterNr: '',
-      email: '',
-    });
-    setDrawerOpen(true);
-  }
-
-  function openEditDrawer(user: UserRecord) {
+  function openEditDrawer(user: User) {
     setDrawerMode('edit');
     setEditingUserId(user.id);
-    setFormData(user);
+    setFormData({
+      full_name: user.full_name,
+      email: user.email,
+      password: '',
+      role: user.role,
+      status: user.status,
+      language: user.language || 'de',
+    });
+    setFormError(null);
     setDrawerOpen(true);
   }
 
   function closeDrawer() {
+    if (saving) return;
     setDrawerOpen(false);
     setEditingUserId(null);
   }
 
-  function saveUser() {
-    const nextUser: UserRecord = {
-      id: editingUserId ?? `${Date.now()}`,
-      ...formData,
-    };
+  async function saveUser() {
+    setFormError(null);
 
-    if (drawerMode === 'edit' && editingUserId) {
-      setUsers((current) => current.map((user) => (user.id === editingUserId ? nextUser : user)));
-      setSelectedUserId(nextUser.id);
-    } else {
-      setUsers((current) => [...current, nextUser]);
-      setSelectedUserId(nextUser.id);
+    if (!formData.full_name.trim() || !formData.email.trim()) {
+      setFormError(t('usersAdmin.nameEmailRequired'));
+      return;
+    }
+    if (drawerMode === 'create' && !isPasswordStrong(formData.password)) {
+      setFormError(t('usersAdmin.passwordMin'));
+      return;
+    }
+    if (drawerMode === 'edit' && formData.password && !isPasswordStrong(formData.password)) {
+      setFormError(t('usersAdmin.passwordMin'));
+      return;
     }
 
-    closeDrawer();
+    setSaving(true);
+    try {
+      if (drawerMode === 'invite') {
+        const result = await invitationsApi.create({
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          role: formData.role,
+          language: formData.language,
+        });
+        const mailHint = result.mail_sent
+          ? t('usersAdmin.inviteMailSent')
+          : t('usersAdmin.inviteMailLogged', { mode: result.mail_mode });
+        window.prompt(
+          `${mailHint}\n\n${t('usersAdmin.inviteLinkCreated', { url: result.invite_url })}`,
+          result.invite_url,
+        );
+      } else if (drawerMode === 'edit' && editingUserId) {
+        await usersApi.update(editingUserId, {
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          role: formData.role,
+          status: formData.status,
+          language: formData.language,
+          ...(formData.password ? { password: formData.password } : {}),
+        });
+      } else {
+        await usersApi.create({
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+          role: formData.role,
+          status: formData.status,
+          language: formData.language,
+        });
+      }
+      setDrawerOpen(false);
+      setEditingUserId(null);
+      await load();
+    } catch (error) {
+      const message =
+        (error as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      setFormError(
+        Array.isArray(message) ? message.join(' ') : message || t('usersAdmin.saveError'),
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function sendWelcomeEmail() {
-    if (!selectedUser) return;
-    setToastMessage(`Willkommens-Email wurde an ${selectedUser.benutzername} gesendet.`);
-    setTimeout(() => setToastMessage(null), 2500);
+  function openInviteDrawer() {
+    setDrawerMode('invite');
+    setEditingUserId(null);
+    setFormData({ ...emptyForm, password: '' });
+    setFormError(null);
+    setDrawerOpen(true);
+  }
+
+  async function createResetLink(user: User) {
+    try {
+      const result = await authApi.requestPasswordReset(user.id);
+      window.prompt(t('usersAdmin.resetLinkCreated', { url: result.reset_url }), result.reset_url);
+    } catch {
+      setLoadError(t('usersAdmin.resetLinkError'));
+    }
+  }
+
+  async function toggleStatus(user: User) {
+    const nextStatus: UserStatus = user.status === 'active' ? 'inactive' : 'active';
+    const confirmed =
+      nextStatus === 'inactive'
+        ? window.confirm(t('usersAdmin.confirmDeactivate', { name: user.full_name }))
+        : true;
+    if (!confirmed) return;
+
+    try {
+      if (nextStatus === 'inactive') {
+        await usersApi.deactivate(user.id);
+      } else {
+        await usersApi.update(user.id, { status: 'active' });
+      }
+      await load();
+    } catch {
+      setLoadError(t('usersAdmin.statusError'));
+    }
   }
 
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">Benutzerverwaltung</h2>
-        <p className="text-sm text-slate-600">ERP-style user administration with filters, row actions, and creation workflow.</p>
+        <h2 className="text-xl font-bold text-slate-900">{t('usersAdmin.title')}</h2>
+        <p className="text-sm text-slate-600">{t('usersAdmin.subtitle')}</p>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={openCreateDrawer}
-            className="inline-flex items-center gap-2 rounded-md border border-blue-700 bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-          >
-            <UserPlus className="h-4 w-4" />
-            Neuen Benutzer anlegen
-          </button>
-          <button
-            type="button"
-            onClick={openCopyDrawer}
-            disabled={!selectedUser}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Copy className="h-4 w-4 text-blue-600" />
-            Benutzer kopieren
-          </button>
-          <button
-            type="button"
-            onClick={sendWelcomeEmail}
-            disabled={!selectedUser}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Mail className="h-4 w-4 text-blue-600" />
-            Willkommens-Email senden
-          </button>
-        </div>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <button
+          type="button"
+          onClick={openCreateDrawer}
+          className="inline-flex items-center gap-2 rounded-md border border-blue-700 bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+        >
+          <UserPlus className="h-4 w-4" />
+          {t('usersAdmin.create')}
+        </button>
+        <button
+          type="button"
+          onClick={openInviteDrawer}
+          className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <Mail className="h-4 w-4" />
+          {t('usersAdmin.invite')}
+        </button>
+
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t('usersAdmin.searchPlaceholder')}
+          className="h-9 w-56 rounded-md border border-slate-300 px-3 text-sm"
+        />
+        <select
+          value={roleFilter}
+          onChange={(event) => setRoleFilter(event.target.value)}
+          className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+        >
+          <option value="">{t('usersAdmin.allRoles')}</option>
+          {roleValues.map((role) => (
+            <option key={role} value={role}>{roleLabel(role)}</option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+        >
+          <option value="">{t('usersAdmin.allStatuses')}</option>
+          <option value="active">{t('usersAdmin.statusActive')}</option>
+          <option value="inactive">{t('usersAdmin.statusInactive')}</option>
+        </select>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-[1480px] text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-50">
-              <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="border-b border-slate-200 px-3 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
-                    className="inline-flex items-center gap-1 font-semibold text-slate-600"
-                  >
-                    Nachname
-                    <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  </button>
-                </th>
-                <th className="border-b border-slate-200 px-3 py-3">Vorname</th>
-                <th className="border-b border-slate-200 px-3 py-3">Benutzername</th>
-                <th className="border-b border-slate-200 px-3 py-3">Mitarbeiter-Nr.</th>
-                <th className="border-b border-slate-200 px-3 py-3">Abteilung</th>
-                <th className="border-b border-slate-200 px-3 py-3">Abteilung gültig ab</th>
-                <th className="border-b border-slate-200 px-3 py-3">Benutzerrolle</th>
-                <th className="border-b border-slate-200 px-3 py-3">Sprache</th>
-                <th className="border-b border-slate-200 px-3 py-3">Vollzeit/Teilzeit</th>
-                <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Aktionen</th>
-              </tr>
-              <tr className="bg-white">
-                <th className="border-b border-slate-200 px-3 py-2"><input value={filters.nachname} onChange={(event) => setFilters((current) => ({ ...current, nachname: event.target.value }))} placeholder="Filtern" className="h-8 w-full rounded border border-slate-300 px-2 text-xs" /></th>
-                <th className="border-b border-slate-200 px-3 py-2"><input value={filters.vorname} onChange={(event) => setFilters((current) => ({ ...current, vorname: event.target.value }))} placeholder="Filtern" className="h-8 w-full rounded border border-slate-300 px-2 text-xs" /></th>
-                <th className="border-b border-slate-200 px-3 py-2"><input value={filters.benutzername} onChange={(event) => setFilters((current) => ({ ...current, benutzername: event.target.value }))} placeholder="Filtern" className="h-8 w-full rounded border border-slate-300 px-2 text-xs" /></th>
-                <th className="border-b border-slate-200 px-3 py-2" />
-                <th className="border-b border-slate-200 px-3 py-2"><input value={filters.abteilung} onChange={(event) => setFilters((current) => ({ ...current, abteilung: event.target.value }))} placeholder="Filtern" className="h-8 w-full rounded border border-slate-300 px-2 text-xs" /></th>
-                <th className="border-b border-slate-200 px-3 py-2" />
-                <th className="border-b border-slate-200 px-3 py-2"><input value={filters.benutzerrolle} onChange={(event) => setFilters((current) => ({ ...current, benutzerrolle: event.target.value }))} placeholder="Filtern" className="h-8 w-full rounded border border-slate-300 px-2 text-xs" /></th>
-                <th className="border-b border-slate-200 px-3 py-2"><input value={filters.sprache} onChange={(event) => setFilters((current) => ({ ...current, sprache: event.target.value }))} placeholder="Filtern" className="h-8 w-full rounded border border-slate-300 px-2 text-xs" /></th>
-                <th className="border-b border-slate-200 px-3 py-2" />
-                <th className="border-b border-slate-200 px-3 py-2" />
-                <th className="border-b border-slate-200 px-3 py-2" />
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colName')}</th>
+                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colEmail')}</th>
+                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colRole')}</th>
+                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colLanguage')}</th>
+                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colStatus')}</th>
+                <th className="border-b border-slate-200 px-4 py-3 text-right">{t('usersAdmin.colActions')}</th>
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className={`border-t border-slate-100 ${selectedUserId === user.id ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'}`}
-                  onClick={() => setSelectedUserId(user.id)}
-                >
-                  <td className="px-3 py-2.5 font-medium text-slate-900">{user.nachname}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.vorname}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.benutzername}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.mitarbeiterNr}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.abteilung}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.abteilungGueltigAb}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.benutzerrolle}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.sprache}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{user.workload}</td>
-                  <td className="px-3 py-2.5">
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(user.status)}`}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditDrawer(user);
-                        }}
-                        className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50"
-                        aria-label="Edit user"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedUserId(user.id);
-                          setDrawerMode('copy');
-                          setFormData({ ...user, mitarbeiterNr: '', email: '' });
-                          setEditingUserId(null);
-                          setDrawerOpen(true);
-                        }}
-                        className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50"
-                        aria-label="Copy user"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setUsers((current) => current.filter((item) => item.id !== user.id));
-                          if (selectedUserId === user.id) setSelectedUserId(null);
-                        }}
-                        className="rounded border border-red-200 p-1.5 text-red-600 hover:bg-red-50"
-                        aria-label="Delete user"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                    {t('usersAdmin.loading')}
                   </td>
                 </tr>
-              ))}
+              )}
+
+              {!loading && loadError && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-rose-600">
+                    {loadError}
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !loadError && sortedUsers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                    {t('usersAdmin.empty')}
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !loadError &&
+                sortedUsers.map((user) => (
+                  <tr key={user.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-medium text-slate-900">{user.full_name}</td>
+                    <td className="px-4 py-2.5 text-slate-700">{user.email}</td>
+                    <td className="px-4 py-2.5 text-slate-700">{roleLabel(user.role)}</td>
+                    <td className="px-4 py-2.5 text-slate-700">{languageLabel(user.language)}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(user.status)}`}>
+                        {user.status === 'active' ? t('usersAdmin.statusActive') : t('usersAdmin.statusInactive')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openEditDrawer(user)}
+                          className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50"
+                          aria-label={t('usersAdmin.editAction')}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        {user.status === 'active' ? (
+                          <button
+                            type="button"
+                            onClick={() => void createResetLink(user)}
+                            className="rounded border border-amber-200 p-1.5 text-amber-700 hover:bg-amber-50"
+                            aria-label={t('usersAdmin.resetPasswordAction')}
+                            title={t('usersAdmin.resetPassword')}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(user)}
+                          className={`rounded border p-1.5 ${
+                            user.status === 'active'
+                              ? 'border-rose-200 text-rose-600 hover:bg-rose-50'
+                              : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
+                          }`}
+                          aria-label={user.status === 'active' ? t('usersAdmin.deactivateAction') : t('usersAdmin.activateAction')}
+                        >
+                          <Power className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
       </div>
-
-      {toastMessage && (
-        <div className="fixed right-6 top-6 z-50 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 shadow-lg">
-          {toastMessage}
-        </div>
-      )}
 
       {drawerOpen && (
         <>
@@ -389,34 +371,79 @@ export function Benutzerverwaltung() {
           <aside className="fixed right-0 top-0 z-50 h-screen w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
             <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <h3 className="text-base font-semibold text-slate-900">
-                {drawerMode === 'create' ? 'Neuen Benutzer anlegen' : drawerMode === 'copy' ? 'Benutzer kopieren' : 'Benutzer bearbeiten'}
+                {drawerMode === 'create'
+                  ? t('usersAdmin.createTitle')
+                  : drawerMode === 'invite'
+                    ? t('usersAdmin.inviteTitle')
+                    : t('usersAdmin.editTitle')}
               </h3>
-              <button type="button" onClick={closeDrawer} className="rounded-md border border-slate-300 p-2 text-slate-500 hover:bg-slate-50" aria-label="Close drawer">
+              <button type="button" onClick={closeDrawer} className="rounded-md border border-slate-300 p-2 text-slate-500 hover:bg-slate-50" aria-label={t('usersAdmin.close')}>
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="grid grid-cols-1 gap-4 px-5 py-5 md:grid-cols-2">
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Nachname</span><input value={formData.nachname} onChange={(event) => setFormData((current) => ({ ...current, nachname: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" /></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Vorname</span><input value={formData.vorname} onChange={(event) => setFormData((current) => ({ ...current, vorname: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" /></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Benutzername</span><input value={formData.benutzername} onChange={(event) => setFormData((current) => ({ ...current, benutzername: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" /></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Mitarbeiter-Nr.</span><input value={formData.mitarbeiterNr} onChange={(event) => setFormData((current) => ({ ...current, mitarbeiterNr: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" /></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">E-Mail</span><input type="email" value={formData.email} onChange={(event) => setFormData((current) => ({ ...current, email: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" /></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Telefonnummer</span><input value={formData.telefonnummer} onChange={(event) => setFormData((current) => ({ ...current, telefonnummer: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" /></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Abteilung</span><select value={formData.abteilung} onChange={(event) => setFormData((current) => ({ ...current, abteilung: event.target.value as Department }))} className="h-10 w-full rounded-md border border-slate-300 px-3">{departments.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Abteilung gültig ab</span><input type="date" value={toInputDate(formData.abteilungGueltigAb)} onChange={(event) => setFormData((current) => ({ ...current, abteilungGueltigAb: toDisplayDate(event.target.value) }))} className="h-10 w-full rounded-md border border-slate-300 px-3" /></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Benutzerrolle</span><select value={formData.benutzerrolle} onChange={(event) => setFormData((current) => ({ ...current, benutzerrolle: event.target.value as Role }))} className="h-10 w-full rounded-md border border-slate-300 px-3">{roles.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Sprache</span><select value={formData.sprache} onChange={(event) => setFormData((current) => ({ ...current, sprache: event.target.value as Language }))} className="h-10 w-full rounded-md border border-slate-300 px-3">{languages.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Vollzeit/Teilzeit</span><select value={formData.workload} onChange={(event) => setFormData((current) => ({ ...current, workload: event.target.value as Workload }))} className="h-10 w-full rounded-md border border-slate-300 px-3">{workloads.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-              <label className="space-y-1 text-sm"><span className="text-slate-600">Status</span><select value={formData.status} onChange={(event) => setFormData((current) => ({ ...current, status: event.target.value as UserStatus }))} className="h-10 w-full rounded-md border border-slate-300 px-3">{userStatuses.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">{t('usersAdmin.fieldName')}</span>
+                <input value={formData.full_name} onChange={(event) => setFormData((current) => ({ ...current, full_name: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">{t('usersAdmin.fieldEmail')}</span>
+                <input type="email" value={formData.email} onChange={(event) => setFormData((current) => ({ ...current, email: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3" />
+              </label>
+              {drawerMode !== 'invite' ? (
+                <label className="space-y-1 text-sm md:col-span-2">
+                  <span className="text-slate-600">
+                    {drawerMode === 'create' ? t('usersAdmin.fieldPassword') : t('usersAdmin.fieldNewPassword')}
+                  </span>
+                  <input type="password" value={formData.password} onChange={(event) => setFormData((current) => ({ ...current, password: event.target.value }))} placeholder={drawerMode === 'edit' ? t('usersAdmin.passwordKeepHint') : ''} className="h-10 w-full rounded-md border border-slate-300 px-3" />
+                  <p className="text-xs text-slate-500">{t('auth.passwordPolicy.hint')}</p>
+                </label>
+              ) : (
+                <p className="text-sm text-slate-600 md:col-span-2">{t('usersAdmin.inviteHint')}</p>
+              )}
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">{t('usersAdmin.fieldRole')}</span>
+                <select value={formData.role} onChange={(event) => setFormData((current) => ({ ...current, role: event.target.value as UserRole }))} className="h-10 w-full rounded-md border border-slate-300 px-3">
+                  {roleValues.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-slate-600">{t('usersAdmin.fieldLanguage')}</span>
+                <select value={formData.language} onChange={(event) => setFormData((current) => ({ ...current, language: event.target.value }))} className="h-10 w-full rounded-md border border-slate-300 px-3">
+                  {languageValues.map((language) => <option key={language} value={language}>{languageLabel(language)}</option>)}
+                </select>
+              </label>
+              {drawerMode !== 'invite' ? (
+                <label className="space-y-1 text-sm">
+                  <span className="text-slate-600">{t('usersAdmin.fieldStatus')}</span>
+                  <select value={formData.status} onChange={(event) => setFormData((current) => ({ ...current, status: event.target.value as UserStatus }))} className="h-10 w-full rounded-md border border-slate-300 px-3">
+                    {statusValues.map((status) => (
+                      <option key={status} value={status}>
+                        {status === 'active' ? t('usersAdmin.statusActive') : t('usersAdmin.statusInactive')}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </div>
 
+            {formError && (
+              <div className="mx-5 mb-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {formError}
+              </div>
+            )}
+
             <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
-              <button type="button" onClick={closeDrawer} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                Abbrechen
+              <button type="button" onClick={closeDrawer} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                {t('usersAdmin.cancel')}
               </button>
-              <button type="button" onClick={saveUser} className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">
-                Benutzer speichern
+              <button type="button" onClick={saveUser} disabled={saving} className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
+                {saving
+                  ? t('usersAdmin.saving')
+                  : drawerMode === 'invite'
+                    ? t('usersAdmin.inviteSend')
+                    : t('usersAdmin.save')}
               </button>
             </div>
           </aside>

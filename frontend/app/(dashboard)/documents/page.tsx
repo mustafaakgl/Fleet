@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { documentHasFile, openAuthenticatedDocument } from '@/lib/file-access';
 import { formatDate } from '@/lib/utils';
 
 const OWNER_TYPES: Array<Document['ownerType']> = [
@@ -52,21 +53,6 @@ function badgeClass(status: Document['status']) {
   if (status === 'expiring_soon') return 'bg-amber-100 text-amber-700';
   if (status === 'expired') return 'bg-rose-100 text-rose-700';
   return 'bg-slate-100 text-slate-700';
-}
-
-function resolveDocumentUrl(fileUrl?: string) {
-  if (!fileUrl) return null;
-  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-    return fileUrl;
-  }
-
-  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
-  try {
-    const origin = new URL(base).origin;
-    return `${origin}${fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`}`;
-  } catch {
-    return fileUrl;
-  }
 }
 
 export default function DocumentsPage() {
@@ -211,11 +197,14 @@ export default function DocumentsPage() {
     setDetailOpen(true);
   }
 
-  function openFileIfAvailable(doc: Document) {
-    const url = resolveDocumentUrl(doc.fileUrl);
-    if (!url) return false;
-    window.open(url, '_blank', 'noopener,noreferrer');
-    return true;
+  async function openFileIfAvailable(doc: Document) {
+    if (!documentHasFile(doc)) return false;
+    try {
+      await openAuthenticatedDocument(doc.id, doc.fileName);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function openForm(mode: DrawerMode, doc?: Document, missingRow?: MissingDocumentRow) {
@@ -466,9 +455,9 @@ export default function DocumentsPage() {
                             type="button"
                             className="font-medium text-blue-600 hover:underline"
                             onClick={() => {
-                              if (!openFileIfAvailable(doc)) {
-                                openDetail(doc);
-                              }
+                              void openFileIfAvailable(doc).then((opened) => {
+                                if (!opened) openDetail(doc);
+                              });
                             }}
                           >
                             Open
@@ -510,13 +499,10 @@ export default function DocumentsPage() {
         onOpenChange={setDetailOpen}
         document={detailDocument}
         ownerName={ownerName}
-        onOpenFile={(doc) => {
-          const url = resolveDocumentUrl(doc.fileUrl);
-          if (url) {
-            window.open(url, '_blank', 'noopener,noreferrer');
-            return;
+        onOpenFile={async (doc) => {
+          if (!(await openFileIfAvailable(doc))) {
+            setToast({ type: 'error', message: 'Metadata-only document: no file available.' });
           }
-          setToast({ type: 'error', message: 'Metadata-only document: no file available.' });
         }}
       />
 
@@ -579,22 +565,13 @@ function DocumentDetailDrawer({
             <DetailItem label="Status" value={document.status} />
             <DetailItem label="Uploaded At" value={formatDate(document.uploadedAt)} />
             <DetailItem label="Notes" value={document.notes || '-'} />
-            {document.fileUrl ? (
+            {documentHasFile(document) ? (
               <div className="space-y-3 rounded border border-gray-200 bg-gray-50 p-4 md:col-span-2">
                 <p className="text-xs font-semibold uppercase text-gray-500">File</p>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => onOpenFile(document)}>
+                  <Button size="sm" onClick={() => void onOpenFile(document)}>
                     Open in new tab
                   </Button>
-                  <a
-                    href={resolveDocumentUrl(document.fileUrl) ?? '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                    download
-                    className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                  >
-                    Download
-                  </a>
                 </div>
               </div>
             ) : (

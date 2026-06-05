@@ -79,7 +79,7 @@ export function StandardDashboard() {
         if (mounted) setSummary(data);
       })
       .catch((e) => {
-        if (mounted) setError(e instanceof Error ? e.message : 'Failed to load dashboard');
+        if (mounted) setError(e instanceof Error ? e.message : t('dashboard.loadError'));
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -87,7 +87,7 @@ export function StandardDashboard() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [t]);
 
   const showFinancials = user ? canViewFinancials(user.role) : false;
 
@@ -114,7 +114,7 @@ export function StandardDashboard() {
         <button
           type="button"
           className="rounded border border-slate-300 p-2 text-slate-600 hover:bg-slate-50"
-          aria-label="Print dashboard"
+          aria-label={t('dashboard.printAria')}
           onClick={() => window.print()}
         >
           <Printer className="h-4 w-4" />
@@ -126,9 +126,9 @@ export function StandardDashboard() {
           <CardContent className="p-4">
             <EmptyState
               icon={AlertTriangle}
-              title="Failed to load dashboard"
+              title={t('dashboard.loadError')}
               subtitle={error}
-              actionLabel="Retry"
+              actionLabel={t('dashboard.retry')}
               onAction={() => window.location.reload()}
             />
           </CardContent>
@@ -144,7 +144,7 @@ export function StandardDashboard() {
             ))}
           </div>
         ) : !summary || summary.criticalAlerts.length === 0 ? (
-          <p className="text-sm text-gray-500">No critical alerts.</p>
+          <p className="text-sm text-gray-500">{t('dashboard.noCriticalAlerts')}</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {summary.criticalAlerts.map((alert) => (
@@ -205,9 +205,9 @@ export function StandardDashboard() {
             <div className="p-4">
               <EmptyState
                 icon={TrendingUp}
-                title="No assignments today"
-                subtitle="No assignments available for selected date."
-                actionLabel="Create Assignment"
+                title={t('dashboard.noAssignmentsToday')}
+                subtitle={t('dashboard.noAssignmentsTodaySub')}
+                actionLabel={t('dashboard.createAssignment')}
                 onAction={() => router.push('/assignments/new')}
               />
             </div>
@@ -219,7 +219,7 @@ export function StandardDashboard() {
                   <TableHead>{t('dashboard.vehicle')}</TableHead>
                   <TableHead>{t('dashboard.company')}</TableHead>
                   <TableHead>{t('dashboard.startTime')}</TableHead>
-                  <TableHead>End time</TableHead>
+                  <TableHead>{t('dashboard.endTime')}</TableHead>
                   <TableHead>{t('common.status')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -253,14 +253,14 @@ export function StandardDashboard() {
               <StatCard label={t('dashboard.availableDrivers')} value={String(summary.tomorrowPlanning.availableDrivers)} />
               <StatCard label={t('dashboard.missingAssignments')} value={String(summary.tomorrowPlanning.missingAssignments)} />
               <StatCard
-                label="Unavailable drivers"
+                label={t('dashboard.unavailableDrivers')}
                 value={String(summary.tomorrowPlanning.unavailableDrivers.length)}
               />
             </div>
             {summary.tomorrowPlanning.unavailableDrivers.length > 0 && (
               <Card>
                 <CardContent className="p-3">
-                  <p className="text-xs font-semibold uppercase text-slate-500 mb-2">Unavailable</p>
+                  <p className="text-xs font-semibold uppercase text-slate-500 mb-2">{t('dashboard.unavailable')}</p>
                   <div className="flex flex-wrap gap-2 text-sm">
                     {summary.tomorrowPlanning.unavailableDrivers.map((d) => (
                       <Link
@@ -294,7 +294,7 @@ export function StandardDashboard() {
             <Skeleton className="h-20" />
           </div>
         ) : !summary || summary.vehicleHealth.length === 0 ? (
-          <p className="text-sm text-gray-500">No vehicles require attention.</p>
+          <p className="text-sm text-gray-500">{t('dashboard.noVehiclesAttention')}</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {summary.vehicleHealth.map((v) => (
@@ -317,22 +317,22 @@ export function StandardDashboard() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.revenueAnalytics')}</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <RevenueCard title="Today" value={currency(summary.revenueAnalytics.todayRevenue)} />
-            <RevenueCard title="This week" value={currency(summary.revenueAnalytics.weeklyRevenue)} />
-            <RevenueCard title="This month" value={currency(summary.revenueAnalytics.monthlyRevenue)} />
+            <RevenueCard title={t('dashboard.revToday')} value={currency(summary.revenueAnalytics.todayRevenue)} />
+            <RevenueCard title={t('dashboard.revWeek')} value={currency(summary.revenueAnalytics.weeklyRevenue)} />
+            <RevenueCard title={t('dashboard.revMonth')} value={currency(summary.revenueAnalytics.monthlyRevenue)} />
           </div>
           {summary.revenueAnalytics.revenueByCompany && summary.revenueAnalytics.revenueByCompany.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">Revenue by company</CardTitle>
+                <CardTitle className="text-sm">{t('dashboard.revenueByCompany')}</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Assignments</TableHead>
-                      <TableHead>Revenue</TableHead>
+                      <TableHead>{t('dashboard.colCompany')}</TableHead>
+                      <TableHead>{t('dashboard.colAssignments')}</TableHead>
+                      <TableHead>{t('dashboard.colRevenue')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -359,7 +359,7 @@ export function StandardDashboard() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">Driver Risk Overview</h2>
+        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.driverRiskOverview')}</h2>
         <Card>
           <CardContent className="space-y-2 p-4">
             {loading ? (
@@ -369,7 +369,7 @@ export function StandardDashboard() {
                 <Skeleton className="h-10" />
               </>
             ) : !summary || summary.driverRiskOverview.length === 0 ? (
-              <p className="text-sm text-gray-500">No risk data.</p>
+              <p className="text-sm text-gray-500">{t('dashboard.noRiskData')}</p>
             ) : (
               summary.driverRiskOverview.slice(0, 5).map((r) => (
                 <Link
@@ -381,7 +381,7 @@ export function StandardDashboard() {
                   <span className="inline-flex items-center gap-2 font-semibold capitalize">
                     <span className={`h-2.5 w-2.5 rounded-full ${riskTone(r.riskLevel)}`} />
                     {r.riskLevel}
-                    <span className="text-xs text-gray-500 ml-2">({r.accidentCount} accidents)</span>
+                    <span className="text-xs text-gray-500 ml-2">({t('dashboard.accidents', { count: r.accidentCount })})</span>
                   </span>
                 </Link>
               ))
@@ -394,6 +394,7 @@ export function StandardDashboard() {
 }
 
 function KpiCard({ item, onClick }: { item: KpiTile; onClick: () => void }) {
+  const { t } = useTranslation();
   return (
     <button type="button" className="text-left" onClick={onClick}>
       <Card className="cursor-pointer rounded-lg shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
@@ -402,7 +403,7 @@ function KpiCard({ item, onClick }: { item: KpiTile; onClick: () => void }) {
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xl font-bold text-slate-900">{item.value}</p>
             <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600">
-              View
+              {t('dashboard.view')}
               <ChevronRight className="h-3.5 w-3.5" />
             </span>
           </div>

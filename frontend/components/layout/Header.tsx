@@ -1,7 +1,7 @@
 'use client';
 
 import { Globe } from 'lucide-react';
-import { getUser, setDevelopmentRole } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
 import { useState } from 'react';
 import type { AuthUser } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ interface HeaderProps {
 }
 
 export function Header({ title }: HeaderProps) {
-  const [user, setUser] = useState<AuthUser | null>(() => getUser());
+  const [user] = useState<AuthUser | null>(() => getUser());
   const { t } = useTranslation();
 
   return (
@@ -48,21 +48,6 @@ export function Header({ title }: HeaderProps) {
             <option value="tr">{t('language.turkish')}</option>
           </select>
         </div>
-
-        <select
-          value={user?.role ?? 'office'}
-          onChange={(event) => {
-            const next = setDevelopmentRole(event.target.value as AuthUser['role']);
-            setUser(next);
-          }}
-          className="hidden rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 md:block"
-          aria-label={t('header.roleSwitcher')}
-        >
-          <option value="admin">admin</option>
-          <option value="boss">boss</option>
-          <option value="accounting">accounting</option>
-          <option value="office">office</option>
-        </select>
 
         <NotificationCenter />
 

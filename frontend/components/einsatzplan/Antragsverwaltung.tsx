@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Printer, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useFleetData } from '@/context/FleetDataContext';
 import { createAntraegeFromRequests } from '@/lib/request-antraege';
 
@@ -12,7 +13,12 @@ function statusClass(value: string) {
   return 'bg-amber-100 text-amber-700';
 }
 
+const KNOWN_STATUSES = ['angenommen', 'abgelehnt', 'storniert', 'beantragt'];
+
 export function Antragsverwaltung() {
+  const { t } = useTranslation();
+  const statusLabel = (value: string) =>
+    KNOWN_STATUSES.includes(value) ? t(`antrag.status.${value}`) : value;
   const { requests, cancelRequest } = useFleetData();
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'Antragsdatum, Antragsart' | 'Antragsart, Antragsdatum'>('Antragsdatum, Antragsart');
@@ -80,7 +86,7 @@ export function Antragsverwaltung() {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
-        Antragsverwaltung ist read-only. Zeilen werden automatisch aus Requests erzeugt.
+        {t('antrag.banner')}
       </div>
 
       <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
@@ -95,7 +101,7 @@ export function Antragsverwaltung() {
             }}
             className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Antrag stornieren
+            {t('antrag.cancel')}
           </button>
         </div>
 
@@ -103,7 +109,7 @@ export function Antragsverwaltung() {
           <input
             value={toolbarFilter}
             onChange={(event) => setToolbarFilter(event.target.value)}
-            placeholder="Filter deaktiviert"
+            placeholder={t('antrag.filterPlaceholder')}
             className="h-8 w-44 rounded border border-slate-300 px-2 text-xs"
           />
           <button
@@ -112,9 +118,9 @@ export function Antragsverwaltung() {
             className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            Aktualisieren
+            {t('antrag.refresh')}
           </button>
-          <button type="button" className="rounded border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-50" aria-label="Print">
+          <button type="button" className="rounded border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-50" aria-label={t('antrag.print')}>
             <Printer className="h-4 w-4" />
           </button>
           <select
@@ -122,8 +128,8 @@ export function Antragsverwaltung() {
             onChange={(event) => setSortBy(event.target.value as 'Antragsdatum, Antragsart' | 'Antragsart, Antragsdatum')}
             className="h-8 rounded border border-slate-300 px-2 text-xs"
           >
-            <option>Antragsdatum, Antragsart</option>
-            <option>Antragsart, Antragsdatum</option>
+            <option value="Antragsdatum, Antragsart">{t('antrag.sortByDateType')}</option>
+            <option value="Antragsart, Antragsdatum">{t('antrag.sortByTypeDate')}</option>
           </select>
         </div>
       </div>
@@ -133,19 +139,19 @@ export function Antragsverwaltung() {
           <table className="min-w-[1960px] border-collapse text-[11px]">
             <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="border border-slate-300 px-2 py-2">Antragsdatum</th>
-                <th className="border border-slate-300 px-2 py-2">Antragsart</th>
-                <th className="border border-slate-300 px-2 py-2">Sonstige Abwesenheit</th>
-                <th className="border border-slate-300 px-2 py-2">Antragsteller</th>
-                <th className="border border-slate-300 px-2 py-2">Kommentar</th>
-                <th className="border border-slate-300 px-2 py-2">Bearbeitungsdatum</th>
-                <th className="border border-slate-300 px-2 py-2">Bearbeitet von</th>
-                <th className="border border-slate-300 px-2 py-2">Vertretung</th>
-                <th className="border border-slate-300 px-2 py-2">Anmerkungen</th>
-                <th className="border border-slate-300 px-2 py-2">Startdatum</th>
-                <th className="border border-slate-300 px-2 py-2">Enddatum</th>
-                <th className="border border-slate-300 px-2 py-2">Dauer</th>
-                <th className="border border-slate-300 px-2 py-2">Status</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAntragsdatum')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAntragsart')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colSonstige')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAntragsteller')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colKommentar')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colBearbeitungsdatum')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colBearbeitetVon')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colVertretung')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAnmerkungen')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colStartdatum')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colEnddatum')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colDauer')}</th>
+                <th className="border border-slate-300 px-2 py-2">{t('antrag.colStatus')}</th>
               </tr>
               <tr className="bg-white">
                 <th className="border border-slate-300 p-1"><input value={filters.antragsdatum} onChange={(e) => setFilters((cur) => ({ ...cur, antragsdatum: e.target.value }))} className="h-6 w-full rounded border border-slate-300 px-1 text-[10px]" /></th>
@@ -166,7 +172,7 @@ export function Antragsverwaltung() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="border border-slate-300 px-3 py-4 text-center text-slate-500">No calendar-related requests available.</td>
+                  <td colSpan={13} className="border border-slate-300 px-3 py-4 text-center text-slate-500">{t('antrag.empty')}</td>
                 </tr>
               ) : (
                 rows.map((row, index) => {
@@ -192,7 +198,7 @@ export function Antragsverwaltung() {
                         <div>{row.driverName}</div>
                         {row.source === 'request_auto' && (
                           <span className="inline-flex rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-                            Auto from Request
+                            {t('antrag.autoFromRequest')}
                           </span>
                         )}
                       </td>
@@ -206,7 +212,7 @@ export function Antragsverwaltung() {
                       <td className="border border-slate-300 px-2 py-1.5">{row.dauer}</td>
                       <td className="border border-slate-300 px-2 py-1.5">
                         <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${statusClass(row.status)}`}>
-                          {row.status}
+                          {statusLabel(row.status)}
                         </span>
                       </td>
                     </tr>

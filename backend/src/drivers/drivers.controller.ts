@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -57,18 +58,22 @@ export class DriversController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  createDriver(@Body() dto: CreateDriverDto) {
-    return this.driversService.create(dto);
+  createDriver(@Body() dto: CreateDriverDto, @CurrentUser('id') actorUserId: string) {
+    return this.driversService.create(dto, actorUserId);
   }
 
   @Patch(':id')
-  updateDriver(@Param('id') id: string, @Body() dto: UpdateDriverDto) {
-    return this.driversService.update(id, dto);
+  updateDriver(
+    @Param('id') id: string,
+    @Body() dto: UpdateDriverDto,
+    @CurrentUser('id') actorUserId: string,
+  ) {
+    return this.driversService.update(id, dto, actorUserId);
   }
 
   @Delete(':id')
-  deactivateDriver(@Param('id') id: string) {
-    return this.driversService.deactivate(id);
+  deactivateDriver(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
+    return this.driversService.deactivate(id, actorUserId);
   }
 
   @Get(':id/handovers')

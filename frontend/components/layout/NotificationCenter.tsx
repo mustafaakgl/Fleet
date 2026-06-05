@@ -52,17 +52,17 @@ function parseDate(value: string) {
   return null;
 }
 
-function formatTimeAgo(createdAt: string) {
+function formatTimeAgo(createdAt: string, t: (key: string, options?: Record<string, unknown>) => string) {
   const created = parseDate(createdAt);
   if (!created) return createdAt;
   const diffMs = Date.now() - created.getTime();
   const diffMinutes = Math.max(0, Math.floor(diffMs / (1000 * 60)));
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffMinutes < 1) return t('notifications.justNow');
+  if (diffMinutes < 60) return t('notifications.minutesAgo', { count: diffMinutes });
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 24) return t('notifications.hoursAgo', { count: diffHours });
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
+  return t('notifications.daysAgo', { count: diffDays });
 }
 
 function priorityDotClass(priority: NotificationPriority) {
@@ -183,8 +183,8 @@ export function NotificationCenter() {
     if (pendingTransport) {
       base.push({
         id: `notif-transport-${pendingTransport.id}`,
-        title: 'New transport request',
-        message: `Pickup ${pendingTransport.pickupAddress} -> ${pendingTransport.deliveryAddress}`,
+        title: t('notifications.newTransport'),
+        message: t('notifications.transportMsg', { pickup: pendingTransport.pickupAddress, delivery: pendingTransport.deliveryAddress }),
         type: 'transport_request',
         priority: 'high',
         status: 'unread',
@@ -211,8 +211,15 @@ export function NotificationCenter() {
       const isSick = pendingAbsence.type === 'Krankheit melden';
       base.push({
         id: `notif-absence-${pendingAbsence.id}`,
-        title: `${pendingAbsence.driverName} ${isSick ? 'sick' : 'vacation'} request pending`,
-        message: `${pendingAbsence.type} (${pendingAbsence.dateFrom ?? '-'} to ${pendingAbsence.dateTo ?? '-'})`,
+        title: t('notifications.absencePending', {
+          name: pendingAbsence.driverName,
+          kind: isSick ? t('notifications.kindSick') : t('notifications.kindVacation'),
+        }),
+        message: t('notifications.absenceMsg', {
+          type: pendingAbsence.type,
+          from: pendingAbsence.dateFrom ?? '-',
+          to: pendingAbsence.dateTo ?? '-',
+        }),
         type: 'absence_request',
         priority: isSick ? 'high' : 'medium',
         status: 'unread',
@@ -229,8 +236,8 @@ export function NotificationCenter() {
     if (unsentEmail) {
       base.push({
         id: `notif-company-email-${unsentEmail.id}`,
-        title: 'Company email pending',
-        message: `${unsentEmail.subject || 'Dispatch summary'} not yet sent.`,
+        title: t('notifications.companyEmailPending'),
+        message: t('notifications.companyEmailMsg', { subject: unsentEmail.subject || t('notifications.dispatchSummary') }),
         type: 'company_email',
         priority: 'medium',
         status: 'unread',
@@ -247,7 +254,7 @@ export function NotificationCenter() {
       const dateB = parseDate(b.createdAt)?.getTime() ?? 0;
       return dateB - dateA;
     });
-  }, [alerts, companyEmailDrafts, isOffice, requests, transportRequests]);
+  }, [alerts, companyEmailDrafts, isOffice, requests, transportRequests, t]);
 
   const notificationsWithStatus = useMemo(
     () =>
@@ -312,7 +319,7 @@ export function NotificationCenter() {
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         className="relative rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100"
-        aria-label="Notifications"
+        aria-label={t('notifications.ariaBell')}
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
@@ -331,7 +338,7 @@ export function NotificationCenter() {
               onClick={markAllAsRead}
               className="text-xs font-medium text-blue-700 hover:text-blue-800"
             >
-              {t('notifications.markAllRead', 'Mark all as read')}
+              {t('notifications.markAllRead')}
             </button>
           </div>
 
@@ -370,8 +377,8 @@ export function NotificationCenter() {
               <div className="p-3">
                 <EmptyState
                   icon={Bell}
-                  title={t('notifications.emptyTitle', 'No notifications')}
-                  subtitle={t('notifications.emptySubtitle', 'You are all caught up.')}
+                  title={t('notifications.emptyTitle')}
+                  subtitle={t('notifications.emptySubtitle')}
                 />
               </div>
             ) : (
@@ -397,7 +404,7 @@ export function NotificationCenter() {
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 text-[11px]">
-                      <span className="text-slate-500">{formatTimeAgo(notification.createdAt)}</span>
+                      <span className="text-slate-500">{formatTimeAgo(notification.createdAt, t)}</span>
                       <span
                         className={
                           notification.status === 'unread'
@@ -405,7 +412,7 @@ export function NotificationCenter() {
                             : 'text-slate-400'
                         }
                       >
-                        {notification.status === 'unread' ? 'Unread' : 'Read'}
+                        {notification.status === 'unread' ? t('notifications.unread') : t('notifications.read')}
                       </span>
                     </div>
                   </div>

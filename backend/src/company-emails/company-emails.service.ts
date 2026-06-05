@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyEmailDto } from './dto/update-company-email.dto';
 
@@ -24,6 +25,7 @@ export class CompanyEmailsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly mailService: MailService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -348,6 +350,49 @@ export class CompanyEmailsService {
     });
 
     return updated;
+  }
+
+  async sendEmail(emailId: string, actorUserId?: string) {
+    const row = await this.getCompanyEmailById(emailId);
+    const recipient = row.recipientEmail?.trim();
+    if (!recipient) {
+      throw new BadRequestException('Recipient email is required before sending');
+    }
+
+    const mailResult = await this.mailService.sendMail({
+      to: recipient,
+      subject: row.subject,
+      text: row.body,
+    });
+
+    const db = this.prisma as any;
+    const updated = await db.companyEmail.update({
+      where: { id: emailId },
+      data: {
+        status: mailResult.sent || mailResult.mode === 'log' ? 'sent' : 'failed',
+        lastSentAt: new Date(),
+      },
+      include: { company: true },
+    });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'company_email.sent',
+      entityType: 'company_email',
+      entityId: updated.id,
+      summary: 'Company email sent',
+      metadata: {
+        mail_mode: mailResult.mode,
+        mail_sent: mailResult.sent,
+        recipient_domain: recipient.split('@')[1] ?? 'unknown',
+      },
+    });
+
+    return {
+      email: updated,
+      mail_sent: mailResult.sent,
+      mail_mode: mailResult.mode,
+    };
   }
 
   async markAsSent(emailId: string, actorUserId?: string) {

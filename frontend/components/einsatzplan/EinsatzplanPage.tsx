@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,12 +9,13 @@ import {
   Wallet,
   ClipboardCheck,
   Sun,
-  UserRoundCheck,
   Users,
   X,
   Plus,
 } from 'lucide-react';
 import { getUser } from '@/lib/auth';
+import { dashboardApi } from '@/lib/api';
+import type { DashboardKpis } from '@/lib/types';
 import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { EinsatzplanOfficeView } from './EinsatzplanOfficeView';
 import { Benutzerverwaltung } from './Benutzerverwaltung';
@@ -23,59 +25,22 @@ import { RevenueSummary } from './RevenueSummary';
 import { Tagesplanung } from './Tagesplanung';
 import { UrlaubsplanerPanel } from './UrlaubsplanerPanel';
 
-type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue' | 'status' | 'users';
+type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue' | 'users';
 type UrlaubSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
 type PlanningSubtab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
-type DocStatus = 'Valid' | 'Expiring soon' | 'Expired';
 
-interface SummaryCard {
-  label: string;
-  value: number;
-}
-
-interface DocumentItem {
-  type: string;
-  name: string;
-  category: string;
-  expiryDate: string;
-  status: DocStatus;
-}
-
-const topTabs: Array<{ id: TopTab; label: string; icon: typeof Gauge }> = [
+const baseTopTabs: Array<{ id: TopTab; label: string; icon: typeof Gauge }> = [
   { id: 'dashboard', label: 'Dashboard', icon: Gauge },
   { id: 'urlaub', label: 'Urlaubsplaner', icon: Sun },
   { id: 'tagesplanung', label: 'Tagesplanung', icon: ClipboardCheck },
   { id: 'revenue', label: 'Revenue Summary', icon: Wallet },
-  { id: 'status', label: 'Statusubersicht', icon: UserRoundCheck },
-  { id: 'users', label: 'Benutzerverwaltung', icon: Users },
 ];
 
-const summaryCards: SummaryCard[] = [
-  { label: 'Active drivers', value: 42 },
-  { label: 'Vehicles in use', value: 31 },
-  { label: 'Vacation today', value: 4 },
-  { label: 'Sick drivers', value: 2 },
-];
-
-const documentItems: DocumentItem[] = [
-  { type: 'License', name: 'Ilker Cukur', category: 'Driver', expiryDate: '2026-06-21', status: 'Expiring soon' },
-  { type: 'Passport', name: 'Sita Diallo', category: 'Driver', expiryDate: '2026-12-14', status: 'Valid' },
-  { type: 'TUV', name: 'AP102', category: 'Vehicle', expiryDate: '2026-05-25', status: 'Expiring soon' },
-  { type: 'Insurance', name: 'AP104', category: 'Vehicle', expiryDate: '2026-05-10', status: 'Expired' },
-];
-
-function badgeClasses(status: DocStatus) {
-  switch (status) {
-    case 'Expiring soon':
-      return 'bg-amber-100 text-amber-700 border-amber-200';
-    case 'Valid':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    case 'Expired':
-      return 'bg-rose-100 text-rose-700 border-rose-200';
-    default:
-      return 'bg-slate-100 text-slate-700 border-slate-200';
-  }
-}
+const adminTab: { id: TopTab; label: string; icon: typeof Gauge } = {
+  id: 'users',
+  label: 'Benutzerverwaltung',
+  icon: Users,
+};
 
 export function EinsatzplanPage() {
   const user = getUser();
@@ -90,6 +55,39 @@ function EinsatzplanFullView() {
   const { assignments, drivers } = useFleetData();
   const searchParams = useSearchParams();
   const tomorrowDate = getTomorrowDate();
+
+  const isAdmin = getUser()?.role === 'admin';
+  const topTabs = useMemo(
+    () => (isAdmin ? [...baseTopTabs, adminTab] : baseTopTabs),
+    [isAdmin],
+  );
+
+  const [kpis, setKpis] = useState<DashboardKpis | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    dashboardApi
+      .getSummary()
+      .then((summary) => {
+        if (active) setKpis(summary.kpis);
+      })
+      .catch(() => {
+        if (active) setKpis(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const summaryCards = useMemo(
+    () => [
+      { label: t('einsatzplan.kpi.activeDrivers'), value: kpis?.activeDrivers },
+      { label: t('einsatzplan.kpi.vehiclesInUse'), value: kpis?.vehiclesInUse },
+      { label: t('einsatzplan.kpi.driversOnVacation'), value: kpis?.driversOnVacation },
+      { label: t('einsatzplan.kpi.sickDrivers'), value: kpis?.sickDrivers },
+    ],
+    [kpis, t],
+  );
 
   const tomorrowCompanyGroups = useMemo(() => {
     const tomorrowAssignments = assignments.filter((assignment) => {
@@ -173,36 +171,37 @@ function EinsatzplanFullView() {
                   <h1 className="mt-2 text-2xl font-bold">{t('einsatzplan.title')}</h1>
                   <p className="mt-1 text-sm text-blue-100">{t('einsatzplan.subtitle')}</p>
                 </div>
-                <button
-                  type="button"
+                <Link
+                  href="/assignments/new"
                   className="inline-flex items-center justify-center gap-2 rounded-md border border-white/30 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
                 >
                   <Plus className="h-4 w-4" />
-                  Neue Planung
-                </button>
+                  {t('assignmentForm.title')}
+                </Link>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {summaryCards.map((card) => (
                   <div key={card.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                     <p className="text-xs uppercase tracking-wide text-slate-500">{card.label}</p>
-                    <p className="mt-2 text-3xl font-bold text-slate-900">{card.value}</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">
+                      {card.value ?? '—'}
+                    </p>
                   </div>
                 ))}
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 px-4 py-3">
-                  <h2 className="text-sm font-semibold text-slate-900">Tomorrow&apos;s Einsatzplan</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">{t('einsatzplan.tomorrowTitle')}</h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    Grouped by company — same company assignments are listed together.
+                    {t('einsatzplan.tomorrowHint')}
                   </p>
                 </div>
                 <div className="p-3">
                   <CompanyAssignmentBoard
                     groups={tomorrowCompanyGroups}
                     drivers={drivers}
-                    emptyMessage="No assignments planned for tomorrow."
                   />
                 </div>
               </div>
@@ -216,64 +215,6 @@ function EinsatzplanFullView() {
           {activeTab === 'tagesplanung' && <Tagesplanung initialSubTab={initialPlanningSubtab} />}
 
           {activeTab === 'revenue' && <RevenueSummary />}
-
-          {activeTab === 'status' && (
-            <div className="space-y-5">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">{t('einsatzplan.statusOverview')}</h2>
-                <p className="text-sm text-slate-600">Operational totals and document expiries in a compact administration view.</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Drivers total</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">58</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Vehicles total</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">46</p>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Documents total</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">124</p>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-slate-900">Document expiry overview</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Type</th>
-                        <th className="px-4 py-3">Name</th>
-                        <th className="px-4 py-3">Category</th>
-                        <th className="px-4 py-3">Expiry date</th>
-                        <th className="px-4 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {documentItems.map((item) => (
-                        <tr key={`${item.type}-${item.name}`} className="border-t border-slate-100">
-                          <td className="px-4 py-3 text-slate-800">{item.type}</td>
-                          <td className="px-4 py-3 font-medium text-slate-900">{item.name}</td>
-                          <td className="px-4 py-3 text-slate-700">{item.category}</td>
-                          <td className="px-4 py-3 text-slate-700">{item.expiryDate}</td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClasses(item.status)}`}>
-                              {item.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
 
           {activeTab === 'users' && (
             <Benutzerverwaltung />

@@ -300,7 +300,9 @@ export interface Document {
   ownerId: string;
   documentType: string;
   fileName: string;
+  /** @deprecated Internal storage path — use download_url */
   fileUrl?: string;
+  download_url?: string | null;
   expiryDate?: string;
   uploadedAt: string;
   status: 'valid' | 'expiring_soon' | 'expired' | 'missing' | 'archived';

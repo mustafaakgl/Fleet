@@ -10,10 +10,14 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
+import type { Response } from 'express';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -49,6 +53,19 @@ export class VehiclesController {
     });
   }
 
+  @Get(':id/photo')
+  async downloadVehiclePhoto(@Param('id') id: string, @Res() res: Response) {
+    const file = await this.vehiclesService.resolveVehiclePhotoDownload(id);
+
+    res.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(file.fileName)}"`,
+      'Cache-Control': 'private, no-store',
+    });
+
+    createReadStream(file.absolutePath).pipe(res);
+  }
+
   @Get(':id')
   getVehicle(@Param('id') id: string) {
     return this.vehiclesService.getById(id);
@@ -56,13 +73,21 @@ export class VehiclesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  createVehicle(@Body() dto: CreateVehicleDto) {
-    return this.vehiclesService.create(dto);
+  createVehicle(
+    @Body() dto: CreateVehicleDto,
+    @CurrentUser('id') actorUserId: string,
+    @CurrentUser('tenantId') tenantId: string | undefined,
+  ) {
+    return this.vehiclesService.create(dto, actorUserId, tenantId);
   }
 
   @Patch(':id')
-  updateVehicle(@Param('id') id: string, @Body() dto: UpdateVehicleDto) {
-    return this.vehiclesService.update(id, dto);
+  updateVehicle(
+    @Param('id') id: string,
+    @Body() dto: UpdateVehicleDto,
+    @CurrentUser('id') actorUserId: string,
+  ) {
+    return this.vehiclesService.update(id, dto, actorUserId);
   }
 
   @Post(':id/photo')
@@ -78,13 +103,14 @@ export class VehiclesController {
         }),
     )
     file: UploadedVehiclePhotoFile,
+    @CurrentUser('id') actorUserId: string,
   ) {
-    return this.vehiclesService.uploadPhoto(id, file);
+    return this.vehiclesService.uploadPhoto(id, file, actorUserId);
   }
 
   @Delete(':id')
-  deactivateVehicle(@Param('id') id: string) {
-    return this.vehiclesService.deactivate(id);
+  deactivateVehicle(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
+    return this.vehiclesService.deactivate(id, actorUserId);
   }
 
   @Get(':id/assignments')

@@ -7,6 +7,7 @@ import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ChevronLeft, Loader2, Truck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,9 +16,9 @@ import { vehiclesApi } from '@/lib/api';
 import type { Vehicle } from '@/lib/types';
 
 const schema = z.object({
-  plate_number: z.string().min(1, 'Required'),
-  brand: z.string().min(1, 'Required'),
-  model: z.string().min(1, 'Required'),
+  plate_number: z.string().min(1, 'form.required'),
+  brand: z.string().min(1, 'form.required'),
+  model: z.string().min(1, 'form.required'),
   year: z.string().optional(),
   tuv_expiry_date: z.string().optional(),
   sp_expiry_date: z.string().optional(),
@@ -37,6 +38,7 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 
 export default function NewVehiclePage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -62,7 +64,7 @@ export default function NewVehiclePage() {
       const vehicle = await vehiclesApi.create(payload);
       router.push(`/vehicles/${vehicle.id}`);
     } catch {
-      setServerError('Failed to create vehicle. Please try again.');
+      setServerError(t('form.createVehicleError'));
     }
   }
 
@@ -71,34 +73,34 @@ export default function NewVehiclePage() {
       <Button variant="ghost" size="sm" asChild>
         <Link href="/vehicles">
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Back to Vehicles
+          {t('form.backToVehicles')}
         </Link>
       </Button>
 
       <div className="flex items-center gap-3">
         <Truck className="w-6 h-6 text-purple-600" />
-        <h1 className="text-2xl font-bold text-gray-900">Add New Vehicle</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('form.addVehicle')}</h1>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Vehicle Information</CardTitle>
+            <CardTitle className="text-base">{t('form.vehicleInfo')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Plate Number *" error={errors.plate_number?.message}>
+              <Field label={`${t('form.plateNumber')} *`} error={t(errors.plate_number?.message ?? '')}>
                 <Input {...register('plate_number')} placeholder="B-AB-1234" />
               </Field>
-              <Field label="Year" error={errors.year?.message}>
+              <Field label={t('form.year')} error={t(errors.year?.message ?? '')}>
                 <Input type="number" {...register('year')} placeholder="2021" />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Brand *" error={errors.brand?.message}>
+              <Field label={`${t('form.brand')} *`} error={t(errors.brand?.message ?? '')}>
                 <Input {...register('brand')} placeholder="Mercedes" />
               </Field>
-              <Field label="Model *" error={errors.model?.message}>
+              <Field label={`${t('form.model')} *`} error={t(errors.model?.message ?? '')}>
                 <Input {...register('model')} placeholder="Actros" />
               </Field>
             </div>
@@ -107,14 +109,14 @@ export default function NewVehiclePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Inspection Dates</CardTitle>
+            <CardTitle className="text-base">{t('form.inspectionDates')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="TÜV Expiry Date" error={errors.tuv_expiry_date?.message}>
+              <Field label={t('form.tuvExpiry')} error={t(errors.tuv_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('tuv_expiry_date')} />
               </Field>
-              <Field label="SP Expiry Date" error={errors.sp_expiry_date?.message}>
+              <Field label={t('form.spExpiry')} error={t(errors.sp_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('sp_expiry_date')} />
               </Field>
             </div>
@@ -132,14 +134,14 @@ export default function NewVehiclePage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating...
+                {t('form.creating')}
               </>
             ) : (
-              'Create Vehicle'
+              t('form.createVehicle')
             )}
           </Button>
           <Button variant="outline" type="button" asChild>
-            <Link href="/vehicles">Cancel</Link>
+            <Link href="/vehicles">{t('form.cancel')}</Link>
           </Button>
         </div>
       </form>

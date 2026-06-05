@@ -1,9 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getTodayDate, getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 
 type EmailStatus = 'Not Prepared' | 'Draft Ready' | 'Sent' | 'Failed' | 'Needs Review';
+
+const EMAIL_STATUS_KEY: Record<EmailStatus, string> = {
+  'Not Prepared': 'compNotif.status.notPrepared',
+  'Draft Ready': 'compNotif.status.draftReady',
+  Sent: 'compNotif.status.sent',
+  Failed: 'compNotif.status.failed',
+  'Needs Review': 'compNotif.status.needsReview',
+};
 
 interface CompanyAssignmentItem {
   assignmentId: string;
@@ -84,6 +93,7 @@ function formatRowsForBody(items: CompanyAssignmentItem[]) {
 }
 
 export function CompanyNotifications({ onAttentionCountChange }: CompanyNotificationsProps) {
+  const { t } = useTranslation();
   const { assignments, drivers } = useFleetData();
   const [notificationState, setNotificationState] = useState<Record<string, CompanyNotificationRecord>>({});
   const [previewKey, setPreviewKey] = useState<string | null>(null);
@@ -323,8 +333,8 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">Company Notifications</h2>
-        <p className="text-sm text-slate-600">Review and prepare company emails for today and tomorrow assignments.</p>
+        <h2 className="text-xl font-bold text-slate-900">{t('compNotif.title')}</h2>
+        <p className="text-sm text-slate-600">{t('compNotif.subtitle')}</p>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -332,15 +342,15 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
           <table className="min-w-[1520px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">Company</th>
-                <th className="border-b border-slate-200 px-3 py-3">Date</th>
-                <th className="border-b border-slate-200 px-3 py-3">Assigned Drivers</th>
-                <th className="border-b border-slate-200 px-3 py-3">Vehicles</th>
-                <th className="border-b border-slate-200 px-3 py-3">Planned Jobs</th>
-                <th className="border-b border-slate-200 px-3 py-3">Email Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Recipient Email</th>
-                <th className="border-b border-slate-200 px-3 py-3">Last Sent</th>
-                <th className="border-b border-slate-200 px-3 py-3">Actions</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colCompany')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colDate')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colAssignedDrivers')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colVehicles')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colPlannedJobs')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colEmailStatus')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colRecipientEmail')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colLastSent')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -356,7 +366,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
                     <td className="px-3 py-2.5 text-slate-700">{row.plannedJobs.join(', ') || '-'}</td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClass(row.status)}`}>
-                        {row.status}
+                        {t(EMAIL_STATUS_KEY[row.status])}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-slate-700">{row.recipientEmail}</td>
@@ -368,28 +378,28 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
                           onClick={() => generateCompanyEmailDraft(row.company, row.date)}
                           className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
                         >
-                          Generate Draft
+                          {t('compNotif.generateDraft')}
                         </button>
                         <button
                           type="button"
                           onClick={() => setPreviewKey(rowKey)}
                           className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
-                          Preview
+                          {t('compNotif.preview')}
                         </button>
                         <button
                           type="button"
                           onClick={() => markCompanyEmailAsSent(row.company, row.date)}
                           className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
                         >
-                          Mark as Sent
+                          {t('compNotif.markSent')}
                         </button>
                         <button
                           type="button"
-                          onClick={() => showToast('Email sending will be connected to backend later.')}
+                          onClick={() => showToast(t('compNotif.sendToast'))}
                           className="rounded-md border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
                         >
-                          Send Email
+                          {t('compNotif.sendEmail')}
                         </button>
                       </div>
                     </td>
@@ -400,7 +410,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
               {notificationRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-500">
-                    No company notifications yet for today or tomorrow.
+                    {t('compNotif.empty')}
                   </td>
                 </tr>
               )}
@@ -414,23 +424,23 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setPreviewKey(null)} />
           <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
             <div className="sticky top-0 border-b border-slate-200 bg-white px-5 py-4">
-              <h3 className="text-lg font-bold text-slate-900">Email Preview</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('compNotif.emailPreview')}</h3>
             </div>
 
             <div className="space-y-4 px-5 py-4 text-sm">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Company</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t('compNotif.colCompany')}</p>
                   <p className="mt-1 font-medium text-slate-900">{previewRecord.company}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Recipient Email</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">{t('compNotif.colRecipientEmail')}</p>
                   <p className="mt-1 font-medium text-slate-900">{previewRecord.recipientEmail}</p>
                 </div>
               </div>
 
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Subject</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('compNotif.subject')}</span>
                 <input
                   value={previewRecord.subject}
                   onChange={(event) => {
@@ -448,7 +458,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
               </label>
 
               <label className="space-y-1">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Body</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('compNotif.body')}</span>
                 <textarea
                   value={previewRecord.body}
                   onChange={(event) => {
@@ -467,7 +477,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
               </label>
 
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assignment List</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('compNotif.assignmentList')}</p>
                 <ul className="mt-2 space-y-2">
                   {previewRecord.assignments.map((item) => (
                     <li key={item.assignmentId} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
@@ -485,21 +495,21 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
                 onClick={() => markCompanyEmailAsSent(previewRecord.company, previewRecord.date)}
                 className="rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
               >
-                Mark as Sent
+                {t('compNotif.markSent')}
               </button>
               <button
                 type="button"
-                onClick={() => showToast('Email sending will be connected to backend later.')}
+                onClick={() => showToast(t('compNotif.sendToast'))}
                 className="rounded-md border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
               >
-                Send Email
+                {t('compNotif.sendEmail')}
               </button>
               <button
                 type="button"
                 onClick={() => setPreviewKey(null)}
                 className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
-                Close
+                {t('compNotif.close')}
               </button>
             </div>
           </aside>

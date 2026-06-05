@@ -59,6 +59,11 @@ export class CompanyEmailsController {
     return this.companyEmailsService.markAsDraftReady(id, currentUserId);
   }
 
+  @Post(':id/send')
+  sendEmail(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
+    return this.companyEmailsService.sendEmail(id, currentUserId);
+  }
+
   @Post(':id/mark-sent')
   markAsSent(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.companyEmailsService.markAsSent(id, currentUserId);

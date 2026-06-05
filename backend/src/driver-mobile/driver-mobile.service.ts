@@ -629,7 +629,7 @@ export class DriverMobileService {
         ownerId: handoverId,
         documentType,
         fileName: file.originalname,
-        fileUrl: this.storage.buildPublicUrl('documents', file.filename),
+        fileUrl: this.storage.buildStoredPath('documents', file.filename),
         uploadedById: user.id,
       },
     });
@@ -669,7 +669,7 @@ export class DriverMobileService {
       photo: {
         id: document.id,
         fileName: document.fileName,
-        fileUrl: document.fileUrl,
+        download_url: `/driver/documents/${document.id}/download`,
       },
     };
   }
@@ -799,7 +799,7 @@ export class DriverMobileService {
       {
         originalName: file.originalname,
         storedFileName: file.filename,
-        fileUrl: this.storage.buildPublicUrl('documents', file.filename),
+        fileUrl: this.storage.buildStoredPath('documents', file.filename),
       },
       user.id,
     );
@@ -816,7 +816,7 @@ export class DriverMobileService {
     return {
       id: document.id,
       fileName: document.fileName,
-      fileUrl: document.fileUrl,
+      download_url: `/driver/documents/${document.id}/download`,
       attachmentCount: existingCount + 1,
     };
   }
@@ -1031,7 +1031,7 @@ export class DriverMobileService {
       {
         originalName: file.originalname,
         storedFileName: file.filename,
-        fileUrl: this.storage.buildPublicUrl('documents', file.filename),
+        fileUrl: this.storage.buildStoredPath('documents', file.filename),
       },
       user.id,
     );
@@ -1048,7 +1048,7 @@ export class DriverMobileService {
     return {
       id: document.id,
       fileName: document.fileName,
-      fileUrl: document.fileUrl,
+      download_url: `/driver/documents/${document.id}/download`,
       attachmentCount: existingCount + 1,
     };
   }
@@ -1194,24 +1194,39 @@ export class DriverMobileService {
     id: string;
     documentType: string;
     fileName: string;
-    fileUrl: string | null;
+    fileUrl?: string | null;
+    download_url?: string | null;
     status: string;
     expiryDate: Date | null;
     notes: string | null;
     createdAt: Date;
     updatedAt: Date;
   }) {
+    const downloadUrl =
+      row.download_url ??
+      (row.fileUrl ? this.storage.buildDocumentDownloadPath(row.id) : null);
+
     return {
       id: row.id,
       documentType: row.documentType,
       fileName: row.fileName,
-      fileUrl: row.fileUrl,
+      download_url: downloadUrl,
       status: row.status,
       expiryDate: row.expiryDate?.toISOString() ?? null,
       notes: row.notes,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  async downloadDriverDocument(userId: string, documentId: string) {
+    const { user } = await this.resolveDriver(userId);
+    const file = await this.documentsService.resolveDocumentDownload(documentId, {
+      userId: user.id,
+      role: user.role,
+    });
+    await this.documentsService.recordDocumentDownload(documentId, user.id);
+    return file;
   }
 
   async listDriverDocuments(userId: string) {
@@ -1271,7 +1286,7 @@ export class DriverMobileService {
       {
         originalName: file.originalname,
         storedFileName: file.filename,
-        fileUrl: this.storage.buildPublicUrl('documents', file.filename),
+        fileUrl: this.storage.buildStoredPath('documents', file.filename),
       },
       user.id,
     );

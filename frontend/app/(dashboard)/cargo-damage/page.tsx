@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, PackageX } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -44,6 +45,7 @@ function statusClass(status: IncidentStatus) {
 }
 
 export default function CargoDamagePage() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const [reports, setReports] = useState<CargoDamageRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,11 +59,11 @@ export default function CargoDamagePage() {
       const all = (await accidentsApi.list()) as CargoDamageRow[];
       setReports(all.filter((r) => r.type === 'cargo_damage'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load cargo damage reports');
+      setError(e instanceof Error ? e.message : t('cargoDamage.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     reload();
@@ -92,7 +94,7 @@ export default function CargoDamagePage() {
       await accidentsApi.updateStatus(id, status);
       await reload();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Failed to update status');
+      window.alert(e instanceof Error ? e.message : t('cargoDamage.statusUpdateError'));
     }
   }
 
@@ -100,7 +102,7 @@ export default function CargoDamagePage() {
     <div className="space-y-5">
       <div className="flex items-center gap-3">
         <PackageX className="h-6 w-6 text-rose-600" />
-        <h1 className="text-2xl font-bold text-gray-900">Cargo Damage Reports</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('cargoDamage.title')}</h1>
         {!loading && !error && (
           <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
             {visibleReports.length}
@@ -110,14 +112,14 @@ export default function CargoDamagePage() {
 
       <Card>
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-500">Loading...</div>
+          <div className="p-6 text-center text-sm text-gray-500">{t('cargoDamage.loading')}</div>
         ) : error ? (
           <div className="p-4">
             <EmptyState
               icon={PackageX}
-              title="Failed to load reports"
+              title={t('cargoDamage.loadErrorTitle')}
               subtitle={error}
-              actionLabel="Retry"
+              actionLabel={t('cargoDamage.retry')}
               onAction={reload}
             />
           </div>
@@ -125,8 +127,8 @@ export default function CargoDamagePage() {
           <div className="p-4">
             <EmptyState
               icon={PackageX}
-              title="No cargo damage reports"
-              subtitle="No cargo damage cases match current filters."
+              title={t('cargoDamage.emptyTitle')}
+              subtitle={t('cargoDamage.emptySubtitle')}
             />
           </div>
         ) : (
@@ -134,15 +136,15 @@ export default function CargoDamagePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Cargo Name</TableHead>
-                  <TableHead>Cargo Owner</TableHead>
-                  <TableHead>Damage Value</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>{t('cargoDamage.colDate')}</TableHead>
+                  <TableHead>{t('cargoDamage.colDriver')}</TableHead>
+                  <TableHead>{t('cargoDamage.colVehicle')}</TableHead>
+                  <TableHead>{t('cargoDamage.colCompany')}</TableHead>
+                  <TableHead>{t('cargoDamage.colCargoName')}</TableHead>
+                  <TableHead>{t('cargoDamage.colCargoOwner')}</TableHead>
+                  <TableHead>{t('cargoDamage.colDamageValue')}</TableHead>
+                  <TableHead>{t('cargoDamage.colStatus')}</TableHead>
+                  <TableHead>{t('cargoDamage.colActions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -161,7 +163,7 @@ export default function CargoDamagePage() {
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(r.status)}`}
                       >
-                        {r.status}
+                        {t(`cargoDamage.status.${r.status}`)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -171,7 +173,7 @@ export default function CargoDamagePage() {
                           onClick={() => setSelectedId(r.id)}
                           className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
                         >
-                          View
+                          {t('cargoDamage.view')}
                         </button>
                         <button
                           type="button"
@@ -179,7 +181,7 @@ export default function CargoDamagePage() {
                           disabled={r.status === 'under_review'}
                           className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                         >
-                          Review
+                          {t('cargoDamage.review')}
                         </button>
                         <button
                           type="button"
@@ -187,7 +189,7 @@ export default function CargoDamagePage() {
                           disabled={r.status === 'resolved'}
                           className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                         >
-                          Resolve
+                          {t('cargoDamage.resolve')}
                         </button>
                         <button
                           type="button"
@@ -195,7 +197,7 @@ export default function CargoDamagePage() {
                           disabled={r.status === 'rejected'}
                           className="rounded border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                         >
-                          Reject
+                          {t('cargoDamage.reject')}
                         </button>
                       </div>
                     </TableCell>
@@ -212,29 +214,29 @@ export default function CargoDamagePage() {
           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setSelectedId(null)} />
           <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
             <div className="sticky top-0 border-b border-slate-200 bg-white px-5 py-4">
-              <h3 className="text-lg font-bold text-slate-900">Cargo Damage Report Detail</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('cargoDamage.detailTitle')}</h3>
             </div>
 
             <div className="space-y-4 px-5 py-4 text-sm">
-              <DetailRow label="Date" value={formatDate(selectedReport.incidentDateTime)} />
+              <DetailRow label={t('cargoDamage.colDate')} value={formatDate(selectedReport.incidentDateTime)} />
               <DetailRow
-                label="Driver"
+                label={t('cargoDamage.colDriver')}
                 value={
                   selectedReport.driver
                     ? `${selectedReport.driver.firstName} ${selectedReport.driver.lastName}`
                     : '-'
                 }
               />
-              <DetailRow label="Vehicle" value={selectedReport.vehicle?.plateNumber ?? '-'} />
-              <DetailRow label="Company" value={selectedReport.company?.name ?? '-'} />
-              <DetailRow label="Cargo name" value={selectedReport.cargoName ?? '-'} />
-              <DetailRow label="Cargo owner" value={selectedReport.cargoOwner ?? '-'} />
-              <DetailRow label="Description" value={selectedReport.description || '-'} />
+              <DetailRow label={t('cargoDamage.colVehicle')} value={selectedReport.vehicle?.plateNumber ?? '-'} />
+              <DetailRow label={t('cargoDamage.colCompany')} value={selectedReport.company?.name ?? '-'} />
+              <DetailRow label={t('cargoDamage.colCargoName')} value={selectedReport.cargoName ?? '-'} />
+              <DetailRow label={t('cargoDamage.colCargoOwner')} value={selectedReport.cargoOwner ?? '-'} />
+              <DetailRow label={t('cargoDamage.colDescription')} value={selectedReport.description || '-'} />
               <DetailRow
-                label="Damage value"
+                label={t('cargoDamage.colDamageValue')}
                 value={currency(selectedReport.damageValue)}
               />
-              <DetailRow label="Status" value={selectedReport.status} />
+              <DetailRow label={t('cargoDamage.colStatus')} value={t(`cargoDamage.status.${selectedReport.status}`)} />
             </div>
 
             <div className="sticky bottom-0 flex gap-2 border-t border-slate-200 bg-white px-5 py-4">
@@ -244,7 +246,7 @@ export default function CargoDamagePage() {
                 disabled={selectedReport.status === 'under_review'}
                 className="rounded border border-blue-300 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 disabled:opacity-50"
               >
-                Mark Under Review
+                {t('cargoDamage.markUnderReview')}
               </button>
               <button
                 type="button"
@@ -252,7 +254,7 @@ export default function CargoDamagePage() {
                 disabled={selectedReport.status === 'resolved'}
                 className="rounded border border-emerald-300 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
               >
-                Resolve
+                {t('cargoDamage.resolve')}
               </button>
               <button
                 type="button"
@@ -260,14 +262,14 @@ export default function CargoDamagePage() {
                 disabled={selectedReport.status === 'rejected'}
                 className="rounded border border-rose-300 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50 disabled:opacity-50"
               >
-                Reject
+                {t('cargoDamage.reject')}
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
                 className="ml-auto rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
               >
-                Close
+                {t('cargoDamage.close')}
               </button>
             </div>
           </aside>
@@ -276,8 +278,7 @@ export default function CargoDamagePage() {
 
       <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
         <AlertTriangle className="mr-1 inline-block h-4 w-4" />
-        Cargo damage is tracked separately from traffic accidents. Resolved cargo reports feed driver
-        risk score breakdown.
+        {t('cargoDamage.infoBanner')}
       </div>
     </div>
   );

@@ -1,8 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Vehicle, VehicleStatus } from '@prisma/client';
+import { existsSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { mimeTypeFromFileName, resolveAbsolutePathFromStoredUrl } from '../storage/file-path.util';
 import { StorageService } from '../storage/storage.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -35,7 +40,7 @@ function toClientVehicle(row: VehicleWithCurrentDriver) {
           last_name: row.currentDriver.lastName,
         }
       : null,
-    photo_url: row.photoUrl ?? undefined,
+    photo_url: row.photoUrl ? `/vehicles/${row.id}/photo` : undefined,
     created_at: row.createdAt.toISOString(),
   };
 }
@@ -55,6 +60,8 @@ export class VehiclesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
+    private readonly auditService: AuditService,
+    private readonly billingService: BillingService,
   ) {}
 
   async list(query: { status?: string; search?: string; page?: number; limit?: number }) {
@@ -144,7 +151,7 @@ export class VehiclesService {
         ownerId: d.ownerId,
         documentType: d.documentType,
         fileName: d.fileName,
-        fileUrl: d.fileUrl ?? undefined,
+        download_url: d.fileUrl ? `/documents/${d.id}/download` : undefined,
         expiryDate: d.expiryDate?.toISOString(),
         uploadedAt: d.createdAt.toISOString(),
         status: d.status,
@@ -153,7 +160,8 @@ export class VehiclesService {
     };
   }
 
-  async create(dto: CreateVehicleDto) {
+  async create(dto: CreateVehicleDto, actorUserId?: string, tenantId?: string) {
+    await this.billingService.assertCanAddVehicle(tenantId);
     const internalCode = dto.internal_code ?? `V-${Date.now()}`;
 
     const vehicle = await this.prisma.vehicle.create({
@@ -178,10 +186,18 @@ export class VehiclesService {
       include: currentDriverInclude,
     });
 
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'vehicle.created',
+      entityType: 'vehicle',
+      entityId: vehicle.id,
+      summary: 'Vehicle created',
+    });
+
     return toClientVehicle(vehicle);
   }
 
-  async update(id: string, dto: UpdateVehicleDto) {
+  async update(id: string, dto: UpdateVehicleDto, actorUserId?: string) {
     await this.assertExists(id);
 
     const data: Prisma.VehicleUpdateInput = {};
@@ -220,16 +236,52 @@ export class VehiclesService {
       include: currentDriverInclude,
     });
 
+    const changed = changedFieldNames(dto as Record<string, unknown>);
+    if (changed.length > 0) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'vehicle.updated',
+        entityType: 'vehicle',
+        entityId: id,
+        summary: 'Vehicle updated',
+        metadata: { changed_fields: changed },
+      });
+    }
+
     return toClientVehicle(updated);
   }
 
-  async uploadPhoto(id: string, file: UploadedVehiclePhotoFile) {
+  async resolveVehiclePhotoDownload(
+    id: string,
+  ): Promise<{ absolutePath: string; fileName: string; mimeType: string }> {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id },
+      select: { photoUrl: true, plateNumber: true },
+    });
+    if (!vehicle?.photoUrl) {
+      throw new NotFoundException('Vehicle photo not found');
+    }
+
+    const absolutePath = resolveAbsolutePathFromStoredUrl(vehicle.photoUrl);
+    if (!absolutePath || !existsSync(absolutePath)) {
+      throw new NotFoundException('Vehicle photo file not found');
+    }
+
+    const fileName = `${vehicle.plateNumber.replace(/\s+/g, '-')}-photo.jpg`;
+    return {
+      absolutePath,
+      fileName,
+      mimeType: mimeTypeFromFileName(fileName),
+    };
+  }
+
+  async uploadPhoto(id: string, file: UploadedVehiclePhotoFile, actorUserId?: string) {
     const existing = await this.prisma.vehicle.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Vehicle not found');
     }
 
-    const photoUrl = this.storageService.buildPublicUrl('vehicles', file.filename);
+    const photoUrl = this.storageService.buildStoredPath('vehicles', file.filename);
     const vehicle = await this.prisma.vehicle.update({
       where: { id },
       data: { photoUrl },
@@ -238,15 +290,30 @@ export class VehiclesService {
 
     await this.removeStoredPhotoIfLocal(existing.photoUrl);
 
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'vehicle.photo_uploaded',
+      entityType: 'vehicle',
+      entityId: id,
+      summary: 'Vehicle photo uploaded',
+    });
+
     return toClientVehicle(vehicle);
   }
 
-  async deactivate(id: string) {
+  async deactivate(id: string, actorUserId?: string) {
     await this.assertExists(id);
     const vehicle = await this.prisma.vehicle.update({
       where: { id },
       data: { status: 'inactive' },
       include: currentDriverInclude,
+    });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'vehicle.deactivated',
+      entityType: 'vehicle',
+      entityId: id,
+      summary: 'Vehicle deactivated',
     });
     return toClientVehicle(vehicle);
   }

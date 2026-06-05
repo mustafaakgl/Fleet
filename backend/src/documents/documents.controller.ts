@@ -10,10 +10,13 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -116,20 +119,40 @@ export class DocumentsController {
     return this.documentsService.getDocumentsByOwner(ownerType, ownerId);
   }
 
+  @Get(':id/download')
+  async downloadDocument(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.documentsService.resolveDocumentDownload(id, { userId, role });
+    await this.documentsService.recordDocumentDownload(id, userId);
+
+    res.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(file.fileName)}"`,
+      'Cache-Control': 'private, no-store',
+    });
+
+    createReadStream(file.absolutePath).pipe(res);
+  }
+
   @Get(':id')
   getDocumentById(@Param('id') id: string) {
-    return this.documentsService.getDocumentById(id);
+    return this.documentsService.getDocumentByIdForClient(id);
   }
 
   @Post()
-  createDocument(@Body() dto: CreateDocumentDto, @CurrentUser('id') userId?: string, @Query('uploadedById') uploadedById?: string) {
+  async createDocument(@Body() dto: CreateDocumentDto, @CurrentUser('id') userId?: string, @Query('uploadedById') uploadedById?: string) {
     const finalUploadedById = userId ?? uploadedById;
-    return this.documentsService.createDocument(dto, finalUploadedById);
+    const created = await this.documentsService.createDocument(dto, finalUploadedById);
+    return this.documentsService.mapDocumentToClient(created);
   }
 
   @Post('upload')
   @UseInterceptors(DOCUMENT_UPLOAD_INTERCEPTOR)
-  uploadDocument(
+  async uploadDocument(
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addMaxSizeValidator({
@@ -153,7 +176,7 @@ export class DocumentsController {
       throw new BadRequestException('file is required');
     }
 
-    return this.documentsService.createUploadedDocument(
+    const created = await this.documentsService.createUploadedDocument(
       {
         ownerType,
         ownerId,
@@ -164,15 +187,16 @@ export class DocumentsController {
       {
         originalName: file.originalname,
         storedFileName: file.filename,
-        fileUrl: this.storageService.buildPublicUrl('documents', file.filename),
+        fileUrl: this.storageService.buildStoredPath('documents', file.filename),
       },
       userId ?? uploadedById,
     );
+    return this.documentsService.mapDocumentToClient(created);
   }
 
   @Post(':id/replace-upload')
   @UseInterceptors(DOCUMENT_UPLOAD_INTERCEPTOR)
-  replaceUploadDocument(
+  async replaceUploadDocument(
     @Param('id') id: string,
     @UploadedFile(
       new ParseFilePipeBuilder()
@@ -195,7 +219,7 @@ export class DocumentsController {
       throw new BadRequestException('file is required');
     }
 
-    return this.documentsService.replaceDocumentWithUpload(
+    const replaced = await this.documentsService.replaceDocumentWithUpload(
       id,
       {
         documentType,
@@ -205,10 +229,11 @@ export class DocumentsController {
       {
         originalName: file.originalname,
         storedFileName: file.filename,
-        fileUrl: this.storageService.buildPublicUrl('documents', file.filename),
+        fileUrl: this.storageService.buildStoredPath('documents', file.filename),
       },
       userId ?? uploadedById,
     );
+    return this.documentsService.mapDocumentToClient(replaced);
   }
 
   @Patch(':id')

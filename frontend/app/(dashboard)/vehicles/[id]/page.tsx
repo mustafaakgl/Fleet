@@ -162,7 +162,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   if (notFound || !vehicle) {
     return (
       <div className="py-20 text-center">
-        <p className="text-lg text-gray-500">Vehicle not found.</p>
+        <p className="text-lg text-gray-500">{t('form.vehicleNotFound')}</p>
         <Button variant="outline" className="mt-4" asChild>
           <Link href="/vehicles">{t('common.back')}</Link>
         </Button>
@@ -204,17 +204,17 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </div>
 
             <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-sm md:grid-cols-4">
-              <HeaderItem label="Current driver" value={currentDriver} />
-              <HeaderItem label="Current company" value={currentCompany} />
-              <HeaderItem label="TÜV expiry" value={formatDate(vehicle.tuv_expiry_date)} />
-              <HeaderItem label="SP expiry" value={formatDate(vehicle.sp_expiry_date)} />
+              <HeaderItem label={t('vehicleDetail.hdrCurrentDriver')} value={currentDriver} />
+              <HeaderItem label={t('vehicleDetail.hdrCurrentCompany')} value={currentCompany} />
+              <HeaderItem label={t('vehicleDetail.hdrTuvExpiry')} value={formatDate(vehicle.tuv_expiry_date)} />
+              <HeaderItem label={t('vehicleDetail.hdrSpExpiry')} value={formatDate(vehicle.sp_expiry_date)} />
             </div>
 
             <Button variant="outline" size="sm" asChild>
               <Link href={`/vehicles/${id}/edit`}>
                 <span className="inline-flex items-center">
                   <Pencil className="mr-1 h-4 w-4" />
-                  Edit
+                  {t('vehicleDetail.edit')}
                 </span>
               </Link>
             </Button>
@@ -224,19 +224,19 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle information</CardTitle>
+          <CardTitle>{t('vehicleDetail.vehicleInfo')}</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <InfoItem label="Plate" value={vehicle.plate_number} />
-            <InfoItem label="Brand" value={vehicle.brand} />
-            <InfoItem label="Model" value={vehicle.model} />
-            <InfoItem label="Year" value={String(vehicle.year ?? '-')} />
-            <InfoItem label="TÜV expiry" value={formatDate(vehicle.tuv_expiry_date)} />
-            <InfoItem label="SP expiry" value={formatDate(vehicle.sp_expiry_date)} />
-            <InfoItem label="Status" value={vehicle.status.replace('_', ' ')} />
+            <InfoItem label={t('vehicleDetail.plate')} value={vehicle.plate_number} />
+            <InfoItem label={t('vehicleDetail.brand')} value={vehicle.brand} />
+            <InfoItem label={t('vehicleDetail.model')} value={vehicle.model} />
+            <InfoItem label={t('vehicleDetail.year')} value={String(vehicle.year ?? '-')} />
+            <InfoItem label={t('vehicleDetail.hdrTuvExpiry')} value={formatDate(vehicle.tuv_expiry_date)} />
+            <InfoItem label={t('vehicleDetail.hdrSpExpiry')} value={formatDate(vehicle.sp_expiry_date)} />
+            <InfoItem label={t('vehicleDetail.status')} value={vehicle.status.replace('_', ' ')} />
             <InfoItem
-              label="Current driver"
+              label={t('vehicleDetail.currentDriver')}
               value={
                 vehicle.current_driver
                   ? `${vehicle.current_driver.first_name} ${vehicle.current_driver.last_name}`
@@ -249,20 +249,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Documents</CardTitle>
+          <CardTitle>{t('vehicleDetail.documents')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {documentsError ? (
-            <p className="p-4 text-sm text-gray-500">Documents could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.documentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Document type</TableHead>
-                  <TableHead>File name</TableHead>
-                  <TableHead>Expiry date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Uploaded at</TableHead>
+                  <TableHead>{t('vehicleDetail.colDocType')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colFileName')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colExpiryDate')}</TableHead>
+                  <TableHead>{t('vehicleDetail.status')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colUploadedAt')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -305,21 +305,21 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Assignment history</CardTitle>
+          <CardTitle>{t('vehicleDetail.assignmentHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {assignmentsError ? (
-            <p className="p-4 text-sm text-gray-500">Assignments could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.assignmentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Start time</TableHead>
-                  <TableHead>End time</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead>{t('vehicleDetail.company')}</TableHead>
+                  <TableHead>{t('vehicleDetail.startTime')}</TableHead>
+                  <TableHead>{t('vehicleDetail.endTime')}</TableHead>
+                  <TableHead>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -353,16 +353,16 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Driver history</CardTitle>
+          <CardTitle>{t('vehicleDetail.driverHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Driver</TableHead>
-                <TableHead>First used</TableHead>
-                <TableHead>Last used</TableHead>
-                <TableHead>Total assignments</TableHead>
+                <TableHead>{t('vehicleDetail.driver')}</TableHead>
+                <TableHead>{t('vehicleDetail.colFirstUsed')}</TableHead>
+                <TableHead>{t('vehicleDetail.colLastUsed')}</TableHead>
+                <TableHead>{t('vehicleDetail.colTotalAssignments')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -389,21 +389,21 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Handover history</CardTitle>
+          <CardTitle>{t('vehicleDetail.handoverHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {handoversError ? (
-            <p className="p-4 text-sm text-gray-500">Handovers could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.handoversLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Photo status</TableHead>
-                  <TableHead>Damage</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colType')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colPhotoStatus')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colDamage')}</TableHead>
+                  <TableHead>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -422,7 +422,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                       </TableCell>
                       <TableCell>{h.handoverType}</TableCell>
                       <TableCell>{h.photoStatus.replace(/_/g, ' ')}</TableCell>
-                      <TableCell>{h.damageDetected ? h.damageNotes ?? 'Yes' : '-'}</TableCell>
+                      <TableCell>{h.damageDetected ? h.damageNotes ?? t('vehicleDetail.yes') : '-'}</TableCell>
                       <TableCell>{h.status}</TableCell>
                     </TableRow>
                   ))
@@ -435,20 +435,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Accident history</CardTitle>
+          <CardTitle>{t('vehicleDetail.accidentHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {incidentsError ? (
-            <p className="p-4 text-sm text-gray-500">Incidents could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.incidentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Damage value</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colDescription')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colDamageValue')}</TableHead>
+                  <TableHead>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -490,21 +490,21 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Cargo damage history</CardTitle>
+          <CardTitle>{t('vehicleDetail.cargoHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {incidentsError ? (
-            <p className="p-4 text-sm text-gray-500">Cargo damages could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.cargoLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Cargo name</TableHead>
-                  <TableHead>Cargo owner</TableHead>
-                  <TableHead>Damage value</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colCargoName')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colCargoOwner')}</TableHead>
+                  <TableHead>{t('vehicleDetail.colDamageValue')}</TableHead>
+                  <TableHead>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { canEditVehicleHandovers } from '@/lib/permissions';
@@ -17,12 +18,12 @@ function toDisplayDate(iso: string) {
   return d.toLocaleDateString('de-DE');
 }
 
-function labelizePhotoStatus(value: PhotoStatus) {
-  if (value === 'not_required') return 'Not Required';
-  if (value === 'uploaded') return 'Uploaded';
-  if (value === 'approved') return 'Uploaded';
-  if (value === 'missing') return 'Missing';
-  if (value === 'rejected') return 'Rejected';
+function photoStatusLabelKey(value: PhotoStatus) {
+  if (value === 'not_required') return 'handover.photoNotRequired';
+  if (value === 'uploaded') return 'handover.photoUploaded';
+  if (value === 'approved') return 'handover.photoUploaded';
+  if (value === 'missing') return 'handover.photoMissing';
+  if (value === 'rejected') return 'handover.photoRejected';
   return value;
 }
 
@@ -46,6 +47,8 @@ function photoStatusClass(value: PhotoStatus) {
 }
 
 export function VehicleHandovers() {
+  const { t } = useTranslation();
+  const dispStatusLabel = (status: DisplayStatus) => t(`handover.disp${status}`);
   const [rows, setRows] = useState<VehicleHandoverRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,11 +70,11 @@ export function VehicleHandovers() {
       setRows(data);
     } catch (e) {
       setRows([]);
-      setError(e instanceof Error ? e.message : 'Failed to load handovers');
+      setError(e instanceof Error ? e.message : t('handover.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     refresh();
@@ -115,9 +118,9 @@ export function VehicleHandovers() {
     try {
       await vehicleHandoversApi.approvePhoto(selected.id);
       await refresh();
-      setMessage('Photo approved.');
+      setMessage(t('handover.photoApproved'));
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Failed to approve photo');
+      setMessage(e instanceof Error ? e.message : t('handover.approveError'));
     }
   }
 
@@ -126,9 +129,9 @@ export function VehicleHandovers() {
     try {
       await vehicleHandoversApi.rejectPhoto(selected.id);
       await refresh();
-      setMessage('Photo rejected.');
+      setMessage(t('handover.photoRejected'));
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Failed to reject photo');
+      setMessage(e instanceof Error ? e.message : t('handover.rejectError'));
     }
   }
 
@@ -137,18 +140,18 @@ export function VehicleHandovers() {
     try {
       await vehicleHandoversApi.complete(selected.id);
       await refresh();
-      setMessage('Handover marked completed.');
+      setMessage(t('handover.markedCompleted'));
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Failed to complete');
+      setMessage(e instanceof Error ? e.message : t('handover.completeError'));
     }
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">Vehicle Handovers</h2>
+        <h2 className="text-xl font-bold text-slate-900">{t('handover.title')}</h2>
         <p className="text-sm text-slate-600">
-          Complete pickup handover workflow with photo and damage controls.
+          {t('handover.subtitle')}
         </p>
       </div>
 
@@ -158,7 +161,7 @@ export function VehicleHandovers() {
             htmlFor="handover-date"
             className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
           >
-            Date
+            {t('handover.colDate')}
           </label>
           <input
             id="handover-date"
@@ -174,14 +177,14 @@ export function VehicleHandovers() {
             htmlFor="handover-driver"
             className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
           >
-            Driver Search
+            {t('handover.driverSearch')}
           </label>
           <input
             id="handover-driver"
             type="text"
             value={driverQuery}
             onChange={(event) => setDriverQuery(event.target.value)}
-            placeholder="Search driver"
+            placeholder={t('handover.searchDriver')}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
           />
         </div>
@@ -191,14 +194,14 @@ export function VehicleHandovers() {
             htmlFor="handover-vehicle"
             className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
           >
-            Vehicle Search
+            {t('handover.vehicleSearch')}
           </label>
           <input
             id="handover-vehicle"
             type="text"
             value={vehicleQuery}
             onChange={(event) => setVehicleQuery(event.target.value)}
-            placeholder="Search vehicle"
+            placeholder={t('handover.searchVehicle')}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
           />
         </div>
@@ -208,7 +211,7 @@ export function VehicleHandovers() {
             htmlFor="handover-status"
             className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
           >
-            Status
+            {t('handover.colStatus')}
           </label>
           <select
             id="handover-status"
@@ -216,10 +219,10 @@ export function VehicleHandovers() {
             onChange={(event) => setStatusFilter(event.target.value as TableStatusFilter)}
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
           >
-            <option value="all">All</option>
-            <option value="completed">Completed</option>
-            <option value="pending">Pending</option>
-            <option value="missing">Missing</option>
+            <option value="all">{t('handover.filterAll')}</option>
+            <option value="completed">{t('handover.filterCompleted')}</option>
+            <option value="pending">{t('handover.filterPending')}</option>
+            <option value="missing">{t('handover.filterMissing')}</option>
           </select>
         </div>
 
@@ -229,27 +232,27 @@ export function VehicleHandovers() {
           className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
         >
           <RefreshCw className="h-4 w-4" />
-          Refresh
+          {t('handover.refresh')}
         </button>
       </div>
 
       {!canEdit && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <AlertTriangle className="h-4 w-4" />
-          View-only mode. Only Admin and Office can edit handovers.
+          {t('handover.viewOnly')}
         </div>
       )}
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="p-6 text-center text-sm text-slate-500">Loading...</div>
+          <div className="p-6 text-center text-sm text-slate-500">{t('handover.loading')}</div>
         ) : error ? (
           <div className="p-4">
             <EmptyState
               icon={AlertTriangle}
-              title="Failed to load handovers"
+              title={t('handover.loadErrorTitle')}
               subtitle={error}
-              actionLabel="Retry"
+              actionLabel={t('handover.retry')}
               onAction={refresh}
             />
           </div>
@@ -257,9 +260,9 @@ export function VehicleHandovers() {
           <div className="p-4">
             <EmptyState
               icon={AlertTriangle}
-              title="No vehicle handovers"
-              subtitle="No handovers found for selected filters."
-              actionLabel="Clear filters"
+              title={t('handover.emptyTitle')}
+              subtitle={t('handover.emptySubtitle')}
+              actionLabel={t('handover.clearFilters')}
               onAction={() => {
                 setDateFilter('');
                 setDriverQuery('');
@@ -273,15 +276,15 @@ export function VehicleHandovers() {
             <table className="min-w-[1260px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="border-b border-slate-200 px-3 py-3">Date</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Driver</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Previous Vehicle</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Current Vehicle</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Photo Required</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Photo Status</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Damage Detected</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                  <th className="border-b border-slate-200 px-3 py-3">Actions</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colDate')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colDriver')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colPreviousVehicle')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colCurrentVehicle')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colPhotoRequired')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colPhotoStatus')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colDamageDetected')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colStatus')}</th>
+                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colActions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -302,23 +305,23 @@ export function VehicleHandovers() {
                       </td>
                       <td className="px-3 py-2.5 text-slate-700">{vehiclePlate}</td>
                       <td className="px-3 py-2.5 text-slate-700">
-                        {row.photoRequired ? 'Yes' : 'No'}
+                        {row.photoRequired ? t('handover.yes') : t('handover.no')}
                       </td>
                       <td className="px-3 py-2.5">
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${photoStatusClass(row.photoStatus)}`}
                         >
-                          {labelizePhotoStatus(row.photoStatus)}
+                          {t(photoStatusLabelKey(row.photoStatus))}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-slate-700">
-                        {row.damageDetected ? 'Yes' : 'No'}
+                        {row.damageDetected ? t('handover.yes') : t('handover.no')}
                       </td>
                       <td className="px-3 py-2.5">
                         <span
                           className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${displayStatusClass(displayStatus)}`}
                         >
-                          {displayStatus}
+                          {dispStatusLabel(displayStatus)}
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
@@ -327,7 +330,7 @@ export function VehicleHandovers() {
                           onClick={() => setSelectedId(row.id)}
                           className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
-                          View
+                          {t('handover.view')}
                         </button>
                       </td>
                     </tr>
@@ -344,29 +347,29 @@ export function VehicleHandovers() {
           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setSelectedId(null)} />
           <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
             <div className="sticky top-0 border-b border-slate-200 bg-white px-5 py-4">
-              <h3 className="text-lg font-bold text-slate-900">Handover Details</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('handover.detailTitle')}</h3>
             </div>
 
             <div className="space-y-4 px-5 py-4 text-sm">
               <DetailRow
-                label="Driver"
+                label={t('handover.colDriver')}
                 value={
                   selected.driver
                     ? `${selected.driver.firstName} ${selected.driver.lastName}`
                     : selected.driverId
                 }
               />
-              <DetailRow label="Date" value={toDisplayDate(selected.handoverDateTime)} />
-              <DetailRow label="Previous Vehicle" value={selected.previousVehicleId ?? '-'} />
+              <DetailRow label={t('handover.colDate')} value={toDisplayDate(selected.handoverDateTime)} />
+              <DetailRow label={t('handover.colPreviousVehicle')} value={selected.previousVehicleId ?? '-'} />
               <DetailRow
-                label="Current Vehicle"
+                label={t('handover.colCurrentVehicle')}
                 value={selected.vehicle?.plateNumber ?? selected.vehicleId}
               />
-              <DetailRow label="Handover Type" value={selected.handoverType} />
-              <DetailRow label="Photo Required" value={selected.photoRequired ? 'Yes' : 'No'} />
-              <DetailRow label="Photo Status" value={labelizePhotoStatus(selected.photoStatus)} />
-              <DetailRow label="Damage Detected" value={selected.damageDetected ? 'Yes' : 'No'} />
-              <DetailRow label="Notes" value={selected.notes ?? selected.damageNotes ?? '-'} />
+              <DetailRow label={t('handover.handoverType')} value={selected.handoverType} />
+              <DetailRow label={t('handover.colPhotoRequired')} value={selected.photoRequired ? t('handover.yes') : t('handover.no')} />
+              <DetailRow label={t('handover.colPhotoStatus')} value={t(photoStatusLabelKey(selected.photoStatus))} />
+              <DetailRow label={t('handover.colDamageDetected')} value={selected.damageDetected ? t('handover.yes') : t('handover.no')} />
+              <DetailRow label={t('handover.notes')} value={selected.notes ?? selected.damageNotes ?? '-'} />
             </div>
 
             <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-slate-200 bg-white px-5 py-4">
@@ -376,7 +379,7 @@ export function VehicleHandovers() {
                 disabled={!canEdit || selected.photoStatus !== 'uploaded'}
                 className="rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Approve Photo
+                {t('handover.approvePhoto')}
               </button>
               <button
                 type="button"
@@ -384,7 +387,7 @@ export function VehicleHandovers() {
                 disabled={!canEdit || selected.photoStatus !== 'uploaded'}
                 className="rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Reject Photo
+                {t('handover.rejectPhoto')}
               </button>
               <button
                 type="button"
@@ -392,14 +395,14 @@ export function VehicleHandovers() {
                 disabled={!canEdit || selected.status === 'completed'}
                 className="rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Mark Completed
+                {t('handover.markCompleted')}
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
                 className="ml-auto rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
-                Close
+                {t('handover.close')}
               </button>
             </div>
           </aside>

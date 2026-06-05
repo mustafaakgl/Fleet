@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AssignmentStatus, Company, Prisma, CompanyEmailStatus } from '@prisma/client';
+import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -41,7 +43,10 @@ const listInclude = {
 
 @Injectable()
 export class CompaniesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async list(query: { search?: string; page?: number; limit?: number }) {
     const page = Number.isFinite(query.page) ? Math.max(1, Number(query.page)) : 1;
@@ -145,7 +150,7 @@ export class CompaniesService {
     };
   }
 
-  async create(dto: CreateCompanyDto) {
+  async create(dto: CreateCompanyDto, actorUserId?: string) {
     const company = await this.prisma.company.create({
       data: {
         name: dto.name,
@@ -158,10 +163,17 @@ export class CompaniesService {
       },
       include: listInclude,
     });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'company.created',
+      entityType: 'company',
+      entityId: company.id,
+      summary: 'Company created',
+    });
     return toClientCompany(company);
   }
 
-  async update(id: string, dto: UpdateCompanyDto) {
+  async update(id: string, dto: UpdateCompanyDto, actorUserId?: string) {
     await this.assertExists(id);
 
     const data: Prisma.CompanyUpdateInput = {};
@@ -178,12 +190,32 @@ export class CompaniesService {
       data,
       include: listInclude,
     });
+
+    const changed = changedFieldNames(dto as Record<string, unknown>);
+    if (changed.length > 0) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'company.updated',
+        entityType: 'company',
+        entityId: id,
+        summary: 'Company updated',
+        metadata: { changed_fields: changed },
+      });
+    }
+
     return toClientCompany(updated);
   }
 
-  async remove(id: string) {
+  async remove(id: string, actorUserId?: string) {
     await this.assertExists(id);
     await this.prisma.company.delete({ where: { id } });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'company.deactivated',
+      entityType: 'company',
+      entityId: id,
+      summary: 'Company removed',
+    });
     return { id, deleted: true };
   }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Wrench } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -20,6 +21,7 @@ function currency(value: number) {
 }
 
 export default function ServiceHistoryPage() {
+  const { t } = useTranslation();
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [repairCompanies, setRepairCompanies] = useState<string[]>([]);
   const [repairCompany, setRepairCompany] = useState('');
@@ -38,11 +40,11 @@ export default function ServiceHistoryPage() {
       setRepairCompanies(companies);
     } catch (e) {
       setRecords([]);
-      setError(e instanceof Error ? e.message : 'Failed to load service history');
+      setError(e instanceof Error ? e.message : t('serviceHistory.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [repairCompany]);
+  }, [repairCompany, t]);
 
   useEffect(() => {
     reload();
@@ -57,7 +59,7 @@ export default function ServiceHistoryPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Wrench className="h-6 w-6 text-blue-600" />
-        <h1 className="text-2xl font-bold text-gray-900">Service History</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('serviceHistory.title')}</h1>
         {!loading && !error && (
           <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
             {records.length}
@@ -67,7 +69,7 @@ export default function ServiceHistoryPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Filters</CardTitle>
+          <CardTitle className="text-base">{t('serviceHistory.filters')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -76,7 +78,7 @@ export default function ServiceHistoryPage() {
               onChange={(e) => setRepairCompany(e.target.value)}
               className="w-full sm:w-72"
             >
-              <option value="">All repair companies</option>
+              <option value="">{t('serviceHistory.allRepairCompanies')}</option>
               {repairCompanies.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -84,7 +86,7 @@ export default function ServiceHistoryPage() {
               ))}
             </Select>
             <div className="text-sm text-gray-600">
-              Total cost: <span className="font-semibold">{currency(totalCost)}</span>
+              {t('serviceHistory.totalCost')} <span className="font-semibold">{currency(totalCost)}</span>
             </div>
           </div>
         </CardContent>
@@ -92,14 +94,14 @@ export default function ServiceHistoryPage() {
 
       <Card>
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-500">Loading...</div>
+          <div className="p-6 text-center text-sm text-gray-500">{t('serviceHistory.loading')}</div>
         ) : error ? (
           <div className="p-4">
             <EmptyState
               icon={Wrench}
-              title="Failed to load service history"
+              title={t('serviceHistory.loadError')}
               subtitle={error}
-              actionLabel="Retry"
+              actionLabel={t('serviceHistory.retry')}
               onAction={reload}
             />
           </div>
@@ -107,8 +109,8 @@ export default function ServiceHistoryPage() {
           <div className="p-4">
             <EmptyState
               icon={Wrench}
-              title="No service records"
-              subtitle="No maintenance records match current filters."
+              title={t('serviceHistory.emptyTitle')}
+              subtitle={t('serviceHistory.emptySubtitle')}
             />
           </div>
         ) : (
@@ -116,13 +118,13 @@ export default function ServiceHistoryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Service Task</TableHead>
-                  <TableHead>Repair Company</TableHead>
-                  <TableHead>Mileage (km)</TableHead>
-                  <TableHead>Cost</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead>{t('serviceHistory.colDate')}</TableHead>
+                  <TableHead>{t('serviceHistory.colVehicle')}</TableHead>
+                  <TableHead>{t('serviceHistory.colTask')}</TableHead>
+                  <TableHead>{t('serviceHistory.colRepairCompany')}</TableHead>
+                  <TableHead>{t('serviceHistory.colMileage')}</TableHead>
+                  <TableHead>{t('serviceHistory.colCost')}</TableHead>
+                  <TableHead>{t('serviceHistory.colNotes')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -42,17 +43,25 @@ export class UsersController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateUserDto) {
-    return this.users.create(dto);
+  create(
+    @Body() dto: CreateUserDto,
+    @CurrentUser('id') actorUserId: string,
+    @CurrentUser('tenantId') tenantId: string | undefined,
+  ) {
+    return this.users.create(dto, actorUserId, tenantId);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
-    return this.users.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser('id') actorUserId: string,
+  ) {
+    return this.users.update(id, dto, actorUserId);
   }
 
   @Delete(':id')
-  deactivate(@Param('id') id: string) {
-    return this.users.deactivate(id);
+  deactivate(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
+    return this.users.deactivate(id, actorUserId);
   }
 }

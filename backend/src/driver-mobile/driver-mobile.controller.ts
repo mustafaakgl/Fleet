@@ -10,10 +10,13 @@ import {
   ParseFilePipeBuilder,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -173,6 +176,23 @@ export class DriverMobileController {
   @Get('documents')
   listDriverDocuments(@CurrentUser('id') userId: string) {
     return this.driverMobile.listDriverDocuments(userId);
+  }
+
+  @Get('documents/:id/download')
+  async downloadDriverDocument(
+    @CurrentUser('id') userId: string,
+    @Param('id') documentId: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.driverMobile.downloadDriverDocument(userId, documentId);
+
+    res.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(file.fileName)}"`,
+      'Cache-Control': 'private, no-store',
+    });
+
+    createReadStream(file.absolutePath).pipe(res);
   }
 
   @Post('documents')

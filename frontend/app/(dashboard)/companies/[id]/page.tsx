@@ -194,7 +194,7 @@ export default function CompanyProfilePage({
   if (companyError || !company) {
     return (
       <div className="py-20 text-center">
-        <p className="text-lg text-gray-500">Company not found.</p>
+        <p className="text-lg text-gray-500">{t('form.companyNotFound')}</p>
         <Button variant="outline" className="mt-4" asChild>
           <Link href="/companies">{t('common.back')}</Link>
         </Button>
@@ -227,15 +227,15 @@ export default function CompanyProfilePage({
 
             <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
               <HeaderStat
-                label="Active assignments"
+                label={t('companyDetail.hdrActiveAssignments')}
                 value={statsError ? '?' : String(stats?.active_assignments ?? '...')}
               />
               <HeaderStat
-                label="Current drivers"
+                label={t('companyDetail.hdrCurrentDrivers')}
                 value={statsError ? '?' : String(stats?.current_drivers ?? '...')}
               />
               <HeaderStat
-                label="Current vehicles"
+                label={t('companyDetail.hdrCurrentVehicles')}
                 value={statsError ? '?' : String(stats?.current_vehicles ?? '...')}
               />
             </div>
@@ -244,7 +244,7 @@ export default function CompanyProfilePage({
               <Link href={`/companies/${id}/edit`}>
                 <span className="inline-flex items-center">
                   <Pencil className="mr-1 h-4 w-4" />
-                  Edit
+                  {t('companyDetail.edit')}
                 </span>
               </Link>
             </Button>
@@ -254,19 +254,19 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Company information</CardTitle>
+          <CardTitle>{t('companyDetail.companyInfo')}</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            <InfoItem label="Name" value={company.name} />
-            <InfoItem label="Contact person" value={company.contact_person || '-'} />
-            <InfoItem label="Email" value={company.email ?? '-'} />
-            <InfoItem label="Phone" value={company.phone ?? '-'} />
-            <InfoItem label="Address" value={company.address ?? '-'} />
-            <InfoItem label="Notes" value={company.notes || '-'} />
+            <InfoItem label={t('companyDetail.name')} value={company.name} />
+            <InfoItem label={t('companyDetail.contactPerson')} value={company.contact_person || '-'} />
+            <InfoItem label={t('companyDetail.email')} value={company.email ?? '-'} />
+            <InfoItem label={t('companyDetail.phone')} value={company.phone ?? '-'} />
+            <InfoItem label={t('companyDetail.address')} value={company.address ?? '-'} />
+            <InfoItem label={t('companyDetail.notes')} value={company.notes || '-'} />
             {showFinancials && (
               <InfoItem
-                label="Default daily revenue"
+                label={t('companyDetail.defaultDailyRevenue')}
                 value={
                   company.default_daily_revenue !== null && company.default_daily_revenue !== undefined
                     ? currency(company.default_daily_revenue)
@@ -280,22 +280,22 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Current assignments</CardTitle>
+          <CardTitle>{t('companyDetail.currentAssignments')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {assignmentsError ? (
-            <p className="p-4 text-sm text-gray-500">Assignments could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('companyDetail.assignmentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Start time</TableHead>
-                  <TableHead>End time</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead>{t('companyDetail.colDriver')}</TableHead>
+                  <TableHead>{t('companyDetail.colVehicle')}</TableHead>
+                  <TableHead>{t('companyDetail.colCargo')}</TableHead>
+                  <TableHead>{t('companyDetail.colStartTime')}</TableHead>
+                  <TableHead>{t('companyDetail.colEndTime')}</TableHead>
+                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -330,20 +330,20 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Assignment history</CardTitle>
+          <CardTitle>{t('companyDetail.assignmentHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {assignmentsError ? (
-            <p className="p-4 text-sm text-gray-500">Assignments could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('companyDetail.assignmentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead>{t('companyDetail.colDriver')}</TableHead>
+                  <TableHead>{t('companyDetail.colVehicle')}</TableHead>
+                  <TableHead>{t('companyDetail.colCargo')}</TableHead>
+                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -376,16 +376,16 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Driver history</CardTitle>
+          <CardTitle>{t('companyDetail.driverHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Driver</TableHead>
-                <TableHead>First assignment</TableHead>
-                <TableHead>Last assignment</TableHead>
-                <TableHead>Total</TableHead>
+                <TableHead>{t('companyDetail.colDriver')}</TableHead>
+                <TableHead>{t('companyDetail.colFirstAssignment')}</TableHead>
+                <TableHead>{t('companyDetail.colLastAssignment')}</TableHead>
+                <TableHead>{t('companyDetail.colTotal')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -412,16 +412,16 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle history</CardTitle>
+          <CardTitle>{t('companyDetail.vehicleHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>First assignment</TableHead>
-                <TableHead>Last assignment</TableHead>
-                <TableHead>Total</TableHead>
+                <TableHead>{t('companyDetail.colVehicle')}</TableHead>
+                <TableHead>{t('companyDetail.colFirstAssignment')}</TableHead>
+                <TableHead>{t('companyDetail.colLastAssignment')}</TableHead>
+                <TableHead>{t('companyDetail.colTotal')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -448,19 +448,19 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Company email history</CardTitle>
+          <CardTitle>{t('companyDetail.emailHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {emailsError ? (
-            <p className="p-4 text-sm text-gray-500">Emails could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('companyDetail.emailsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last sent</TableHead>
+                  <TableHead>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead>{t('companyDetail.colSubject')}</TableHead>
+                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
+                  <TableHead>{t('companyDetail.colLastSent')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -490,19 +490,19 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Documents</CardTitle>
+          <CardTitle>{t('companyDetail.documents')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {documentsError ? (
-            <p className="p-4 text-sm text-gray-500">Documents could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('companyDetail.documentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Document type</TableHead>
-                  <TableHead>File name</TableHead>
-                  <TableHead>Expiry date</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('companyDetail.colDocType')}</TableHead>
+                  <TableHead>{t('companyDetail.colFileName')}</TableHead>
+                  <TableHead>{t('companyDetail.colExpiryDate')}</TableHead>
+                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -532,21 +532,21 @@ export default function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Cargo damage history</CardTitle>
+          <CardTitle>{t('companyDetail.cargoHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {cargoDamagesError ? (
-            <p className="p-4 text-sm text-gray-500">Cargo damages could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('companyDetail.cargoLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Driver</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Cargo name</TableHead>
-                  <TableHead>Status</TableHead>
-                  {showFinancials && <TableHead>Damage value</TableHead>}
+                  <TableHead>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead>{t('companyDetail.colDriver')}</TableHead>
+                  <TableHead>{t('companyDetail.colVehicle')}</TableHead>
+                  <TableHead>{t('companyDetail.colCargoName')}</TableHead>
+                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
+                  {showFinancials && <TableHead>{t('companyDetail.colDamageValue')}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>

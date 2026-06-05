@@ -20,6 +20,13 @@ const COMPANY_REVENUE_MAP: Record<string, number> = {
 };
 
 const AVAILABILITY_OPTIONS = ['Available', 'Urlaub', 'Krank', 'Feiertag', 'Not Assigned'] as const;
+const AVAILABILITY_KEY: Record<string, string> = {
+  Available: 'planning.avail.Available',
+  Urlaub: 'planning.avail.Urlaub',
+  Krank: 'planning.avail.Krank',
+  Feiertag: 'planning.avail.Feiertag',
+  'Not Assigned': 'planning.avail.notAssigned',
+};
 type PlanSubTab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
 
 function currency(value: number) {
@@ -58,6 +65,10 @@ export function Tagesplanung({
   const [selectedTransportRequestId, setSelectedTransportRequestId] = useState<string | null>(null);
   const [driverSearch, setDriverSearch] = useState('');
   const planningDate = planningDateProp ?? getTodayDate();
+  const transportStatusLabel = (status: string) =>
+    ['approved', 'rejected', 'needs_review', 'pending'].includes(status)
+      ? t(`planning.tstatus.${status}`)
+      : status;
 
   useEffect(() => {
     const transportId = searchParams.get('transport');
@@ -217,20 +228,20 @@ export function Tagesplanung({
         <>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-7">
-        <SummaryCard label="Available Drivers" value={String(availableCount)} tone="text-emerald-700" />
-        <SummaryCard label="Drivers on Vacation" value={String(vacationCount)} tone="text-blue-700" />
-        <SummaryCard label="Sick Drivers" value={String(sickCount)} tone="text-red-700" />
-        <SummaryCard label="Planned Trucks" value={String(plannedTrucks)} tone="text-slate-900" />
-        <SummaryCard label="Open Assignments" value={String(openAssignments)} tone="text-amber-700" />
-        <SummaryCard label="Expected Daily Revenue" value={currency(expectedDailyRevenue)} tone="text-emerald-700" />
-        <SummaryCard label="Lost Revenue Estimate" value={currency(lostRevenueEstimate)} tone="text-red-700" />
+        <SummaryCard label={t('planning.kpiAvailable')} value={String(availableCount)} tone="text-emerald-700" />
+        <SummaryCard label={t('planning.kpiVacation')} value={String(vacationCount)} tone="text-blue-700" />
+        <SummaryCard label={t('planning.kpiSick')} value={String(sickCount)} tone="text-red-700" />
+        <SummaryCard label={t('planning.kpiPlannedTrucks')} value={String(plannedTrucks)} tone="text-slate-900" />
+        <SummaryCard label={t('planning.kpiOpenAssignments')} value={String(openAssignments)} tone="text-amber-700" />
+        <SummaryCard label={t('planning.kpiExpectedRevenue')} value={currency(expectedDailyRevenue)} tone="text-emerald-700" />
+        <SummaryCard label={t('planning.kpiLostRevenue')} value={currency(lostRevenueEstimate)} tone="text-red-700" />
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <p className="text-sm font-semibold text-slate-800 sm:pb-2">
-              Planning Date: {planningDate}
+              {t('planning.planningDate', { date: planningDate })}
             </p>
             <div className="min-w-[220px] flex-1 sm:max-w-md">
               <label
@@ -280,13 +291,13 @@ export function Tagesplanung({
             <button
               type="button"
               onClick={() => {
-                setInfoMessage('Tagesplanung wurde lokal gespeichert.');
+                setInfoMessage(t('planning.savedToast'));
                 setTimeout(() => setInfoMessage(null), 2200);
               }}
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               <Save className="h-4 w-4" />
-              Plan speichern
+              {t('planning.savePlan')}
             </button>
             <button
               type="button"
@@ -296,7 +307,7 @@ export function Tagesplanung({
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               <Mail className="h-4 w-4" />
-              Company Emails
+              {t('planning.companyEmails')}
               {companyEmailAttentionCount > 0 && (
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
                   {companyEmailAttentionCount}
@@ -310,17 +321,17 @@ export function Tagesplanung({
           <table className="min-w-[1400px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">Driver</th>
-                <th className="border-b border-slate-200 px-3 py-3">Availability</th>
-                <th className="border-b border-slate-200 px-3 py-3">Vehicle</th>
-                <th className="border-b border-slate-200 px-3 py-3">Company</th>
-                <th className="border-b border-slate-200 px-3 py-3">From</th>
-                <th className="border-b border-slate-200 px-3 py-3">To</th>
-                <th className="border-b border-slate-200 px-3 py-3">Start Time</th>
-                <th className="border-b border-slate-200 px-3 py-3">End Time</th>
-                <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Expected Revenue</th>
-                <th className="border-b border-slate-200 px-3 py-3">Actions</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDriver')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colAvailability')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colVehicle')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colCompany')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colFrom')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colTo')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStartTime')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colEndTime')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStatus')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colExpectedRevenue')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -350,7 +361,7 @@ export function Tagesplanung({
                       >
                         {AVAILABILITY_OPTIONS.map((option) => (
                           <option key={option} value={option}>
-                            {option}
+                            {t(AVAILABILITY_KEY[option])}
                           </option>
                         ))}
                       </select>
@@ -381,7 +392,7 @@ export function Tagesplanung({
                       <input
                         value={row.assignment.pickupAddress ?? ''}
                         disabled={disabled}
-                        placeholder="Pickup / origin"
+                        placeholder={t('planning.pickupPh')}
                         onChange={(event) =>
                           updateAssignment(row.assignment.id, { pickupAddress: event.target.value })
                         }
@@ -392,7 +403,7 @@ export function Tagesplanung({
                       <input
                         value={row.assignment.deliveryAddress ?? ''}
                         disabled={disabled}
-                        placeholder="Delivery / destination"
+                        placeholder={t('planning.deliveryPh')}
                         onChange={(event) =>
                           updateAssignment(row.assignment.id, { deliveryAddress: event.target.value })
                         }
@@ -425,7 +436,7 @@ export function Tagesplanung({
                             : 'bg-blue-100 text-blue-700'
                         }`}
                       >
-                        {disabled ? 'Unavailable' : row.assignment.status}
+                        {disabled ? t('planning.unavailable') : row.assignment.status}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
@@ -440,7 +451,7 @@ export function Tagesplanung({
                           updateAssignment(row.assignment.id, { expectedRevenue: nextRevenue });
                         }}
                         className="h-9 w-full min-w-[100px] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
-                        aria-label={`Expected revenue for ${row.driverName}`}
+                        aria-label={`${t('planning.colExpectedRevenue')} — ${row.driverName}`}
                       />
                     </td>
                     <td className="px-3 py-2.5">
@@ -453,7 +464,7 @@ export function Tagesplanung({
                           });
                         }}
                       >
-                        Clear
+                        {t('planning.clear')}
                       </button>
                     </td>
                   </tr>
@@ -466,25 +477,25 @@ export function Tagesplanung({
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h3 className="text-base font-semibold text-slate-900">Transport Requests</h3>
-          <p className="text-sm text-slate-600">Incoming transport requests from mobile app drivers.</p>
+          <h3 className="text-base font-semibold text-slate-900">{t('planning.transportTitle')}</h3>
+          <p className="text-sm text-slate-600">{t('planning.transportSubtitle')}</p>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-[1600px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">Driver</th>
-                <th className="border-b border-slate-200 px-3 py-3">Date</th>
-                <th className="border-b border-slate-200 px-3 py-3">Vehicle</th>
-                <th className="border-b border-slate-200 px-3 py-3">Company</th>
-                <th className="border-b border-slate-200 px-3 py-3">Cargo</th>
-                <th className="border-b border-slate-200 px-3 py-3">Pickup</th>
-                <th className="border-b border-slate-200 px-3 py-3">Delivery</th>
-                <th className="border-b border-slate-200 px-3 py-3">Start</th>
-                <th className="border-b border-slate-200 px-3 py-3">End</th>
-                <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Conflict</th>
-                <th className="border-b border-slate-200 px-3 py-3">Actions</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDriver')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDate')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colVehicle')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colCompany')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colCargo')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colPickup')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDelivery')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStart')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colEnd')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStatus')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colConflict')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -515,7 +526,7 @@ export function Tagesplanung({
                             : 'border-slate-200 bg-slate-100 text-slate-700'
                         }`}
                       >
-                        {request.status}
+                        {transportStatusLabel(request.status)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-slate-700">{request.conflictReason ?? '-'}</td>
@@ -526,7 +537,7 @@ export function Tagesplanung({
                           onClick={() => setSelectedTransportRequestId(request.id)}
                           className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
-                          View
+                          {t('planning.view')}
                         </button>
                         <button
                           type="button"
@@ -534,7 +545,7 @@ export function Tagesplanung({
                           onClick={() => {
                             const result = approveTransportRequest(request.id);
                             if (result.success) {
-                              setInfoMessage('Transport request approved and added to Einsatzplan.');
+                              setInfoMessage(t('planning.approveToast'));
                             } else {
                               setInfoMessage(result.message);
                             }
@@ -542,19 +553,19 @@ export function Tagesplanung({
                           }}
                           className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Approve
+                          {t('planning.approve')}
                         </button>
                         <button
                           type="button"
                           disabled={!canDecide}
                           onClick={() => {
                             rejectTransportRequest(request.id);
-                            setInfoMessage('Transport request rejected.');
+                            setInfoMessage(t('planning.rejectToast'));
                             setTimeout(() => setInfoMessage(null), 2200);
                           }}
                           className="rounded-md border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Reject
+                          {t('planning.reject')}
                         </button>
                       </div>
                     </td>
@@ -582,26 +593,26 @@ export function Tagesplanung({
           <div className="fixed inset-0 z-30 bg-black/30" onClick={() => setSelectedTransportRequestId(null)} />
           <aside className="fixed right-0 top-0 z-40 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
             <div className="border-b border-slate-200 px-5 py-4">
-              <h3 className="text-lg font-bold text-slate-900">Transport Request Details</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('planning.transportDetailTitle')}</h3>
             </div>
 
             <div className="space-y-3 px-5 py-4 text-sm">
-              <DetailRow label="Driver" value={drivers.find((item) => item.id === selectedTransportRequest.driverId)?.name ?? selectedTransportRequest.driverId} />
-              <DetailRow label="Date" value={selectedTransportRequest.date} />
-              <DetailRow label="Submitted At" value={selectedTransportRequest.submittedAt} />
-              <DetailRow label="Vehicle" value={selectedTransportRequest.vehicleId} />
-              <DetailRow label="Company" value={selectedTransportRequest.companyId} />
-              <DetailRow label="Cargo" value={selectedTransportRequest.cargoName} />
-              <DetailRow label="Cargo Owner" value={selectedTransportRequest.cargoOwner} />
-              <DetailRow label="Pickup Address" value={selectedTransportRequest.pickupAddress} />
-              <DetailRow label="Delivery Address" value={selectedTransportRequest.deliveryAddress} />
-              <DetailRow label="Start Time" value={selectedTransportRequest.startTime} />
-              <DetailRow label="End Time" value={selectedTransportRequest.endTime ?? '-'} />
-              <DetailRow label="Route Name" value={selectedTransportRequest.routeName ?? '-'} />
-              <DetailRow label="Status" value={selectedTransportRequest.status} />
-              <DetailRow label="Conflict" value={selectedTransportRequest.conflictReason ?? '-'} />
-              <DetailRow label="Source" value="Mobile App" />
-              <DetailRow label="Notes" value={selectedTransportRequest.notes ?? '-'} />
+              <DetailRow label={t('planning.colDriver')} value={drivers.find((item) => item.id === selectedTransportRequest.driverId)?.name ?? selectedTransportRequest.driverId} />
+              <DetailRow label={t('planning.colDate')} value={selectedTransportRequest.date} />
+              <DetailRow label={t('planning.submittedAt')} value={selectedTransportRequest.submittedAt} />
+              <DetailRow label={t('planning.colVehicle')} value={selectedTransportRequest.vehicleId} />
+              <DetailRow label={t('planning.colCompany')} value={selectedTransportRequest.companyId} />
+              <DetailRow label={t('planning.colCargo')} value={selectedTransportRequest.cargoName} />
+              <DetailRow label={t('planning.cargoOwner')} value={selectedTransportRequest.cargoOwner} />
+              <DetailRow label={t('planning.pickupAddress')} value={selectedTransportRequest.pickupAddress} />
+              <DetailRow label={t('planning.deliveryAddress')} value={selectedTransportRequest.deliveryAddress} />
+              <DetailRow label={t('planning.colStartTime')} value={selectedTransportRequest.startTime} />
+              <DetailRow label={t('planning.colEndTime')} value={selectedTransportRequest.endTime ?? '-'} />
+              <DetailRow label={t('planning.routeName')} value={selectedTransportRequest.routeName ?? '-'} />
+              <DetailRow label={t('planning.colStatus')} value={transportStatusLabel(selectedTransportRequest.status)} />
+              <DetailRow label={t('planning.colConflict')} value={selectedTransportRequest.conflictReason ?? '-'} />
+              <DetailRow label={t('planning.source')} value={t('planning.sourceMobile')} />
+              <DetailRow label={t('planning.notes')} value={selectedTransportRequest.notes ?? '-'} />
             </div>
 
             <div className="sticky bottom-0 border-t border-slate-200 bg-white px-5 py-4">
@@ -610,7 +621,7 @@ export function Tagesplanung({
                 onClick={() => setSelectedTransportRequestId(null)}
                 className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
-                Close
+                {t('planning.close')}
               </button>
             </div>
           </aside>

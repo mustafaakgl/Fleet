@@ -1,5 +1,10 @@
 export type StorageBucket = 'documents' | 'vehicles';
 
 export abstract class StorageService {
-  abstract buildPublicUrl(bucket: StorageBucket, storedFileName: string): string;
+  /** Internal storage path persisted in the database (not publicly served). */
+  abstract buildStoredPath(bucket: StorageBucket, storedFileName: string): string;
+
+  abstract buildDocumentDownloadPath(documentId: string): string;
+
+  abstract buildVehiclePhotoDownloadPath(vehicleId: string): string;
 }

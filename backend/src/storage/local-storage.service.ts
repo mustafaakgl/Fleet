@@ -17,7 +17,7 @@ export class LocalStorageService extends StorageService {
     mkdirSync(VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR, { recursive: true });
   }
 
-  buildPublicUrl(bucket: StorageBucket, storedFileName: string): string {
+  buildStoredPath(bucket: StorageBucket, storedFileName: string): string {
     if (bucket === 'documents') {
       return `/uploads/documents/${storedFileName}`;
     }
@@ -25,6 +25,14 @@ export class LocalStorageService extends StorageService {
       return `/uploads/vehicles/${storedFileName}`;
     }
     throw new Error(`Unsupported storage bucket: ${bucket}`);
+  }
+
+  buildDocumentDownloadPath(documentId: string): string {
+    return `/documents/${documentId}/download`;
+  }
+
+  buildVehiclePhotoDownloadPath(vehicleId: string): string {
+    return `/vehicles/${vehicleId}/photo`;
   }
 
   generateDocumentFileName(originalName: string): string {

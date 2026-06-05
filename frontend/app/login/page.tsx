@@ -7,30 +7,46 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2 } from 'lucide-react';
 import { AxiosError } from 'axios';
+import { useTranslation } from 'react-i18next';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { authApi } from '@/lib/api';
+import { authApi, onboardingApi } from '@/lib/api';
 import { isAuthenticated, saveAuth, MOCK_CURRENT_USER, getPostLoginPath, getUser } from '@/lib/auth';
 
 const schema = z.object({
-  email: z.string().email('Invalid email'),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().email('auth.errors.invalidEmail'),
+  password: z.string().min(1, 'auth.errors.passwordRequired'),
 });
 
 type FormData = z.infer<typeof schema>;
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated()) {
       const user = getUser();
       router.replace(getPostLoginPath(user?.role ?? 'office'));
+      return;
     }
+
+    onboardingApi
+      .status()
+      .then((status) => {
+        if (status.needs_setup) {
+          router.replace('/onboarding');
+        }
+      })
+      .catch(() => {
+        // Backend unavailable — stay on login.
+      });
   }, [router]);
 
   const {
@@ -48,7 +64,7 @@ export default function LoginPage() {
       const res = await authApi.signIn(email, data.password);
       const token = res.accessToken ?? res.access_token;
       if (!token) {
-        setError('Login response did not include access token.');
+        setError(t('auth.errors.noToken'));
         return;
       }
       saveAuth(token, {
@@ -59,15 +75,19 @@ export default function LoginPage() {
     } catch (err) {
       if (err instanceof AxiosError) {
         if (!err.response) {
-          setError('Backend sunucusuna ulasilamiyor. Lutfen backend servisini baslatin.');
+          setError(t('auth.errors.backendUnreachable'));
           return;
         }
         if (err.response.status === 401) {
-          setError('Invalid email/password. Please try again.');
+          setError(t('auth.errors.invalidCredentials'));
+          return;
+        }
+        if (err.response.status === 429) {
+          setError(t('auth.errors.tooManyAttempts'));
           return;
         }
       }
-      setError('Giris sirasinda beklenmeyen bir hata olustu. Tekrar deneyin.');
+      setError(t('auth.errors.unexpected'));
     }
   }
 
@@ -82,18 +102,18 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <MyFleetLogo height={72} href={null} priority />
-          <p className="text-gray-500 text-sm mt-4">Admin Panel</p>
+          <p className="text-gray-500 text-sm mt-4">{t('auth.adminPanel')}</p>
         </div>
 
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>Enter your credentials to access the dashboard</CardDescription>
+            <CardTitle>{t('auth.signIn')}</CardTitle>
+            <CardDescription>{t('auth.signInDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('auth.email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -102,12 +122,12 @@ export default function LoginPage() {
                   {...register('email')}
                 />
                 {errors.email && (
-                  <p className="text-xs text-red-600">{errors.email.message}</p>
+                  <p className="text-xs text-red-600">{t(errors.email.message ?? '')}</p>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">{t('auth.password')}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -116,7 +136,7 @@ export default function LoginPage() {
                   {...register('password')}
                 />
                 {errors.password && (
-                  <p className="text-xs text-red-600">{errors.password.message}</p>
+                  <p className="text-xs text-red-600">{t(errors.password.message ?? '')}</p>
                 )}
               </div>
 
@@ -130,40 +150,50 @@ export default function LoginPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Signing in...
+                    {t('auth.signingIn')}
                   </>
                 ) : (
-                  'Sign in'
+                  t('auth.signIn')
                 )}
               </Button>
             </form>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full mt-3"
-              onClick={handleDemoLogin}
-            >
-              Demo giris (backend olmadan)
-            </Button>
+            {isDev && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full mt-3"
+                  onClick={handleDemoLogin}
+                >
+                  Demo login (no backend)
+                </Button>
 
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <p className="text-xs text-gray-500 text-center mb-2">Test credentials</p>
-              <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
-                <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                  <p className="font-medium">Admin</p>
-                  <p>admin@fleet.com</p>
-                  <p className="text-gray-400">admin123</p>
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 text-center mb-2">Test credentials (dev only)</p>
+                  <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
+                    <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
+                      <p className="font-medium">Admin</p>
+                      <p>admin@fleet.com</p>
+                      <p className="text-gray-400">admin123</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
+                      <p className="font-medium">Customer (DHL)</p>
+                      <p>dhl.customer@fleet.com</p>
+                      <p className="text-gray-400">customer123</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                  <p className="font-medium">Customer (DHL)</p>
-                  <p>dhl.customer@fleet.com</p>
-                  <p className="text-gray-400">customer123</p>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
+
+        <p className="mt-4 text-center text-xs text-gray-500">
+          <a href="/datenschutz" className="text-blue-700 hover:underline">
+            {t('nav.privacy')}
+          </a>
+        </p>
       </div>
     </div>
   );

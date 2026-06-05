@@ -72,7 +72,9 @@ export function LandingFooter() {
             © {new Date().getFullYear()} MyFleet. {t('footer.rights')}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-blue-200">
-            <span>{t('footer.privacy')}</span>
+            <Link href="/datenschutz" className="transition hover:text-white">
+              {t('footer.privacy')}
+            </Link>
             <span>{t('footer.terms')}</span>
             <span>{t('footer.imprint')}</span>
             <Link href="/login" className="font-semibold text-white transition hover:text-blue-200">

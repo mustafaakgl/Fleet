@@ -1,5 +1,6 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 import { UserRole, UserStatus } from '@prisma/client';
+import { IsStrongPassword } from '../../common/validators/is-strong-password.decorator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -12,8 +13,9 @@ export class UpdateUserDto {
   email?: string;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== undefined && value !== '')
   @IsString()
-  @MinLength(6)
+  @IsStrongPassword()
   password?: string;
 
   @IsOptional()

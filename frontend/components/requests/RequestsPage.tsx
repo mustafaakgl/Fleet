@@ -3,14 +3,26 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Eye, FileText, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useFleetData } from '@/context/FleetDataContext';
 import { EmptyState } from '@/components/ui/empty-state';
 
 type RequestTab = 'Pending' | 'Approved' | 'Rejected' | 'Needs Review' | 'Cancelled';
 
+const TAB_KEY: Record<RequestTab, string> = {
+  Pending: 'pending',
+  Approved: 'approved',
+  Rejected: 'rejected',
+  'Needs Review': 'needsReview',
+  Cancelled: 'cancelled',
+};
+
 export function RequestsPage() {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const typeFilter = searchParams.get('type');
+  const statusLabel = (status: string) =>
+    status in TAB_KEY ? t(`requests.tab.${TAB_KEY[status as RequestTab]}`) : status;
   const {
     requests,
     drivers,
@@ -49,34 +61,34 @@ export function RequestsPage() {
   }
 
   function handleApprove(requestId: string) {
-    const result = approveRequest(requestId);
-    runToast(result.calendarUpdated ? 'Request approved and calendar updated.' : 'Request approved and calendar updated.');
+    approveRequest(requestId);
+    runToast(t('requests.toastApproved'));
     setSelectedRequestId(null);
   }
 
   function handleReject(requestId: string) {
     rejectRequest(requestId);
-    runToast('Request rejected.');
+    runToast(t('requests.toastRejected'));
     setSelectedRequestId(null);
   }
 
   function handleNeedsReview(requestId: string) {
     moveRequestToNeedsReview(requestId);
-    runToast('Request moved to Needs Review.');
+    runToast(t('requests.toastNeedsReview'));
     setSelectedRequestId(null);
   }
 
   function handleCancel(requestId: string) {
     cancelRequest(requestId);
-    runToast('Request cancelled and calendar entries removed.');
+    runToast(t('requests.toastCancelled'));
     setSelectedRequestId(null);
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{typeFilter ? 'Accidents' : 'Requests'}</h1>
-        <p className="mt-1 text-sm text-slate-600">Anfragen aus der Driver-App prufen und bei Freigabe in den Kalender ubernehmen.</p>
+        <h1 className="text-2xl font-bold text-slate-900">{typeFilter ? t('requests.titleAccidents') : t('requests.titleRequests')}</h1>
+        <p className="mt-1 text-sm text-slate-600">{t('requests.subtitle')}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -91,7 +103,7 @@ export function RequestsPage() {
                 : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
             }`}
           >
-            {tab}
+            {t(`requests.tab.${TAB_KEY[tab]}`)}
           </button>
         ))}
       </div>
@@ -101,9 +113,9 @@ export function RequestsPage() {
           <div className="p-4">
             <EmptyState
               icon={FileText}
-              title={typeFilter ? 'No accident requests found' : 'No requests found'}
-              subtitle="No requests match current filters."
-              actionLabel="Clear filters"
+              title={typeFilter ? t('requests.emptyTitleAccidents') : t('requests.emptyTitleRequests')}
+              subtitle={t('requests.emptySubtitle')}
+              actionLabel={t('requests.clearFilters')}
               onAction={() => setActiveTab('Pending')}
             />
           </div>
@@ -120,7 +132,7 @@ export function RequestsPage() {
                 className="mt-2 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 onClick={() => setSelectedRequestId(request.id)}
               >
-                View
+                {t('requests.view')}
               </button>
             </div>
           ))}
@@ -129,17 +141,17 @@ export function RequestsPage() {
           <table className="min-w-[1500px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">Request ID</th>
-                <th className="border-b border-slate-200 px-3 py-3">Driver</th>
-                <th className="border-b border-slate-200 px-3 py-3">Department</th>
-                <th className="border-b border-slate-200 px-3 py-3">Type</th>
-                <th className="border-b border-slate-200 px-3 py-3">Date From</th>
-                <th className="border-b border-slate-200 px-3 py-3">Date To</th>
-                <th className="border-b border-slate-200 px-3 py-3">Uploaded Document</th>
-                <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Responsible Department</th>
-                <th className="border-b border-slate-200 px-3 py-3">Submitted At</th>
-                <th className="border-b border-slate-200 px-3 py-3">Actions</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colRequestId')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDriver')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDepartment')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colType')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDateFrom')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDateTo')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colUploadedDoc')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colStatus')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colResponsibleDept')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colSubmittedAt')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -153,7 +165,7 @@ export function RequestsPage() {
                   <td className="px-3 py-2.5 text-slate-700">{request.dateTo ?? '-'}</td>
                   <td className="px-3 py-2.5 text-slate-700">{request.uploadedDocument}</td>
                   <td className="px-3 py-2.5">
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{request.status}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{statusLabel(request.status)}</span>
                   </td>
                   <td className="px-3 py-2.5 text-slate-700">{request.responsibleDepartment}</td>
                   <td className="px-3 py-2.5 text-slate-700">{request.submittedAt}</td>
@@ -165,35 +177,35 @@ export function RequestsPage() {
                         onClick={() => setSelectedRequestId(request.id)}
                       >
                         <Eye className="h-3.5 w-3.5" />
-                        View
+                        {t('requests.view')}
                       </button>
                       <button
                         type="button"
                         className="rounded border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
                         onClick={() => handleApprove(request.id)}
                       >
-                        Approve
+                        {t('requests.approve')}
                       </button>
                       <button
                         type="button"
                         className="rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
                         onClick={() => handleReject(request.id)}
                       >
-                        Reject
+                        {t('requests.reject')}
                       </button>
                       <button
                         type="button"
                         className="rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
                         onClick={() => handleNeedsReview(request.id)}
                       >
-                        Ask for more info
+                        {t('requests.askMoreInfo')}
                       </button>
                       <button
                         type="button"
                         className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                         onClick={() => handleCancel(request.id)}
                       >
-                        Cancel
+                        {t('requests.cancel')}
                       </button>
                     </div>
                   </td>
@@ -211,7 +223,7 @@ export function RequestsPage() {
           <div className="fixed inset-0 z-40 bg-slate-900/30" onClick={() => setSelectedRequestId(null)} />
           <aside className="fixed right-0 top-0 z-50 h-screen w-full max-w-lg border-l border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <h2 className="text-sm font-semibold text-slate-900">Request Detail</h2>
+              <h2 className="text-sm font-semibold text-slate-900">{t('requests.detailTitle')}</h2>
               <button
                 type="button"
                 onClick={() => setSelectedRequestId(null)}
@@ -222,16 +234,16 @@ export function RequestsPage() {
             </div>
 
             <div className="space-y-4 px-5 py-5 text-sm">
-              <DetailRow label="Request" value={selectedRequest.id} />
-              <DetailRow label="Driver" value={getDriverName(selectedRequest.driverId, selectedRequest.driverName)} />
-              <DetailRow label="Department" value={selectedRequest.department} />
-              <DetailRow label="Type" value={selectedRequest.type} />
-              <DetailRow label="Date From" value={selectedRequest.dateFrom ?? '-'} />
-              <DetailRow label="Date To" value={selectedRequest.dateTo ?? '-'} />
-              <DetailRow label="Responsible" value={selectedRequest.responsibleDepartment} />
+              <DetailRow label={t('requests.rowRequest')} value={selectedRequest.id} />
+              <DetailRow label={t('requests.colDriver')} value={getDriverName(selectedRequest.driverId, selectedRequest.driverName)} />
+              <DetailRow label={t('requests.colDepartment')} value={selectedRequest.department} />
+              <DetailRow label={t('requests.colType')} value={selectedRequest.type} />
+              <DetailRow label={t('requests.colDateFrom')} value={selectedRequest.dateFrom ?? '-'} />
+              <DetailRow label={t('requests.colDateTo')} value={selectedRequest.dateTo ?? '-'} />
+              <DetailRow label={t('requests.rowResponsible')} value={selectedRequest.responsibleDepartment} />
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Uploaded document preview</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('requests.uploadedDocPreview')}</p>
                 <div className="mt-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">
                   <FileText className="h-4 w-4" />
                   <span>{selectedRequest.uploadedDocument || '-'}</span>
@@ -239,31 +251,31 @@ export function RequestsPage() {
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Notes</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('requests.notes')}</p>
                 <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">{selectedRequest.notes}</p>
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Timeline</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('requests.timeline')}</p>
                 <ul className="mt-1 space-y-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">
-                  <li>Submitted at: {selectedRequest.submittedAt}</li>
-                  <li>Current status: {selectedRequest.status}</li>
-                  <li>Responsible: {selectedRequest.responsibleDepartment}</li>
+                  <li>{t('requests.submittedAtLabel')} {selectedRequest.submittedAt}</li>
+                  <li>{t('requests.currentStatusLabel')} {statusLabel(selectedRequest.status)}</li>
+                  <li>{t('requests.responsibleLabel')} {selectedRequest.responsibleDepartment}</li>
                 </ul>
               </div>
 
               <div className="grid grid-cols-3 gap-2 pt-1">
                 <button type="button" className="rounded border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50" onClick={() => handleApprove(selectedRequest.id)}>
-                  Approve
+                  {t('requests.approve')}
                 </button>
                 <button type="button" className="rounded border border-red-300 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50" onClick={() => handleReject(selectedRequest.id)}>
-                  Reject
+                  {t('requests.reject')}
                 </button>
                 <button type="button" className="rounded border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50" onClick={() => handleNeedsReview(selectedRequest.id)}>
-                  Ask for more info
+                  {t('requests.askMoreInfo')}
                 </button>
                 <button type="button" className="rounded border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50" onClick={() => handleCancel(selectedRequest.id)}>
-                  Cancel
+                  {t('requests.cancel')}
                 </button>
               </div>
             </div>

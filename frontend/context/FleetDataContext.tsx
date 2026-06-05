@@ -1197,7 +1197,7 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
 
         const merged = { ...item, ...updates };
         if (merged.availability !== 'Available') {
-          return {
+          const unavailable: FleetAssignment = {
             ...merged,
             vehicle: '',
             company: '',
@@ -1209,18 +1209,22 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
             status: 'Unavailable',
             expectedRevenue: 0,
           };
+          return unavailable;
         }
 
         const pickup = merged.pickupAddress?.trim();
         const delivery = merged.deliveryAddress?.trim();
         const routeJob = pickup && delivery ? `${pickup} → ${delivery}` : merged.routeJob;
+        const status: PlanningStatus =
+          merged.status === 'In Progress' ? 'In Progress' : 'Planned';
 
-        return {
+        const updated: FleetAssignment = {
           ...merged,
           routeJob,
-          status: merged.status === 'In Progress' ? 'In Progress' : 'Planned',
+          status,
           source: merged.source ?? 'manual',
         };
+        return updated;
       });
 
       const merged = next.find((item) => item.id === assignmentId);

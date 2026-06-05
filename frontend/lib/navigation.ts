@@ -5,19 +5,18 @@ import {
   Truck,
   Building2,
   FileText,
-  Radar,
   MapPinned,
   CalendarDays,
   Bell,
   MessageSquare,
-  Shield,
   ClipboardList,
   ListTodo,
-  Settings,
   Wrench,
+  Shield,
+  Upload,
+  CreditCard,
 } from 'lucide-react';
 import type { Role } from './types';
-import { canManageSettings } from './permissions';
 
 export type NavItem = {
   href: string;
@@ -44,10 +43,7 @@ const ALL_ITEMS: Record<string, NavItem> = {
   documents: { href: '/documents', labelKey: 'nav.documents', icon: FileText },
   reminders: { href: '/reminders', labelKey: 'nav.reminders', icon: Bell },
   cargoDamage: { href: '/cargo-damage', labelKey: 'nav.cargoDamage', icon: ClipboardList },
-  flottenmonitor: { href: '/flottenmonitor', labelKey: 'nav.flottenmonitor', icon: Radar },
   serviceHistory: { href: '/service-history', labelKey: 'nav.serviceHistory', icon: Wrench },
-  dsgvo: { href: '/dsgvo', labelKey: 'nav.dsgvo', icon: Shield },
-  settings: { href: '/settings', labelKey: 'nav.settings', icon: Settings },
 };
 
 function group(id: string, labelKey: string, keys: (keyof typeof ALL_ITEMS)[]): NavGroup {
@@ -66,7 +62,7 @@ const OFFICE_NAV: NavGroup[] = [
   ]),
   group('fleet', 'nav.group.fleet', ['drivers', 'vehicles', 'companies']),
   group('compliance', 'nav.group.compliance', ['documents', 'reminders', 'cargoDamage']),
-  group('more', 'nav.group.more', ['flottenmonitor', 'serviceHistory', 'dsgvo']),
+  group('more', 'nav.group.more', ['serviceHistory']),
 ];
 
 /** Default operational layout (admin, boss, accounting). */
@@ -75,7 +71,6 @@ const DEFAULT_NAV: NavGroup[] = [
     'dashboard',
     'assignments',
     'liveTracking',
-    'flottenmonitor',
   ]),
   group('master', 'nav.group.master', ['drivers', 'vehicles', 'companies', 'documents']),
   group('operations', 'nav.group.operations', [
@@ -85,20 +80,45 @@ const DEFAULT_NAV: NavGroup[] = [
     'reminders',
     'messenger',
   ]),
-  group('admin', 'nav.group.admin', ['dsgvo']),
 ];
 
-function appendSettings(groups: NavGroup[], role: Role): NavGroup[] {
-  if (!canManageSettings(role)) return groups;
-  return [
-    ...groups,
-    group('settings', 'nav.group.settings', ['settings']),
-  ];
-}
+const PRIVACY_ITEM: NavItem = {
+  href: '/privacy',
+  labelKey: 'nav.privacy',
+  icon: Shield,
+};
+
+const IMPORT_ITEM: NavItem = {
+  href: '/import',
+  labelKey: 'nav.import',
+  icon: Upload,
+};
+
+const BILLING_ITEM: NavItem = {
+  href: '/billing',
+  labelKey: 'nav.billing',
+  icon: CreditCard,
+};
 
 export function getNavigationForRole(role: Role): NavGroup[] {
-  const base = role === 'office' ? OFFICE_NAV : DEFAULT_NAV;
-  return appendSettings(base, role);
+  const groups =
+    role === 'office'
+      ? OFFICE_NAV.map((group) => ({ ...group, items: [...group.items] }))
+      : DEFAULT_NAV.map((group) => ({ ...group, items: [...group.items] }));
+
+  if (role === 'admin') {
+    const complianceGroup = groups.find((group) => group.id === 'compliance');
+    if (complianceGroup) {
+      complianceGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+    } else {
+      const operationsGroup = groups.find((group) => group.id === 'operations');
+      if (operationsGroup) {
+        operationsGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+      }
+    }
+  }
+
+  return groups;
 }
 
 export function flattenNavGroups(groups: NavGroup[]): NavItem[] {

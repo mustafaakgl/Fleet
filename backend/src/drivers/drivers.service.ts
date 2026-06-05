@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Driver, DriverStatus } from '@prisma/client';
+import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
@@ -60,7 +62,10 @@ const currentAssignmentInclude = {
 
 @Injectable()
 export class DriversService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async listDrivers(query: { status?: string; search?: string; page?: number; limit?: number }) {
     const page = Number.isFinite(query.page) ? Math.max(1, Number(query.page)) : 1;
@@ -160,7 +165,7 @@ export class DriversService {
         ownerId: d.ownerId,
         documentType: d.documentType,
         fileName: d.fileName,
-        fileUrl: d.fileUrl ?? undefined,
+        download_url: d.fileUrl ? `/documents/${d.id}/download` : undefined,
         expiryDate: d.expiryDate?.toISOString(),
         uploadedAt: d.createdAt.toISOString(),
         status: d.status,
@@ -169,7 +174,7 @@ export class DriversService {
     };
   }
 
-  async create(dto: CreateDriverDto) {
+  async create(dto: CreateDriverDto, actorUserId?: string) {
     const employeeNumber = dto.employee_number ?? `D-${Date.now()}`;
 
     const driver = await this.prisma.driver.create({
@@ -191,10 +196,18 @@ export class DriversService {
       include: currentAssignmentInclude,
     });
 
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'driver.created',
+      entityType: 'driver',
+      entityId: driver.id,
+      summary: 'Driver created',
+    });
+
     return toClientDriver(driver);
   }
 
-  async update(id: string, dto: UpdateDriverDto) {
+  async update(id: string, dto: UpdateDriverDto, actorUserId?: string) {
     await this.assertExists(id);
 
     const data: Prisma.DriverUpdateInput = {};
@@ -227,15 +240,44 @@ export class DriversService {
       include: currentAssignmentInclude,
     });
 
+    const changed = changedFieldNames(dto as Record<string, unknown>);
+    if (changed.length > 0) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'driver.updated',
+        entityType: 'driver',
+        entityId: id,
+        summary: 'Driver updated',
+        metadata: { changed_fields: changed },
+      });
+    }
+    if (dto.risk_level !== undefined) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'driver.risk_changed',
+        entityType: 'driver',
+        entityId: id,
+        summary: 'Driver risk level changed',
+        metadata: { changed_fields: ['risk_level'] },
+      });
+    }
+
     return toClientDriver(updated);
   }
 
-  async deactivate(id: string) {
+  async deactivate(id: string, actorUserId?: string) {
     await this.assertExists(id);
     const driver = await this.prisma.driver.update({
       where: { id },
       data: { status: 'inactive' },
       include: currentAssignmentInclude,
+    });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'driver.deactivated',
+      entityType: 'driver',
+      entityId: id,
+      summary: 'Driver deactivated',
     });
     return toClientDriver(driver);
   }

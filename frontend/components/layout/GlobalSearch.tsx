@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { searchApi, type SearchResult } from '@/lib/api';
 
 function escapeRegExp(value: string) {
@@ -42,15 +43,6 @@ function resultIcon(type: SearchResult['type']) {
   return <Send className="h-4 w-4 text-violet-600" />;
 }
 
-function typeLabel(type: SearchResult['type']) {
-  if (type === 'driver') return 'Driver';
-  if (type === 'vehicle') return 'Vehicle';
-  if (type === 'company') return 'Company';
-  if (type === 'document') return 'Document';
-  if (type === 'assignment') return 'Assignment';
-  return 'Transport Request';
-}
-
 function resultRoute(result: SearchResult): string | null {
   if (result.type === 'driver') return `/drivers/${result.id}`;
   if (result.type === 'vehicle') return `/vehicles/${result.id}`;
@@ -63,6 +55,8 @@ function resultRoute(result: SearchResult): string | null {
 
 export function GlobalSearch() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const typeLabel = (type: SearchResult['type']) => t(`search.type.${type}`);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -164,17 +158,17 @@ export function GlobalSearch() {
             if (query.trim().length >= 2) setOpen(true);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Search drivers, vehicles, companies, documents..."
+          placeholder={t('search.placeholder')}
           className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none ring-0 placeholder:text-gray-400 focus:border-blue-500"
-          aria-label="Global search"
+          aria-label={t('search.placeholder')}
         />
 
         {open && (
           <div className="absolute right-0 top-full z-50 mt-2 w-full rounded-xl border border-slate-200 bg-white shadow-xl">
             {loading ? (
-              <p className="px-3 py-3 text-sm text-slate-500">Searching...</p>
+              <p className="px-3 py-3 text-sm text-slate-500">{t('search.searching')}</p>
             ) : visibleResults.length === 0 ? (
-              <p className="px-3 py-3 text-sm text-slate-500">No matches.</p>
+              <p className="px-3 py-3 text-sm text-slate-500">{t('search.noMatches')}</p>
             ) : (
               <ul className="max-h-[420px] overflow-y-auto py-1">
                 {visibleResults.map((item, index) => {
@@ -213,22 +207,22 @@ export function GlobalSearch() {
           <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedDetail(null)} />
           <aside className="absolute right-0 top-0 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
             <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
-              <h3 className="text-lg font-bold text-slate-900">{typeLabel(selectedDetail.type)} Detail</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('search.detailTitle', { type: typeLabel(selectedDetail.type) })}</h3>
               <button
                 type="button"
                 onClick={() => setSelectedDetail(null)}
                 className="rounded-md p-2 text-slate-500 hover:bg-slate-100"
-                aria-label="Close drawer"
+                aria-label={t('search.openPage')}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-3 px-5 py-4 text-sm">
-              <DetailRow label="Title" value={selectedDetail.title} />
-              <DetailRow label="Details" value={selectedDetail.subtitle} />
-              <DetailRow label="Type" value={typeLabel(selectedDetail.type)} />
-              <DetailRow label="ID" value={selectedDetail.id} />
+              <DetailRow label={t('search.rowTitle')} value={selectedDetail.title} />
+              <DetailRow label={t('search.rowDetails')} value={selectedDetail.subtitle} />
+              <DetailRow label={t('search.rowType')} value={typeLabel(selectedDetail.type)} />
+              <DetailRow label={t('search.rowId')} value={selectedDetail.id} />
               <button
                 type="button"
                 onClick={() => {
@@ -240,7 +234,7 @@ export function GlobalSearch() {
                 }}
                 className="mt-4 inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
               >
-                Open page
+                {t('search.openPage')}
               </button>
             </div>
           </aside>

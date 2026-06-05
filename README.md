@@ -152,7 +152,7 @@ Implemented behavior:
 - Accepted types: PDF, JPG, JPEG, PNG, WEBP
 - Max size: 10MB
 - Disk storage in `backend/uploads/documents`
-- Static serving from `/uploads/documents/{filename}`
+- Auth-gated download via `GET /api/v1/documents/:id/download` (JWT required; no public `/uploads` serving)
 - Storage abstraction (`StorageService`) with local implementation (`LocalStorageService`)
 
 ---

@@ -4,8 +4,9 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Camera, Loader2, Truck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { cn, resolveAssetUrl } from '@/lib/utils';
+import { useAuthenticatedImageUrl, vehiclePhotoApiPath } from '@/lib/file-access';
 import { vehiclesApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 type VehiclePlateDisplayProps = {
   plate: string;
@@ -81,7 +82,13 @@ export function VehiclePlateDisplay({
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const canUpload = Boolean(vehicleId);
-  const displayUrl = resolveAssetUrl(photoUrl);
+  const photoApiPath =
+    photoUrl && photoUrl.startsWith('/vehicles/')
+      ? photoUrl
+      : vehicleId && photoUrl
+        ? vehiclePhotoApiPath(vehicleId)
+        : null;
+  const displayUrl = useAuthenticatedImageUrl(photoApiPath);
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];

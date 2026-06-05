@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { isAxiosError } from 'axios';
 import { ChevronLeft, Loader2, Pencil } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,9 +18,9 @@ import { driversApi } from '@/lib/api';
 import type { DriverStatus } from '@/lib/types';
 
 const schema = z.object({
-  first_name: z.string().min(1, 'Required'),
-  last_name: z.string().min(1, 'Required'),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  first_name: z.string().min(1, 'form.required'),
+  last_name: z.string().min(1, 'form.required'),
+  email: z.string().email('form.invalidEmail').optional().or(z.literal('')),
   phone: z.string().optional(),
   license_number: z.string().optional(),
   license_expiry_date: z.string().optional(),
@@ -41,14 +42,14 @@ function blankToUndefined<T extends Record<string, unknown>>(obj: T): Partial<T>
   return out;
 }
 
-function extractServerError(e: unknown): string {
+function extractServerError(e: unknown, fallback: string): string {
   if (isAxiosError(e)) {
     const data = e.response?.data as { message?: string | string[] } | undefined;
     if (data?.message) {
       return Array.isArray(data.message) ? data.message.join('. ') : data.message;
     }
   }
-  return 'Failed to update driver. Please try again.';
+  return fallback;
 }
 
 function toDateInputValue(iso?: string): string {
@@ -77,6 +78,7 @@ function Field({
 export default function EditDriverPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
       await driversApi.update(id, payload);
       router.push(`/drivers/${id}`);
     } catch (e) {
-      setServerError(extractServerError(e));
+      setServerError(extractServerError(e, t('form.updateDriverError')));
     }
   }
 
@@ -133,9 +135,9 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
   if (notFound) {
     return (
       <div className="py-20 text-center">
-        <p className="text-lg text-gray-500">Driver not found.</p>
+        <p className="text-lg text-gray-500">{t('form.driverNotFound')}</p>
         <Button variant="outline" className="mt-4" asChild>
-          <Link href="/drivers">Back</Link>
+          <Link href="/drivers">{t('form.back')}</Link>
         </Button>
       </div>
     );
@@ -146,47 +148,47 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
       <Button variant="ghost" size="sm" asChild>
         <Link href={`/drivers/${id}`}>
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Back
+          {t('form.back')}
         </Link>
       </Button>
 
       <div className="flex items-center gap-3">
         <Pencil className="w-6 h-6 text-blue-600" />
-        <h1 className="text-2xl font-bold text-gray-900">Edit Driver</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('form.editDriver')}</h1>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Personal Information</CardTitle>
+            <CardTitle className="text-base">{t('form.personalInfo')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="First Name *" error={errors.first_name?.message}>
+              <Field label={`${t('form.firstName')} *`} error={t(errors.first_name?.message ?? '')}>
                 <Input {...register('first_name')} />
               </Field>
-              <Field label="Last Name *" error={errors.last_name?.message}>
+              <Field label={`${t('form.lastName')} *`} error={t(errors.last_name?.message ?? '')}>
                 <Input {...register('last_name')} />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Email" error={errors.email?.message}>
+              <Field label={t('form.email')} error={t(errors.email?.message ?? '')}>
                 <Input type="email" {...register('email')} />
               </Field>
-              <Field label="Phone" error={errors.phone?.message}>
+              <Field label={t('form.phone')} error={t(errors.phone?.message ?? '')}>
                 <Input {...register('phone')} />
               </Field>
             </div>
-            <Field label="Date of birth" error={errors.date_of_birth?.message}>
+            <Field label={t('form.dateOfBirth')} error={t(errors.date_of_birth?.message ?? '')}>
               <Input type="date" {...register('date_of_birth')} />
             </Field>
-            <Field label="Status" error={errors.status?.message}>
+            <Field label={t('form.status')} error={t(errors.status?.message ?? '')}>
               <Select {...register('status')}>
-                <option value="active">Active</option>
-                <option value="on_leave">On Leave</option>
-                <option value="sick">Sick</option>
-                <option value="inactive">Inactive</option>
-                <option value="terminated">Terminated</option>
+                <option value="active">{t('form.driverStatus.active')}</option>
+                <option value="on_leave">{t('form.driverStatus.on_leave')}</option>
+                <option value="sick">{t('form.driverStatus.sick')}</option>
+                <option value="inactive">{t('form.driverStatus.inactive')}</option>
+                <option value="terminated">{t('form.driverStatus.terminated')}</option>
               </Select>
             </Field>
           </CardContent>
@@ -194,22 +196,22 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Documents</CardTitle>
+            <CardTitle className="text-base">{t('form.documents')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="License Number" error={errors.license_number?.message}>
+              <Field label={t('form.licenseNumber')} error={t(errors.license_number?.message ?? '')}>
                 <Input {...register('license_number')} />
               </Field>
-              <Field label="License Expiry Date" error={errors.license_expiry_date?.message}>
+              <Field label={t('form.licenseExpiry')} error={t(errors.license_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('license_expiry_date')} />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Passport Number" error={errors.passport_number?.message}>
+              <Field label={t('form.passportNumber')} error={t(errors.passport_number?.message ?? '')}>
                 <Input {...register('passport_number')} />
               </Field>
-              <Field label="Passport Expiry Date" error={errors.passport_expiry_date?.message}>
+              <Field label={t('form.passportExpiry')} error={t(errors.passport_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('passport_expiry_date')} />
               </Field>
             </div>
@@ -227,14 +229,14 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {t('form.saving')}
               </>
             ) : (
-              'Save Changes'
+              t('form.saveChanges')
             )}
           </Button>
           <Button variant="outline" type="button" asChild>
-            <Link href={`/drivers/${id}`}>Cancel</Link>
+            <Link href={`/drivers/${id}`}>{t('form.cancel')}</Link>
           </Button>
         </div>
       </form>

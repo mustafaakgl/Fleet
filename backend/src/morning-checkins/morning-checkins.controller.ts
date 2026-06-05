@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -48,14 +49,18 @@ export class MorningCheckinsController {
   @Post()
   @Roles(...OPERATIONAL_WRITE_ROLES)
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateMorningCheckinDto) {
-    return this.morningCheckins.create(dto);
+  create(@Body() dto: CreateMorningCheckinDto, @CurrentUser('id') actorUserId: string) {
+    return this.morningCheckins.create(dto, actorUserId);
   }
 
   @Patch(':id')
   @Roles(...OPERATIONAL_WRITE_ROLES)
-  update(@Param('id') id: string, @Body() dto: UpdateMorningCheckinDto) {
-    return this.morningCheckins.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateMorningCheckinDto,
+    @CurrentUser('id') actorUserId: string,
+  ) {
+    return this.morningCheckins.update(id, dto, actorUserId);
   }
 
   @Post(':id/add-to-einsatzplan')

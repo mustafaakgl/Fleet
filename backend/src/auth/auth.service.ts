@@ -1,10 +1,20 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { createHash, randomBytes } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuditService } from '../audit/audit.service';
+import { getFrontendUrl } from '../config/env.validation';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveCustomerCompanyContext } from './customer-company-context';
+
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 interface AuthUserPayload {
   id: string;
@@ -23,6 +33,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly auditService: AuditService,
+    private readonly mailService: MailService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -110,6 +121,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tenantId: user.tenantId,
     });
 
     await this.safeAuditLog({
@@ -135,5 +147,154 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
     return this.buildAuthUserPayload(user);
+  }
+
+  private hashResetToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  async requestPasswordReset(adminUserId: string, targetUserId: string) {
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, status: true },
+    });
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+    if (targetUser.status !== 'active') {
+      throw new BadRequestException('Cannot reset password for inactive user');
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashResetToken(rawToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+    await this.prisma.passwordResetToken.updateMany({
+      where: {
+        userId: targetUser.id,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { usedAt: new Date() },
+    });
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: targetUser.id,
+        tokenHash,
+        expiresAt,
+        createdById: adminUserId,
+      },
+    });
+
+    const resetUrl = `${getFrontendUrl()}/reset-password?token=${rawToken}`;
+
+    const mailResult = await this.mailService.sendMail({
+      to: targetUser.email,
+      subject: 'MyFleet Passwort zurücksetzen',
+      text: [
+        'Sie haben eine Anfrage zum Zurücksetzen Ihres MyFleet-Passworts erhalten.',
+        '',
+        resetUrl,
+        '',
+        `Der Link ist bis ${expiresAt.toISOString()} gültig.`,
+        '',
+        'Wenn Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail.',
+      ].join('\n'),
+    });
+
+    await this.safeAuditLog({
+      actorUserId: adminUserId,
+      action: 'auth.password_reset_requested',
+      entityType: 'user',
+      entityId: targetUser.id,
+      summary: 'Password reset link created',
+      metadata: {
+        expiresAt: expiresAt.toISOString(),
+        mail_mode: mailResult.mode,
+        mail_sent: mailResult.sent,
+      },
+    });
+
+    return {
+      reset_url: resetUrl,
+      expires_at: expiresAt.toISOString(),
+      user_email: targetUser.email,
+      mail_sent: mailResult.sent,
+      mail_mode: mailResult.mode,
+    };
+  }
+
+  async validatePasswordResetToken(token: string) {
+    const tokenHash = this.hashResetToken(token.trim());
+    const row = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        user: { select: { email: true, status: true } },
+      },
+    });
+
+    if (!row || row.user.status !== 'active') {
+      return { valid: false as const };
+    }
+
+    return {
+      valid: true as const,
+      email: row.user.email,
+      expires_at: row.expiresAt.toISOString(),
+    };
+  }
+
+  async confirmPasswordReset(token: string, password: string) {
+    const tokenHash = this.hashResetToken(token.trim());
+    const row = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        user: { select: { id: true, status: true } },
+      },
+    });
+
+    if (!row || row.user.status !== 'active') {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: row.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: row.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.passwordResetToken.updateMany({
+        where: {
+          userId: row.userId,
+          usedAt: null,
+          id: { not: row.id },
+        },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    await this.safeAuditLog({
+      actorUserId: row.userId,
+      action: 'auth.password_reset_completed',
+      entityType: 'user',
+      entityId: row.userId,
+      summary: 'Password reset completed',
+    });
+
+    return { success: true };
   }
 }

@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Prisma, User, UserRole, UserStatus } from '@prisma/client';
+import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
+import { BillingService } from '../billing/billing.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -22,7 +25,11 @@ function toClientUser(u: User) {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+    private readonly billingService: BillingService,
+  ) {}
 
   async list(query: { role?: string; status?: string; search?: string }) {
     const where: Prisma.UserWhereInput = {};
@@ -52,10 +59,14 @@ export class UsersService {
     return toClientUser(user);
   }
 
-  async create(dto: CreateUserDto) {
+  async create(dto: CreateUserDto, actorUserId?: string, tenantId?: string) {
+    if (dto.role !== 'driver') {
+      await this.billingService.assertCanAddSeat(tenantId);
+    }
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const user = await this.prisma.user.create({
       data: {
+        tenantId,
         fullName: dto.full_name,
         email: dto.email,
         passwordHash,
@@ -64,10 +75,17 @@ export class UsersService {
         language: dto.language ?? 'de',
       },
     });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'user.created',
+      entityType: 'user',
+      entityId: user.id,
+      summary: 'User created',
+    });
     return toClientUser(user);
   }
 
-  async update(id: string, dto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto, actorUserId?: string) {
     await this.assertExists(id);
     const data: Prisma.UserUpdateInput = {};
     if (dto.full_name !== undefined) data.fullName = dto.full_name;
@@ -78,14 +96,43 @@ export class UsersService {
     if (dto.language !== undefined) data.language = dto.language;
 
     const user = await this.prisma.user.update({ where: { id }, data });
+
+    const changed = changedFieldNames(dto as Record<string, unknown>).filter((f) => f !== 'password');
+    if (changed.length > 0) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'user.updated',
+        entityType: 'user',
+        entityId: id,
+        summary: 'User updated',
+        metadata: { changed_fields: changed },
+      });
+    }
+    if (dto.password !== undefined) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'user.password_changed',
+        entityType: 'user',
+        entityId: id,
+        summary: 'User password changed',
+      });
+    }
+
     return toClientUser(user);
   }
 
-  async deactivate(id: string) {
+  async deactivate(id: string, actorUserId?: string) {
     await this.assertExists(id);
     const user = await this.prisma.user.update({
       where: { id },
       data: { status: UserStatus.inactive },
+    });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'user.deactivated',
+      entityType: 'user',
+      entityId: id,
+      summary: 'User deactivated',
     });
     return toClientUser(user);
   }

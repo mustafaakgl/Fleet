@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './config/env.bootstrap';
 import 'reflect-metadata';
 import './prisma-enum-polyfill';
 import { mkdirSync } from 'node:fs';
@@ -16,7 +17,9 @@ import {
 async function bootstrap() {
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
   console.log('[boot] bootstrap started');
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
   app.setGlobalPrefix('api/v1');
 
@@ -46,14 +49,10 @@ async function bootstrap() {
 
   app.useGlobalFilters(new PrismaExceptionFilter());
 
-  const uploadsRoot = join(process.cwd(), 'uploads');
   const documentsRoot = join(process.cwd(), DOCUMENT_UPLOAD_RELATIVE_DIR);
   const vehiclePhotosRoot = join(process.cwd(), VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR);
   mkdirSync(documentsRoot, { recursive: true });
   mkdirSync(vehiclePhotosRoot, { recursive: true });
-  app.useStaticAssets(uploadsRoot, {
-    prefix: '/uploads',
-  });
 
   console.log('[boot] Nest app created');
   await app.listen(port);

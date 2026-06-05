@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { isAxiosError } from 'axios';
 import { ChevronLeft, Loader2, Pencil } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,9 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { vehiclesApi } from '@/lib/api';
 
 const schema = z.object({
-  plate_number: z.string().min(1, 'Required'),
-  brand: z.string().min(1, 'Required'),
-  model: z.string().min(1, 'Required'),
+  plate_number: z.string().min(1, 'form.required'),
+  brand: z.string().min(1, 'form.required'),
+  model: z.string().min(1, 'form.required'),
   year: z
     .union([z.string().length(0), z.coerce.number().int().min(1900).max(2100)])
     .optional(),
@@ -43,14 +44,14 @@ function blankToUndefined<T extends Record<string, unknown>>(obj: T): Partial<T>
   return out;
 }
 
-function extractServerError(e: unknown): string {
+function extractServerError(e: unknown, fallback: string): string {
   if (isAxiosError(e)) {
     const data = e.response?.data as { message?: string | string[] } | undefined;
     if (data?.message) {
       return Array.isArray(data.message) ? data.message.join('. ') : data.message;
     }
   }
-  return 'Failed to update vehicle. Please try again.';
+  return fallback;
 }
 
 function toDateInputValue(iso?: string): string {
@@ -79,6 +80,7 @@ function Field({
 export default function EditVehiclePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
       await vehiclesApi.update(id, payload as Record<string, unknown>);
       router.push(`/vehicles/${id}`);
     } catch (e) {
-      setServerError(extractServerError(e));
+      setServerError(extractServerError(e, t('form.updateVehicleError')));
     }
   }
 
@@ -136,9 +138,9 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
   if (notFound) {
     return (
       <div className="py-20 text-center">
-        <p className="text-lg text-gray-500">Vehicle not found.</p>
+        <p className="text-lg text-gray-500">{t('form.vehicleNotFound')}</p>
         <Button variant="outline" className="mt-4" asChild>
-          <Link href="/vehicles">Back</Link>
+          <Link href="/vehicles">{t('form.back')}</Link>
         </Button>
       </div>
     );
@@ -149,47 +151,47 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
       <Button variant="ghost" size="sm" asChild>
         <Link href={`/vehicles/${id}`}>
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Back
+          {t('form.back')}
         </Link>
       </Button>
 
       <div className="flex items-center gap-3">
         <Pencil className="w-6 h-6 text-purple-600" />
-        <h1 className="text-2xl font-bold text-gray-900">Edit Vehicle</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('form.editVehicle')}</h1>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Vehicle Information</CardTitle>
+            <CardTitle className="text-base">{t('form.vehicleInfo')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Plate Number *" error={errors.plate_number?.message}>
+              <Field label={`${t('form.plateNumber')} *`} error={t(errors.plate_number?.message ?? '')}>
                 <Input {...register('plate_number')} />
               </Field>
-              <Field label="VIN" error={errors.vin?.message}>
+              <Field label={t('form.vin')} error={t(errors.vin?.message ?? '')}>
                 <Input {...register('vin')} />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Brand *" error={errors.brand?.message}>
+              <Field label={`${t('form.brand')} *`} error={t(errors.brand?.message ?? '')}>
                 <Input {...register('brand')} />
               </Field>
-              <Field label="Model *" error={errors.model?.message}>
+              <Field label={`${t('form.model')} *`} error={t(errors.model?.message ?? '')}>
                 <Input {...register('model')} />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Year" error={errors.year?.message}>
+              <Field label={t('form.year')} error={t(errors.year?.message ?? '')}>
                 <Input type="number" {...register('year')} />
               </Field>
-              <Field label="Status" error={errors.status?.message}>
+              <Field label={t('form.status')} error={t(errors.status?.message ?? '')}>
                 <Select {...register('status')}>
-                  <option value="active">Active</option>
-                  <option value="maintenance">Maintenance</option>
-                  <option value="broken">Broken</option>
-                  <option value="inactive">Inactive</option>
+                  <option value="active">{t('form.vehicleStatus.active')}</option>
+                  <option value="maintenance">{t('form.vehicleStatus.maintenance')}</option>
+                  <option value="broken">{t('form.vehicleStatus.broken')}</option>
+                  <option value="inactive">{t('form.vehicleStatus.inactive')}</option>
                 </Select>
               </Field>
             </div>
@@ -198,26 +200,26 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Document Expiry</CardTitle>
+            <CardTitle className="text-base">{t('form.documentExpiry')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="TÜV Expiry" error={errors.tuv_expiry_date?.message}>
+              <Field label={t('form.tuvExpiry')} error={t(errors.tuv_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('tuv_expiry_date')} />
               </Field>
-              <Field label="SP Expiry" error={errors.sp_expiry_date?.message}>
+              <Field label={t('form.spExpiry')} error={t(errors.sp_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('sp_expiry_date')} />
               </Field>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Insurance Expiry" error={errors.insurance_expiry_date?.message}>
+              <Field label={t('form.insuranceExpiry')} error={t(errors.insurance_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('insurance_expiry_date')} />
               </Field>
-              <Field label="Registration Expiry" error={errors.registration_expiry_date?.message}>
+              <Field label={t('form.registrationExpiry')} error={t(errors.registration_expiry_date?.message ?? '')}>
                 <Input type="date" {...register('registration_expiry_date')} />
               </Field>
             </div>
-            <Field label="Notes" error={errors.notes?.message}>
+            <Field label={t('form.notes')} error={t(errors.notes?.message ?? '')}>
               <Input {...register('notes')} />
             </Field>
           </CardContent>
@@ -234,14 +236,14 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
+                {t('form.saving')}
               </>
             ) : (
-              'Save Changes'
+              t('form.saveChanges')
             )}
           </Button>
           <Button variant="outline" type="button" asChild>
-            <Link href={`/vehicles/${id}`}>Cancel</Link>
+            <Link href={`/vehicles/${id}`}>{t('form.cancel')}</Link>
           </Button>
         </div>
       </form>

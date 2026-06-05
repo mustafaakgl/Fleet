@@ -49,24 +49,33 @@ export class CompaniesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateCompanyDto, @CurrentUser('role') role?: string) {
+  create(
+    @Body() dto: CreateCompanyDto,
+    @CurrentUser('role') role?: string,
+    @CurrentUser('id') actorUserId?: string,
+  ) {
     if (!canViewFinancialFields(role) && dto.default_daily_revenue !== undefined) {
       throw new ForbiddenException('You do not have permission to set default daily revenue');
     }
-    return this.companies.create(dto).then((data) => maskFinancialFields(data, role));
+    return this.companies.create(dto, actorUserId).then((data) => maskFinancialFields(data, role));
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateCompanyDto, @CurrentUser('role') role?: string) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCompanyDto,
+    @CurrentUser('role') role?: string,
+    @CurrentUser('id') actorUserId?: string,
+  ) {
     if (!canViewFinancialFields(role) && dto.default_daily_revenue !== undefined) {
       throw new ForbiddenException('You do not have permission to update default daily revenue');
     }
-    return this.companies.update(id, dto).then((data) => maskFinancialFields(data, role));
+    return this.companies.update(id, dto, actorUserId).then((data) => maskFinancialFields(data, role));
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.companies.remove(id);
+  remove(@Param('id') id: string, @CurrentUser('id') actorUserId: string) {
+    return this.companies.remove(id, actorUserId);
   }
 
   @Get(':id/assignments')

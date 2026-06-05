@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Lock, RefreshCw, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
@@ -392,6 +393,7 @@ function isWeekend(year: number, monthIndex: number, day: number) {
 }
 
 export function Jahreskalender() {
+  const { t } = useTranslation();
   const {
     getCalendarStatusEntry,
     getAssignmentById,
@@ -478,13 +480,13 @@ export function Jahreskalender() {
   }, [selectedDriver, selectedYear]);
 
   const vacationOverviewRows = [
-    { label: 'Ubertrag Vorperiode', current: formatDays(vacationOverview.currentPeriod.carryOver), next: formatDays(vacationOverview.nextPeriod.carryOver) },
-    { label: '+ Anspruch Periode', current: formatDays(vacationOverview.currentPeriod.entitlement), next: formatDays(vacationOverview.nextPeriod.entitlement) },
-    { label: '- Verbrauch Periode', current: formatDays(vacationOverview.currentPeriod.consumed), next: formatDays(vacationOverview.nextPeriod.consumed) },
-    { label: 'Anspruch aktuell', current: formatDays(vacationOverview.currentPeriod.currentClaim), next: formatDays(vacationOverview.nextPeriod.currentClaim) },
-    { label: '- beantragt', current: formatDays(vacationOverview.currentPeriod.pending), next: formatDays(vacationOverview.nextPeriod.pending) },
-    { label: '- genehmigt', current: formatDays(vacationOverview.currentPeriod.approved), next: formatDays(vacationOverview.nextPeriod.approved) },
-    { label: 'Resturlaub', current: formatDays(vacationOverview.currentPeriod.remaining), next: formatDays(vacationOverview.nextPeriod.remaining) },
+    { label: 'jk.rowCarryOver', current: formatDays(vacationOverview.currentPeriod.carryOver), next: formatDays(vacationOverview.nextPeriod.carryOver) },
+    { label: 'jk.rowEntitlement', current: formatDays(vacationOverview.currentPeriod.entitlement), next: formatDays(vacationOverview.nextPeriod.entitlement) },
+    { label: 'jk.rowConsumption', current: formatDays(vacationOverview.currentPeriod.consumed), next: formatDays(vacationOverview.nextPeriod.consumed) },
+    { label: 'jk.rowCurrentClaim', current: formatDays(vacationOverview.currentPeriod.currentClaim), next: formatDays(vacationOverview.nextPeriod.currentClaim) },
+    { label: 'jk.rowRequested', current: formatDays(vacationOverview.currentPeriod.pending), next: formatDays(vacationOverview.nextPeriod.pending) },
+    { label: 'jk.rowApproved', current: formatDays(vacationOverview.currentPeriod.approved), next: formatDays(vacationOverview.nextPeriod.approved) },
+    { label: 'jk.rowRemaining', current: formatDays(vacationOverview.currentPeriod.remaining), next: formatDays(vacationOverview.nextPeriod.remaining) },
   ];
 
   const closeContextMenu = () => {
@@ -579,7 +581,7 @@ export function Jahreskalender() {
 
             <div className="min-w-[260px]">
               <label htmlFor="driver-select" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Fahrer
+                {t('jk.driver')}
               </label>
               <select
                 id="driver-select"
@@ -602,7 +604,7 @@ export function Jahreskalender() {
             <button
               type="button"
               className="mt-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-              aria-label="Lock selection"
+              aria-label={t('jk.lockSelection')}
             >
               <Lock className="h-4 w-4" />
             </button>
@@ -612,8 +614,8 @@ export function Jahreskalender() {
               className="mt-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleRefresh}
               disabled={isRefreshing || isHydrating}
-              aria-label="Refresh calendar data"
-              title="Kalenderdaten neu laden"
+              aria-label={t('jk.refreshAria')}
+              title={t('jk.refreshTitle')}
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing || isHydrating ? 'animate-spin' : ''}`} />
             </button>
@@ -623,22 +625,22 @@ export function Jahreskalender() {
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Urlaubsubersicht</h2>
+          <h2 className="text-sm font-semibold text-slate-900">{t('jk.vacationOverview')}</h2>
         </div>
 
         <div className="overflow-x-auto p-4">
           <table className="min-w-full border border-slate-200 text-sm">
             <thead>
               <tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="border-b border-r border-slate-200 px-4 py-3">Position</th>
-                <th className="border-b border-r border-slate-200 px-4 py-3">Current period: vom 01.01.2026 bis 31.12.2026</th>
-                <th className="border-b border-slate-200 px-4 py-3">Next period: nachste Periode ab 01.01.2027</th>
+                <th className="border-b border-r border-slate-200 px-4 py-3">{t('jk.colPosition')}</th>
+                <th className="border-b border-r border-slate-200 px-4 py-3">{t('jk.colCurrentPeriod')}</th>
+                <th className="border-b border-slate-200 px-4 py-3">{t('jk.colNextPeriod')}</th>
               </tr>
             </thead>
             <tbody>
               {vacationOverviewRows.map((row) => (
                 <tr key={row.label} className="border-t border-slate-100">
-                  <td className="border-r border-slate-200 px-4 py-3 font-medium text-slate-800">{row.label}</td>
+                  <td className="border-r border-slate-200 px-4 py-3 font-medium text-slate-800">{t(row.label)}</td>
                   <td className="border-r border-slate-200 px-4 py-3 text-slate-700">{row.current}</td>
                   <td className="px-4 py-3 text-slate-700">{row.next}</td>
                 </tr>
@@ -650,7 +652,7 @@ export function Jahreskalender() {
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <h3 className="text-sm font-semibold text-slate-900">Jahreskalender</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{t('jk.title')}</h3>
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <select
@@ -672,8 +674,8 @@ export function Jahreskalender() {
               onChange={(event) => setWorkTimeMode(event.target.value as WorkTimeMode)}
               className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
             >
-              <option value="inklusive Arbeitszeiten">inklusive Arbeitszeiten</option>
-              <option value="exklusive Arbeitszeiten">exklusive Arbeitszeiten</option>
+              <option value="inklusive Arbeitszeiten">{t('jk.workTimeInclusive')}</option>
+              <option value="exklusive Arbeitszeiten">{t('jk.workTimeExclusive')}</option>
             </select>
           </div>
         </div>
@@ -681,7 +683,7 @@ export function Jahreskalender() {
         <div className="overflow-x-auto p-4">
           <div className="min-w-[1700px]">
             <div className="grid grid-cols-[140px_repeat(31,minmax(42px,1fr))] border border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <div className="border-r border-slate-200 px-3 py-3">Monat</div>
+              <div className="border-r border-slate-200 px-3 py-3">{t('jk.month')}</div>
               {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
                 <div key={day} className="border-l border-slate-200 px-1 py-3 text-center">
                   {day}
@@ -694,7 +696,7 @@ export function Jahreskalender() {
 
               return (
                 <div key={monthLabel} className="grid grid-cols-[140px_repeat(31,minmax(42px,1fr))] border-x border-b border-slate-200 bg-white">
-                  <div className="border-r border-slate-200 px-3 py-3 text-sm font-medium text-slate-800">{monthLabel}</div>
+                  <div className="border-r border-slate-200 px-3 py-3 text-sm font-medium text-slate-800">{t(`jk.months.${monthIndex}`)}</div>
 
                   {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => {
                     if (day > maxDays) {
@@ -782,13 +784,13 @@ export function Jahreskalender() {
 
         <div className="border-t border-slate-200 px-4 py-3">
           <div className="flex flex-wrap gap-4 text-xs text-slate-600">
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-pink-400" />FT = Feiertag</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-500" />UT = Urlaubstag</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-red-500" />KT = Krankheitstag</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-blue-500" />AT = Arbeitstag</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-amber-500" />UT (pending) = beantragter Urlaub</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-700" />UT (approved) = genehmigter Urlaub</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm border border-slate-200 bg-white" />Empty = Kein Eintrag</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-pink-400" />{t('jk.legendFT')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-500" />{t('jk.legendUT')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-red-500" />{t('jk.legendKT')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-blue-500" />{t('jk.legendAT')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-amber-500" />{t('jk.legendPending')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-700" />{t('jk.legendApproved')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm border border-slate-200 bg-white" />{t('jk.legendEmpty')}</div>
           </div>
         </div>
       </div>
@@ -798,12 +800,12 @@ export function Jahreskalender() {
           <div className="fixed inset-0 z-40 bg-slate-900/25" onClick={() => setSelectedDay(null)} />
           <aside className="fixed right-0 top-0 z-50 h-screen w-full max-w-sm border-l border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <h4 className="text-sm font-semibold text-slate-900">Kalenderdetails</h4>
+              <h4 className="text-sm font-semibold text-slate-900">{t('jk.details')}</h4>
               <button
                 type="button"
                 onClick={() => setSelectedDay(null)}
                 className="rounded-md border border-slate-300 p-2 text-slate-500 hover:bg-slate-50"
-                aria-label="Close details"
+                aria-label={t('jk.closeDetails')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -811,60 +813,60 @@ export function Jahreskalender() {
 
             <div className="space-y-4 px-5 py-5 text-sm">
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Driver name</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.driverName')}</p>
                 <p className="mt-1 font-medium text-slate-900">{selectedDriver.name}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Date</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.date')}</p>
                 <p className="mt-1 font-medium text-slate-900">{`${selectedDay.day}.${String(selectedDay.monthIndex + 1).padStart(2, '0')}.${selectedDay.year}`}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Month</p>
-                <p className="mt-1 font-medium text-slate-900">{monthLabels[selectedDay.monthIndex]}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.monthLabel')}</p>
+                <p className="mt-1 font-medium text-slate-900">{t(`jk.months.${selectedDay.monthIndex}`)}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Day number</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.dayNumber')}</p>
                 <p className="mt-1 font-medium text-slate-900">{selectedDay.day}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Status abbreviation</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.statusAbbr')}</p>
                 <p className="mt-1 font-medium text-slate-900">{getStatusLabel(selectedDay.entry.status) || '-'}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Full status name</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.fullStatusName')}</p>
                 <p className="mt-1 font-medium text-slate-900">
-                  {selectedDay.entry.status ? statusNames[selectedDay.entry.status as Exclude<CalendarStatus, ''>] : 'Kein Eintrag'}
+                  {selectedDay.entry.status ? statusNames[selectedDay.entry.status as Exclude<CalendarStatus, ''>] : t('jk.noEntry')}
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Notes</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.notes')}</p>
                 <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">{selectedDay.entry.notes}</p>
               </div>
 
               {selectedAssignment && (
                 <>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Assignment source</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.assignmentSource')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.source}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Vehicle</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.vehicle')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.vehicle || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Company</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.company')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.company || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Cargo</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.cargo')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.cargoName || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Pickup</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.pickup')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.pickupAddress || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Delivery</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.delivery')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.deliveryAddress || '-'}</p>
                   </div>
                 </>

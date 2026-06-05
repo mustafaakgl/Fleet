@@ -21,6 +21,16 @@ function formatApiError(error: unknown, fallback: string) {
   return fallback;
 }
 
+const CHECKIN_STATUS_KEY: Record<string, string> = {
+  Confirmed: 'checkins.status.confirmed',
+  'Added to Einsatzplan': 'checkins.status.added',
+  'Waiting for Review': 'checkins.status.waiting',
+  'Missing Vehicle Plate': 'checkins.status.missingVehicle',
+  'Missing Company': 'checkins.status.missingCompany',
+  Conflict: 'checkins.status.conflict',
+  Rejected: 'checkins.status.rejected',
+};
+
 function statusPill(status: MorningCheckin['status']) {
   switch (status) {
     case 'Confirmed':
@@ -133,13 +143,13 @@ export function MorningCheckins() {
 
   function handleReject(checkinId: string) {
     rejectMorningCheckin(checkinId);
-    showToast('Check-in rejected.');
+    showToast(t('checkins.toastRejected'));
   }
 
   async function handleAdd(checkinId: string) {
     const checkin = todaysCheckins.find((item) => item.id === checkinId);
     if (!checkin) {
-      showToast('Check-in not found.');
+      showToast(t('checkins.notFound'));
       return;
     }
     if (checkin.status === 'Added to Einsatzplan') {
@@ -147,7 +157,7 @@ export function MorningCheckins() {
     }
     const validation = validateMorningCheckin(checkin);
     if (validation.status !== 'Confirmed') {
-      showToast(validation.conflictReason ?? 'Check-in needs review before adding.');
+      showToast(validation.conflictReason ?? t('checkins.needsReview'));
       return;
     }
     try {
@@ -156,7 +166,7 @@ export function MorningCheckins() {
       showToast(`${t('office.checkin.addedToast')} ${t('office.checkin.trackingHint')}`);
     } catch (error) {
       await refetchHydrate();
-      showToast(formatApiError(error, 'Failed to add check-in to Einsatzplan.'));
+      showToast(formatApiError(error, t('checkins.addError')));
     }
   }
 
@@ -167,7 +177,7 @@ export function MorningCheckins() {
       company: editCompany.trim() || undefined,
     });
     setEditMode(false);
-    showToast('Check-in updated.');
+    showToast(t('checkins.toastUpdated'));
   }
 
   const summary = {
@@ -183,11 +193,11 @@ export function MorningCheckins() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Morning Check-ins</h2>
-          <p className="text-sm text-slate-600">Live admin intake for driver morning starts from the mobile app.</p>
+          <h2 className="text-xl font-bold text-slate-900">{t('checkins.title')}</h2>
+          <p className="text-sm text-slate-600">{t('checkins.subtitle')}</p>
         </div>
         <label className="inline-flex items-center gap-3 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700">
-          <span>Auto-add valid check-ins to Einsatzplan</span>
+          <span>{t('checkins.autoAdd')}</span>
           <button
             type="button"
             onClick={() => setAutoAddEnabled((prev) => !prev)}
@@ -206,12 +216,12 @@ export function MorningCheckins() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <SummaryCard label="Total Check-ins Today" value={summary.total} tone="text-slate-900" />
-        <SummaryCard label="Confirmed" value={summary.confirmed} tone="text-emerald-700" />
-        <SummaryCard label="Waiting for Review" value={summary.waiting} tone="text-amber-700" />
-        <SummaryCard label="Missing Vehicle Plate" value={summary.missingVehicle} tone="text-orange-700" />
-        <SummaryCard label="Missing Company" value={summary.missingCompany} tone="text-orange-700" />
-        <SummaryCard label="Added to Einsatzplan" value={summary.added} tone="text-blue-700" />
+        <SummaryCard label={t('checkins.total')} value={summary.total} tone="text-slate-900" />
+        <SummaryCard label={t('checkins.confirmed')} value={summary.confirmed} tone="text-emerald-700" />
+        <SummaryCard label={t('checkins.waiting')} value={summary.waiting} tone="text-amber-700" />
+        <SummaryCard label={t('checkins.missingVehicle')} value={summary.missingVehicle} tone="text-orange-700" />
+        <SummaryCard label={t('checkins.missingCompany')} value={summary.missingCompany} tone="text-orange-700" />
+        <SummaryCard label={t('checkins.added')} value={summary.added} tone="text-blue-700" />
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -219,17 +229,17 @@ export function MorningCheckins() {
           <table className="min-w-[1280px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">Driver</th>
-                <th className="border-b border-slate-200 px-3 py-3">Department</th>
-                <th className="border-b border-slate-200 px-3 py-3">Submitted At</th>
-                <th className="border-b border-slate-200 px-3 py-3">Vehicle Plate</th>
-                <th className="border-b border-slate-200 px-3 py-3">Company</th>
-                <th className="border-b border-slate-200 px-3 py-3">Cargo</th>
-                <th className="border-b border-slate-200 px-3 py-3">Quantity</th>
-                <th className="border-b border-slate-200 px-3 py-3">Start Location</th>
-                <th className="border-b border-slate-200 px-3 py-3">Status</th>
-                <th className="border-b border-slate-200 px-3 py-3">Conflict</th>
-                <th className="border-b border-slate-200 px-3 py-3">Actions</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colDriver')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colDepartment')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colSubmittedAt')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colVehiclePlate')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colCompany')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colCargo')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colQuantity')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colStartLocation')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colStatus')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colConflict')}</th>
+                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -247,10 +257,10 @@ export function MorningCheckins() {
                     <td className="px-3 py-2.5 text-slate-700">{checkin.startLocation || '-'}</td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusPill(checkin.status)}`}>
-                        {checkin.status}
+                        {t(CHECKIN_STATUS_KEY[checkin.status] ?? checkin.status)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.conflictReason ?? 'No conflict'}</td>
+                    <td className="px-3 py-2.5 text-slate-700">{checkin.conflictReason ?? t('checkins.noConflict')}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -258,28 +268,28 @@ export function MorningCheckins() {
                           onClick={() => handleView(checkin)}
                           className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
-                          View
+                          {t('checkins.view')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleAdd(checkin.id)}
                           className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
                         >
-                          Add to Einsatzplan
+                          {t('checkins.addToPlan')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleEdit(checkin)}
                           className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                         >
-                          Edit
+                          {t('checkins.edit')}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleReject(checkin.id)}
                           className="rounded-md border border-rose-300 px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50"
                         >
-                          Reject
+                          {t('checkins.reject')}
                         </button>
                         {checkin.status === 'Added to Einsatzplan' || checkin.assignmentId ? (
                           <Link
@@ -305,7 +315,7 @@ export function MorningCheckins() {
           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setDrawerOpen(false)} />
           <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
             <div className="sticky top-0 border-b border-slate-200 bg-white px-5 py-4">
-              <h3 className="text-lg font-bold text-slate-900">Morning Check-in Details</h3>
+              <h3 className="text-lg font-bold text-slate-900">{t('checkins.detailTitle')}</h3>
             </div>
 
             <div className="space-y-4 px-5 py-4 text-sm">
@@ -317,11 +327,11 @@ export function MorningCheckins() {
 
                 return (
                   <>
-                    <DetailRow label="Driver" value={driver?.name ?? selectedCheckin.driverId} />
-                    <DetailRow label="Department" value={driver?.department ?? '-'} />
-                    <DetailRow label="Accidents" value={formatAccidentCountLabel(driver?.accidentCount ?? 0)} />
+                    <DetailRow label={t('checkins.colDriver')} value={driver?.name ?? selectedCheckin.driverId} />
+                    <DetailRow label={t('checkins.colDepartment')} value={driver?.department ?? '-'} />
+                    <DetailRow label={t('abt.accidents')} value={formatAccidentCountLabel(driver?.accidentCount ?? 0)} />
                     <div className="grid grid-cols-1 gap-1 border-b border-slate-100 pb-2 sm:grid-cols-[180px_1fr]">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Risk</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('checkins.risk')}</p>
                       <div>
                         <span
                           className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getDriverRiskBadgeClass(
@@ -332,12 +342,12 @@ export function MorningCheckins() {
                         </span>
                       </div>
                     </div>
-                    <DetailRow label="Submitted At" value={selectedCheckin.submittedAt} />
+                    <DetailRow label={t('checkins.colSubmittedAt')} value={selectedCheckin.submittedAt} />
 
                     {editMode ? (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <label className="space-y-1">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Vehicle Plate</span>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('checkins.colVehiclePlate')}</span>
                           <input
                             value={editVehiclePlate}
                             onChange={(event) => setEditVehiclePlate(event.target.value)}
@@ -345,7 +355,7 @@ export function MorningCheckins() {
                           />
                         </label>
                         <label className="space-y-1">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Company</span>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('checkins.colCompany')}</span>
                           <input
                             value={editCompany}
                             onChange={(event) => setEditCompany(event.target.value)}
@@ -355,27 +365,27 @@ export function MorningCheckins() {
                       </div>
                     ) : (
                       <>
-                        <DetailRow label="Vehicle Plate" value={selectedCheckin.vehiclePlate || '-'} />
-                        <DetailRow label="Company" value={selectedCheckin.company || '-'} />
-                        <DetailRow label="Cargo" value={selectedCheckin.cargoName || '-'} />
-                        <DetailRow label="Quantity" value={selectedCheckin.cargoQuantity || '-'} />
+                        <DetailRow label={t('checkins.colVehiclePlate')} value={selectedCheckin.vehiclePlate || '-'} />
+                        <DetailRow label={t('checkins.colCompany')} value={selectedCheckin.company || '-'} />
+                        <DetailRow label={t('checkins.colCargo')} value={selectedCheckin.cargoName || '-'} />
+                        <DetailRow label={t('checkins.colQuantity')} value={selectedCheckin.cargoQuantity || '-'} />
                       </>
                     )}
 
-                    <DetailRow label="Start Location" value={selectedCheckin.startLocation || '-'} />
+                    <DetailRow label={t('checkins.colStartLocation')} value={selectedCheckin.startLocation || '-'} />
                     <DetailRow
-                      label="GPS Coordinates"
+                      label={t('checkins.gpsCoordinates')}
                       value={selectedCheckin.gps ? `${selectedCheckin.gps.lat}, ${selectedCheckin.gps.lng}` : '-'}
                     />
-                    <DetailRow label="Phone" value={selectedCheckin.phone || '-'} />
-                    <DetailRow label="Calendar Status Today" value={selectedCheckin.conflictReason?.includes('Urlaub') ? 'Urlaub (UT)' : selectedCheckin.conflictReason?.includes('Krank') ? 'Krank (KT)' : 'Available'} />
+                    <DetailRow label={t('checkins.phone')} value={selectedCheckin.phone || '-'} />
+                    <DetailRow label={t('checkins.calendarStatusToday')} value={selectedCheckin.conflictReason?.includes('Urlaub') ? 'Urlaub (UT)' : selectedCheckin.conflictReason?.includes('Krank') ? 'Krank (KT)' : t('checkins.available')} />
                     <DetailRow
-                      label="Existing Assignment"
-                      value={assignment ? `${assignment.vehicle} / ${assignment.company}` : 'None'}
+                      label={t('checkins.existingAssignment')}
+                      value={assignment ? `${assignment.vehicle} / ${assignment.company}` : t('checkins.none')}
                     />
-                    <DetailRow label="Conflict" value={selectedCheckin.conflictReason || 'No conflict'} />
-                    <DetailRow label="Source" value="Mobile App" />
-                    <DetailRow label="Notes" value={selectedCheckin.notes || '-'} />
+                    <DetailRow label={t('checkins.colConflict')} value={selectedCheckin.conflictReason || t('checkins.noConflict')} />
+                    <DetailRow label={t('checkins.source')} value={t('checkins.sourceMobile')} />
+                    <DetailRow label={t('checkins.notes')} value={selectedCheckin.notes || '-'} />
                   </>
                 );
               })()}
@@ -389,7 +399,7 @@ export function MorningCheckins() {
                 }}
                 className="rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
               >
-                Add to Einsatzplan
+                {t('checkins.addToPlan')}
               </button>
               {selectedCheckin &&
               (selectedCheckin.status === 'Added to Einsatzplan' || selectedCheckin.assignmentId) ? (
@@ -407,7 +417,7 @@ export function MorningCheckins() {
                   onClick={handleSaveEdit}
                   className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
                 >
-                  Save
+                  {t('checkins.save')}
                 </button>
               ) : (
                 <button
@@ -419,7 +429,7 @@ export function MorningCheckins() {
                   }}
                   className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
                 >
-                  Edit
+                  {t('checkins.edit')}
                 </button>
               )}
               <button
@@ -427,14 +437,14 @@ export function MorningCheckins() {
                 onClick={() => selectedCheckin && handleReject(selectedCheckin.id)}
                 className="rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
               >
-                Reject
+                {t('checkins.reject')}
               </button>
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
                 className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
-                Close
+                {t('checkins.close')}
               </button>
             </div>
           </aside>

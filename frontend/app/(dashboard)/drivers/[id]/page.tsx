@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { driversApi, documentsApi, leaveRequestsApi, type DriverRiskSummary } from '@/lib/api';
+import { driversApi, documentsApi, leaveRequestsApi, privacyApi, type DriverRiskSummary } from '@/lib/api';
+import { downloadBlob } from '@/lib/download-blob';
 import type { DriverDetail, Document, LeaveRequest } from '@/lib/types';
 import { getUser } from '@/lib/auth';
 import { canViewFinancials } from '@/lib/permissions';
@@ -65,6 +66,9 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [anonymizing, setAnonymizing] = useState(false);
 
   const [risk, setRisk] = useState<DriverRiskSummary | null>(null);
   const [riskError, setRiskError] = useState<string | null>(null);
@@ -84,6 +88,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     const user = getUser();
     setShowFinancials(user ? canViewFinancials(user.role) : false);
+    setIsAdmin(user?.role === 'admin');
   }, []);
 
   useEffect(() => {
@@ -115,11 +120,45 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       .catch((e) => setLeaveRequestsError(e?.message ?? 'Failed'));
   }, [id]);
 
+  async function handleGdprExport() {
+    if (!driver) return;
+    setExporting(true);
+    try {
+      const blob = await privacyApi.exportDriver(id);
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(blob, `driver-export-${id}-${stamp}.zip`);
+    } catch {
+      window.alert(t('driverDetail.gdprExportError'));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleGdprAnonymize() {
+    if (!driver) return;
+    const name = fullName(driver.first_name, driver.last_name);
+    if (!window.confirm(t('driverDetail.gdprAnonymizeConfirm', { name }))) return;
+    const reason = window.prompt(t('driverDetail.gdprReasonPrompt'));
+    if (!reason || reason.trim().length < 3) return;
+
+    setAnonymizing(true);
+    try {
+      await privacyApi.anonymizeDriver(id, reason.trim());
+      window.alert(t('driverDetail.gdprAnonymizeDone'));
+      const fresh = await driversApi.getById(id);
+      setDriver(fresh);
+    } catch {
+      window.alert(t('driverDetail.gdprAnonymizeError'));
+    } finally {
+      setAnonymizing(false);
+    }
+  }
+
   async function handleDeactivate() {
     if (!driver || driver.status === 'inactive') return;
     if (
       !window.confirm(
-        `Deactivate ${driver.first_name} ${driver.last_name}? They can be reactivated later.`,
+        t('driverDetail.confirmDeactivate', { name: `${driver.first_name} ${driver.last_name}` }),
       )
     ) {
       return;
@@ -130,7 +169,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       const fresh = await driversApi.getById(id);
       setDriver(fresh);
     } catch {
-      window.alert('Failed to deactivate driver.');
+      window.alert(t('driverDetail.deactivateError'));
     } finally {
       setDeactivating(false);
     }
@@ -200,7 +239,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   if (notFound || !driver) {
     return (
       <div className="py-20 text-center">
-        <p className="text-lg text-gray-500">Driver not found.</p>
+        <p className="text-lg text-gray-500">{t('form.driverNotFound')}</p>
         <Button variant="outline" className="mt-4" asChild>
           <Link href="/drivers">{t('common.back')}</Link>
         </Button>
@@ -240,15 +279,15 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
             </div>
 
             <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-sm md:grid-cols-3">
-              <HeaderItem label="Current vehicle" value={currentVehicle} />
-              <HeaderItem label="Current company" value={currentCompany} />
-              <HeaderItem label="Current status" value={driver.status.replace('_', ' ')} />
+              <HeaderItem label={t('driverDetail.hdrCurrentVehicle')} value={currentVehicle} />
+              <HeaderItem label={t('driverDetail.hdrCurrentCompany')} value={currentCompany} />
+              <HeaderItem label={t('driverDetail.hdrCurrentStatus')} value={driver.status.replace('_', ' ')} />
               <HeaderItem
-                label="Accidents"
+                label={t('driverDetail.hdrAccidents')}
                 value={formatAccidentCountLabel(driver.accident_count ?? 0)}
               />
               <HeaderItem
-                label="Risk score"
+                label={t('driverDetail.hdrRiskScore')}
                 value={
                   risk
                     ? `${risk.computed_risk_level} (${risk.points})`
@@ -266,7 +305,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
               >
                 <span className="inline-flex items-center">
                   <Pencil className="mr-1 h-4 w-4" />
-                  Edit
+                  {t('driverDetail.edit')}
                 </span>
               </Button>
               {driver.status !== 'inactive' && (
@@ -280,7 +319,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                 >
                   <span className="inline-flex items-center">
                     <Power className="mr-1 h-4 w-4" />
-                    {deactivating ? 'Deactivating...' : 'Deactivate'}
+                    {deactivating ? t('driverDetail.deactivating') : t('driverDetail.deactivate')}
                   </span>
                 </Button>
               )}
@@ -291,13 +330,13 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Risk overview</CardTitle>
+          <CardTitle>{t('driverDetail.riskOverview')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {riskError ? (
-            <p className="text-sm text-gray-500">Risk data could not be loaded.</p>
+            <p className="text-sm text-gray-500">{t('driverDetail.riskLoadError')}</p>
           ) : !risk ? (
-            <p className="text-sm text-gray-500">Loading...</p>
+            <p className="text-sm text-gray-500">{t('driverDetail.loading')}</p>
           ) : (
             <>
               <div className="flex items-center gap-3">
@@ -305,23 +344,23 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                   {risk.computed_risk_level.toUpperCase()}
                 </Badge>
                 <span className="text-sm text-gray-600">
-                  Points: <span className="font-semibold">{risk.points}</span>
+                  {t('driverDetail.points')} <span className="font-semibold">{risk.points}</span>
                 </span>
                 <span className="text-xs text-gray-500">
-                  (stored: {risk.stored_risk_level})
+                  {t('driverDetail.stored', { level: risk.stored_risk_level })}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
                 <HeaderItem
-                  label="Vehicle accidents (6m)"
+                  label={t('driverDetail.vehicleAccidents6m')}
                   value={String(risk.breakdown.vehicle_accidents_6m)}
                 />
                 <HeaderItem
-                  label="Cargo damages (6m)"
+                  label={t('driverDetail.cargoDamages6m')}
                   value={String(risk.breakdown.cargo_damages_6m)}
                 />
                 <HeaderItem
-                  label="Open incidents"
+                  label={t('driverDetail.openIncidents')}
                   value={String(risk.breakdown.open_incidents)}
                 />
               </div>
@@ -332,37 +371,37 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Personal information</CardTitle>
+          <CardTitle>{t('driverDetail.personalInfo')}</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <InfoItem label="First name" value={driver.first_name} />
-            <InfoItem label="Last name" value={driver.last_name} />
-            <InfoItem label="Phone" value={driver.phone ?? '-'} />
-            <InfoItem label="Email" value={driver.email ?? '-'} />
-            <InfoItem label="Date of birth" value={formatDate(driver.date_of_birth)} />
-            <InfoItem label="License number" value={driver.license_number ?? '-'} />
-            <InfoItem label="License expiry" value={formatDate(driver.license_expiry_date)} />
-            <InfoItem label="Passport number" value={driver.passport_number ?? '-'} />
-            <InfoItem label="Passport expiry" value={formatDate(driver.passport_expiry_date)} />
+            <InfoItem label={t('driverDetail.firstName')} value={driver.first_name} />
+            <InfoItem label={t('driverDetail.lastName')} value={driver.last_name} />
+            <InfoItem label={t('driverDetail.phone')} value={driver.phone ?? '-'} />
+            <InfoItem label={t('driverDetail.email')} value={driver.email ?? '-'} />
+            <InfoItem label={t('driverDetail.dateOfBirth')} value={formatDate(driver.date_of_birth)} />
+            <InfoItem label={t('driverDetail.licenseNumber')} value={driver.license_number ?? '-'} />
+            <InfoItem label={t('driverDetail.licenseExpiry')} value={formatDate(driver.license_expiry_date)} />
+            <InfoItem label={t('driverDetail.passportNumber')} value={driver.passport_number ?? '-'} />
+            <InfoItem label={t('driverDetail.passportExpiry')} value={formatDate(driver.passport_expiry_date)} />
           </dl>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Current assignment</CardTitle>
+          <CardTitle>{t('driverDetail.currentAssignment')}</CardTitle>
         </CardHeader>
         <CardContent>
           {currentAssignment ? (
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <InfoItem label="Date" value={formatDate(currentAssignment.work_date)} />
-              <InfoItem label="Vehicle" value={currentAssignment.vehicle.plate_number} />
-              <InfoItem label="Company" value={currentAssignment.company_name} />
-              <InfoItem label="Notes" value={currentAssignment.notes || '—'} />
-              <InfoItem label="Start time" value={currentAssignment.start_time} />
-              <InfoItem label="End time" value={currentAssignment.end_time} />
-              <InfoItem label="Status" value={currentAssignment.status} />
+              <InfoItem label={t('driverDetail.date')} value={formatDate(currentAssignment.work_date)} />
+              <InfoItem label={t('driverDetail.vehicle')} value={currentAssignment.vehicle.plate_number} />
+              <InfoItem label={t('driverDetail.company')} value={currentAssignment.company_name} />
+              <InfoItem label={t('driverDetail.notes')} value={currentAssignment.notes || '—'} />
+              <InfoItem label={t('driverDetail.startTime')} value={currentAssignment.start_time} />
+              <InfoItem label={t('driverDetail.endTime')} value={currentAssignment.end_time} />
+              <InfoItem label={t('driverDetail.status')} value={currentAssignment.status} />
             </dl>
           ) : (
             <p className="text-sm text-gray-500">{t('common.noRecords')}</p>
@@ -372,20 +411,20 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Documents</CardTitle>
+          <CardTitle>{t('driverDetail.documents')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {documentsError ? (
-            <p className="p-4 text-sm text-gray-500">Documents could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('driverDetail.documentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Document type</TableHead>
-                  <TableHead>File name</TableHead>
-                  <TableHead>Expiry date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Uploaded at</TableHead>
+                  <TableHead>{t('driverDetail.colDocType')}</TableHead>
+                  <TableHead>{t('driverDetail.colFileName')}</TableHead>
+                  <TableHead>{t('driverDetail.colExpiryDate')}</TableHead>
+                  <TableHead>{t('driverDetail.status')}</TableHead>
+                  <TableHead>{t('driverDetail.colUploadedAt')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -428,19 +467,19 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Assignment history</CardTitle>
+          <CardTitle>{t('driverDetail.assignmentHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead>Start time</TableHead>
-                <TableHead>End time</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t('driverDetail.date')}</TableHead>
+                <TableHead>{t('driverDetail.vehicle')}</TableHead>
+                <TableHead>{t('driverDetail.company')}</TableHead>
+                <TableHead>{t('driverDetail.notes')}</TableHead>
+                <TableHead>{t('driverDetail.startTime')}</TableHead>
+                <TableHead>{t('driverDetail.endTime')}</TableHead>
+                <TableHead>{t('driverDetail.status')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -472,17 +511,17 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Vehicle history</CardTitle>
+          <CardTitle>{t('driverDetail.vehicleHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>First used</TableHead>
-                <TableHead>Last used</TableHead>
-                <TableHead>Total assignments</TableHead>
-                <TableHead>Handover photo status</TableHead>
+                <TableHead>{t('driverDetail.vehicle')}</TableHead>
+                <TableHead>{t('driverDetail.colFirstUsed')}</TableHead>
+                <TableHead>{t('driverDetail.colLastUsed')}</TableHead>
+                <TableHead>{t('driverDetail.colTotalAssignments')}</TableHead>
+                <TableHead>{t('driverDetail.colHandoverPhotoStatus')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -510,22 +549,22 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Handover history</CardTitle>
+          <CardTitle>{t('driverDetail.handoverHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {handoversError ? (
-            <p className="p-4 text-sm text-gray-500">Handovers could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('driverDetail.handoversLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Photo required</TableHead>
-                  <TableHead>Photo status</TableHead>
-                  <TableHead>Damage detected</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('driverDetail.date')}</TableHead>
+                  <TableHead>{t('driverDetail.vehicle')}</TableHead>
+                  <TableHead>{t('driverDetail.colType')}</TableHead>
+                  <TableHead>{t('driverDetail.colPhotoRequired')}</TableHead>
+                  <TableHead>{t('driverDetail.colPhotoStatus')}</TableHead>
+                  <TableHead>{t('driverDetail.colDamageDetected')}</TableHead>
+                  <TableHead>{t('driverDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -541,9 +580,9 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                       <TableCell>{formatDate(h.handoverDateTime)}</TableCell>
                       <TableCell>{h.vehicle?.plateNumber ?? '-'}</TableCell>
                       <TableCell>{h.handoverType}</TableCell>
-                      <TableCell>{h.photoRequired ? 'Required' : 'Not required'}</TableCell>
+                      <TableCell>{h.photoRequired ? t('driverDetail.required') : t('driverDetail.notRequired')}</TableCell>
                       <TableCell>{h.photoStatus.replace(/_/g, ' ')}</TableCell>
-                      <TableCell>{h.damageDetected ? 'Yes' : 'No'}</TableCell>
+                      <TableCell>{h.damageDetected ? t('driverDetail.yes') : t('driverDetail.no')}</TableCell>
                       <TableCell>{h.status}</TableCell>
                     </TableRow>
                   ))
@@ -556,21 +595,21 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Leave request history</CardTitle>
+          <CardTitle>{t('driverDetail.leaveHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {leaveRequestsError ? (
-            <p className="p-4 text-sm text-gray-500">Leave requests could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('driverDetail.leaveLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Date from</TableHead>
-                  <TableHead>Date to</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Reason</TableHead>
+                  <TableHead>{t('driverDetail.colType')}</TableHead>
+                  <TableHead>{t('driverDetail.colDateFrom')}</TableHead>
+                  <TableHead>{t('driverDetail.colDateTo')}</TableHead>
+                  <TableHead>{t('driverDetail.colDuration')}</TableHead>
+                  <TableHead>{t('driverDetail.status')}</TableHead>
+                  <TableHead>{t('driverDetail.colReason')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -591,7 +630,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                         <TableCell>{item.type}</TableCell>
                         <TableCell>{formatDate(item.startDate)}</TableCell>
                         <TableCell>{formatDate(item.endDate)}</TableCell>
-                        <TableCell>{duration} day(s)</TableCell>
+                        <TableCell>{t('driverDetail.durationDays', { count: duration })}</TableCell>
                         <TableCell>
                           <Badge className={statusColor(item.status)}>{item.status}</Badge>
                         </TableCell>
@@ -608,20 +647,20 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Accident history</CardTitle>
+          <CardTitle>{t('driverDetail.accidentHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {incidentsError ? (
-            <p className="p-4 text-sm text-gray-500">Incidents could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('driverDetail.incidentsLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Description</TableHead>
-                  {showFinancials && <TableHead>Damage value</TableHead>}
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('driverDetail.date')}</TableHead>
+                  <TableHead>{t('driverDetail.vehicle')}</TableHead>
+                  <TableHead>{t('driverDetail.colDescription')}</TableHead>
+                  {showFinancials && <TableHead>{t('driverDetail.colDamageValue')}</TableHead>}
+                  <TableHead>{t('driverDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -666,22 +705,22 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
       <Card>
         <CardHeader>
-          <CardTitle>Cargo damage history</CardTitle>
+          <CardTitle>{t('driverDetail.cargoHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {incidentsError ? (
-            <p className="p-4 text-sm text-gray-500">Cargo damages could not be loaded.</p>
+            <p className="p-4 text-sm text-gray-500">{t('driverDetail.cargoLoadError')}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Cargo name</TableHead>
-                  <TableHead>Cargo owner</TableHead>
-                  <TableHead>Status</TableHead>
-                  {showFinancials && <TableHead>Damage value</TableHead>}
+                  <TableHead>{t('driverDetail.date')}</TableHead>
+                  <TableHead>{t('driverDetail.vehicle')}</TableHead>
+                  <TableHead>{t('driverDetail.company')}</TableHead>
+                  <TableHead>{t('driverDetail.colCargoName')}</TableHead>
+                  <TableHead>{t('driverDetail.colCargoOwner')}</TableHead>
+                  <TableHead>{t('driverDetail.status')}</TableHead>
+                  {showFinancials && <TableHead>{t('driverDetail.colDamageValue')}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -716,6 +755,36 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
           )}
         </CardContent>
       </Card>
+
+      {isAdmin ? (
+        <Card className="border-amber-200 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle>{t('driverDetail.gdprTitle')}</CardTitle>
+            <p className="text-sm text-slate-600">{t('driverDetail.gdprSubtitle')}</p>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => void handleGdprExport()}
+              disabled={exporting || anonymizing}
+            >
+              {exporting ? t('driverDetail.gdprExporting') : t('driverDetail.gdprExport')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => void handleGdprAnonymize()}
+              disabled={exporting || anonymizing || driver.status === 'terminated'}
+              className="border-rose-300 text-rose-700 hover:bg-rose-50"
+            >
+              {anonymizing ? t('driverDetail.gdprAnonymizing') : t('driverDetail.gdprAnonymize')}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

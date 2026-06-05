@@ -7,6 +7,8 @@ import {
   MorningCheckinStatus,
   Prisma,
 } from '@prisma/client';
+import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMorningCheckinDto } from './dto/create-morning-checkin.dto';
@@ -59,6 +61,7 @@ export class MorningCheckinsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly driverNotify: DriverNotifyService,
+    private readonly auditService: AuditService,
   ) {}
 
   async list(query: { date?: string; driver_id?: string; status?: string }) {
@@ -95,7 +98,7 @@ export class MorningCheckinsService {
     return toClient(row);
   }
 
-  async create(dto: CreateMorningCheckinDto) {
+  async create(dto: CreateMorningCheckinDto, actorUserId?: string) {
     const row = await this.prisma.morningCheckin.create({
       data: {
         driverId: dto.driver_id,
@@ -109,10 +112,17 @@ export class MorningCheckinsService {
       },
       include: includeDriver,
     });
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'morning_checkin.created',
+      entityType: 'morning_checkin',
+      entityId: row.id,
+      summary: 'Morning check-in created',
+    });
     return toClient(row);
   }
 
-  async update(id: string, dto: UpdateMorningCheckinDto) {
+  async update(id: string, dto: UpdateMorningCheckinDto, actorUserId?: string) {
     await this.assertExists(id);
     const data: Prisma.MorningCheckinUpdateInput = {};
     if (dto.vehicle_plate !== undefined) data.vehiclePlate = dto.vehicle_plate;
@@ -128,6 +138,29 @@ export class MorningCheckinsService {
       data,
       include: includeDriver,
     });
+
+    const changed = changedFieldNames(dto as Record<string, unknown>);
+    if (changed.length > 0) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'morning_checkin.updated',
+        entityType: 'morning_checkin',
+        entityId: id,
+        summary: 'Morning check-in updated',
+        metadata: { changed_fields: changed },
+      });
+    }
+    if (dto.status !== undefined) {
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'morning_checkin.status_changed',
+        entityType: 'morning_checkin',
+        entityId: id,
+        summary: 'Morning check-in status changed',
+        metadata: { changed_fields: ['status'] },
+      });
+    }
+
     return toClient(row);
   }
 

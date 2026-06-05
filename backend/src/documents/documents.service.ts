@@ -1,7 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { existsSync } from 'node:fs';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { OPERATIONAL_ROLES, type UserRole } from '../common/utils/permissions';
 import { PrismaService } from '../prisma/prisma.service';
+import { mimeTypeFromFileName, resolveAbsolutePathFromStoredUrl } from '../storage/file-path.util';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { StorageService } from '../storage/storage.service';
@@ -42,6 +50,121 @@ export class DocumentsService {
     private readonly storageService: StorageService,
     private readonly auditService: AuditService,
   ) {}
+
+  mapDocumentToClient(document: Record<string, unknown>) {
+    const id = String(document.id);
+    const hasFile = Boolean(document.fileUrl);
+    const { fileUrl: _fileUrl, ...rest } = document;
+
+    return {
+      ...rest,
+      download_url: hasFile ? this.storageService.buildDocumentDownloadPath(id) : null,
+    };
+  }
+
+  private mapDocumentsToClient(documents: Record<string, unknown>[]) {
+    return documents.map((document) => this.mapDocumentToClient(document));
+  }
+
+  async assertCanDownloadDocument(
+    document: { ownerType: string; ownerId: string; fileUrl: string | null },
+    actor: { userId: string; role: string },
+  ): Promise<void> {
+    if (!document.fileUrl) {
+      throw new NotFoundException('Document has no file');
+    }
+
+    if (OPERATIONAL_ROLES.includes(actor.role as UserRole)) {
+      return;
+    }
+
+    if (actor.role !== 'driver') {
+      throw new ForbiddenException('You do not have access to this document');
+    }
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId: actor.userId },
+      select: { id: true },
+    });
+    if (!driver) {
+      throw new ForbiddenException('You do not have access to this document');
+    }
+
+    if (document.ownerType === 'driver' && document.ownerId === driver.id) {
+      return;
+    }
+
+    if (document.ownerType === 'vehicle_handover') {
+      const handover = await this.prisma.vehicleHandover.findUnique({
+        where: { id: document.ownerId },
+        select: { driverId: true },
+      });
+      if (handover?.driverId === driver.id) {
+        return;
+      }
+    }
+
+    if (document.ownerType === 'request') {
+      const request = await this.prisma.request.findUnique({
+        where: { id: document.ownerId },
+        select: { driverId: true },
+      });
+      if (request?.driverId === driver.id) {
+        return;
+      }
+    }
+
+    if (document.ownerType === 'transport_request') {
+      const transportRequest = await this.prisma.transportRequest.findUnique({
+        where: { id: document.ownerId },
+        select: { driverId: true },
+      });
+      if (transportRequest?.driverId === driver.id) {
+        return;
+      }
+    }
+
+    if (document.ownerType === 'accident') {
+      const accident = await this.prisma.accident.findUnique({
+        where: { id: document.ownerId },
+        select: { driverId: true },
+      });
+      if (accident?.driverId === driver.id) {
+        return;
+      }
+    }
+
+    throw new ForbiddenException('You do not have access to this document');
+  }
+
+  async recordDocumentDownload(documentId: string, actorUserId?: string) {
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'document.download',
+      entityType: 'document',
+      entityId: documentId,
+      summary: 'Document file downloaded',
+    });
+  }
+
+  async resolveDocumentDownload(
+    id: string,
+    actor: { userId: string; role: string },
+  ): Promise<{ absolutePath: string; fileName: string; mimeType: string }> {
+    const document = await this.getDocumentById(id);
+    await this.assertCanDownloadDocument(document, actor);
+
+    const absolutePath = resolveAbsolutePathFromStoredUrl(document.fileUrl ?? '');
+    if (!absolutePath || !existsSync(absolutePath)) {
+      throw new NotFoundException('Document file not found');
+    }
+
+    return {
+      absolutePath,
+      fileName: document.fileName,
+      mimeType: mimeTypeFromFileName(document.fileName),
+    };
+  }
 
   private async safeAuditLog(params: {
     actorUserId?: string;
@@ -190,7 +313,7 @@ export class DocumentsService {
         expiryDate: dto.expiryDate,
         notes: dto.notes,
         fileName: file.originalName,
-        fileUrl: file.fileUrl ?? this.storageService.buildPublicUrl('documents', file.storedFileName),
+        fileUrl: file.fileUrl ?? this.storageService.buildStoredPath('documents', file.storedFileName),
       },
       uploadedById,
     );
@@ -245,7 +368,7 @@ export class DocumentsService {
     }
 
     const db = this.prisma as any;
-    return db.document.findMany({
+    const rows = await db.document.findMany({
       where,
       include: {
         uploadedBy: true,
@@ -254,6 +377,7 @@ export class DocumentsService {
         createdAt: 'desc',
       },
     });
+    return this.mapDocumentsToClient(rows);
   }
 
   async getDocumentById(id: string) {
@@ -272,11 +396,16 @@ export class DocumentsService {
     return document;
   }
 
+  async getDocumentByIdForClient(id: string) {
+    const document = await this.getDocumentById(id);
+    return this.mapDocumentToClient(document);
+  }
+
   async getDocumentsByOwner(ownerType: string, ownerId: string) {
     const normalizedOwnerType = this.ensureOwnerType(ownerType);
 
     const db = this.prisma as any;
-    return db.document.findMany({
+    const rows = await db.document.findMany({
       where: {
         ownerType: normalizedOwnerType,
         ownerId,
@@ -288,6 +417,7 @@ export class DocumentsService {
         createdAt: 'desc',
       },
     });
+    return this.mapDocumentsToClient(rows);
   }
 
   async updateDocument(id: string, dto: UpdateDocumentDto) {
@@ -323,13 +453,14 @@ export class DocumentsService {
     }
 
     const db = this.prisma as any;
-    return db.document.update({
+    const updated = await db.document.update({
       where: { id },
       data: payload,
       include: {
         uploadedBy: true,
       },
     });
+    return this.mapDocumentToClient(updated);
   }
 
   async replaceDocument(id: string, dto: UpdateDocumentDto, uploadedById?: string) {
@@ -404,7 +535,7 @@ export class DocumentsService {
       },
     });
 
-    return replacement.created;
+    return this.mapDocumentToClient(replacement.created);
   }
 
   async replaceDocumentWithUpload(
@@ -463,7 +594,7 @@ export class DocumentsService {
           fileName: file.originalName,
           fileUrl:
             file.fileUrl ??
-            this.storageService.buildPublicUrl('documents', file.storedFileName),
+            this.storageService.buildStoredPath('documents', file.storedFileName),
           expiryDate,
           status,
           notes: dto.notes ?? oldDocument.notes,
@@ -512,7 +643,7 @@ export class DocumentsService {
       },
     });
 
-    return replacement.created;
+    return this.mapDocumentToClient(replacement.created);
   }
 
   async deleteDocument(id: string, actorUserId?: string) {
@@ -541,7 +672,7 @@ export class DocumentsService {
       },
     });
 
-    return archived;
+    return this.mapDocumentToClient(archived);
   }
 
   async getExpiringDocuments(days = 90) {
@@ -556,7 +687,7 @@ export class DocumentsService {
     threshold.setDate(threshold.getDate() + days);
 
     const db = this.prisma as any;
-    return db.document.findMany({
+    const rows = await db.document.findMany({
       where: {
         OR: [
           {
@@ -578,6 +709,7 @@ export class DocumentsService {
         expiryDate: 'asc',
       },
     });
+    return this.mapDocumentsToClient(rows);
   }
 
   async getMissingRequiredDocuments() {

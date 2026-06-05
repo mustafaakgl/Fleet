@@ -71,7 +71,14 @@ api.interceptors.response.use(
     const status = error.response?.status;
     if (status === 401) {
       clearAuth();
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (
+        path
+        && !path.startsWith('/login')
+        && !path.startsWith('/reset-password')
+        && !path.startsWith('/accept-invite')
+        && !path.startsWith('/onboarding')
+      ) {
         window.location.href = '/login';
       }
     } else if (status === 403 && typeof window !== 'undefined') {
@@ -99,6 +106,88 @@ export const authApi = {
     api.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data),
 
   me: () => api.get<AuthResponse['user']>('/auth/me').then((r) => r.data),
+
+  requestPasswordReset: (userId: string) =>
+    api
+      .post<{ reset_url: string; expires_at: string; user_email: string }>(
+        '/auth/password-reset/request',
+        { user_id: userId },
+      )
+      .then((r) => r.data),
+
+  validatePasswordReset: (token: string) =>
+    api
+      .get<{ valid: boolean; email?: string; expires_at?: string }>(
+        '/auth/password-reset/validate',
+        { params: { token } },
+      )
+      .then((r) => r.data),
+
+  confirmPasswordReset: (token: string, password: string) =>
+    api
+      .post<{ success: boolean }>('/auth/password-reset/confirm', { token, password })
+      .then((r) => r.data),
+};
+
+// ─── Audit logs (admin) ───────────────────────────────────────────────────────
+
+export interface AuditLogRow {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  summary?: string | null;
+  createdAt: string;
+  actorUser?: {
+    id: string;
+    fullName: string;
+    email: string;
+    role: string;
+  } | null;
+}
+
+export const auditApi = {
+  list: (params?: {
+    actorUserId?: string;
+    action?: string;
+    entityType?: string;
+    entityId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }) => api.get<AuditLogRow[]>('/audit-logs', { params }).then((r) => r.data),
+};
+
+// ─── Privacy / DSGVO (admin) ──────────────────────────────────────────────────
+
+export interface DriverAnonymizeResult {
+  driver_id: string;
+  anonymized_at: string;
+  removed: {
+    personal_fields: boolean;
+    documents: number;
+    location_history: boolean;
+    linked_user_deactivated: boolean;
+  };
+  retained: {
+    assignments: boolean;
+    legal_basis: string;
+  };
+}
+
+export const privacyApi = {
+  exportDriver: (id: string) =>
+    api.get<Blob>(`/privacy/export/driver/${id}`, { responseType: 'blob' }).then((r) => r.data),
+
+  exportUser: (id: string) =>
+    api.get<Blob>(`/privacy/export/user/${id}`, { responseType: 'blob' }).then((r) => r.data),
+
+  anonymizeDriver: (id: string, reason: string) =>
+    api
+      .post<DriverAnonymizeResult>(`/privacy/delete/driver/${id}`, {
+        confirm: 'DELETE',
+        reason,
+      })
+      .then((r) => r.data),
 };
 
 // ─── Customer Portal ────────────────────────────────────────────────────────
@@ -699,6 +788,198 @@ export const companyEmailsApi = {
 
   markFailed: (id: string) =>
     api.post<CompanyEmail>(`/company-emails/${id}/mark-failed`).then((r) => r.data),
+
+  send: (id: string) =>
+    api
+      .post<{ email: CompanyEmail; mail_sent: boolean; mail_mode: 'smtp' | 'log' }>(
+        `/company-emails/${id}/send`,
+      )
+      .then((r) => r.data),
+};
+
+// ─── Onboarding ───────────────────────────────────────────────────────────────
+
+export interface TenantProfile {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  contact_email?: string;
+  contact_phone?: string;
+  address?: string;
+  language: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const onboardingApi = {
+  status: () =>
+    api
+      .get<{ needs_setup: boolean; tenant: TenantProfile | null }>('/onboarding/status')
+      .then((r) => r.data),
+
+  setup: (data: {
+    fleet_name: string;
+    slug?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    address?: string;
+    admin_full_name: string;
+    admin_email: string;
+    admin_password: string;
+  }) =>
+    api
+      .post<{ tenant: TenantProfile; admin: { id: string; email: string; full_name: string; role: string } }>(
+        '/onboarding/setup',
+        data,
+      )
+      .then((r) => r.data),
+
+  getTenant: () => api.get<TenantProfile>('/onboarding/tenant').then((r) => r.data),
+
+  updateTenant: (data: {
+    fleet_name?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    address?: string;
+    language?: string;
+  }) => api.patch<TenantProfile>('/onboarding/tenant', data).then((r) => r.data),
+};
+
+// ─── Invitations ──────────────────────────────────────────────────────────────
+
+export interface UserInvitation {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  language: string;
+  status: string;
+  expires_at: string;
+  accepted_at?: string;
+  created_at: string;
+}
+
+export const invitationsApi = {
+  list: () =>
+    api.get<{ data: UserInvitation[] }>('/invitations').then((r) => r.data.data),
+
+  create: (data: { full_name: string; email: string; role: string; language?: string }) =>
+    api
+      .post<{
+        invitation: UserInvitation;
+        invite_url: string;
+        expires_at: string;
+        mail_sent: boolean;
+        mail_mode: 'smtp' | 'log';
+      }>('/invitations', data)
+      .then((r) => r.data),
+
+  validate: (token: string) =>
+    api
+      .get<{ valid: boolean; email?: string; full_name?: string; role?: string; expires_at?: string }>(
+        '/invitations/validate',
+        { params: { token } },
+      )
+      .then((r) => r.data),
+
+  accept: (token: string, password: string) =>
+    api.post<{ success: boolean }>('/invitations/accept', { token, password }).then((r) => r.data),
+
+  revoke: (id: string) => api.delete<UserInvitation>(`/invitations/${id}`).then((r) => r.data),
+};
+
+// ─── CSV Import ───────────────────────────────────────────────────────────────
+
+export interface ImportResult {
+  created: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+}
+
+// ─── Billing ────────────────────────────────────────────────────────────────────
+
+export interface BillingPlanInfo {
+  id: string;
+  name_de: string;
+  name_en: string;
+  monthly_amount_cents: number;
+  monthly_amount_formatted: string;
+  vehicle_limit: number;
+  seat_limit: number;
+  features_de: string[];
+  stripe_available: boolean;
+}
+
+export interface BillingStatusResponse {
+  subscription: {
+    id: string;
+    plan: string;
+    plan_name_de: string;
+    status: string;
+    billing_mode: string;
+    vehicle_limit: number;
+    seat_limit: number;
+    monthly_amount_cents: number;
+    monthly_amount_formatted: string;
+    billing_email?: string;
+    manual_invoice_reference?: string;
+    trial_ends_at?: string;
+    current_period_end?: string;
+    stripe_configured: boolean;
+    features_de: string[];
+  };
+  usage: {
+    vehicles: number;
+    seats: number;
+    vehicle_limit: number;
+    seat_limit: number;
+    vehicles_remaining: number;
+    seats_remaining: number;
+  };
+  access: {
+    is_active: boolean;
+    within_limits: boolean;
+    can_add_vehicle: boolean;
+    can_add_seat: boolean;
+  };
+}
+
+export const billingApi = {
+  getPlans: () => api.get<BillingPlanInfo[]>('/billing/plans').then((r) => r.data),
+
+  getStatus: () => api.get<BillingStatusResponse>('/billing/status').then((r) => r.data),
+
+  startCheckout: (plan: string, billing_email: string) =>
+    api
+      .post<{ url: string; sessionId: string }>('/billing/checkout', { plan, billing_email })
+      .then((r) => r.data),
+
+  openPortal: () => api.post<{ url: string }>('/billing/portal').then((r) => r.data),
+
+  setManual: (data: {
+    tenant_id: string;
+    plan: string;
+    billing_email?: string;
+    invoice_reference?: string;
+    monthly_amount_cents?: number;
+    vehicle_limit?: number;
+    seat_limit?: number;
+  }) => api.post('/billing/manual', data).then((r) => r.data),
+};
+
+export const importApi = {
+  drivers: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<ImportResult>('/import/drivers', form).then((r) => r.data);
+  },
+
+  vehicles: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<ImportResult>('/import/vehicles', form).then((r) => r.data);
+  },
 };
 
 // ─── Documents ────────────────────────────────────────────────────────────────
@@ -754,6 +1035,11 @@ export const documentsApi = {
 
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/documents/${id}`).then((r) => r.data),
+
+  downloadBlob: (id: string) =>
+    api
+      .get<Blob>(`/documents/${id}/download`, { responseType: 'blob' })
+      .then((r) => r.data),
 };
 
 // ─── Requests (driver absence/leave workflow — Anträge) ──────────────────────

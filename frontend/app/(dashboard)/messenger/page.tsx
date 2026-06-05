@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageSquare, Plus, Search, Send, UserRound } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,12 +50,12 @@ function conversationTitle(conversation: ConversationListItem | ConversationDeta
   return conversation.subject?.trim() ? `${driverName} · ${conversation.subject}` : driverName;
 }
 
-function previewText(conversation: ConversationListItem): string {
-  if (!conversation.lastMessage) return 'No messages yet';
-  return conversation.lastMessage.translatedText ?? conversation.lastMessage.originalText;
-}
-
 export default function MessengerPage() {
+  const { t } = useTranslation();
+  const previewText = (conversation: ConversationListItem): string => {
+    if (!conversation.lastMessage) return t('messenger.noMessagesPreview');
+    return conversation.lastMessage.translatedText ?? conversation.lastMessage.originalText;
+  };
   const [role, setRole] = useState<string | null>(() => getUser()?.role ?? null);
   const [forbidden, setForbidden] = useState(false);
   const [bootLoading, setBootLoading] = useState(true);
@@ -138,12 +139,12 @@ export default function MessengerPage() {
           }
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load conversations');
+        setError(e instanceof Error ? e.message : t('messenger.loadConversationsError'));
       } finally {
         if (!silent) setLoadingConversations(false);
       }
     },
-    [search, selectedConversationId],
+    [search, selectedConversationId, t],
   );
 
   const refreshLeftPanel = useCallback(async () => {
@@ -178,12 +179,12 @@ export default function MessengerPage() {
         await messengerApi.markConversationRead(conversationId);
         await fetchUnreadCount();
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load conversation');
+        setError(e instanceof Error ? e.message : t('messenger.loadConversationError'));
       } finally {
         setLoadingMessages(false);
       }
     },
-    [fetchConversations, fetchUnreadCount],
+    [fetchConversations, fetchUnreadCount, t],
   );
 
   useEffect(() => {
@@ -264,7 +265,7 @@ export default function MessengerPage() {
     if (!selectedConversationId) return;
     const text = composerText.trim();
     if (!text) {
-      showToast('Message cannot be empty.', 'error');
+      showToast(t('messenger.emptyMessage'), 'error');
       return;
     }
 
@@ -279,7 +280,7 @@ export default function MessengerPage() {
       setComposerText('');
       await refreshLeftPanel();
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Failed to send message.', 'error');
+      showToast(e instanceof Error ? e.message : t('messenger.sendError'), 'error');
     } finally {
       setSending(false);
     }
@@ -290,6 +291,7 @@ export default function MessengerPage() {
     selectedConversationId,
     showToast,
     targetLanguage,
+    t,
   ]);
 
   const loadDrivers = useCallback(async () => {
@@ -299,11 +301,11 @@ export default function MessengerPage() {
       const response = await driversApi.list({ limit: 200, status: 'active' });
       setDrivers(response.data);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Failed to load drivers.', 'error');
+      showToast(e instanceof Error ? e.message : t('messenger.loadDriversError'), 'error');
     } finally {
       setDriversLoading(false);
     }
-  }, [canCreateConversation, showToast]);
+  }, [canCreateConversation, showToast, t]);
 
   useEffect(() => {
     if (newConversationOpen && drivers.length === 0) {
@@ -313,7 +315,7 @@ export default function MessengerPage() {
 
   const handleCreateConversation = useCallback(async () => {
     if (!newConversationDriverId) {
-      showToast('Please select a driver.', 'error');
+      showToast(t('messenger.selectDriverError'), 'error');
       return;
     }
     setCreatingConversation(true);
@@ -329,9 +331,9 @@ export default function MessengerPage() {
       setSelectedConversationId(created.id);
       setSelectedConversation(created);
       setMessages(created.messagesPreview ?? []);
-      showToast('Conversation created.', 'success');
+      showToast(t('messenger.created'), 'success');
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Failed to create conversation.', 'error');
+      showToast(e instanceof Error ? e.message : t('messenger.createError'), 'error');
     } finally {
       setCreatingConversation(false);
     }
@@ -340,6 +342,7 @@ export default function MessengerPage() {
     newConversationSubject,
     refreshLeftPanel,
     showToast,
+    t,
   ]);
 
   if (bootLoading) {
@@ -357,8 +360,8 @@ export default function MessengerPage() {
         <CardContent className="p-6">
           <EmptyState
             icon={MessageSquare}
-            title="Messenger is not available for driver role"
-            subtitle="Use the mobile driver messenger interface."
+            title={t('messenger.forbiddenTitle')}
+            subtitle={t('messenger.forbiddenSubtitle')}
           />
         </CardContent>
       </Card>
@@ -370,15 +373,15 @@ export default function MessengerPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <MessageSquare className="h-6 w-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Messenger</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('messenger.title')}</h1>
           <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-            {unreadCount.total} unread
+            {t('messenger.unread', { count: unreadCount.total })}
           </span>
         </div>
         {canCreateConversation && (
           <Button onClick={() => setNewConversationOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            New Conversation
+            {t('messenger.newConversation')}
           </Button>
         )}
       </div>
@@ -392,13 +395,13 @@ export default function MessengerPage() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_1fr]">
         <Card className="min-h-[620px]">
           <CardHeader className="space-y-3">
-            <CardTitle className="text-base">Conversations</CardTitle>
+            <CardTitle className="text-base">{t('messenger.conversations')}</CardTitle>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by driver or subject"
+                placeholder={t('messenger.searchPlaceholder')}
                 className="pl-9"
               />
             </div>
@@ -413,8 +416,8 @@ export default function MessengerPage() {
             ) : filteredConversations.length === 0 ? (
               <EmptyState
                 icon={MessageSquare}
-                title="No conversations found"
-                subtitle="Create a new conversation to start messaging drivers."
+                title={t('messenger.noConversationsTitle')}
+                subtitle={t('messenger.noConversationsSubtitle')}
               />
             ) : (
               filteredConversations.map((conversation) => {
@@ -457,8 +460,8 @@ export default function MessengerPage() {
             <CardContent className="p-6">
               <EmptyState
                 icon={UserRound}
-                title="No conversation selected"
-                subtitle="Choose a conversation from the list to view messages."
+                title={t('messenger.noConversationSelectedTitle')}
+                subtitle={t('messenger.noConversationSelectedSubtitle')}
               />
             </CardContent>
           ) : loadingMessages ? (
@@ -472,7 +475,7 @@ export default function MessengerPage() {
               <CardHeader className="border-b border-gray-100">
                 <CardTitle className="text-base">{conversationTitle(selectedConversation)}</CardTitle>
                 <p className="text-xs text-gray-500">
-                  Participants:{' '}
+                  {t('messenger.participants')}{' '}
                   {selectedConversation.participants
                     .map((participant) => participant.user.fullName)
                     .join(', ')}
@@ -482,7 +485,7 @@ export default function MessengerPage() {
               <CardContent className="flex h-[520px] flex-col gap-3 p-4">
                 <div className="flex-1 space-y-2 overflow-y-auto rounded-md border border-gray-100 bg-gray-50 p-3">
                   {messages.length === 0 ? (
-                    <p className="text-sm text-gray-500">No messages yet.</p>
+                    <p className="text-sm text-gray-500">{t('messenger.noMessages')}</p>
                   ) : (
                     messages.map((message) => {
                       const own = message.senderUserId === getUser()?.id;
@@ -500,7 +503,7 @@ export default function MessengerPage() {
                             <>
                               <p className="whitespace-pre-wrap text-gray-900">{message.translatedText}</p>
                               <p className="mt-1 whitespace-pre-wrap text-xs text-gray-600">
-                                Original ({message.originalLanguage}): {message.originalText}
+                                {t('messenger.originalLabel', { lang: message.originalLanguage })} {message.originalText}
                               </p>
                             </>
                           ) : (
@@ -514,7 +517,7 @@ export default function MessengerPage() {
                             </>
                           )}
                           {message.translationStatus === 'failed' ? (
-                            <p className="mt-1 text-[11px] text-amber-700">Translation failed</p>
+                            <p className="mt-1 text-[11px] text-amber-700">{t('messenger.translationFailed')}</p>
                           ) : null}
                           <p className="mt-1 text-[11px] text-gray-500">{formatDateTime(message.createdAt)}</p>
                         </div>
@@ -529,7 +532,7 @@ export default function MessengerPage() {
                     value={composerText}
                     onChange={(e) => setComposerText(e.target.value)}
                     rows={3}
-                    placeholder={`Message ${selectedDriverName ?? ''}`.trim()}
+                    placeholder={t('messenger.messagePlaceholder', { name: selectedDriverName ?? '' }).trim()}
                     className="w-full resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                     disabled={sending}
                   />
@@ -539,14 +542,14 @@ export default function MessengerPage() {
                       onChange={(e) => setOriginalLanguage(e.target.value as MessengerLanguage)}
                       disabled={sending}
                     >
-                      <option value="de">Original: de</option>
-                      <option value="tr">Original: tr</option>
-                      <option value="en">Original: en</option>
-                      <option value="pl">Original: pl</option>
-                      <option value="nl">Original: nl</option>
-                      <option value="it">Original: it</option>
-                      <option value="es">Original: es</option>
-                      <option value="ru">Original: ru</option>
+                      <option value="de">{t('messenger.originalPrefix')}: de</option>
+                      <option value="tr">{t('messenger.originalPrefix')}: tr</option>
+                      <option value="en">{t('messenger.originalPrefix')}: en</option>
+                      <option value="pl">{t('messenger.originalPrefix')}: pl</option>
+                      <option value="nl">{t('messenger.originalPrefix')}: nl</option>
+                      <option value="it">{t('messenger.originalPrefix')}: it</option>
+                      <option value="es">{t('messenger.originalPrefix')}: es</option>
+                      <option value="ru">{t('messenger.originalPrefix')}: ru</option>
                     </Select>
                     <Select
                       value={targetLanguage}
@@ -555,19 +558,19 @@ export default function MessengerPage() {
                       }
                       disabled={sending}
                     >
-                      <option value="none">Target: none</option>
-                      <option value="de">Target: de</option>
-                      <option value="tr">Target: tr</option>
-                      <option value="en">Target: en</option>
-                      <option value="pl">Target: pl</option>
-                      <option value="nl">Target: nl</option>
-                      <option value="it">Target: it</option>
-                      <option value="es">Target: es</option>
-                      <option value="ru">Target: ru</option>
+                      <option value="none">{t('messenger.targetPrefix')}: {t('messenger.targetNone')}</option>
+                      <option value="de">{t('messenger.targetPrefix')}: de</option>
+                      <option value="tr">{t('messenger.targetPrefix')}: tr</option>
+                      <option value="en">{t('messenger.targetPrefix')}: en</option>
+                      <option value="pl">{t('messenger.targetPrefix')}: pl</option>
+                      <option value="nl">{t('messenger.targetPrefix')}: nl</option>
+                      <option value="it">{t('messenger.targetPrefix')}: it</option>
+                      <option value="es">{t('messenger.targetPrefix')}: es</option>
+                      <option value="ru">{t('messenger.targetPrefix')}: ru</option>
                     </Select>
                     <Button onClick={handleSendMessage} disabled={sending || !composerText.trim()}>
                       <Send className="mr-2 h-4 w-4" />
-                      {sending ? 'Sending...' : 'Send'}
+                      {sending ? t('messenger.sending') : t('messenger.send')}
                     </Button>
                   </div>
                 </div>
@@ -577,8 +580,8 @@ export default function MessengerPage() {
             <CardContent className="p-6">
               <EmptyState
                 icon={MessageSquare}
-                title="Conversation unavailable"
-                subtitle="Select another conversation from the left panel."
+                title={t('messenger.conversationUnavailableTitle')}
+                subtitle={t('messenger.conversationUnavailableSubtitle')}
               />
             </CardContent>
           )}
@@ -588,18 +591,18 @@ export default function MessengerPage() {
       <Dialog open={newConversationOpen} onOpenChange={setNewConversationOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Conversation</DialogTitle>
-            <DialogDescription>Create a new driver conversation thread.</DialogDescription>
+            <DialogTitle>{t('messenger.newConversation')}</DialogTitle>
+            <DialogDescription>{t('messenger.newConvDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Driver</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('messenger.driver')}</label>
               <Select
                 value={newConversationDriverId}
                 onChange={(e) => setNewConversationDriverId(e.target.value)}
                 disabled={driversLoading || creatingConversation}
               >
-                <option value="">Select a driver</option>
+                <option value="">{t('messenger.selectDriver')}</option>
                 {drivers.map((driver) => (
                   <option key={driver.id} value={driver.id}>
                     {`${driver.first_name} ${driver.last_name}`.trim()}
@@ -608,21 +611,21 @@ export default function MessengerPage() {
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Subject (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('messenger.subjectOptional')}</label>
               <Input
                 value={newConversationSubject}
                 onChange={(e) => setNewConversationSubject(e.target.value)}
-                placeholder="e.g. Route update"
+                placeholder={t('messenger.subjectPlaceholder')}
                 disabled={creatingConversation}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewConversationOpen(false)} disabled={creatingConversation}>
-              Cancel
+              {t('messenger.cancel')}
             </Button>
             <Button onClick={handleCreateConversation} disabled={creatingConversation || !newConversationDriverId}>
-              {creatingConversation ? 'Creating...' : 'Create'}
+              {creatingConversation ? t('messenger.creating') : t('messenger.create')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { DriversModule } from './drivers/drivers.module';
@@ -28,9 +30,21 @@ import { AuditModule } from './audit/audit.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { CustomerPortalModule } from './customer-portal/customer-portal.module';
+import { PrivacyModule } from './privacy/privacy.module';
+import { MailModule } from './mail/mail.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
+import { InvitationsModule } from './invitations/invitations.module';
+import { ImportModule } from './import/import.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 100,
+      },
+    ]),
     ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
@@ -60,6 +74,18 @@ import { CustomerPortalModule } from './customer-portal/customer-portal.module';
     PushNotificationsModule,
     TrackingModule,
     CustomerPortalModule,
+    PrivacyModule,
+    MailModule,
+    OnboardingModule,
+    InvitationsModule,
+    ImportModule,
+    BillingModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

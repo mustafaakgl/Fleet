@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   X,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
@@ -249,6 +250,7 @@ function createMonthlyStatusMap() {
 const monthlyStatusMap = createMonthlyStatusMap();
 
 export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' }) {
+  const { t } = useTranslation();
   const { drivers, getCalendarStatusEntry, getAssignmentById } = useFleetData();
   const [statusMap, setStatusMap] = useState<Record<string, Record<string, StatusEntry>>>(monthlyStatusMap);
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([
@@ -424,7 +426,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
     <div className="space-y-5">
       {statusFocus && (
         <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
-          Fokus aktiv: {statusFocus} Status wird hervorgehoben.
+          {t('abt.focusBanner', { status: statusFocus })}
         </div>
       )}
 
@@ -437,7 +439,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                 onClick={() => setDropdownOpen((value) => !value)}
                 className="inline-flex h-10 min-w-[250px] items-center justify-between rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800 hover:bg-slate-50"
               >
-                <span>{`${selectedDepartmentIds.length} Abteilungen ausgewahlt`}</span>
+                <span>{t('abt.departmentsSelected', { count: selectedDepartmentIds.length })}</span>
                 <ChevronsUpDown className="h-4 w-4 text-slate-500" />
               </button>
 
@@ -449,14 +451,14 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                       onClick={() => setSelectedDepartmentIds(departments.map((department) => department.id))}
                       className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      Alle auswahlen
+                      {t('abt.selectAll')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedDepartmentIds([])}
                       className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      Auswahl loschen
+                      {t('abt.clearSelection')}
                     </button>
                   </div>
 
@@ -503,7 +505,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               >
                 {monthLabels.map((label, index) => (
                   <option key={label} value={index}>
-                    {label}
+                    {t(`jk.months.${index}`)}
                   </option>
                 ))}
               </select>
@@ -532,8 +534,8 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               onChange={(event) => setWorkTimeMode(event.target.value as WorkTimeMode)}
               className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
             >
-              <option value="inklusive Arbeitszeiten">inklusive Arbeitszeiten</option>
-              <option value="exklusive Arbeitszeiten">exklusive Arbeitszeiten</option>
+              <option value="inklusive Arbeitszeiten">{t('jk.workTimeInclusive')}</option>
+              <option value="exklusive Arbeitszeiten">{t('jk.workTimeExclusive')}</option>
             </select>
 
             <select
@@ -541,8 +543,8 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               onChange={(event) => setViewMode(event.target.value as ViewMode)}
               className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
             >
-              <option value="Überlappung">Überlappung</option>
-              <option value="Einzelansicht">Einzelansicht</option>
+              <option value="Überlappung">{t('abt.viewOverlap')}</option>
+              <option value="Einzelansicht">{t('abt.viewSingle')}</option>
             </select>
           </div>
         </div>
@@ -551,23 +553,23 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
       {viewMode === 'Überlappung' && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Selected departments</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.selectedDepartments')}</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{overlapSummary.departmentCount}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Employees shown</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.employeesShown')}</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{overlapSummary.employeeCount}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Vacation days this month</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.vacationDaysMonth')}</p>
             <p className="mt-1 text-2xl font-bold text-emerald-700">{overlapSummary.vacationDays}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Sick days this month</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.sickDaysMonth')}</p>
             <p className="mt-1 text-2xl font-bold text-red-700">{overlapSummary.sickDays}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Overlapping vacation conflicts</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.overlapConflicts')}</p>
             <p className="mt-1 text-2xl font-bold text-amber-700">{overlapSummary.overlappingVacationConflicts}</p>
           </div>
         </div>
@@ -575,14 +577,14 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-900">
-          {`${monthLabels[month]}, ${year}`}
+          {`${t(`jk.months.${month}`)}, ${year}`}
         </div>
 
         <div className="overflow-x-auto">
           <div className="min-w-[1700px]">
             <div className="grid grid-cols-[160px_220px_repeat(31,minmax(42px,1fr))] border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <div className="sticky left-0 z-20 border-r border-slate-200 bg-slate-50 px-3 py-3">Abteilung</div>
-              <div className="sticky left-[160px] z-20 border-r border-slate-200 bg-slate-50 px-3 py-3">Name</div>
+              <div className="sticky left-0 z-20 border-r border-slate-200 bg-slate-50 px-3 py-3">{t('abt.colDepartment')}</div>
+              <div className="sticky left-[160px] z-20 border-r border-slate-200 bg-slate-50 px-3 py-3">{t('abt.colName')}</div>
               {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
                 <div key={day} className="border-l border-slate-200 px-1 py-3 text-center">
                   {String(day).padStart(2, '0')}
@@ -632,7 +634,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                           }
                           className="sticky left-0 z-10 border-r border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-500 hover:bg-slate-50"
                         >
-                          {department.kind === 'internal' ? 'Intern' : 'Extern'}
+                          {department.kind === 'internal' ? t('abt.internal') : t('abt.external')}
                         </button>
                         <button
                           type="button"
@@ -744,12 +746,12 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
           <div className="fixed inset-0 z-40 bg-slate-900/25" onClick={() => setSelectedCell(null)} />
           <aside className="fixed right-0 top-0 z-50 h-screen w-full max-w-sm border-l border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Abteilungskalender Details</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('abt.detailsTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setSelectedCell(null)}
                 className="rounded-md border border-slate-300 p-2 text-slate-500 hover:bg-slate-50"
-                aria-label="Close details"
+                aria-label={t('abt.closeDetails')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -757,17 +759,17 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
 
             <div className="space-y-4 px-5 py-5 text-sm">
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Employee name</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.employeeName')}</p>
                 <p className="mt-1 font-medium text-slate-900">{selectedCell.employee.name}</p>
               </div>
               {selectedFleetDriver && (
                 <>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Accidents</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.accidents')}</p>
                     <p className="mt-1 font-medium text-slate-900">{formatAccidentCountLabel(selectedFleetDriver.accidentCount)}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Risk</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.risk')}</p>
                     <span
                       className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getDriverRiskBadgeClass(
                         selectedFleetDriver.riskScore,
@@ -779,52 +781,52 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                 </>
               )}
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Department</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.department')}</p>
                 <p className="mt-1 font-medium text-slate-900">{selectedCell.department.name}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Selected date</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('abt.selectedDate')}</p>
                 <p className="mt-1 font-medium text-slate-900">{`${String(selectedCell.day).padStart(2, '0')}.${String(selectedCell.month + 1).padStart(2, '0')}.${selectedCell.year}`}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Status abbreviation</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.statusAbbr')}</p>
                 <p className="mt-1 font-medium text-slate-900">{selectedCell.entry.status || '-'}</p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Full status name</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.fullStatusName')}</p>
                 <p className="mt-1 font-medium text-slate-900">
-                  {selectedCell.entry.status ? statusNames[selectedCell.entry.status as Exclude<CalendarStatus, ''>] : 'Kein Eintrag'}
+                  {selectedCell.entry.status ? statusNames[selectedCell.entry.status as Exclude<CalendarStatus, ''>] : t('jk.noEntry')}
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Notes</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.notes')}</p>
                 <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">{selectedCell.entry.notes}</p>
               </div>
 
               {selectedAssignment && (
                 <>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Assignment source</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.assignmentSource')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.source}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Vehicle</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.vehicle')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.vehicle || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Company</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.company')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.company || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Cargo</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.cargo')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.cargoName || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Pickup</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.pickup')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.pickupAddress || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Delivery</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{t('jk.delivery')}</p>
                     <p className="mt-1 font-medium text-slate-900">{selectedAssignment.deliveryAddress || '-'}</p>
                   </div>
                 </>
@@ -832,16 +834,16 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
 
               <div className="grid grid-cols-2 gap-2 pt-2">
                 <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  Edit Status
+                  {t('abt.editStatus')}
                 </button>
                 <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  Add Vacation
+                  {t('abt.addVacation')}
                 </button>
                 <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  Mark Sick
+                  {t('abt.markSick')}
                 </button>
                 <button type="button" className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
-                  Clear Status
+                  {t('abt.clearStatus')}
                 </button>
               </div>
             </div>

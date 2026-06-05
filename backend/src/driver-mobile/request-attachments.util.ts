@@ -4,7 +4,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 export type RequestAttachmentSummary = {
   id: string;
   fileName: string;
-  fileUrl: string | null;
+  download_url: string | null;
 };
 
 export async function loadRequestAttachmentsByOwner(
@@ -29,7 +29,11 @@ export async function loadRequestAttachmentsByOwner(
   const map = new Map<string, RequestAttachmentSummary[]>();
   for (const row of rows) {
     const list = map.get(row.ownerId) ?? [];
-    list.push({ id: row.id, fileName: row.fileName, fileUrl: row.fileUrl });
+    list.push({
+      id: row.id,
+      fileName: row.fileName,
+      download_url: row.fileUrl ? `/driver/documents/${row.id}/download` : null,
+    });
     map.set(row.ownerId, list);
   }
   return map;

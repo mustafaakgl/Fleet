@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { isAxiosError } from 'axios';
 import { ChevronLeft, Loader2, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,8 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { companiesApi } from '@/lib/api';
 
 const schema = z.object({
-  name: z.string().min(1, 'Required'),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  name: z.string().min(1, 'form.required'),
+  email: z.string().email('form.invalidEmail').optional().or(z.literal('')),
   phone: z.string().optional(),
   address: z.string().optional(),
   contact_person: z.string().optional(),
@@ -38,14 +39,14 @@ function blankToUndefined<T extends Record<string, unknown>>(obj: T): Partial<T>
   return out;
 }
 
-function extractServerError(e: unknown): string {
+function extractServerError(e: unknown, fallback: string): string {
   if (isAxiosError(e)) {
     const data = e.response?.data as { message?: string | string[] } | undefined;
     if (data?.message) {
       return Array.isArray(data.message) ? data.message.join('. ') : data.message;
     }
   }
-  return 'Failed to create company. Please try again.';
+  return fallback;
 }
 
 function Field({
@@ -68,6 +69,7 @@ function Field({
 
 export default function NewCompanyPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -85,7 +87,7 @@ export default function NewCompanyPage() {
       const company = await companiesApi.create(payload as Record<string, unknown>);
       router.push(`/companies/${company.id}`);
     } catch (e) {
-      setServerError(extractServerError(e));
+      setServerError(extractServerError(e, t('form.createCompanyError')));
     }
   }
 
@@ -94,44 +96,44 @@ export default function NewCompanyPage() {
       <Button variant="ghost" size="sm" asChild>
         <Link href="/companies">
           <ChevronLeft className="w-4 h-4 mr-1" />
-          Back
+          {t('form.backToCompanies')}
         </Link>
       </Button>
 
       <div className="flex items-center gap-3">
         <Plus className="w-6 h-6 text-blue-600" />
-        <h1 className="text-2xl font-bold text-gray-900">Add New Company</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('form.addCompany')}</h1>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Company Information</CardTitle>
+            <CardTitle className="text-base">{t('form.companyInfo')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="Name *" error={errors.name?.message}>
+            <Field label={`${t('form.name')} *`} error={t(errors.name?.message ?? '')}>
               <Input {...register('name')} placeholder="DHL" />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Email" error={errors.email?.message}>
+              <Field label={t('form.email')} error={t(errors.email?.message ?? '')}>
                 <Input type="email" {...register('email')} placeholder="dispatch@example.com" />
               </Field>
-              <Field label="Phone" error={errors.phone?.message}>
+              <Field label={t('form.phone')} error={t(errors.phone?.message ?? '')}>
                 <Input {...register('phone')} placeholder="+49 30 1234567" />
               </Field>
             </div>
-            <Field label="Address" error={errors.address?.message}>
+            <Field label={t('form.address')} error={t(errors.address?.message ?? '')}>
               <Input {...register('address')} placeholder="Berlin, Germany" />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Contact Person" error={errors.contact_person?.message}>
+              <Field label={t('form.contactPerson')} error={t(errors.contact_person?.message ?? '')}>
                 <Input {...register('contact_person')} />
               </Field>
-              <Field label="Default Daily Revenue (€)" error={errors.default_daily_revenue?.message}>
+              <Field label={t('form.defaultDailyRevenue')} error={t(errors.default_daily_revenue?.message ?? '')}>
                 <Input type="number" step="0.01" {...register('default_daily_revenue')} />
               </Field>
             </div>
-            <Field label="Notes" error={errors.notes?.message}>
+            <Field label={t('form.notes')} error={t(errors.notes?.message ?? '')}>
               <Input {...register('notes')} />
             </Field>
           </CardContent>
@@ -148,14 +150,14 @@ export default function NewCompanyPage() {
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating...
+                {t('form.creating')}
               </>
             ) : (
-              'Create Company'
+              t('form.createCompany')
             )}
           </Button>
           <Button variant="outline" type="button" asChild>
-            <Link href="/companies">Cancel</Link>
+            <Link href="/companies">{t('form.cancel')}</Link>
           </Button>
         </div>
       </form>
