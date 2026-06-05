@@ -45,13 +45,20 @@ export function validateEnv(): void {
     }
 
     if (process.env.STORAGE_DRIVER !== 's3') {
-      console.warn(
-        '[boot] STORAGE_DRIVER is not s3 — uploads use local disk. Set STORAGE_DRIVER=s3 for production.',
-      );
+      throw new Error('STORAGE_DRIVER must be s3 in production.');
+    }
+    requireProductionEnv('S3_BUCKET');
+    requireProductionEnv('S3_ACCESS_KEY_ID');
+    requireProductionEnv('S3_SECRET_ACCESS_KEY');
+    requireProductionEnv('S3_REGION');
+    requireProductionEnv('METRICS_TOKEN');
+
+    if (!process.env.CORS_ORIGIN?.trim()) {
+      throw new Error('CORS_ORIGIN must list allowed frontend origins in production.');
     }
 
-    if (!process.env.S3_BUCKET?.trim() || !process.env.S3_ACCESS_KEY_ID?.trim()) {
-      console.warn('[boot] S3 credentials incomplete — file storage may fail in production.');
+    if (!process.env.SENTRY_DSN?.trim()) {
+      console.warn('[boot] SENTRY_DSN not set — error monitoring disabled in production.');
     }
 
     if ((process.env.STRIPE_ENABLED ?? '').toLowerCase() === 'true') {

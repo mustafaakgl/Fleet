@@ -234,12 +234,12 @@ Woche 1–2          Woche 2–3          Woche 3–4
 | S.4 | RBAC + WriteRoleGuard | ✅ | Ja |
 | S.5 | Audit CRUD | ✅ | Ja |
 | S.6 | Multi-Tenant | ✅ | Ja |
-| S.7 | S3/MinIO Prod | 🟡 | Ja |
-| S.8 | Backup Cron | 🟡 | Ja |
-| S.9 | Sentry | 🟡 | Empfohlen |
+| S.7 | S3/MinIO Prod | ✅ Code · 🟡 Bucket | `docs/ops/S3-GO-LIVE.md` + prod enforced |
+| S.8 | Backup Cron | ✅ | `docs/ops/BACKUP-CRON.md` + `backup-daily.sh` |
+| S.9 | Sentry + Metrics | ✅ Code · 🟡 DSN | `docs/ops/OBSERVABILITY-PROD.md` |
 | S.10 | MFA / 2FA | ❌ | Post-launch |
 | S.11 | Virus-Scan | ❌ | Post-revenue |
-| S.12 | Pentest Checklist | 🟡 | Vor Enterprise |
+| S.12 | Pentest Checklist | ✅ | `PENTEST-CHECKLIST.md` + `launch-preflight.sh` |
 
 ---
 
@@ -288,7 +288,8 @@ Woche 1–2          Woche 2–3          Woche 3–4
 - [ ] Stripe SEPA Testzahlung
 - [ ] Deutsche Rechnung an Testkunde
 - [ ] Support-E-Mail + Hilfe-Seite live
-- [ ] Prod: Backup + Sentry + Health
+- [x] Prod: Backup + Sentry + Health (code) · [ ] Ops cron + DSN live
+- [x] E2E Rehearsal Script (`docs/ops/LAUNCH-E2E-REHEARSAL.md`)
 
 ---
 

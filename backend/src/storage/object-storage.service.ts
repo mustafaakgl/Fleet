@@ -51,12 +51,25 @@ export class ObjectStorageService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    if (this.driver !== 's3' || !this.s3) return;
+    const verify = await this.verifyConnection();
+    if (this.driver === 's3' && verify.ok) {
+      this.logger.log(`S3 bucket ready: ${this.bucket}`);
+    } else if (this.driver === 's3' && verify.error) {
+      this.logger.warn(`S3 bucket check failed (${this.bucket}): ${verify.error}`);
+    }
+  }
+
+  async verifyConnection(): Promise<{ ok: boolean; error?: string }> {
+    if (this.driver !== 's3' || !this.s3) {
+      return { ok: false, error: 's3_not_configured' };
+    }
+
     try {
       await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
-      this.logger.log(`S3 bucket ready: ${this.bucket}`);
+      return { ok: true };
     } catch (error) {
-      this.logger.warn(`S3 bucket check failed (${this.bucket}): ${error}`);
+      const message = error instanceof Error ? error.message : 's3_verify_failed';
+      return { ok: false, error: message };
     }
   }
 

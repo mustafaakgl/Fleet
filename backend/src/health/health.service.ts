@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { isProductionEnv } from '../config/env.validation';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 
 export type HealthStatus = {
   status: 'ok' | 'degraded' | 'error';
@@ -13,6 +14,8 @@ export type ReadinessStatus = HealthStatus & {
   checks: {
     database: 'ok' | 'error';
     smtp: 'ok' | 'error' | 'skipped';
+    storage: 'ok' | 'error' | 'skipped';
+    sentry: 'ok' | 'skipped';
   };
 };
 
@@ -23,6 +26,7 @@ export class HealthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
+    private readonly objectStorage: ObjectStorageService,
   ) {}
 
   getLiveness(): HealthStatus {
@@ -36,6 +40,8 @@ export class HealthService {
   async getReadiness(): Promise<ReadinessStatus> {
     let database: 'ok' | 'error' = 'error';
     let smtp: 'ok' | 'error' | 'skipped' = 'skipped';
+    let storage: 'ok' | 'error' | 'skipped' = 'skipped';
+    const sentry: 'ok' | 'skipped' = process.env.SENTRY_DSN?.trim() ? 'ok' : 'skipped';
 
     try {
       await this.prisma.unscoped.$queryRaw`SELECT 1`;
@@ -49,13 +55,21 @@ export class HealthService {
       smtp = verify.ok ? 'ok' : 'error';
     }
 
-    const allOk = database === 'ok' && (smtp === 'ok' || smtp === 'skipped');
+    if (isProductionEnv() && this.objectStorage.mode === 's3') {
+      const verify = await this.objectStorage.verifyConnection();
+      storage = verify.ok ? 'ok' : 'error';
+    }
+
+    const allOk =
+      database === 'ok' &&
+      (smtp === 'ok' || smtp === 'skipped') &&
+      (storage === 'ok' || storage === 'skipped');
 
     return {
       status: allOk ? 'ok' : 'degraded',
       uptimeSeconds: this.uptimeSeconds(),
       timestamp: new Date().toISOString(),
-      checks: { database, smtp },
+      checks: { database, smtp, storage, sentry },
     };
   }
 

@@ -19,9 +19,14 @@ UPLOADS_FILE="$BACKUP_DIR/fleet-uploads-$TIMESTAMP.tar.gz"
 echo "Backing up database to $DB_FILE"
 pg_dump "$DATABASE_URL" | gzip -9 > "$DB_FILE"
 
-if [[ -d "$ROOT_DIR/backend/uploads" ]]; then
+STORAGE_DRIVER="${STORAGE_DRIVER:-local}"
+if [[ "$STORAGE_DRIVER" == "s3" ]]; then
+  echo "STORAGE_DRIVER=s3 — skipping local uploads archive (use S3 versioning; see docs/ops/BACKUP-CRON.md)"
+elif [[ -d "$ROOT_DIR/backend/uploads" ]]; then
   echo "Backing up uploads to $UPLOADS_FILE"
   tar -czf "$UPLOADS_FILE" -C "$ROOT_DIR/backend" uploads
+else
+  echo "No local uploads directory — skipping file archive"
 fi
 
 find "$BACKUP_DIR" -type f -name 'fleet-db-*.sql.gz' -mtime +"$RETENTION_DAYS" -delete
