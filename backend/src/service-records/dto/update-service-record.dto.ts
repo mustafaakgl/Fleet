@@ -28,4 +28,8 @@ export class UpdateServiceRecordDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  driver_id?: string;
 }

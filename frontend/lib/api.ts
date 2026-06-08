@@ -623,6 +623,7 @@ export const serviceRecordsApi = {
 
   create: (data: {
     vehicle_id: string;
+    driver_id?: string;
     date: string;
     service_type: string;
     repair_company: string;

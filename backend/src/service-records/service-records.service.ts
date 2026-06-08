@@ -6,15 +6,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateServiceRecordDto } from './dto/create-service-record.dto';
 import { UpdateServiceRecordDto } from './dto/update-service-record.dto';
 
-type ServiceRecordWithVehicle = ServiceRecord & {
+type ServiceRecordWithRelations = ServiceRecord & {
   vehicle: { id: string; plateNumber: string };
+  driver: { id: string; firstName: string; lastName: string } | null;
 };
 
-function toClient(row: ServiceRecordWithVehicle) {
+function toClient(row: ServiceRecordWithRelations) {
   return {
     id: row.id,
     vehicle_id: row.vehicleId,
     vehicle_plate: row.vehicle.plateNumber,
+    driver_id: row.driverId ?? undefined,
+    driver_name: row.driver ? `${row.driver.firstName} ${row.driver.lastName}`.trim() : undefined,
     date: row.date.toISOString(),
     service_type: row.serviceType,
     repair_company: row.repairCompany,
@@ -26,8 +29,9 @@ function toClient(row: ServiceRecordWithVehicle) {
   };
 }
 
-const vehicleInclude = {
+const recordInclude = {
   vehicle: { select: { id: true, plateNumber: true } },
+  driver: { select: { id: true, firstName: true, lastName: true } },
 } satisfies Prisma.ServiceRecordInclude;
 
 @Injectable()
@@ -63,7 +67,7 @@ export class ServiceRecordsService {
     const rows = await this.prisma.serviceRecord.findMany({
       where,
       orderBy: { date: 'desc' },
-      include: vehicleInclude,
+      include: recordInclude,
     });
     return rows.map(toClient);
   }
@@ -71,7 +75,7 @@ export class ServiceRecordsService {
   async getById(id: string) {
     const record = await this.prisma.serviceRecord.findUnique({
       where: { id },
-      include: vehicleInclude,
+      include: recordInclude,
     });
     if (!record) throw new NotFoundException('Service record not found');
     return toClient(record);
@@ -90,6 +94,7 @@ export class ServiceRecordsService {
     const record = await this.prisma.serviceRecord.create({
       data: {
         vehicleId: dto.vehicle_id,
+        driverId: dto.driver_id,
         date: new Date(dto.date),
         serviceType: dto.service_type,
         repairCompany: dto.repair_company,
@@ -97,7 +102,7 @@ export class ServiceRecordsService {
         mileageKm: dto.mileage_km,
         notes: dto.notes,
       },
-      include: vehicleInclude,
+      include: recordInclude,
     });
     await safeAuditLog(this.auditService, {
       actorUserId,
@@ -118,11 +123,16 @@ export class ServiceRecordsService {
     if (dto.cost_amount !== undefined) data.costAmount = dto.cost_amount;
     if (dto.mileage_km !== undefined) data.mileageKm = dto.mileage_km;
     if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.driver_id !== undefined) {
+      data.driver = dto.driver_id
+        ? { connect: { id: dto.driver_id } }
+        : { disconnect: true };
+    }
 
     const record = await this.prisma.serviceRecord.update({
       where: { id },
       data,
-      include: vehicleInclude,
+      include: recordInclude,
     });
     await safeAuditLog(this.auditService, {
       actorUserId,

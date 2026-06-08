@@ -18,6 +18,7 @@ import {
   Rocket,
   ScrollText,
   Clock,
+  CarFront,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -46,6 +47,7 @@ const ALL_ITEMS: Record<string, NavItem> = {
   documents: { href: '/documents', labelKey: 'nav.documents', icon: FileText },
   reminders: { href: '/reminders', labelKey: 'nav.reminders', icon: Bell },
   cargoDamage: { href: '/cargo-damage', labelKey: 'nav.cargoDamage', icon: ClipboardList },
+  accidents: { href: '/accidents', labelKey: 'nav.accidents', icon: CarFront },
   serviceHistory: { href: '/service-history', labelKey: 'nav.serviceHistory', icon: Wrench },
   workSessions: { href: '/work-sessions', labelKey: 'nav.workSessions', icon: Clock },
 };
@@ -65,7 +67,7 @@ const OFFICE_NAV: NavGroup[] = [
     'messenger',
   ]),
   group('fleet', 'nav.group.fleet', ['drivers', 'vehicles', 'companies']),
-  group('compliance', 'nav.group.compliance', ['documents', 'reminders', 'cargoDamage', 'workSessions']),
+  group('compliance', 'nav.group.compliance', ['documents', 'reminders', 'cargoDamage', 'accidents', 'workSessions']),
   group('more', 'nav.group.more', ['serviceHistory']),
 ];
 
@@ -80,6 +82,7 @@ const DEFAULT_NAV: NavGroup[] = [
   group('operations', 'nav.group.operations', [
     'requests',
     'cargoDamage',
+    'accidents',
     'serviceHistory',
     'reminders',
     'workSessions',

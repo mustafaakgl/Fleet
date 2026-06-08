@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { vehiclesApi, documentsApi, type VehicleEquipmentItem } from '@/lib/api';
-import type { VehicleDetail, Document } from '@/lib/types';
+import { vehiclesApi, documentsApi, serviceRecordsApi, type VehicleEquipmentItem } from '@/lib/api';
+import type { VehicleDetail, Document, ServiceRecord } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 import { formatDate, statusColor } from '@/lib/utils';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
@@ -86,6 +86,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [equipmentQty, setEquipmentQty] = useState('1');
   const [equipmentSaving, setEquipmentSaving] = useState(false);
 
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [serviceRecordsError, setServiceRecordsError] = useState<string | null>(null);
+
   useEffect(() => {
     vehiclesApi
       .getById(id)
@@ -116,6 +119,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       .listEquipment(id)
       .then(setEquipment)
       .catch((e) => setEquipmentError(e?.message ?? 'Failed'));
+    serviceRecordsApi
+      .list({ vehicle_id: id })
+      .then(setServiceRecords)
+      .catch((e) => setServiceRecordsError(e?.message ?? 'Failed'));
   }, [id]);
 
   async function addEquipmentItem() {
@@ -377,6 +384,54 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                     <TableCell>{item.status}</TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('vehicleDetail.serviceHistory')}</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {serviceRecordsError ? (
+            <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.serviceHistoryLoadError')}</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead>{t('serviceHistory.colTask')}</TableHead>
+                  <TableHead>{t('serviceHistory.colRepairCompany')}</TableHead>
+                  <TableHead>{t('serviceHistory.colMileage')}</TableHead>
+                  <TableHead>{t('serviceHistory.colCost')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {serviceRecords.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  serviceRecords.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{formatDate(row.date)}</TableCell>
+                      <TableCell>{row.driver_name ?? '-'}</TableCell>
+                      <TableCell>{row.service_type}</TableCell>
+                      <TableCell>{row.repair_company}</TableCell>
+                      <TableCell>
+                        {row.mileage_km !== null && row.mileage_km !== undefined
+                          ? row.mileage_km.toLocaleString('de-DE')
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{currency(row.cost_amount)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           )}

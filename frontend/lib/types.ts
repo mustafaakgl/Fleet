@@ -431,6 +431,8 @@ export interface ServiceRecord {
   id: string;
   vehicle_id: string;
   vehicle_plate: string;
+  driver_id?: string;
+  driver_name?: string;
   date: string;
   service_type: string;
   repair_company: string;

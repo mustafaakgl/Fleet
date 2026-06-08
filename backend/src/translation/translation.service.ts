@@ -5,6 +5,7 @@ const SUPPORTED_LANGUAGE_CODES = {
   de: 'DE',
   en: 'EN',
   es: 'ES',
+  fr: 'FR',
   it: 'IT',
   nl: 'NL',
   pl: 'PL',

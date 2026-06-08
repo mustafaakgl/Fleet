@@ -120,6 +120,7 @@ export default function ServiceHistoryPage() {
                 <TableRow>
                   <TableHead>{t('serviceHistory.colDate')}</TableHead>
                   <TableHead>{t('serviceHistory.colVehicle')}</TableHead>
+                  <TableHead>{t('serviceHistory.colDriver')}</TableHead>
                   <TableHead>{t('serviceHistory.colTask')}</TableHead>
                   <TableHead>{t('serviceHistory.colRepairCompany')}</TableHead>
                   <TableHead>{t('serviceHistory.colMileage')}</TableHead>
@@ -132,6 +133,7 @@ export default function ServiceHistoryPage() {
                   <TableRow key={row.id}>
                     <TableCell>{formatDate(row.date)}</TableCell>
                     <TableCell className="font-semibold text-gray-900">{row.vehicle_plate}</TableCell>
+                    <TableCell>{row.driver_name ?? '-'}</TableCell>
                     <TableCell>{row.service_type}</TableCell>
                     <TableCell>{row.repair_company}</TableCell>
                     <TableCell>{row.mileage_km !== null && row.mileage_km !== undefined ? row.mileage_km.toLocaleString('de-DE') : '-'}</TableCell>

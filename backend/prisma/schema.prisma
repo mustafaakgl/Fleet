@@ -461,6 +461,7 @@ model Driver {
   locationLatest    DriverLocationLatest?
   locationHistory   DriverLocationHistory[]
   workSessions      WorkSession[]
+  serviceRecords    ServiceRecord[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -970,6 +971,7 @@ model ServiceRecord {
   tenantId      String   @default("default-tenant")
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   vehicleId     String
+  driverId      String?
   date          DateTime
   serviceType   String
   repairCompany String
@@ -980,9 +982,11 @@ model ServiceRecord {
   updatedAt     DateTime @updatedAt
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driver  Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([vehicleId, date])
+  @@index([driverId, date])
   @@index([repairCompany])
 }
 
