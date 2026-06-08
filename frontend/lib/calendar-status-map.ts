@@ -14,7 +14,10 @@ export function toCalendarApiStatus(status: string): string {
 }
 
 /** Best-effort reverse map when loading persisted manual events. */
-export function fromCalendarApiStatus(apiStatus: string): string {
+export function fromCalendarApiStatus(apiStatus: string, uiStatus?: string | null): string {
+  if (uiStatus?.trim()) {
+    return uiStatus;
+  }
   const map: Record<string, string> = {
     US: 'SU',
     FR: 'PU',

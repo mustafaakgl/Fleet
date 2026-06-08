@@ -9,6 +9,7 @@ type CreateCalendarEventInput = {
   assignmentId?: string;
   date: Date;
   status: CalendarStatus;
+  uiStatus?: string;
   source: CalendarSource;
 };
 
@@ -70,6 +71,7 @@ export class CalendarService {
         assignmentId: input.assignmentId,
         date: normalizedDate,
         status: input.status,
+        uiStatus: input.uiStatus,
         source: input.source,
       },
     });

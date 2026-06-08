@@ -704,6 +704,7 @@ model CalendarEvent {
   requestId    String?
   date         DateTime
   status       CalendarStatus
+  uiStatus     String?
   source       CalendarSource
   createdAt    DateTime       @default(now())
 

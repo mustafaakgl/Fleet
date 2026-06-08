@@ -15,11 +15,11 @@ import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './C
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { useFleetData } from '@/context/FleetDataContext';
 import { calendarApi } from '@/lib/api';
-import { toCalendarApiStatus } from '@/lib/calendar-status-map';
+import { fromCalendarApiStatus, toCalendarApiStatus } from '@/lib/calendar-status-map';
+import { buildYearOptions } from '@/lib/calendar-vacation';
 import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | AbsenceTypeAbbreviation | '';
-type WorkTimeMode = 'inklusive Arbeitszeiten' | 'exklusive Arbeitszeiten';
 type ViewMode = 'Überlappung' | 'Einzelansicht';
 
 interface Department {
@@ -41,6 +41,7 @@ interface StatusEntry {
   sourceDate?: string;
   requestId?: string;
   assignmentId?: string;
+  eventId?: string;
 }
 
 interface HoveredStatusCell {
@@ -74,6 +75,7 @@ interface SelectedEmptyCell {
   day: number;
   month: number;
   year: number;
+  eventId?: string;
 }
 
 function slugifyDepartment(name: string) {
@@ -161,8 +163,9 @@ function isWeekend(year: number, month: number, day: number) {
 
 export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' }) {
   const { t } = useTranslation();
-  const { drivers, getCalendarStatusEntry, getAssignmentById } = useFleetData();
+  const { drivers, getCalendarStatusEntry, getAssignmentById, refetchHydrate } = useFleetData();
   const now = new Date();
+  const yearOptions = useMemo(() => buildYearOptions(now), [now]);
   const [statusMap, setStatusMap] = useState<Record<string, Record<string, StatusEntry>>>({});
   const [apiCalendarMap, setApiCalendarMap] = useState<Record<string, Record<string, StatusEntry>>>({});
   const departments = useMemo<Department[]>(() => {
@@ -185,8 +188,8 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([]);
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
-  const [workTimeMode, setWorkTimeMode] = useState<WorkTimeMode>('inklusive Arbeitszeiten');
   const [viewMode, setViewMode] = useState<ViewMode>('Überlappung');
+  const [focusedEmployeeId, setFocusedEmployeeId] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [collapsedDepartments, setCollapsedDepartments] = useState<Record<string, boolean>>({});
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
@@ -194,7 +197,9 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
   const [selectedAbsenceTypeId, setSelectedAbsenceTypeId] = useState<string | null>(null);
   const [hoveredStatusCell, setHoveredStatusCell] = useState<HoveredStatusCell | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenuMode, setContextMenuMode] = useState<'empty' | 'manual'>('empty');
   const [selectedEmptyCell, setSelectedEmptyCell] = useState<SelectedEmptyCell | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (departments.length === 0) {
@@ -233,10 +238,11 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
           }
           map[event.driverId] ??= {};
           map[event.driverId][`${month}-${dayPart}`] = {
-            status: event.status as CalendarStatus,
+            status: fromCalendarApiStatus(event.status, event.uiStatus) as CalendarStatus,
             notes: 'Manuell eingetragen.',
             source: 'manual',
             sourceDate: dateStr,
+            eventId: event.id,
           };
         }
         setApiCalendarMap(map);
@@ -262,6 +268,26 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
       employees: employees.filter((employee) => employee.departmentId === department.id),
     }));
   }, [employees, visibleDepartments]);
+
+  useEffect(() => {
+    if (viewMode !== 'Einzelansicht') return;
+    if (employees.length === 0) return;
+    setFocusedEmployeeId((current) =>
+      current && employees.some((employee) => employee.id === current) ? current : employees[0].id,
+    );
+  }, [employees, viewMode]);
+
+  const visibleDepartmentEmployeeMap = useMemo(() => {
+    if (viewMode !== 'Einzelansicht' || !focusedEmployeeId) {
+      return departmentEmployeeMap;
+    }
+    return departmentEmployeeMap
+      .map(({ department, employees: departmentEmployees }) => ({
+        department,
+        employees: departmentEmployees.filter((employee) => employee.id === focusedEmployeeId),
+      }))
+      .filter(({ employees: departmentEmployees }) => departmentEmployees.length > 0);
+  }, [departmentEmployeeMap, focusedEmployeeId, viewMode]);
 
   const dayCount = useMemo(() => daysInMonth(year, month), [month, year]);
 
@@ -344,49 +370,85 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
   const closeContextMenu = () => {
     setContextMenuPosition(null);
     setSelectedEmptyCell(null);
+    setContextMenuMode('empty');
   };
 
   const openContextMenu = (
     event: React.MouseEvent<HTMLButtonElement>,
     payload: SelectedEmptyCell,
+    mode: 'empty' | 'manual' = 'empty',
   ) => {
     event.preventDefault();
     setSelectedCell(null);
     setPendingAbsenceSelection(null);
     setSelectedAbsenceTypeId(null);
     setSelectedEmptyCell(payload);
+    setContextMenuMode(mode);
     setContextMenuPosition({ x: event.clientX + 8, y: event.clientY + 8 });
+  };
+
+  const deleteManualEntry = async (target: SelectedEmptyCell) => {
+    const sourceDate = formatMonthDate(target.year, target.month, target.day);
+    const mapKey = `${target.month}-${target.day}`;
+    setSaveError(null);
+
+    setApiCalendarMap((current) => {
+      const employeeMap = { ...(current[target.employee.id] ?? {}) };
+      delete employeeMap[mapKey];
+      return { ...current, [target.employee.id]: employeeMap };
+    });
+
+    if (target.eventId) {
+      try {
+        await calendarApi.remove(target.eventId);
+        refetchHydrate();
+      } catch {
+        setSaveError(t('jk.saveError'));
+      }
+    }
   };
 
   const applyManualStatus = async (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
     const sourceDate = formatMonthDate(target.year, target.month, target.day);
+    const mapKey = `${target.month}-${target.day}`;
     const entry: StatusEntry = {
       status,
       notes: 'Manuell eingetragen.',
       source: 'manual',
       sourceDate,
     };
+    setSaveError(null);
 
     setApiCalendarMap((current) => ({
       ...current,
       [target.employee.id]: {
         ...(current[target.employee.id] ?? {}),
-        [`${target.month}-${target.day}`]: entry,
+        [mapKey]: entry,
       },
     }));
 
     try {
-      await calendarApi.create({
+      const created = await calendarApi.create({
         driver_id: target.employee.id,
         date: sourceDate,
         status: toCalendarApiStatus(status),
+        ui_status: status,
       });
+      setApiCalendarMap((current) => ({
+        ...current,
+        [target.employee.id]: {
+          ...(current[target.employee.id] ?? {}),
+          [mapKey]: { ...entry, eventId: created.id },
+        },
+      }));
+      refetchHydrate();
     } catch {
+      setSaveError(t('jk.saveError'));
       setStatusMap((current) => ({
         ...current,
         [target.employee.id]: {
           ...(current[target.employee.id] ?? {}),
-          [`${target.month}-${target.day}`]: entry,
+          [mapKey]: entry,
         },
       }));
     }
@@ -394,6 +456,19 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
 
   const handleContextMenuAction = (action: CalendarCellContextMenuAction) => {
     if (!selectedEmptyCell) return;
+
+    if (action === 'delete') {
+      void deleteManualEntry(selectedEmptyCell);
+      closeContextMenu();
+      return;
+    }
+
+    if (action === 'change') {
+      setPendingAbsenceSelection(selectedEmptyCell);
+      setSelectedAbsenceTypeId(null);
+      closeContextMenu();
+      return;
+    }
 
     if (action === 'urlaub') {
       void applyManualStatus(selectedEmptyCell, 'UT');
@@ -422,6 +497,12 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
       {statusFocus && (
         <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
           {t('abt.focusBanner', { status: statusFocus })}
+        </div>
+      )}
+
+      {saveError && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {saveError}
         </div>
       )}
 
@@ -519,18 +600,11 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               onChange={(event) => setYear(Number(event.target.value))}
               className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
             >
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-              <option value={2027}>2027</option>
-            </select>
-
-            <select
-              value={workTimeMode}
-              onChange={(event) => setWorkTimeMode(event.target.value as WorkTimeMode)}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-            >
-              <option value="inklusive Arbeitszeiten">{t('jk.workTimeInclusive')}</option>
-              <option value="exklusive Arbeitszeiten">{t('jk.workTimeExclusive')}</option>
+              {yearOptions.map((optionYear) => (
+                <option key={optionYear} value={optionYear}>
+                  {optionYear}
+                </option>
+              ))}
             </select>
 
             <select
@@ -541,6 +615,20 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               <option value="Überlappung">{t('abt.viewOverlap')}</option>
               <option value="Einzelansicht">{t('abt.viewSingle')}</option>
             </select>
+
+            {viewMode === 'Einzelansicht' && (
+              <select
+                value={focusedEmployeeId}
+                onChange={(event) => setFocusedEmployeeId(event.target.value)}
+                className="h-10 min-w-[220px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
       </div>
@@ -587,7 +675,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               ))}
             </div>
 
-            {departmentEmployeeMap.map(({ department, employees: departmentEmployees }) => {
+            {visibleDepartmentEmployeeMap.map(({ department, employees: departmentEmployees }) => {
               const isCollapsed = collapsedDepartments[department.id] ?? false;
 
               return (
@@ -684,22 +772,32 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                                 });
                               }}
                               onContextMenu={(event) => {
+                                if (entry.source === 'manual' && entry.eventId) {
+                                  openContextMenu(
+                                    event,
+                                    { employee, department, day, month, year, eventId: entry.eventId },
+                                    'manual',
+                                  );
+                                  return;
+                                }
                                 if (entry.status) return;
                                 openContextMenu(event, { employee, department, day, month, year });
                               }}
                               onClick={() => {
-                                if (entry.status) {
-                                  closeContextMenu();
-                                  setSelectedCell({ employee, department, day, month, year, entry });
-                                  setPendingAbsenceSelection(null);
-                                  return;
-                                }
-
-                                setSelectedCell(null);
+                                closeContextMenu();
+                                setSelectedCell({ employee, department, day, month, year, entry });
                                 setPendingAbsenceSelection(null);
-                                setSelectedAbsenceTypeId(null);
                               }}
                               onMouseDown={(event) => {
+                                if (entry.source === 'manual' && entry.eventId) {
+                                  if (event.button !== 0) return;
+                                  openContextMenu(
+                                    event,
+                                    { employee, department, day, month, year, eventId: entry.eventId },
+                                    'manual',
+                                  );
+                                  return;
+                                }
                                 if (entry.status) return;
                                 if (event.button !== 0) return;
                                 openContextMenu(event, { employee, department, day, month, year });
@@ -827,20 +925,87 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                 </>
               )}
 
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  {t('abt.editStatus')}
-                </button>
-                <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  {t('abt.addVacation')}
-                </button>
-                <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  {t('abt.markSick')}
-                </button>
-                <button type="button" className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
-                  {t('abt.clearStatus')}
-                </button>
-              </div>
+              {selectedCell.entry.source === 'manual' && selectedCell.entry.eventId && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingAbsenceSelection({
+                        employee: selectedCell.employee,
+                        department: selectedCell.department,
+                        day: selectedCell.day,
+                        month: selectedCell.month,
+                        year: selectedCell.year,
+                      });
+                      setSelectedAbsenceTypeId(null);
+                      setSelectedCell(null);
+                    }}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {t('jk.changeEntry')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void deleteManualEntry({
+                        employee: selectedCell.employee,
+                        department: selectedCell.department,
+                        day: selectedCell.day,
+                        month: selectedCell.month,
+                        year: selectedCell.year,
+                        eventId: selectedCell.entry.eventId,
+                      });
+                      setSelectedCell(null);
+                    }}
+                    className="rounded-md border border-rose-300 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                  >
+                    {t('jk.deleteEntry')}
+                  </button>
+                </div>
+              )}
+
+              {!selectedCell.entry.status && (
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void applyManualStatus(
+                        {
+                          employee: selectedCell.employee,
+                          department: selectedCell.department,
+                          day: selectedCell.day,
+                          month: selectedCell.month,
+                          year: selectedCell.year,
+                        },
+                        'UT',
+                      );
+                      setSelectedCell(null);
+                    }}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {t('abt.addVacation')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void applyManualStatus(
+                        {
+                          employee: selectedCell.employee,
+                          department: selectedCell.department,
+                          day: selectedCell.day,
+                          month: selectedCell.month,
+                          year: selectedCell.year,
+                        },
+                        'KT',
+                      );
+                      setSelectedCell(null);
+                    }}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {t('abt.markSick')}
+                  </button>
+                </div>
+              )}
             </div>
           </aside>
         </>
@@ -850,6 +1015,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
         <CalendarCellContextMenu
           x={contextMenuPosition.x}
           y={contextMenuPosition.y}
+          mode={contextMenuMode}
           onClose={closeContextMenu}
           onSelect={handleContextMenuAction}
         />

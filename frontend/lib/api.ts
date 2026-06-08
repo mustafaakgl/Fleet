@@ -870,8 +870,13 @@ export const calendarApi = {
   driverCalendar: (driverId: string) =>
     api.get<CalendarEvent[]>(`/calendar/driver/${driverId}`).then((r) => r.data),
 
-  create: (data: { driver_id: string; date: string; status: string; assignment_id?: string }) =>
-    api.post<CalendarEvent>('/calendar', data).then((r) => r.data),
+  create: (data: {
+    driver_id: string;
+    date: string;
+    status: string;
+    assignment_id?: string;
+    ui_status?: string;
+  }) => api.post<CalendarEvent>('/calendar', data).then((r) => r.data),
 
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/calendar/${id}`).then((r) => r.data),

@@ -1,13 +1,14 @@
-export type CalendarCellContextMenuAction = 'urlaub' | 'krank' | 'sonstige';
+export type CalendarCellContextMenuAction = 'urlaub' | 'krank' | 'sonstige' | 'delete' | 'change';
 
 interface CalendarCellContextMenuProps {
   x: number;
   y: number;
+  mode?: 'empty' | 'manual';
   onClose: () => void;
   onSelect: (action: CalendarCellContextMenuAction) => void;
 }
 
-const menuItems: Array<{
+const emptyMenuItems: Array<{
   id: CalendarCellContextMenuAction;
   label: string;
   dotClass: string;
@@ -17,7 +18,24 @@ const menuItems: Array<{
   { id: 'sonstige', label: 'Sonstige Abwesenheit eintragen', dotClass: 'bg-blue-500' },
 ];
 
-export function CalendarCellContextMenu({ x, y, onClose, onSelect }: CalendarCellContextMenuProps) {
+const manualMenuItems: Array<{
+  id: CalendarCellContextMenuAction;
+  label: string;
+  dotClass: string;
+}> = [
+  { id: 'change', label: 'Status ändern', dotClass: 'bg-blue-500' },
+  { id: 'delete', label: 'Eintrag löschen', dotClass: 'bg-red-500' },
+];
+
+export function CalendarCellContextMenu({
+  x,
+  y,
+  mode = 'empty',
+  onClose,
+  onSelect,
+}: CalendarCellContextMenuProps) {
+  const menuItems = mode === 'manual' ? manualMenuItems : emptyMenuItems;
+
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={onClose} />

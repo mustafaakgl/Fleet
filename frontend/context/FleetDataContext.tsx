@@ -172,16 +172,6 @@ export interface FleetRequest {
   notes: string;
 }
 
-interface RevenueData {
-  monthlyRevenue: number;
-  todayRevenue: number;
-  tomorrowForecast: number;
-  lostRevenueThisMonth: number;
-  revenueByCompany: Array<{ name: string; amount: number }>;
-  revenueByVehicle: Array<{ name: string; amount: number }>;
-  revenueByDriver: Array<{ name: string; amount: number }>;
-}
-
 interface FleetDataContextValue {
   drivers: FleetDriver[];
   calendarStatuses: FleetCalendarStatus[];
@@ -193,7 +183,6 @@ interface FleetDataContextValue {
   driverAssignmentHistory: AssignmentHistoryEntry[];
   vehicleAssignmentHistory: AssignmentHistoryEntry[];
   companyAssignmentHistory: AssignmentHistoryEntry[];
-  revenueData: RevenueData;
   approveRequest: (requestId: string) => { calendarUpdated: boolean };
   rejectRequest: (requestId: string) => void;
   cancelRequest: (requestId: string) => void;
@@ -643,34 +632,6 @@ const initialRequests: FleetRequest[] = [
   },
 ];
 
-const initialRevenueData: RevenueData = {
-  todayRevenue: 3100,
-  tomorrowForecast: 3900,
-  monthlyRevenue: 78350,
-  lostRevenueThisMonth: 8100,
-  revenueByCompany: [
-    { name: 'DHL', amount: 16200 },
-    { name: 'Amazon', amount: 14100 },
-    { name: 'UPS', amount: 12500 },
-    { name: 'Hermes', amount: 10750 },
-    { name: 'DB Schenker', amount: 14500 },
-  ],
-  revenueByVehicle: [
-    { name: 'AP-101', amount: 11400 },
-    { name: 'AP-102', amount: 15300 },
-    { name: 'AP-103', amount: 9800 },
-    { name: 'AP-104', amount: 12300 },
-    { name: 'AP-105', amount: 14450 },
-  ],
-  revenueByDriver: [
-    { name: 'Ilker Cukur', amount: 15300 },
-    { name: 'Thomas Scharein', amount: 16800 },
-    { name: 'Sita Diallo', amount: 8100 },
-    { name: 'Andrii Dudiak', amount: 7900 },
-    { name: 'Nesrin Feyzula', amount: 14250 },
-  ],
-};
-
 export function FleetDataProvider({ children }: { children: React.ReactNode }) {
   const [drivers, setDrivers] = useState<FleetDriver[]>(USE_MOCK_FLEET_DATA ? initialDrivers : []);
   const [calendarStatuses, setCalendarStatuses] = useState<FleetCalendarStatus[]>(
@@ -695,7 +656,6 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
   const [driverAssignmentHistory, setDriverAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [vehicleAssignmentHistory, setVehicleAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [companyAssignmentHistory, setCompanyAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
-  const [revenueData] = useState<RevenueData>(initialRevenueData);
 
   useEffect(() => {
     let cancelled = false;
@@ -1438,7 +1398,6 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       driverAssignmentHistory,
       vehicleAssignmentHistory,
       companyAssignmentHistory,
-      revenueData,
       approveRequest,
       rejectRequest,
       cancelRequest,
@@ -1474,7 +1433,6 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       morningCheckins,
       refetchHydrate,
       requests,
-      revenueData,
       transportRequests,
       vehicleAssignmentHistory,
     ],

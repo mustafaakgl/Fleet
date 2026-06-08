@@ -116,7 +116,7 @@ export async function hydrateFleetData(
     const from = formatDate(addDays(now, -90));
     const to = formatDate(addDays(now, 90));
     const events = await calendarApi.list({ from, to });
-    const allowed = new Set(['UT', 'KT', 'FT', 'AT', 'HO', 'GR', 'SCH']);
+    const allowed = new Set(['UT', 'KT', 'FT', 'AT', 'HO', 'GR', 'SCH', 'US', 'FR', 'AB', 'WE', 'MT', 'AZ', 'SZ']);
     const sourceMap: Record<string, CalendarStatusSource> = {
       manual: 'manual',
       leave: 'request',

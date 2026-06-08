@@ -51,6 +51,7 @@ export class CalendarController {
         assignmentId: dto.assignment_id,
         date: new Date(dto.date),
         status: dto.status,
+        uiStatus: dto.ui_status,
         source: CalendarSource.manual,
       },
       actorUserId,

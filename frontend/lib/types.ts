@@ -370,6 +370,7 @@ export interface CalendarEvent {
   requestId?: string | null;
   date: string;
   status: CalendarStatusCode;
+  uiStatus?: string | null;
   source: CalendarSourceCode;
 }
 

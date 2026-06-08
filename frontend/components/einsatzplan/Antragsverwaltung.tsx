@@ -19,7 +19,7 @@ export function Antragsverwaltung() {
   const { t } = useTranslation();
   const statusLabel = (value: string) =>
     KNOWN_STATUSES.includes(value) ? t(`antrag.status.${value}`) : value;
-  const { requests, cancelRequest } = useFleetData();
+  const { requests, cancelRequest, refetchHydrate } = useFleetData();
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'Antragsdatum, Antragsart' | 'Antragsart, Antragsdatum'>('Antragsdatum, Antragsart');
   const [refreshTick, setRefreshTick] = useState(0);
@@ -84,7 +84,7 @@ export function Antragsverwaltung() {
   const selectedRow = rows.find((row) => row.id === selectedRowId) ?? null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 print:space-y-2" id="antragsverwaltung-print">
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
         {t('antrag.banner')}
       </div>
@@ -114,13 +114,21 @@ export function Antragsverwaltung() {
           />
           <button
             type="button"
-            onClick={() => setRefreshTick((value) => value + 1)}
+            onClick={() => {
+              refetchHydrate();
+              setRefreshTick((value) => value + 1);
+            }}
             className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             {t('antrag.refresh')}
           </button>
-          <button type="button" className="rounded border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-50" aria-label={t('antrag.print')}>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded border border-slate-300 p-1.5 text-slate-700 hover:bg-slate-50 print:hidden"
+            aria-label={t('antrag.print')}
+          >
             <Printer className="h-4 w-4" />
           </button>
           <select

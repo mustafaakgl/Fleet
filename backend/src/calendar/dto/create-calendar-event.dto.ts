@@ -14,4 +14,9 @@ export class CreateCalendarEventDto {
   @IsOptional()
   @IsString()
   assignment_id?: string;
+
+  /** Original UI abbreviation (SU, PU, …) for round-trip display. */
+  @IsOptional()
+  @IsString()
+  ui_status?: string;
 }

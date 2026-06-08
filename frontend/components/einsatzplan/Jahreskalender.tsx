@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Lock, RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
@@ -9,10 +9,14 @@ import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusToolt
 import { useFleetData } from '@/context/FleetDataContext';
 import { calendarApi } from '@/lib/api';
 import { fromCalendarApiStatus, toCalendarApiStatus } from '@/lib/calendar-status-map';
+import {
+  buildPendingVacationDateSet,
+  buildYearOptions,
+  clampYearOption,
+  DEFAULT_VACATION_ENTITLEMENT,
+} from '@/lib/calendar-vacation';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | 'PENDING_UT' | 'APPROVED_UT' | AbsenceTypeAbbreviation | '';
-type YearOption = 2025 | 2026 | 2027;
-type WorkTimeMode = 'inklusive Arbeitszeiten' | 'exklusive Arbeitszeiten';
 
 interface Driver {
   id: string;
@@ -28,10 +32,11 @@ interface CalendarEntry {
   sourceDate?: string;
   requestId?: string;
   assignmentId?: string;
+  eventId?: string;
 }
 
 interface HoveredStatusCell {
-  year: YearOption;
+  year: number;
   monthIndex: number;
   day: number;
   entry: CalendarEntry;
@@ -39,7 +44,7 @@ interface HoveredStatusCell {
 
 interface DriverCalendarData {
   driverId: string;
-  years: Record<YearOption, Record<number, Record<number, CalendarEntry>>>;
+  years: Record<number, Record<number, Record<number, CalendarEntry>>>;
 }
 
 interface VacationPeriodOverview {
@@ -58,22 +63,23 @@ interface VacationOverview {
 }
 
 interface SelectedDay {
-  year: YearOption;
+  year: number;
   monthIndex: number;
   day: number;
   entry: CalendarEntry;
 }
 
 interface PendingAbsenceSelection {
-  year: YearOption;
+  year: number;
   monthIndex: number;
   day: number;
 }
 
-interface SelectedEmptyCell {
-  year: YearOption;
+interface SelectedContextCell {
+  year: number;
   monthIndex: number;
   day: number;
+  eventId?: string;
 }
 
 const monthLabels = [
@@ -190,7 +196,7 @@ function setStatusRange(
   }
 }
 
-function buildDriverYear(seed: 'A' | 'B' | 'C', year: YearOption) {
+function buildDriverYear(seed: 'A' | 'B' | 'C', year: number) {
   const months: Record<number, Record<number, CalendarEntry>> = {};
 
   if (seed === 'A') {
@@ -323,11 +329,12 @@ function formatYearDate(year: number, monthIndex: number, day: number) {
 
 function resolveCalendarEntry(
   driverId: string,
-  year: YearOption,
+  year: number,
   monthIndex: number,
   day: number,
   localCalendar: Record<number, Record<number, CalendarEntry>>,
   manualYearByDate: Record<string, CalendarEntry>,
+  pendingVacationDates: Set<string>,
   getCalendarStatusEntry: CalendarStatusLookup,
 ): CalendarEntry {
   const dateKey = formatYearDate(year, monthIndex, day);
@@ -352,14 +359,24 @@ function resolveCalendarEntry(
     return manual;
   }
 
+  if (pendingVacationDates.has(dateKey)) {
+    return {
+      status: 'PENDING_UT',
+      notes: 'Urlaubsantrag ausstehend.',
+      source: 'request',
+      sourceDate: dateKey,
+    };
+  }
+
   return localCalendar[monthIndex]?.[day] ?? { status: '', notes: 'Kein Eintrag vorhanden.' };
 }
 
 function calculateVacationOverview(
   driver: Driver,
-  selectedYear: YearOption,
+  selectedYear: number,
   localYearCalendar: Record<number, Record<number, CalendarEntry>>,
   manualYearByDate: Record<string, CalendarEntry>,
+  pendingVacationDates: Set<string>,
   getCalendarStatusEntry: CalendarStatusLookup,
 ): VacationOverview {
   let consumed = 0;
@@ -376,6 +393,7 @@ function calculateVacationOverview(
         day,
         localYearCalendar,
         manualYearByDate,
+        pendingVacationDates,
         getCalendarStatusEntry,
       );
 
@@ -465,21 +483,24 @@ export function Jahreskalender() {
     getCalendarStatusEntry,
     getAssignmentById,
     drivers: fleetDrivers,
+    requests,
     refetchHydrate,
     isHydrating,
   } = useFleetData();
+  const yearOptions = useMemo(() => buildYearOptions(), []);
   const [calendarState, setCalendarState] = useState<DriverCalendarData[]>(cloneDriverCalendars);
   const [selectedDriverId, setSelectedDriverId] = useState<string>('ozdemir-hakan');
-  const [selectedYear, setSelectedYear] = useState<YearOption>(2026);
-  const [workTimeMode, setWorkTimeMode] = useState<WorkTimeMode>('inklusive Arbeitszeiten');
+  const [selectedYear, setSelectedYear] = useState(() => clampYearOption(new Date().getFullYear()));
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
   const [pendingAbsenceSelection, setPendingAbsenceSelection] = useState<PendingAbsenceSelection | null>(null);
   const [selectedAbsenceTypeId, setSelectedAbsenceTypeId] = useState<string | null>(null);
   const [hoveredStatusCell, setHoveredStatusCell] = useState<HoveredStatusCell | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
-  const [selectedEmptyCell, setSelectedEmptyCell] = useState<SelectedEmptyCell | null>(null);
+  const [contextMenuMode, setContextMenuMode] = useState<'empty' | 'manual'>('empty');
+  const [selectedContextCell, setSelectedContextCell] = useState<SelectedContextCell | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [manualYearByDate, setManualYearByDate] = useState<Record<string, CalendarEntry>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const isLiveDriver = useMemo(
     () => fleetDrivers.some((driver) => driver.id === selectedDriverId),
@@ -505,10 +526,11 @@ export function Jahreskalender() {
         }
         const dateStr = (event.date ?? '').slice(0, 10);
         map[dateStr] = {
-          status: fromCalendarApiStatus(event.status) as CalendarStatus,
+          status: fromCalendarApiStatus(event.status, event.uiStatus) as CalendarStatus,
           notes: 'Manuell eingetragen.',
           source: 'manual',
           sourceDate: dateStr,
+          eventId: event.id,
         };
       }
       setManualYearByDate(map);
@@ -526,12 +548,22 @@ export function Jahreskalender() {
       return fleetDrivers.map((driver) => ({
         id: driver.id,
         name: driver.name,
-        annualVacationEntitlement: 24,
+        annualVacationEntitlement: DEFAULT_VACATION_ENTITLEMENT,
         carryOverFromPreviousPeriod: 0,
       }));
     }
     return drivers;
   }, [fleetDrivers]);
+
+  const usesDefaultEntitlement = fleetDrivers.length > 0;
+
+  const pendingVacationDates = useMemo(
+    () =>
+      isLiveDriver
+        ? buildPendingVacationDateSet(requests, selectedDriverId, selectedYear)
+        : new Set<string>(),
+    [isLiveDriver, requests, selectedDriverId, selectedYear],
+  );
 
   useEffect(() => {
     if (driverOptions.length === 0) return;
@@ -569,9 +601,17 @@ export function Jahreskalender() {
         day,
         selectedCalendar,
         manualYearByDate,
+        pendingVacationDates,
         getCalendarStatusEntry,
       );
-  }, [getCalendarStatusEntry, manualYearByDate, selectedCalendar, selectedDriverId, selectedYear]);
+  }, [
+    getCalendarStatusEntry,
+    manualYearByDate,
+    pendingVacationDates,
+    selectedCalendar,
+    selectedDriverId,
+    selectedYear,
+  ]);
 
   const vacationOverview = useMemo(() => {
     return calculateVacationOverview(
@@ -579,9 +619,17 @@ export function Jahreskalender() {
       selectedYear,
       selectedCalendar,
       manualYearByDate,
+      pendingVacationDates,
       getCalendarStatusEntry,
     );
-  }, [getCalendarStatusEntry, manualYearByDate, selectedCalendar, selectedDriver, selectedYear]);
+  }, [
+    getCalendarStatusEntry,
+    manualYearByDate,
+    pendingVacationDates,
+    selectedCalendar,
+    selectedDriver,
+    selectedYear,
+  ]);
 
   const vacationOverviewRows = [
     { label: 'jk.rowCarryOver', current: formatDays(vacationOverview.currentPeriod.carryOver), next: formatDays(vacationOverview.nextPeriod.carryOver) },
@@ -595,22 +643,65 @@ export function Jahreskalender() {
 
   const closeContextMenu = () => {
     setContextMenuPosition(null);
-    setSelectedEmptyCell(null);
+    setSelectedContextCell(null);
+    setContextMenuMode('empty');
   };
 
   const openContextMenu = (
     event: React.MouseEvent<HTMLButtonElement>,
-    payload: SelectedEmptyCell,
+    payload: SelectedContextCell,
+    mode: 'empty' | 'manual' = 'empty',
   ) => {
     event.preventDefault();
     setSelectedDay(null);
     setPendingAbsenceSelection(null);
     setSelectedAbsenceTypeId(null);
-    setSelectedEmptyCell(payload);
+    setSelectedContextCell(payload);
+    setContextMenuMode(mode);
     setContextMenuPosition({ x: event.clientX + 8, y: event.clientY + 8 });
   };
 
-  const applyManualStatus = async (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
+  const deleteManualEntry = async (target: SelectedContextCell) => {
+    const sourceDate = formatYearDate(target.year, target.monthIndex, target.day);
+    setSaveError(null);
+
+    if (isLiveDriver && target.eventId) {
+      setManualYearByDate((current) => {
+        const next = { ...current };
+        delete next[sourceDate];
+        return next;
+      });
+
+      try {
+        await calendarApi.remove(target.eventId);
+        refetchHydrate();
+      } catch {
+        setSaveError(t('jk.saveError'));
+        void loadManualYearEvents();
+      }
+      return;
+    }
+
+    setCalendarState((current) =>
+      current.map((calendar) => {
+        if (calendar.driverId !== selectedDriverId) return calendar;
+        const month = { ...(calendar.years[target.year]?.[target.monthIndex] ?? {}) };
+        delete month[target.day];
+        return {
+          ...calendar,
+          years: {
+            ...calendar.years,
+            [target.year]: {
+              ...calendar.years[target.year],
+              [target.monthIndex]: month,
+            },
+          },
+        };
+      }),
+    );
+  };
+
+  const applyManualStatus = async (target: SelectedContextCell, status: Exclude<CalendarStatus, ''>) => {
     const sourceDate = formatYearDate(target.year, target.monthIndex, target.day);
     const entry: CalendarEntry = {
       status,
@@ -618,18 +709,25 @@ export function Jahreskalender() {
       source: 'manual',
       sourceDate,
     };
+    setSaveError(null);
 
     if (isLiveDriver) {
       setManualYearByDate((current) => ({ ...current, [sourceDate]: entry }));
 
       try {
-        await calendarApi.create({
+        const created = await calendarApi.create({
           driver_id: selectedDriverId,
           date: sourceDate,
           status: toCalendarApiStatus(status),
+          ui_status: status,
         });
+        setManualYearByDate((current) => ({
+          ...current,
+          [sourceDate]: { ...entry, eventId: created.id },
+        }));
         refetchHydrate();
       } catch {
+        setSaveError(t('jk.saveError'));
         setManualYearByDate((current) => {
           const next = { ...current };
           delete next[sourceDate];
@@ -660,25 +758,38 @@ export function Jahreskalender() {
   };
 
   const handleContextMenuAction = (action: CalendarCellContextMenuAction) => {
-    if (!selectedEmptyCell) return;
+    if (!selectedContextCell) return;
+
+    if (action === 'delete') {
+      void deleteManualEntry(selectedContextCell);
+      closeContextMenu();
+      return;
+    }
+
+    if (action === 'change') {
+      setPendingAbsenceSelection(selectedContextCell);
+      setSelectedAbsenceTypeId(null);
+      closeContextMenu();
+      return;
+    }
 
     if (action === 'urlaub') {
-      void applyManualStatus(selectedEmptyCell, 'UT');
+      void applyManualStatus(selectedContextCell, 'UT');
       closeContextMenu();
       return;
     }
 
     if (action === 'krank') {
-      void applyManualStatus(selectedEmptyCell, 'KT');
+      void applyManualStatus(selectedContextCell, 'KT');
       closeContextMenu();
       return;
     }
 
     if (absenceTypes.length > 0) {
-      setPendingAbsenceSelection(selectedEmptyCell);
+      setPendingAbsenceSelection(selectedContextCell);
       setSelectedAbsenceTypeId(null);
     } else {
-      void applyManualStatus(selectedEmptyCell, 'SA');
+      void applyManualStatus(selectedContextCell, 'SA');
     }
 
     closeContextMenu();
@@ -700,6 +811,18 @@ export function Jahreskalender() {
 
   return (
     <div className="space-y-5">
+      {usesDefaultEntitlement && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {t('jk.entitlementWarning', { days: DEFAULT_VACATION_ENTITLEMENT })}
+        </div>
+      )}
+
+      {saveError && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {saveError}
+        </div>
+      )}
+
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-3">
@@ -728,14 +851,6 @@ export function Jahreskalender() {
                 ))}
               </select>
             </div>
-
-            <button
-              type="button"
-              className="mt-5 inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-              aria-label={t('jk.lockSelection')}
-            >
-              <Lock className="h-4 w-4" />
-            </button>
 
             <button
               type="button"
@@ -786,24 +901,17 @@ export function Jahreskalender() {
             <select
               value={selectedYear}
               onChange={(event) => {
-                setSelectedYear(Number(event.target.value) as YearOption);
+                setSelectedYear(Number(event.target.value));
                 setSelectedDay(null);
                 setPendingAbsenceSelection(null);
               }}
               className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
             >
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-              <option value={2027}>2027</option>
-            </select>
-
-            <select
-              value={workTimeMode}
-              onChange={(event) => setWorkTimeMode(event.target.value as WorkTimeMode)}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-            >
-              <option value="inklusive Arbeitszeiten">{t('jk.workTimeInclusive')}</option>
-              <option value="exklusive Arbeitszeiten">{t('jk.workTimeExclusive')}</option>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -856,6 +964,19 @@ export function Jahreskalender() {
                           });
                         }}
                         onContextMenu={(event) => {
+                          if (entry.source === 'manual' && entry.eventId && isLiveDriver) {
+                            openContextMenu(
+                              event,
+                              {
+                                year: selectedYear,
+                                monthIndex,
+                                day,
+                                eventId: entry.eventId,
+                              },
+                              'manual',
+                            );
+                            return;
+                          }
                           if (entry.status) return;
                           openContextMenu(event, { year: selectedYear, monthIndex, day });
                         }}
@@ -872,6 +993,20 @@ export function Jahreskalender() {
                           setSelectedAbsenceTypeId(null);
                         }}
                         onMouseDown={(event) => {
+                          if (entry.source === 'manual' && entry.eventId && isLiveDriver) {
+                            if (event.button !== 0) return;
+                            openContextMenu(
+                              event,
+                              {
+                                year: selectedYear,
+                                monthIndex,
+                                day,
+                                eventId: entry.eventId,
+                              },
+                              'manual',
+                            );
+                            return;
+                          }
                           if (entry.status) return;
                           if (event.button !== 0) return;
                           openContextMenu(event, { year: selectedYear, monthIndex, day });
@@ -971,6 +1106,41 @@ export function Jahreskalender() {
                 <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">{selectedDay.entry.notes}</p>
               </div>
 
+              {selectedDay.entry.source === 'manual' && (selectedDay.entry.eventId || !isLiveDriver) && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingAbsenceSelection({
+                        year: selectedDay.year,
+                        monthIndex: selectedDay.monthIndex,
+                        day: selectedDay.day,
+                      });
+                      setSelectedAbsenceTypeId(null);
+                      setSelectedDay(null);
+                    }}
+                    className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {t('jk.changeEntry')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void deleteManualEntry({
+                        year: selectedDay.year,
+                        monthIndex: selectedDay.monthIndex,
+                        day: selectedDay.day,
+                        eventId: selectedDay.entry.eventId,
+                      });
+                      setSelectedDay(null);
+                    }}
+                    className="rounded-md border border-rose-300 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                  >
+                    {t('jk.deleteEntry')}
+                  </button>
+                </div>
+              )}
+
               {selectedAssignment && (
                 <>
                   <div>
@@ -1004,10 +1174,11 @@ export function Jahreskalender() {
         </>
       )}
 
-      {contextMenuPosition && selectedEmptyCell && (
+      {contextMenuPosition && selectedContextCell && (
         <CalendarCellContextMenu
           x={contextMenuPosition.x}
           y={contextMenuPosition.y}
+          mode={contextMenuMode}
           onClose={closeContextMenu}
           onSelect={handleContextMenuAction}
         />
