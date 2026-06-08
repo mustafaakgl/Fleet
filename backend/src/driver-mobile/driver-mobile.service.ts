@@ -177,7 +177,55 @@ export class DriverMobileService {
   }
 
   async me(userId: string) {
-    const { user, driver } = await this.resolveDriver(userId);
+    const { user, driver: linkedDriver } = await this.resolveDriver(userId);
+
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: linkedDriver.id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        email: true,
+        status: true,
+        riskLevel: true,
+        employeeNumber: true,
+        licenseNumber: true,
+        licenseExpiryDate: true,
+        passportNumber: true,
+        passportExpiryDate: true,
+        currentVehicles: {
+          where: { status: 'active' },
+          select: { id: true, plateNumber: true, brand: true, model: true },
+          take: 1,
+        },
+      },
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const baseDate = this.localCalendarDateString();
+    const { start, end } = this.dayRange(baseDate);
+    const todayAssignment = await this.prisma.assignment.findFirst({
+      where: {
+        driverId: driver.id,
+        workDate: { gte: start, lt: end },
+        status: { not: AssignmentStatus.cancelled },
+      },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        vehicle: { select: { id: true, plateNumber: true, brand: true, model: true } },
+        company: { select: { id: true, name: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    const assignedVehicle = driver.currentVehicles[0] ?? todayAssignment?.vehicle ?? null;
+
     return {
       user: {
         id: user.id,
@@ -195,6 +243,22 @@ export class DriverMobileService {
         email: driver.email,
         status: driver.status,
         riskLevel: driver.riskLevel,
+        employeeNumber: driver.employeeNumber,
+        licenseNumber: driver.licenseNumber,
+        licenseExpiryDate: driver.licenseExpiryDate?.toISOString().slice(0, 10) ?? null,
+        passportNumber: driver.passportNumber,
+        passportExpiryDate: driver.passportExpiryDate?.toISOString().slice(0, 10) ?? null,
+        assignedVehicle,
+        todayAssignment: todayAssignment
+          ? {
+              id: todayAssignment.id,
+              startTime: todayAssignment.startTime,
+              endTime: todayAssignment.endTime,
+              vehicle: todayAssignment.vehicle,
+              company: todayAssignment.company,
+              workDate: baseDate,
+            }
+          : null,
       },
     };
   }

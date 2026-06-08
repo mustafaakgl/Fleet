@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ChevronLeft, Pencil } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Pencil, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,9 @@ import { formatDate, statusColor } from '@/lib/utils';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+
+const VEHICLE_DOCUMENT_TYPES = ['TUV', 'SP', 'Registration', 'Insurance', 'Service Report'] as const;
 
 interface VehicleAssignmentRow {
   id: string;
@@ -89,6 +92,12 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [serviceRecordsError, setServiceRecordsError] = useState<string | null>(null);
 
+  const [uploadDocType, setUploadDocType] = useState<string>(VEHICLE_DOCUMENT_TYPES[0]);
+  const [uploadExpiry, setUploadExpiry] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadDocError, setUploadDocError] = useState<string | null>(null);
+
   useEffect(() => {
     vehiclesApi
       .getById(id)
@@ -140,6 +149,34 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       window.alert(e instanceof Error ? e.message : t('vehicleDetail.equipmentSaveError'));
     } finally {
       setEquipmentSaving(false);
+    }
+  }
+
+  async function handleUploadDocument() {
+    if (!uploadFile) {
+      setUploadDocError(t('vehicleDetail.uploadFileRequired'));
+      return;
+    }
+    setUploadingDoc(true);
+    setUploadDocError(null);
+    try {
+      const formData = new FormData();
+      formData.append('ownerType', 'vehicle');
+      formData.append('ownerId', id);
+      formData.append('documentType', uploadDocType);
+      if (uploadExpiry.trim()) {
+        formData.append('expiryDate', uploadExpiry.trim());
+      }
+      formData.append('file', uploadFile);
+      await documentsApi.upload(formData);
+      setUploadFile(null);
+      setUploadExpiry('');
+      const rows = await documentsApi.list('vehicle', id);
+      setDocuments(rows);
+    } catch (e) {
+      setUploadDocError(e instanceof Error ? e.message : t('vehicleDetail.uploadFailed'));
+    } finally {
+      setUploadingDoc(false);
     }
   }
 
@@ -288,6 +325,59 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         <CardHeader>
           <CardTitle>{t('vehicleDetail.documents')}</CardTitle>
         </CardHeader>
+        <CardContent className="space-y-4 border-b border-slate-200 p-4">
+          <p className="text-sm text-slate-600">{t('vehicleDetail.uploadDocumentHint')}</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                {t('vehicleDetail.colDocType')}
+              </label>
+              <Select
+                value={uploadDocType}
+                onChange={(e) => setUploadDocType(e.target.value)}
+                className="w-full"
+              >
+                {VEHICLE_DOCUMENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                {t('vehicleDetail.colExpiryDate')}
+              </label>
+              <Input
+                type="date"
+                value={uploadExpiry}
+                onChange={(e) => setUploadExpiry(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                {t('vehicleDetail.uploadFile')}
+              </label>
+              <Input
+                type="file"
+                accept=".pdf,image/*"
+                onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                onClick={() => void handleUploadDocument()}
+                disabled={uploadingDoc || !uploadFile}
+                className="w-full"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {uploadingDoc ? t('vehicleDetail.uploading') : t('vehicleDetail.uploadDocument')}
+              </Button>
+            </div>
+          </div>
+          {uploadDocError ? <p className="text-sm text-red-600">{uploadDocError}</p> : null}
+        </CardContent>
         <CardContent className="p-0">
           {documentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.documentsLoadError')}</p>

@@ -25,6 +25,25 @@ export type DriverMeResponse = {
     email?: string | null;
     status: string;
     riskLevel: string;
+    employeeNumber?: string;
+    licenseNumber?: string | null;
+    licenseExpiryDate?: string | null;
+    passportNumber?: string | null;
+    passportExpiryDate?: string | null;
+    assignedVehicle?: {
+      id: string;
+      plateNumber: string;
+      brand: string;
+      model: string;
+    } | null;
+    todayAssignment?: {
+      id: string;
+      workDate: string;
+      startTime: string;
+      endTime: string;
+      vehicle: { id: string; plateNumber: string; brand: string; model: string };
+      company: { id: string; name: string };
+    } | null;
   };
 };
 

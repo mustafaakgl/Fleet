@@ -85,6 +85,44 @@ export default function ProfileSettingsScreen() {
             <SectionHeader title={t('profile.account')} />
             <Card>
               <InfoRow label={t('profile.phone')} value={data.driver.phone ?? '—'} />
+              <InfoRow label={t('profile.employeeNumber')} value={data.driver.employeeNumber ?? '—'} />
+              <InfoRow label={t('profile.riskLevel')} value={data.driver.riskLevel} />
+            </Card>
+
+            <SectionHeader title={t('profile.employeeInfo')} />
+            <Card>
+              <InfoRow
+                label={t('profile.license')}
+                value={formatLicenseLine(
+                  data.driver.licenseNumber,
+                  data.driver.licenseExpiryDate,
+                )}
+              />
+              <InfoRow
+                label={t('profile.passport')}
+                value={formatLicenseLine(
+                  data.driver.passportNumber,
+                  data.driver.passportExpiryDate,
+                )}
+              />
+              <InfoRow
+                label={t('profile.currentVehicle')}
+                value={
+                  data.driver.assignedVehicle
+                    ? `${data.driver.assignedVehicle.plateNumber} · ${data.driver.assignedVehicle.brand} ${data.driver.assignedVehicle.model}`
+                    : '—'
+                }
+              />
+              <InfoRow
+                label={t('profile.todayCompany')}
+                value={data.driver.todayAssignment?.company.name ?? '—'}
+              />
+              {data.driver.todayAssignment ? (
+                <InfoRow
+                  label={t('profile.todayShift')}
+                  value={`${data.driver.todayAssignment.startTime} – ${data.driver.todayAssignment.endTime}`}
+                />
+              ) : null}
             </Card>
 
             <ListRow
@@ -145,6 +183,17 @@ export default function ProfileSettingsScreen() {
   );
 }
 
+function formatLicenseLine(number?: string | null, expiry?: string | null) {
+  if (!number && !expiry) {
+    return '—';
+  }
+  const parts = [number ?? '—'];
+  if (expiry) {
+    parts.push(expiry.slice(0, 10));
+  }
+  return parts.join(' · ');
+}
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.infoRow}>
@@ -199,7 +248,7 @@ const styles = StyleSheet.create({
   languageTextActive: {
     color: colors.accent,
   },
-  infoRow: { gap: 2 },
+  infoRow: { gap: 2, paddingVertical: spacing.xs },
   infoLabel: { ...typography.caption, textTransform: 'none' },
   infoValue: { ...typography.bodyMedium, color: colors.primary },
 });
