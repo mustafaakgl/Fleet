@@ -146,6 +146,8 @@ export interface Vehicle {
   status: VehicleStatus;
   tuv_expiry_date?: string;
   sp_expiry_date?: string;
+  insurance_expiry_date?: string;
+  registration_expiry_date?: string;
   current_driver?: Pick<Driver, 'id' | 'first_name' | 'last_name'> | null;
   photo_url?: string;
   created_at?: string;
@@ -325,7 +327,14 @@ export interface CargoDamageReport {
 
 // ─── Document ─────────────────────────────────────────────────────────────
 
-export type DocumentOwnerType = 'driver' | 'vehicle' | 'company' | 'request' | 'accident' | 'cargo_damage';
+export type DocumentOwnerType =
+  | 'driver'
+  | 'vehicle'
+  | 'company'
+  | 'request'
+  | 'accident'
+  | 'cargo_damage'
+  | 'service_record';
 
 export interface Document {
   id: string;
@@ -438,6 +447,7 @@ export interface ServiceRecord {
   driver_name?: string;
   date: string;
   service_type: string;
+  vendor?: string;
   repair_company: string;
   cost_amount: number;
   mileage_km?: number | null;
@@ -498,6 +508,8 @@ export type ReminderType =
   | 'passport_expiry'
   | 'tuv_expiry'
   | 'sp_expiry'
+  | 'insurance_expiry'
+  | 'document_expiry'
   | 'contract_expiry'
   | 'custom';
 export type ReminderStatus = 'open' | 'resolved';
@@ -559,6 +571,11 @@ export interface DashboardTodayOperation {
   startTime: string;
   endTime: string;
   status: string;
+  cargoName?: string;
+  cargoOwner?: string;
+  pickupAddress?: string;
+  deliveryAddress?: string;
+  routeName?: string;
 }
 
 export interface DashboardTomorrowPlanning {
@@ -608,6 +625,41 @@ export interface DashboardChartAnalytics {
   monthlyAccidents: DashboardChartPoint[];
 }
 
+export interface DashboardFleetWidgets {
+  serviceReminders: { overdue: number; dueSoon: number };
+  openIssues: { open: number; overdue: number };
+  vehicleRenewals: { overdue: number; dueSoon: number };
+  incompleteWorkOrders: { open: number; pending: number };
+  contactRenewals: { overdue: number; dueSoon: number };
+  vehicleAssignments: { assigned: number; unassigned: number };
+  vehicleStatus: {
+    active: number;
+    maintenance: number;
+    inactive: number;
+    broken: number;
+  };
+}
+
+export interface DashboardCostChartPoint {
+  label: string;
+  shortLabel: string;
+  value: number;
+}
+
+export interface DashboardRepairReason {
+  id: string;
+  label: string;
+  count: number;
+  total: number;
+  color: string;
+}
+
+export interface DashboardCostAnalytics {
+  totalCosts: DashboardCostChartPoint[];
+  otherCosts: DashboardCostChartPoint[];
+  topRepairReasons: DashboardRepairReason[];
+}
+
 export interface DashboardSummary {
   kpis: DashboardKpis;
   criticalAlerts: DashboardCriticalAlert[];
@@ -617,6 +669,8 @@ export interface DashboardSummary {
   driverRiskOverview: DashboardDriverRiskRow[];
   revenueAnalytics?: DashboardRevenueAnalytics;
   chartAnalytics?: DashboardChartAnalytics | null;
+  fleetWidgets?: DashboardFleetWidgets;
+  costAnalytics?: DashboardCostAnalytics | null;
 }
 
 // ─── Messenger ─────────────────────────────────────────────────────────────

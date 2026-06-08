@@ -34,6 +34,8 @@ function toClientVehicle(row: VehicleWithCurrentDriver) {
     status: row.status,
     tuv_expiry_date: row.tuvExpiryDate?.toISOString(),
     sp_expiry_date: row.spExpiryDate?.toISOString(),
+    insurance_expiry_date: row.insuranceExpiryDate?.toISOString(),
+    registration_expiry_date: row.registrationExpiryDate?.toISOString(),
     current_driver: row.currentDriver
       ? {
           id: row.currentDriver.id,

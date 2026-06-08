@@ -1,13 +1,15 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Sun } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Sun, Truck } from 'lucide-react';
 import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { usePlanningDate } from '@/hooks/usePlanningDate';
 import {
   resolveOfficeTabFromQuery,
+  vehicleAssignmentsHref,
   type EinsatzplanView,
   type OfficeEinsatzTab,
 } from '@/lib/office-deep-links';
@@ -144,6 +146,13 @@ export function EinsatzplanOfficeView() {
                     {t('office.backToToday')}
                   </button>
                 ) : null}
+                <Link
+                  href={vehicleAssignmentsHref(planningDate)}
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <Truck className="h-4 w-4" />
+                  {tCommon('vehicleAssignments.title')}
+                </Link>
               </div>
               <Tagesplanung
                 initialSubTab={initialPlanningSubtab}

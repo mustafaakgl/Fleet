@@ -1,0 +1,1 @@
+ALTER TABLE "ServiceRecord" ADD COLUMN IF NOT EXISTS "vendor" TEXT;

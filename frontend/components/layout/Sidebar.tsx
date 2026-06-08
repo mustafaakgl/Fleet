@@ -2,12 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, CircleHelp, LogOut, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { Building2, ChevronDown, CircleHelp, LogOut, Menu, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { clearAuth, getUser } from '@/lib/auth';
-import { getNavigationForRole } from '@/lib/navigation';
+import {
+  getNavigationForRole,
+  isNavItemActive,
+  isNavSection,
+  isNavSectionActive,
+  type NavEntry,
+  type NavItem,
+  type NavSection,
+} from '@/lib/navigation';
 import { useRouter } from 'next/navigation';
 import type { AuthUser, Role } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
@@ -21,8 +29,122 @@ export function Sidebar() {
   const [user] = useState<AuthUser | null>(() => getUser());
 
   const role = (user?.role ?? 'office') as Role;
-  const navGroups = getNavigationForRole(role);
+  const navGroups = useMemo(() => getNavigationForRole(role), [role]);
   const isFleetOps = Boolean(user?.fleet_ops);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  function toggleSection(sectionId: string, sectionActive: boolean) {
+    setExpandedSections((current) => {
+      const isOpen = current[sectionId] ?? sectionActive;
+      return { ...current, [sectionId]: !isOpen };
+    });
+  }
+
+  function renderNavItem(item: NavItem, nested = false) {
+    const Icon = item.icon;
+    const isActive = isNavItemActive(pathname, item.href);
+
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() => setMobileOpen(false)}
+        className={cn(
+          'flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors',
+          nested ? 'pl-9 pr-3' : 'px-3',
+          !nested && tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
+          isActive
+            ? nested
+              ? 'bg-blue-50 text-blue-700'
+              : 'bg-blue-50 text-blue-700'
+            : nested
+              ? 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+        )}
+      >
+        {Icon ? <Icon className="h-5 w-5 shrink-0" /> : null}
+        <span className={cn(tabletCollapsed && !nested ? 'hidden lg:inline' : 'inline')}>
+          {t(item.labelKey)}
+        </span>
+      </Link>
+    );
+  }
+
+  function renderNavSection(section: NavSection) {
+    const sectionActive = isNavSectionActive(pathname, section);
+    const expanded = expandedSections[section.id] ?? sectionActive;
+    const SectionIcon = section.icon;
+    const showChildren = expanded;
+
+    return (
+      <div key={section.id} className="space-y-0.5">
+        <button
+          type="button"
+          onClick={() => toggleSection(section.id, sectionActive)}
+          className={cn(
+            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+            tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
+            sectionActive
+              ? 'bg-blue-50 text-blue-700'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+          )}
+        >
+          <SectionIcon className="h-5 w-5 shrink-0" />
+          <span className={cn('flex-1 text-left', tabletCollapsed ? 'hidden lg:inline' : 'inline')}>
+            {t(section.labelKey)}
+          </span>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 shrink-0 text-slate-400 transition-transform',
+              tabletCollapsed ? 'hidden lg:block' : 'block',
+              showChildren ? 'rotate-0' : '-rotate-90',
+            )}
+          />
+        </button>
+
+        {showChildren ? (
+          <div
+            className={cn(
+              'relative space-y-0.5',
+              tabletCollapsed ? 'hidden lg:block' : 'block',
+            )}
+          >
+            <span className="absolute bottom-1 left-[1.35rem] top-1 w-px bg-slate-200" aria-hidden />
+            {section.items.map((item) => {
+              const isActive = isNavItemActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'relative flex items-center rounded-lg py-2 pl-9 pr-3 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute left-[1.22rem] top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white',
+                      isActive ? 'bg-blue-600' : 'bg-slate-300',
+                    )}
+                    aria-hidden
+                  />
+                  {t(item.labelKey)}
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderNavEntry(entry: NavEntry) {
+    if (isNavSection(entry)) return renderNavSection(entry);
+    return renderNavItem(entry);
+  }
 
   function handleLogout() {
     clearAuth();
@@ -65,28 +187,7 @@ export function Sidebar() {
                 {t(group.labelKey)}
               </p>
               <div className="space-y-0.5">
-                {group.items.map(({ href, labelKey, icon: Icon }) => {
-                  const isActive = pathname === href || pathname.startsWith(`${href}/`);
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={() => setMobileOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                        tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
-                        isActive
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-                      )}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" />
-                      <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>
-                        {t(labelKey)}
-                      </span>
-                    </Link>
-                  );
-                })}
+                {group.items.map((entry) => renderNavEntry(entry))}
               </div>
             </div>
           ))}

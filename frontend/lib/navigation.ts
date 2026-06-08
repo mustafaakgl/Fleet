@@ -25,14 +25,48 @@ import type { Role } from './types';
 export type NavItem = {
   href: string;
   labelKey: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
 };
+
+export type NavSection = {
+  id: string;
+  labelKey: string;
+  icon: LucideIcon;
+  items: NavItem[];
+};
+
+export type NavEntry = NavItem | NavSection;
 
 export type NavGroup = {
   id: string;
   labelKey: string;
-  items: NavItem[];
+  items: NavEntry[];
 };
+
+export function isNavSection(entry: NavEntry): entry is NavSection {
+  return 'items' in entry;
+}
+
+export function isVehicleListPath(pathname: string): boolean {
+  if (pathname === '/vehicles') return true;
+  if (pathname.startsWith('/vehicles/assignments')) return false;
+  return pathname.startsWith('/vehicles/');
+}
+
+export function isNavItemActive(pathname: string, href: string): boolean {
+  if (href.startsWith('/reminders/')) {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+  if (href === '/vehicles') return isVehicleListPath(pathname);
+  if (href === '/service-history') {
+    return pathname === '/service-history' || pathname.startsWith('/service-history/');
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function isNavSectionActive(pathname: string, section: NavSection): boolean {
+  return section.items.some((item) => isNavItemActive(pathname, item.href));
+}
 
 const ALL_ITEMS: Record<string, NavItem> = {
   dashboard: { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
@@ -42,51 +76,80 @@ const ALL_ITEMS: Record<string, NavItem> = {
   requests: { href: '/requests', labelKey: 'nav.requests', icon: ClipboardList },
   messenger: { href: '/messenger', labelKey: 'nav.messenger', icon: MessageSquare },
   drivers: { href: '/drivers', labelKey: 'nav.drivers', icon: Users },
-  vehicles: { href: '/vehicles', labelKey: 'nav.vehicles', icon: Truck },
   companies: { href: '/companies', labelKey: 'nav.companies', icon: Building2 },
   documents: { href: '/documents', labelKey: 'nav.documents', icon: FileText },
   reminders: { href: '/reminders', labelKey: 'nav.reminders', icon: Bell },
   cargoDamage: { href: '/cargo-damage', labelKey: 'nav.cargoDamage', icon: ClipboardList },
   accidents: { href: '/accidents', labelKey: 'nav.accidents', icon: CarFront },
-  serviceHistory: { href: '/service-history', labelKey: 'nav.serviceHistory', icon: Wrench },
   workSessions: { href: '/work-sessions', labelKey: 'nav.workSessions', icon: Clock },
 };
 
-function group(id: string, labelKey: string, keys: (keyof typeof ALL_ITEMS)[]): NavGroup {
-  return { id, labelKey, items: keys.map((k) => ALL_ITEMS[k]) };
+const VEHICLES_SECTION: NavSection = {
+  id: 'vehicles',
+  labelKey: 'nav.vehicles',
+  icon: Truck,
+  items: [
+    { href: '/vehicles', labelKey: 'nav.vehicles.list' },
+    { href: '/vehicles/assignments', labelKey: 'nav.vehicles.assignments' },
+    { href: '/service-history', labelKey: 'nav.vehicles.expenseHistory' },
+  ],
+};
+
+const REMINDERS_SECTION: NavSection = {
+  id: 'reminders',
+  labelKey: 'nav.reminders',
+  icon: Bell,
+  items: [
+    { href: '/reminders/service', labelKey: 'nav.reminders.service' },
+    { href: '/reminders/vehicle', labelKey: 'nav.reminders.vehicle' },
+    { href: '/reminders/contact', labelKey: 'nav.reminders.contact' },
+  ],
+};
+
+function item(key: keyof typeof ALL_ITEMS): NavItem {
+  return ALL_ITEMS[key];
+}
+
+function group(id: string, labelKey: string, entries: NavEntry[]): NavGroup {
+  return { id, labelKey, items: entries };
 }
 
 /** Office-first: daily work surfaced at the top, master data grouped below. */
 const OFFICE_NAV: NavGroup[] = [
   group('daily', 'nav.group.daily', [
-    'dashboard',
-    'officeQueue',
-    'assignments',
-    'liveTracking',
-    'requests',
-    'messenger',
+    item('dashboard'),
+    item('officeQueue'),
+    item('assignments'),
+    item('liveTracking'),
+    item('requests'),
+    item('messenger'),
   ]),
-  group('fleet', 'nav.group.fleet', ['drivers', 'vehicles', 'companies']),
-  group('compliance', 'nav.group.compliance', ['documents', 'reminders', 'cargoDamage', 'accidents', 'workSessions']),
-  group('more', 'nav.group.more', ['serviceHistory']),
+  group('fleet', 'nav.group.fleet', [item('drivers'), VEHICLES_SECTION, item('companies')]),
+  group('compliance', 'nav.group.compliance', [
+    item('documents'),
+    REMINDERS_SECTION,
+    item('cargoDamage'),
+    item('accidents'),
+    item('workSessions'),
+  ]),
 ];
 
 /** Default operational layout (admin, boss, accounting). */
 const DEFAULT_NAV: NavGroup[] = [
-  group('overview', 'nav.group.overview', [
-    'dashboard',
-    'assignments',
-    'liveTracking',
+  group('overview', 'nav.group.overview', [item('dashboard'), item('assignments'), item('liveTracking')]),
+  group('master', 'nav.group.master', [
+    item('drivers'),
+    VEHICLES_SECTION,
+    item('companies'),
+    item('documents'),
   ]),
-  group('master', 'nav.group.master', ['drivers', 'vehicles', 'companies', 'documents']),
   group('operations', 'nav.group.operations', [
-    'requests',
-    'cargoDamage',
-    'accidents',
-    'serviceHistory',
-    'reminders',
-    'workSessions',
-    'messenger',
+    item('requests'),
+    item('cargoDamage'),
+    item('accidents'),
+    REMINDERS_SECTION,
+    item('workSessions'),
+    item('messenger'),
   ]),
 ];
 
@@ -150,5 +213,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
 }
 
 export function flattenNavGroups(groups: NavGroup[]): NavItem[] {
-  return groups.flatMap((g) => g.items);
+  return groups.flatMap((group) =>
+    group.items.flatMap((entry) => (isNavSection(entry) ? entry.items : [entry])),
+  );
 }

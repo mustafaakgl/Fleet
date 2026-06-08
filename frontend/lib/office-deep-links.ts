@@ -90,3 +90,8 @@ export function officeQueueHref(category?: string): string {
 export function assignmentDetailHref(assignmentId: string, date?: string): string {
   return einsatzplanHref({ date, panel: 'tagesplanung', view: 'daily-overview', transportId: undefined });
 }
+
+export function vehicleAssignmentsHref(date?: string): string {
+  if (!date) return '/vehicles/assignments';
+  return `/vehicles/assignments?date=${encodeURIComponent(date)}`;
+}

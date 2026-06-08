@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { Mail, Save, Search, X } from 'lucide-react';
+import { Mail, Save, Search, Truck, X } from 'lucide-react';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { createPlanningPlaceholder } from '@/lib/planning-assignment';
+import { vehicleAssignmentsHref } from '@/lib/office-deep-links';
 import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
@@ -45,6 +47,7 @@ export function Tagesplanung({
   operationsOnly?: boolean;
 }) {
   const { t } = useTranslation('einsatzplan');
+  const { t: tCommon } = useTranslation('common');
   const searchParams = useSearchParams();
   const {
     assignments,
@@ -123,11 +126,20 @@ export function Tagesplanung({
   return (
     <div className="space-y-4">
       {!operationsOnly ? (
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">
-            {officeMode ? t('planning.titleOffice') : t('planning.title')}
-          </h2>
-          <p className="text-sm text-slate-600">{t('planning.subtitle')}</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              {officeMode ? t('planning.titleOffice') : t('planning.title')}
+            </h2>
+            <p className="text-sm text-slate-600">{t('planning.subtitle')}</p>
+          </div>
+          <Link
+            href={vehicleAssignmentsHref(planningDate)}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Truck className="h-4 w-4" />
+            {tCommon('vehicleAssignments.title')}
+          </Link>
         </div>
       ) : null}
 

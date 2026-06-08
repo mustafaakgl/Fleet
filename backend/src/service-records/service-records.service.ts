@@ -20,6 +20,7 @@ function toClient(row: ServiceRecordWithRelations) {
     driver_name: row.driver ? `${row.driver.firstName} ${row.driver.lastName}`.trim() : undefined,
     date: row.date.toISOString(),
     service_type: row.serviceType,
+    vendor: row.vendor ?? undefined,
     repair_company: row.repairCompany,
     cost_amount: Number(row.costAmount.toString()),
     mileage_km: row.mileageKm ?? null,
@@ -97,7 +98,8 @@ export class ServiceRecordsService {
         driverId: dto.driver_id,
         date: new Date(dto.date),
         serviceType: dto.service_type,
-        repairCompany: dto.repair_company,
+        vendor: dto.vendor?.trim() || null,
+        repairCompany: dto.repair_company?.trim() || '—',
         costAmount: dto.cost_amount,
         mileageKm: dto.mileage_km,
         notes: dto.notes,
@@ -117,9 +119,13 @@ export class ServiceRecordsService {
   async update(id: string, dto: UpdateServiceRecordDto, actorUserId?: string) {
     await this.assertExists(id);
     const data: Prisma.ServiceRecordUpdateInput = {};
+    if (dto.vehicle_id !== undefined) {
+      data.vehicle = { connect: { id: dto.vehicle_id } };
+    }
     if (dto.date !== undefined) data.date = new Date(dto.date);
     if (dto.service_type !== undefined) data.serviceType = dto.service_type;
-    if (dto.repair_company !== undefined) data.repairCompany = dto.repair_company;
+    if (dto.vendor !== undefined) data.vendor = dto.vendor.trim() || null;
+    if (dto.repair_company !== undefined) data.repairCompany = dto.repair_company.trim() || '—';
     if (dto.cost_amount !== undefined) data.costAmount = dto.cost_amount;
     if (dto.mileage_km !== undefined) data.mileageKm = dto.mileage_km;
     if (dto.notes !== undefined) data.notes = dto.notes;

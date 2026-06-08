@@ -12,9 +12,13 @@ export class CreateServiceRecordDto {
   @MinLength(1)
   service_type!: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1)
-  repair_company!: string;
+  vendor?: string;
+
+  @IsOptional()
+  @IsString()
+  repair_company?: string;
 
   @IsNumber()
   @Min(0)

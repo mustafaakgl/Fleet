@@ -626,7 +626,8 @@ export const serviceRecordsApi = {
     driver_id?: string;
     date: string;
     service_type: string;
-    repair_company: string;
+    vendor?: string;
+    repair_company?: string;
     cost_amount: number;
     mileage_km?: number;
     notes?: string;
@@ -634,7 +635,12 @@ export const serviceRecordsApi = {
 
   update: (
     id: string,
-    data: Partial<Pick<ServiceRecord, 'service_type' | 'notes' | 'date' | 'repair_company' | 'cost_amount' | 'mileage_km' | 'driver_id'>>,
+    data: Partial<
+      Pick<
+        ServiceRecord,
+        'service_type' | 'notes' | 'date' | 'vendor' | 'repair_company' | 'cost_amount' | 'mileage_km' | 'driver_id'
+      >
+    > & { vehicle_id?: string },
   ) => api.patch<ServiceRecord>(`/service-records/${id}`, data).then((r) => r.data),
 
   remove: (id: string) =>

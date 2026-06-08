@@ -977,6 +977,7 @@ model ServiceRecord {
   driverId      String?
   date          DateTime
   serviceType   String
+  vendor        String?
   repairCompany String
   costAmount    Decimal  @db.Decimal(10, 2)
   mileageKm     Int?

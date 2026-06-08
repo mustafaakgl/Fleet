@@ -324,6 +324,11 @@ export class DashboardService {
       startTime: assignment.startTime,
       endTime: assignment.endTime,
       status: assignment.status,
+      cargoName: assignment.cargoName,
+      cargoOwner: assignment.cargoOwner,
+      pickupAddress: assignment.pickupAddress,
+      deliveryAddress: assignment.deliveryAddress,
+      routeName: assignment.routeName,
     }));
   }
 
@@ -672,22 +677,235 @@ export class DashboardService {
     };
   }
 
+  async getFleetWidgets(date: Date) {
+    const db = this.prisma as any;
+    const todayStart = this.normalizeDate(date);
+    const dueSoonEnd = new Date(todayStart);
+    dueSoonEnd.setDate(dueSoonEnd.getDate() + 30);
+    const dayAfter = new Date(todayStart);
+    dayAfter.setDate(dayAfter.getDate() + 1);
+    const staleReviewBefore = new Date(todayStart);
+    staleReviewBefore.setDate(staleReviewBefore.getDate() - 14);
+
+    const openReminderStatuses = ['open', 'sent'];
+    const serviceReminderTypes = ['insurance_expiry', 'document_expiry', 'custom'];
+    const vehicleRenewalTypes = ['tuv_expiry', 'sp_expiry'];
+    const contactRenewalTypes = ['license_expiry', 'passport_expiry'];
+    const activeAssignmentStatuses = ['planned', 'confirmed', 'in_progress', 'completed'];
+
+    const reminderPair = (reminderTypes: string[]) =>
+      Promise.all([
+        db.reminder.count({
+          where: {
+            reminderType: { in: reminderTypes },
+            status: { in: openReminderStatuses },
+            dueDate: { lt: todayStart },
+          },
+        }),
+        db.reminder.count({
+          where: {
+            reminderType: { in: reminderTypes },
+            status: { in: openReminderStatuses },
+            dueDate: { gte: todayStart, lte: dueSoonEnd },
+          },
+        }),
+      ]);
+
+    const [
+      [serviceOverdue, serviceDueSoon],
+      [vehicleRenewalOverdue, vehicleRenewalDueSoon],
+      [contactOverdue, contactDueSoon],
+      openIssuesReported,
+      openIssuesOverdue,
+      vehiclesMaintenance,
+      vehiclesBroken,
+      vehicleStatusGroups,
+      assignedVehicleRows,
+      activeVehicleCount,
+    ] = await Promise.all([
+      reminderPair(serviceReminderTypes),
+      reminderPair(vehicleRenewalTypes),
+      reminderPair(contactRenewalTypes),
+      db.accident.count({
+        where: { status: 'reported' },
+      }),
+      db.accident.count({
+        where: {
+          status: 'under_review',
+          incidentDateTime: { lt: staleReviewBefore },
+        },
+      }),
+      db.vehicle.count({ where: { status: 'maintenance' } }),
+      db.vehicle.count({ where: { status: 'broken' } }),
+      db.vehicle.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+      db.assignment.findMany({
+        where: {
+          workDate: { gte: todayStart, lt: dayAfter },
+          status: { in: activeAssignmentStatuses },
+        },
+        select: { vehicleId: true },
+        distinct: ['vehicleId'],
+      }),
+      db.vehicle.count({ where: { status: 'active' } }),
+    ]);
+
+    const statusCounts = {
+      active: 0,
+      maintenance: 0,
+      inactive: 0,
+      broken: 0,
+    };
+    for (const group of vehicleStatusGroups) {
+      if (group.status in statusCounts) {
+        statusCounts[group.status as keyof typeof statusCounts] = group._count._all;
+      }
+    }
+
+    const assignedVehicles = assignedVehicleRows.length;
+    const unassignedVehicles = Math.max(activeVehicleCount - assignedVehicles, 0);
+
+    return {
+      serviceReminders: { overdue: serviceOverdue, dueSoon: serviceDueSoon },
+      openIssues: { open: openIssuesReported, overdue: openIssuesOverdue },
+      vehicleRenewals: { overdue: vehicleRenewalOverdue, dueSoon: vehicleRenewalDueSoon },
+      incompleteWorkOrders: { open: vehiclesMaintenance, pending: vehiclesBroken },
+      contactRenewals: { overdue: contactOverdue, dueSoon: contactDueSoon },
+      vehicleAssignments: { assigned: assignedVehicles, unassigned: unassignedVehicles },
+      vehicleStatus: statusCounts,
+    };
+  }
+
+  private isRoutineServiceType(serviceType: string): boolean {
+    const normalized = serviceType.trim().toLowerCase();
+    if (!normalized) return false;
+    const routineKeywords = [
+      'routine',
+      'periodic',
+      'maintenance',
+      'inspection',
+      'tüv',
+      'tuv',
+      'oil change',
+      'scheduled',
+      'wartung',
+      'inspektion',
+    ];
+    return routineKeywords.some((keyword) => normalized.includes(keyword));
+  }
+
+  private formatMonthShortLabel(monthKey: string): string {
+    const [yearRaw, monthRaw] = monthKey.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!year || !month) return monthKey;
+    const date = new Date(year, month - 1, 1);
+    const monthLabel = date.toLocaleDateString('en-US', { month: 'short' });
+    const yearLabel = String(year).slice(-2);
+    return `${monthLabel} '${yearLabel}`;
+  }
+
+  async getCostAnalytics(date: Date) {
+    const end = this.normalizeDate(date);
+    const monthKeys = this.buildMonthlySeries(6, end);
+    const monthStart = new Date(end.getFullYear(), end.getMonth() - 5, 1);
+    const dayAfterEnd = new Date(end);
+    dayAfterEnd.setDate(dayAfterEnd.getDate() + 1);
+
+    const db = this.prisma as any;
+    const records = await db.serviceRecord.findMany({
+      where: {
+        date: { gte: monthStart, lt: dayAfterEnd },
+      },
+      select: {
+        date: true,
+        serviceType: true,
+        costAmount: true,
+      },
+    });
+
+    const totalByMonth = new Map(monthKeys.map((key) => [key, 0]));
+    const otherByMonth = new Map(monthKeys.map((key) => [key, 0]));
+    const reasonCounts = new Map<string, { count: number; total: number }>();
+
+    for (const row of records) {
+      const monthKey = this.toMonthKey(new Date(row.date));
+      const cost = this.toCurrencyNumber(row.costAmount);
+      const serviceType = String(row.serviceType ?? '').trim() || 'Unknown';
+
+      if (totalByMonth.has(monthKey)) {
+        totalByMonth.set(monthKey, (totalByMonth.get(monthKey) ?? 0) + cost);
+      }
+
+      if (!this.isRoutineServiceType(serviceType) && otherByMonth.has(monthKey)) {
+        otherByMonth.set(monthKey, (otherByMonth.get(monthKey) ?? 0) + cost);
+      }
+
+      const existing = reasonCounts.get(serviceType) ?? { count: 0, total: 0 };
+      reasonCounts.set(serviceType, {
+        count: existing.count + 1,
+        total: existing.total + cost,
+      });
+    }
+
+    const palette = ['#ef4444', '#f97316', '#a855f7', '#94a3b8', '#06b6d4'];
+    const topRepairReasons = Array.from(reasonCounts.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 4)
+      .map(([label, data], index) => ({
+        id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        label,
+        count: data.count,
+        total: data.total,
+        color: palette[index] ?? '#94a3b8',
+      }));
+
+    const toSeries = (map: Map<string, number>) =>
+      monthKeys.map((label) => ({
+        label,
+        shortLabel: this.formatMonthShortLabel(label),
+        value: map.get(label) ?? 0,
+      }));
+
+    return {
+      totalCosts: toSeries(totalByMonth),
+      otherCosts: toSeries(otherByMonth),
+      topRepairReasons,
+    };
+  }
+
   async getDashboard(date: string, currentUserRole?: UserRole | string) {
     const selectedDate = this.normalizeDate(date);
 
     const includeCriticalAlerts = currentUserRole === 'office';
 
-    const [kpis, criticalAlerts, todayOperations, tomorrowPlanning, vehicleHealth, driverRiskOverview, revenueAnalytics, chartAnalytics] =
-      await Promise.all([
-        this.getKpis(selectedDate),
-        includeCriticalAlerts ? this.getCriticalAlerts(selectedDate) : Promise.resolve([]),
-        this.getTodayOperations(selectedDate),
-        this.getTomorrowPlanning(selectedDate),
-        this.getVehicleHealth(),
-        this.getDriverRiskOverview(),
-        this.getRevenueAnalytics(selectedDate, currentUserRole ?? 'office'),
-        this.getChartAnalytics(selectedDate, currentUserRole ?? 'office'),
-      ]);
+    const [
+      kpis,
+      criticalAlerts,
+      todayOperations,
+      tomorrowPlanning,
+      vehicleHealth,
+      driverRiskOverview,
+      revenueAnalytics,
+      chartAnalytics,
+      fleetWidgets,
+      costAnalytics,
+    ] = await Promise.all([
+      this.getKpis(selectedDate),
+      includeCriticalAlerts ? this.getCriticalAlerts(selectedDate) : Promise.resolve([]),
+      this.getTodayOperations(selectedDate),
+      this.getTomorrowPlanning(selectedDate),
+      this.getVehicleHealth(),
+      this.getDriverRiskOverview(),
+      this.getRevenueAnalytics(selectedDate, currentUserRole ?? 'office'),
+      this.getChartAnalytics(selectedDate, currentUserRole ?? 'office'),
+      this.getFleetWidgets(selectedDate),
+      this.canViewFinancials(currentUserRole)
+        ? this.getCostAnalytics(selectedDate)
+        : Promise.resolve(null),
+    ]);
 
     const dashboardData = {
       kpis,
@@ -698,6 +916,8 @@ export class DashboardService {
       driverRiskOverview,
       revenueAnalytics,
       chartAnalytics,
+      fleetWidgets,
+      costAnalytics,
     };
 
     return maskFinancialFields(dashboardData, currentUserRole);

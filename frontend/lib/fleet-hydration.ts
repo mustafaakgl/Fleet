@@ -1,5 +1,6 @@
 import { toLocalCalendarDate } from '@/lib/calendar-date';
 import { DEFAULT_VACATION_ENTITLEMENT } from '@/lib/calendar-vacation';
+import { inferAssignmentSource } from '@/lib/planning-assignment';
 import { getDriverRiskScore } from '@/lib/utils';
 import {
   assignmentsApi,
@@ -166,12 +167,7 @@ export async function hydrateFleetData(
         endTime: a.end_time,
         notes: a.notes ?? '',
         status: mapAssignmentStatus(a.status),
-        source:
-          a.notes?.includes('morning check-in')
-            ? 'mobile_checkin'
-            : a.notes?.includes('transport request')
-              ? 'transport_request'
-              : 'manual',
+        source: inferAssignmentSource(a.notes),
         expectedRevenue:
           a.expected_daily_revenue
           ?? a.company_default_daily_revenue

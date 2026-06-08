@@ -18,17 +18,17 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/ui/empty-state';
 import { PageError } from '@/components/ui/page-error';
 import { dashboardApi, trackingApi } from '@/lib/api';
 import { fetchOfficeQueueItems } from '@/lib/office-queue';
-import { einsatzplanHref, liveTrackingHref, officeQueueHref } from '@/lib/office-deep-links';
-import { formatDate, statusColor } from '@/lib/utils';
+import { einsatzplanHref, officeQueueHref } from '@/lib/office-deep-links';
 import type { DashboardCriticalAlert, DashboardSummary } from '@/lib/types';
+import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
+import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
+import { WatchedExpensesWidget } from '@/components/dashboard/WatchedExpensesWidget';
+import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 
 function alertClass(priority: DashboardCriticalAlert['priority']) {
   if (priority === 'critical') return 'border-red-300 bg-red-50 text-red-800';
@@ -284,6 +284,18 @@ export function OfficeBriefingDashboard() {
             </div>
           </section>
 
+          <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />
+
+          <WatchedExpensesWidget />
+
+          {summary?.costAnalytics ? <FleetCostCharts analytics={summary.costAnalytics} /> : null}
+
+          <DailyEinsatzplanTable
+            rows={summary?.todayOperations}
+            loading={loading}
+            officeMode
+          />
+
           {!loading && summary ? (
             <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {officeKpis.map((kpi) => (
@@ -303,79 +315,6 @@ export function OfficeBriefingDashboard() {
               ))}
             </section>
           ) : null}
-
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.todayOperations')}</h2>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href={einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' })}>
-                  {t('common.view')}
-                </Link>
-              </Button>
-            </div>
-            <Card>
-              {loading ? (
-                <div className="space-y-2 p-4">
-                  <Skeleton className="h-8" />
-                  <Skeleton className="h-8" />
-                </div>
-              ) : !summary || summary.todayOperations.length === 0 ? (
-                <div className="p-4">
-                  <EmptyState
-                    icon={CalendarDays}
-                    title={t('office.briefing.noAssignmentsToday')}
-                    subtitle={t('office.briefing.noAssignmentsTodayHint')}
-                    actionLabel={t('office.briefing.createAssignment')}
-                    onAction={() => router.push('/assignments/new')}
-                  />
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t('dashboard.driver')}</TableHead>
-                        <TableHead>{t('dashboard.vehicle')}</TableHead>
-                        <TableHead>{t('dashboard.company')}</TableHead>
-                        <TableHead>{t('dashboard.startTime')}</TableHead>
-                        <TableHead>{t('common.status')}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {summary.todayOperations.slice(0, 8).map((row) => (
-                        <TableRow
-                          key={row.id}
-                          className="cursor-pointer hover:bg-slate-50"
-                          onClick={() => {
-                            if (row.driverId) {
-                              router.push(liveTrackingHref(row.driverId));
-                            } else {
-                              router.push(
-                                einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' }),
-                              );
-                            }
-                          }}
-                        >
-                          <TableCell className="font-medium">{row.driverName}</TableCell>
-                          <TableCell>{row.vehiclePlate}</TableCell>
-                          <TableCell>{row.companyName}</TableCell>
-                          <TableCell>{row.startTime}</TableCell>
-                          <TableCell>
-                            <Badge className={statusColor(row.status)}>{row.status}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {summary.todayOperations.length > 8 ? (
-                    <p className="border-t px-4 py-2 text-xs text-slate-500">
-                      {t('office.briefing.moreAssignments', { count: summary.todayOperations.length - 8 })}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </Card>
-          </section>
 
           <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
             <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.tomorrowPlanning')}</h2>

@@ -2,6 +2,11 @@ import { IsDateString, IsInt, IsNumber, IsOptional, IsString, Min, MinLength } f
 
 export class UpdateServiceRecordDto {
   @IsOptional()
+  @IsString()
+  @MinLength(1)
+  vehicle_id?: string;
+
+  @IsOptional()
   @IsDateString()
   date?: string;
 
@@ -12,7 +17,10 @@ export class UpdateServiceRecordDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(1)
+  vendor?: string;
+
+  @IsOptional()
+  @IsString()
   repair_company?: string;
 
   @IsOptional()

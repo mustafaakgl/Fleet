@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle, ChevronRight, Printer, TrendingUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,8 +13,12 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { dashboardApi } from '@/lib/api';
 import { canViewFinancials } from '@/lib/permissions';
-import { formatDate, statusColor } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
+import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
+import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
+import { WatchedExpensesWidget } from '@/components/dashboard/WatchedExpensesWidget';
+import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 import type {
   AuthUser,
   DashboardSummary,
@@ -166,6 +169,16 @@ export function StandardDashboard() {
         )}
       </section>
 
+      <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />
+
+      <WatchedExpensesWidget />
+
+      {showFinancials && summary?.costAnalytics ? (
+        <FleetCostCharts analytics={summary.costAnalytics} />
+      ) : null}
+
+      <DailyEinsatzplanTable rows={summary?.todayOperations} loading={loading} />
+
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.kpiCards')}</h2>
         {loading ? (
@@ -191,56 +204,6 @@ export function StandardDashboard() {
       {showFinancials && summary?.chartAnalytics ? (
         <DashboardCharts analytics={summary.chartAnalytics} />
       ) : null}
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.todayOperations')}</h2>
-        <Card>
-          {loading ? (
-            <div className="p-4 space-y-2">
-              <Skeleton className="h-8" />
-              <Skeleton className="h-8" />
-              <Skeleton className="h-8" />
-            </div>
-          ) : !summary || summary.todayOperations.length === 0 ? (
-            <div className="p-4">
-              <EmptyState
-                icon={TrendingUp}
-                title={t('dashboard.noAssignmentsToday')}
-                subtitle={t('dashboard.noAssignmentsTodaySub')}
-                actionLabel={t('dashboard.createAssignment')}
-                onAction={() => router.push('/assignments/new')}
-              />
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('dashboard.driver')}</TableHead>
-                  <TableHead>{t('dashboard.vehicle')}</TableHead>
-                  <TableHead>{t('dashboard.company')}</TableHead>
-                  <TableHead>{t('dashboard.startTime')}</TableHead>
-                  <TableHead>{t('dashboard.endTime')}</TableHead>
-                  <TableHead>{t('common.status')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {summary.todayOperations.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.driverName}</TableCell>
-                    <TableCell>{row.vehiclePlate}</TableCell>
-                    <TableCell>{row.companyName}</TableCell>
-                    <TableCell>{row.startTime}</TableCell>
-                    <TableCell>{row.endTime}</TableCell>
-                    <TableCell>
-                      <Badge className={statusColor(row.status)}>{row.status}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Card>
-      </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.tomorrowPlanning')}</h2>

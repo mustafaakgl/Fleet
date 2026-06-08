@@ -1,4 +1,5 @@
 import type { FleetAssignment } from '@/context/FleetDataContext';
+import { isVehicleTimelineAssignment } from '@/lib/vehicle-assignment-source';
 
 export const PLANNING_DRAFT_PREFIX = 'planning-draft:';
 
@@ -50,5 +51,6 @@ export function inferAssignmentSource(notes?: string | null): FleetAssignment['s
   if (!notes) return 'manual';
   if (notes.includes('morning check-in')) return 'mobile_checkin';
   if (notes.includes('transport request')) return 'transport_request';
+  if (isVehicleTimelineAssignment(notes)) return 'manual';
   return 'manual';
 }

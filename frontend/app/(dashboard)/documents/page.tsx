@@ -40,6 +40,7 @@ const DOCUMENT_TYPES_BY_OWNER: Record<Document['ownerType'], string[]> = {
   request: ['Request Attachment'],
   accident: ['Accident Report'],
   cargo_damage: ['Cargo Damage Report'],
+  service_record: ['Receipt'],
 };
 
 type DocumentRow =
@@ -272,13 +273,23 @@ export default function DocumentsPage() {
           setToast({ type: 'success', message: 'Document metadata saved.' });
         }
       } else if (formMode === 'edit' && formDocument?.id) {
-        await documentsApi.update(formDocument.id, {
-          documentType: payload.documentType,
-          fileName: payload.fileName,
-          expiryDate: payload.expiryDate,
-          notes: payload.notes,
-        });
-        setToast({ type: 'success', message: 'Document updated.' });
+        if (payload.file) {
+          const formData = new FormData();
+          formData.append('documentType', payload.documentType);
+          if (payload.expiryDate) formData.append('expiryDate', payload.expiryDate);
+          if (payload.notes) formData.append('notes', payload.notes);
+          formData.append('file', payload.file);
+          await documentsApi.replaceUpload(formDocument.id, formData);
+          setToast({ type: 'success', message: 'Document updated with new file.' });
+        } else {
+          await documentsApi.update(formDocument.id, {
+            documentType: payload.documentType,
+            fileName: payload.fileName,
+            expiryDate: payload.expiryDate,
+            notes: payload.notes,
+          });
+          setToast({ type: 'success', message: 'Document updated.' });
+        }
       } else if (formMode === 'replace' && formDocument?.id) {
         if (payload.file) {
           const formData = new FormData();
@@ -617,20 +628,20 @@ function AddDocumentDrawer({
   );
   const [ownerId, setOwnerId] = useState(initialDocument?.ownerId ?? '');
   const [documentType, setDocumentType] = useState(initialDocument?.documentType ?? '');
-  const [fileName, setFileName] = useState(initialDocument?.fileName ?? '');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [expiryDate, setExpiryDate] = useState(initialDocument?.expiryDate?.slice(0, 10) ?? '');
   const [notes, setNotes] = useState(initialDocument?.notes ?? '');
 
   const ownerOptions = ownerOptionsByType(ownerType);
   const typeOptions = DOCUMENT_TYPES_BY_OWNER[ownerType] ?? [];
+  const currentFileName = initialDocument?.fileName ?? '';
+  const displayFileName = selectedFile?.name ?? currentFileName;
 
   useEffect(() => {
     if (open) {
       setOwnerType(initialDocument?.ownerType ?? 'driver');
       setOwnerId(initialDocument?.ownerId ?? '');
       setDocumentType(initialDocument?.documentType ?? '');
-      setFileName(initialDocument?.fileName ?? '');
       setSelectedFile(null);
       setExpiryDate(initialDocument?.expiryDate?.slice(0, 10) ?? '');
       setNotes(initialDocument?.notes ?? '');
@@ -638,13 +649,15 @@ function AddDocumentDrawer({
   }, [open, initialDocument]);
 
   function submit() {
-    const effectiveFileName = selectedFile?.name ?? fileName;
-    if (!ownerId || !documentType || !effectiveFileName) return;
+    if (!ownerId || !documentType) return;
+    if (mode === 'add' && !selectedFile) return;
+    if (mode === 'replace' && !selectedFile && !displayFileName) return;
+
     void onSubmit({
       ownerType,
       ownerId,
       documentType,
-      fileName: effectiveFileName,
+      fileName: selectedFile?.name ?? currentFileName,
       expiryDate: expiryDate || undefined,
       notes: notes || undefined,
       file: selectedFile,
@@ -654,14 +667,14 @@ function AddDocumentDrawer({
   const title =
     mode === 'add' ? t('documents.addDocument') : mode === 'edit' ? t('common.edit') : 'Replace Document';
 
+  const fileRequired = mode === 'add' || mode === 'replace';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            Metadata-only flow is still supported. Choose a file to upload.
-          </DialogDescription>
+          <DialogDescription>{t('documents.chooseFile')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -714,31 +727,27 @@ function AddDocumentDrawer({
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase text-gray-600">File Name</label>
+            <label className="mb-1 block text-xs font-semibold uppercase text-gray-600">
+              {t('documents.fileName')}
+              {fileRequired ? ' *' : ''}
+            </label>
             <Input
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              placeholder="example.pdf"
-              disabled={Boolean(selectedFile)}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
             />
+            {selectedFile ? (
+              <p className="mt-1.5 text-xs text-emerald-700">
+                {t('documents.selectedFile', { name: selectedFile.name })}
+              </p>
+            ) : currentFileName ? (
+              <p className="mt-1.5 text-xs text-slate-500">
+                {t('documents.currentFile', { name: currentFileName })}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-xs text-slate-400">{t('documents.chooseFile')}</p>
+            )}
           </div>
-
-          {(mode === 'add' || mode === 'replace') && (
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase text-gray-600">File Upload</label>
-              <Input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  setSelectedFile(file);
-                  if (file) {
-                    setFileName(file.name);
-                  }
-                }}
-              />
-            </div>
-          )}
 
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase text-gray-600">Expiry Date</label>
@@ -759,7 +768,10 @@ function AddDocumentDrawer({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={isSaving}>
+          <Button
+            onClick={submit}
+            disabled={isSaving || (fileRequired && !selectedFile && !currentFileName)}
+          >
             {isSaving ? 'Uploading...' : mode === 'add' ? t('common.add') : 'Save'}
           </Button>
         </DialogFooter>
