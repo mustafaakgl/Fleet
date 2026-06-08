@@ -52,6 +52,24 @@ export function documentDownloadApiPath(documentId: string): string {
   return `/documents/${documentId}/download`;
 }
 
+export function customerProofDownloadApiPath(assignmentId: string, documentId: string): string {
+  return `/customer/assignments/${assignmentId}/proofs/${documentId}/download`;
+}
+
+export async function openAuthenticatedFile(apiPath: string, fileName?: string): Promise<void> {
+  const blob = await fetchAuthenticatedBlob(apiPath);
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  if (fileName) {
+    anchor.download = fileName;
+  }
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
 export function documentHasFile(doc: { download_url?: string | null; fileUrl?: string | null }): boolean {
   return Boolean(doc.download_url || doc.fileUrl);
 }

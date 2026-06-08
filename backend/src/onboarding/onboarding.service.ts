@@ -78,6 +78,10 @@ export class OnboardingService {
       throw new BadRequestException('Fleet is already provisioned');
     }
 
+    return this.provisionTenant(dto, actorUserId);
+  }
+
+  async provisionTenant(dto: SetupTenantDto, actorUserId?: string) {
     const slug = slugify(dto.slug ?? dto.fleet_name);
     if (!slug) {
       throw new BadRequestException('Invalid fleet slug');

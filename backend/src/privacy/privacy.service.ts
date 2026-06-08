@@ -3,8 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
+import * as bcrypt from 'bcrypt';
 import type { Response } from 'express';
 import archiver from 'archiver';
 import { Prisma } from '@prisma/client';
@@ -184,7 +186,7 @@ export class PrivacyService {
       );
     }
 
-    archive.append(jsonLine(driverAuditLogs), { name: 'audit_log_excerpt.json' });
+    archive.append(jsonLine(driverAuditLogs.data), { name: 'audit_log_excerpt.json' });
     archive.append(buildDriverReadme(driverId, exportedAt), { name: 'README.txt' });
 
     for (const document of documents) {
@@ -254,7 +256,7 @@ export class PrivacyService {
     archive.pipe(res);
 
     archive.append(jsonLine(user), { name: 'user.json' });
-    archive.append(jsonLine(auditLogs), { name: 'audit_log_excerpt.json' });
+    archive.append(jsonLine(auditLogs.data), { name: 'audit_log_excerpt.json' });
     archive.append(jsonLine(notifications), { name: 'notifications.json' });
     archive.append(buildUserReadme(userId, exportedAt), { name: 'README.txt' });
 
@@ -375,6 +377,131 @@ export class PrivacyService {
         assignments: true,
         legal_basis:
           'Aufbewahrung von Einsatz-/Abrechnungsdaten gemäß handels- und steuerrechtlichen Pflichten (bis zu 10 Jahre).',
+      },
+    };
+  }
+
+  private isAnonymizedUser(user: { fullName: string; email: string }): boolean {
+    return user.fullName === 'ANONYMIZED' && user.email.endsWith('@anonymized.local');
+  }
+
+  async anonymizeUser(userId: string, reason: string, actorUserId: string) {
+    if (userId === actorUserId) {
+      throw new BadRequestException('You cannot anonymize your own account');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        driver: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (this.isAnonymizedUser(user)) {
+      throw new BadRequestException('User is already anonymized');
+    }
+
+    if (user.role === 'admin' && user.status === 'active') {
+      const activeAdminCount = await this.prisma.user.count({
+        where: {
+          tenantId: user.tenantId,
+          role: 'admin',
+          status: 'active',
+          NOT: { email: { endsWith: '@anonymized.local' } },
+        },
+      });
+      if (activeAdminCount <= 1) {
+        throw new BadRequestException('Cannot anonymize the last active admin account');
+      }
+    }
+
+    let linkedDriverAnonymized = false;
+    if (user.driver) {
+      const driverAlreadyAnonymized =
+        user.driver.firstName === 'ANONYMIZED' && user.driver.lastName === 'ANONYMIZED';
+      if (!driverAlreadyAnonymized) {
+        await this.anonymizeDriver(user.driver.id, reason, actorUserId);
+        linkedDriverAnonymized = true;
+      }
+    }
+
+    const anonymizedAt = new Date();
+    const anonymizedEmail = `anon-${userId.slice(-12)}@anonymized.local`;
+    const unusablePasswordHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+
+    const [notificationsRemoved, passwordTokensRemoved, companyMembershipsRemoved, messagesAnonymized] =
+      await this.prisma.$transaction(async (tx) => {
+        const notifications = await tx.notification.deleteMany({ where: { userId } });
+        const passwordTokens = await tx.passwordResetToken.deleteMany({ where: { userId } });
+        const companyMemberships = await tx.companyUser.deleteMany({ where: { userId } });
+        const messages = await tx.message.updateMany({
+          where: { senderUserId: userId },
+          data: {
+            originalText: '[ANONYMIZED]',
+            translatedText: null,
+            translationStatus: 'not_requested',
+          },
+        });
+
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            fullName: 'ANONYMIZED',
+            email: anonymizedEmail,
+            passwordHash: unusablePasswordHash,
+            status: 'inactive',
+            expoPushToken: null,
+            mfaEnabled: false,
+            mfaSecret: null,
+            mfaPendingSecret: null,
+            language: 'de',
+          },
+        });
+
+        return [
+          notifications.count,
+          passwordTokens.count,
+          companyMemberships.count,
+          messages.count,
+        ];
+      });
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'privacy.user_anonymized',
+      entityType: 'user',
+      entityId: userId,
+      summary: 'User personal data anonymized',
+      metadata: {
+        reason,
+        linkedDriverAnonymized,
+        notificationsRemoved,
+        passwordTokensRemoved,
+        companyMembershipsRemoved,
+        messagesAnonymized,
+        assignmentsRetained: true,
+        auditLogsRetained: true,
+      },
+    });
+
+    return {
+      user_id: userId,
+      anonymized_at: anonymizedAt.toISOString(),
+      removed: {
+        personal_fields: true,
+        notifications: notificationsRemoved,
+        password_reset_tokens: passwordTokensRemoved,
+        company_memberships: companyMembershipsRemoved,
+        messages_anonymized: messagesAnonymized,
+        linked_driver_anonymized: linkedDriverAnonymized,
+      },
+      retained: {
+        assignments_created: true,
+        audit_logs: true,
+        legal_basis:
+          'Aufbewahrung von Einsatz-/Abrechnungsdaten und Protokolleinträge gemäß handels- und steuerrechtlichen Pflichten.',
       },
     };
   }

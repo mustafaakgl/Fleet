@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { DriverStatus, VehicleStatus } from '@prisma/client';
+import { DriverStatus, Prisma, UserRole, UserStatus, VehicleStatus } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
+import { CompaniesService } from '../companies/companies.service';
 import { DriversService } from '../drivers/drivers.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 import { parseCsv, pickField } from './csv.util';
 
@@ -29,12 +32,21 @@ const VEHICLE_STATUS_VALUES = new Set<string>([
   'inactive',
 ]);
 
+const USER_ROLE_VALUES = new Set<string>(['office', 'accounting', 'boss']);
+
+function generateImportPassword(): string {
+  const suffix = randomBytes(12).toString('base64url');
+  return `Import-${suffix}!9a`;
+}
+
 @Injectable()
 export class ImportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly driversService: DriversService,
     private readonly vehiclesService: VehiclesService,
+    private readonly companiesService: CompaniesService,
+    private readonly usersService: UsersService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -180,6 +192,154 @@ export class ImportService {
       action: 'import.vehicles_csv',
       entityType: 'import',
       summary: 'Vehicles CSV import completed',
+      metadata: {
+        created: result.created,
+        skipped: result.skipped,
+        error_count: result.errors.length,
+      },
+    });
+
+    return result;
+  }
+
+  async importCompaniesCsv(fileContent: string, actorUserId?: string): Promise<ImportResult> {
+    const { rows } = parseCsv(fileContent);
+    if (rows.length === 0) {
+      throw new BadRequestException('CSV file is empty or has no data rows');
+    }
+
+    const result: ImportResult = { created: 0, skipped: 0, errors: [] };
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const rowNumber = index + 2;
+      const row = rows[index];
+
+      try {
+        const name = pickField(row, ['name', 'firma', 'company']);
+        if (!name) {
+          result.errors.push({ row: rowNumber, message: 'name is required' });
+          continue;
+        }
+
+        const email = pickField(row, ['email', 'e-mail']);
+        const companyOr: Prisma.CompanyWhereInput[] = [
+          { name: { equals: name, mode: Prisma.QueryMode.insensitive } },
+        ];
+        if (email) {
+          companyOr.push({ email: { equals: email, mode: Prisma.QueryMode.insensitive } });
+        }
+
+        const existing = await this.prisma.company.findFirst({
+          where: { OR: companyOr },
+          select: { id: true },
+        });
+        if (existing) {
+          result.skipped += 1;
+          continue;
+        }
+
+        const revenueRaw = pickField(row, ['default_daily_revenue', 'tagesumsatz']);
+        const revenue = revenueRaw ? Number(revenueRaw) : undefined;
+
+        await this.companiesService.create(
+          {
+            name,
+            email: email || undefined,
+            phone: pickField(row, ['phone', 'telefon']) || undefined,
+            address: pickField(row, ['address', 'adresse']) || undefined,
+            contact_person: pickField(row, ['contact_person', 'ansprechpartner']) || undefined,
+            default_daily_revenue: Number.isFinite(revenue) ? revenue : undefined,
+            notes: pickField(row, ['notes', 'notizen']) || undefined,
+          },
+          actorUserId,
+        );
+        result.created += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Import failed';
+        result.errors.push({ row: rowNumber, message });
+      }
+    }
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'import.companies_csv',
+      entityType: 'import',
+      summary: 'Companies CSV import completed',
+      metadata: {
+        created: result.created,
+        skipped: result.skipped,
+        error_count: result.errors.length,
+      },
+    });
+
+    return result;
+  }
+
+  async importUsersCsv(fileContent: string, actorUserId?: string): Promise<ImportResult> {
+    const { rows } = parseCsv(fileContent);
+    if (rows.length === 0) {
+      throw new BadRequestException('CSV file is empty or has no data rows');
+    }
+
+    const result: ImportResult = { created: 0, skipped: 0, errors: [] };
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const rowNumber = index + 2;
+      const row = rows[index];
+
+      try {
+        const fullName = pickField(row, ['full_name', 'name', 'vollstaendiger_name']);
+        const email = pickField(row, ['email', 'e-mail']);
+        if (!fullName || !email) {
+          result.errors.push({ row: rowNumber, message: 'full_name and email are required' });
+          continue;
+        }
+
+        const roleRaw = pickField(row, ['role']) || 'office';
+        if (!USER_ROLE_VALUES.has(roleRaw)) {
+          result.errors.push({
+            row: rowNumber,
+            message: 'role must be one of: office, accounting, boss',
+          });
+          continue;
+        }
+
+        const existing = await this.prisma.user.findFirst({
+          where: { email: { equals: email, mode: Prisma.QueryMode.insensitive } },
+          select: { id: true },
+        });
+        if (existing) {
+          result.skipped += 1;
+          continue;
+        }
+
+        const statusRaw = pickField(row, ['status']) || 'active';
+        const status = statusRaw === 'inactive' ? UserStatus.inactive : UserStatus.active;
+        const password = pickField(row, ['password']) || generateImportPassword();
+
+        await this.usersService.create(
+          {
+            full_name: fullName,
+            email,
+            password,
+            role: roleRaw as UserRole,
+            status,
+            language: pickField(row, ['language', 'sprache']) || 'de',
+          },
+          actorUserId,
+        );
+        result.created += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Import failed';
+        result.errors.push({ row: rowNumber, message });
+      }
+    }
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'import.users_csv',
+      entityType: 'import',
+      summary: 'Users CSV import completed',
       metadata: {
         created: result.created,
         skipped: result.skipped,

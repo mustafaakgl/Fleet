@@ -25,7 +25,7 @@
 
 **Fleet-Ops:**
 
-1. `/onboarding/setup` oder bestehenden Tenant prüfen
+1. `/admin/tenants` (Fleet-Ops) — neuen Mandanten anlegen (siehe `docs/ops/FLEET-OPS-TENANT-PROVISIONING.md`)
 2. Admin-Zugang an Kunden übermitteln (sicherer Kanal)
 3. `GET /api/v1/mail/test` — SMTP-Test an Admin-E-Mail
 4. Getting-Started-Checkliste mit Kunden teilen: `/getting-started`

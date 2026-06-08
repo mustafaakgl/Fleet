@@ -29,6 +29,11 @@ export default function LoginPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaSubmitting, setMfaSubmitting] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoLabel, setSsoLabel] = useState('Sign in with SSO');
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -47,6 +52,16 @@ export default function LoginPage() {
       .catch(() => {
         // Backend unavailable — stay on login.
       });
+
+    authApi
+      .oidcConfig()
+      .then((config) => {
+        setSsoEnabled(config.enabled);
+        setSsoLabel(config.label);
+      })
+      .catch(() => {
+        setSsoEnabled(false);
+      });
   }, [router]);
 
   const {
@@ -62,8 +77,12 @@ export default function LoginPage() {
     try {
       const email = data.email.trim().toLowerCase();
       const res = await authApi.signIn(email, data.password);
+      if (res.mfa_required && res.mfa_token) {
+        setMfaToken(res.mfa_token);
+        return;
+      }
       const token = res.accessToken ?? res.access_token;
-      if (!token) {
+      if (!token || !res.user) {
         setError(t('auth.errors.noToken'));
         return;
       }
@@ -91,6 +110,33 @@ export default function LoginPage() {
     }
   }
 
+  async function onSubmitMfa() {
+    if (!mfaToken || mfaCode.length !== 6) return;
+    setError(null);
+    setMfaSubmitting(true);
+    try {
+      const res = await authApi.verifyMfaLogin(mfaToken, mfaCode);
+      const token = res.accessToken ?? res.access_token;
+      if (!token || !res.user) {
+        setError(t('auth.errors.noToken'));
+        return;
+      }
+      saveAuth(token, {
+        ...res.user,
+        name: res.user.name ?? res.user.email,
+      });
+      router.push(getPostLoginPath(res.user.role));
+    } catch (err) {
+      if (err instanceof AxiosError && err.response?.status === 401) {
+        setError(t('auth.mfa.invalidCode'));
+        return;
+      }
+      setError(t('auth.errors.unexpected'));
+    } finally {
+      setMfaSubmitting(false);
+    }
+  }
+
   function handleDemoLogin() {
     saveAuth('dev-demo-token', { ...MOCK_CURRENT_USER, role: 'admin', name: 'Demo Admin' });
     router.push('/dashboard');
@@ -107,10 +153,62 @@ export default function LoginPage() {
 
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle>{t('auth.signIn')}</CardTitle>
-            <CardDescription>{t('auth.signInDescription')}</CardDescription>
+            <CardTitle>{mfaToken ? t('auth.mfa.title') : t('auth.signIn')}</CardTitle>
+            <CardDescription>
+              {mfaToken ? t('auth.mfa.description') : t('auth.signInDescription')}
+            </CardDescription>
           </CardHeader>
           <CardContent>
+            {mfaToken ? (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="mfa-code">{t('auth.mfa.codeLabel')}</Label>
+                  <Input
+                    id="mfa-code"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    value={mfaCode}
+                    onChange={(event) =>
+                      setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))
+                    }
+                    placeholder="123456"
+                  />
+                </div>
+                {error ? (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                ) : null}
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={mfaSubmitting || mfaCode.length !== 6}
+                  onClick={() => void onSubmitMfa()}
+                >
+                  {mfaSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {t('auth.mfa.verifying')}
+                    </>
+                  ) : (
+                    t('auth.mfa.verify')
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => {
+                    setMfaToken(null);
+                    setMfaCode('');
+                    setError(null);
+                  }}
+                >
+                  {t('auth.mfa.back')}
+                </Button>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">{t('auth.email')}</Label>
@@ -127,7 +225,12 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password">{t('auth.password')}</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">{t('auth.password')}</Label>
+                  <a href="/forgot-password" className="text-xs text-blue-700 hover:underline">
+                    {t('auth.forgotPassword.link')}
+                  </a>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -156,9 +259,33 @@ export default function LoginPage() {
                   t('auth.signIn')
                 )}
               </Button>
-            </form>
 
-            {isDev && (
+              {ssoEnabled ? (
+                <>
+                  <div className="relative py-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-gray-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-500">{t('auth.sso.or')}</span>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      window.location.href = authApi.oidcLoginUrl();
+                    }}
+                  >
+                    {ssoLabel}
+                  </Button>
+                </>
+              ) : null}
+            </form>
+            )}
+
+            {!mfaToken && isDev && (
               <>
                 <Button
                   type="button"

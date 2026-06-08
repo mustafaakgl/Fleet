@@ -31,7 +31,13 @@ export class UsersService {
     private readonly billingService: BillingService,
   ) {}
 
-  async list(query: { role?: string; status?: string; search?: string }) {
+  async list(query: {
+    role?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const where: Prisma.UserWhereInput = {};
     if (query.role && Object.values(UserRole).includes(query.role as UserRole)) {
       where.role = query.role as UserRole;
@@ -46,11 +52,38 @@ export class UsersService {
         { email: { contains: search, mode: 'insensitive' } },
       ];
     }
-    const users = await this.prisma.user.findMany({
-      where,
-      orderBy: { fullName: 'asc' },
-    });
-    return { data: users.map(toClientUser) };
+    const usePagination =
+      Number.isFinite(query.page) || Number.isFinite(query.limit);
+    const page = usePagination ? Math.max(1, query.page ?? 1) : 1;
+    const limit = usePagination
+      ? Math.min(200, Math.max(1, query.limit ?? 50))
+      : undefined;
+
+    const [total, users] = await Promise.all([
+      usePagination ? this.prisma.user.count({ where }) : Promise.resolve(0),
+      this.prisma.user.findMany({
+        where,
+        orderBy: { fullName: 'asc' },
+        ...(usePagination ? { skip: (page - 1) * (limit ?? 50), take: limit } : {}),
+      }),
+    ]);
+
+    const response: {
+      data: ReturnType<typeof toClientUser>[];
+      total?: number;
+      page?: number;
+      limit?: number;
+      pages?: number;
+    } = { data: users.map(toClientUser) };
+
+    if (usePagination && limit) {
+      response.total = total;
+      response.page = page;
+      response.limit = limit;
+      response.pages = Math.ceil(total / limit);
+    }
+
+    return response;
   }
 
   async getById(id: string) {

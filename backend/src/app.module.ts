@@ -35,7 +35,10 @@ import { MailModule } from './mail/mail.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { ImportModule } from './import/import.module';
+import { JobsModule } from './queue/jobs.module';
+import { QueueModule } from './queue/queue.module';
 import { BillingModule } from './billing/billing.module';
+import { FleetOpsModule } from './fleet-ops/fleet-ops.module';
 import { TenantModule } from './tenant/tenant.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
@@ -55,6 +58,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
       },
     ]),
     ScheduleModule.forRoot(),
+    QueueModule,
     AuthModule,
     UsersModule,
     DriversModule,
@@ -89,10 +93,12 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     InvitationsModule,
     ImportModule,
     BillingModule,
+    FleetOpsModule,
     TenantModule,
     HealthModule,
     MetricsModule,
     StorageModule,
+    JobsModule,
   ],
   providers: [
     {

@@ -15,6 +15,9 @@ export type CustomerAssignmentDto = {
   vehiclePlateNumber: string;
   driverDisplayName: string;
   notes?: string;
+  proofCount?: number;
+  proofRequired?: boolean;
+  proofPending?: boolean;
   createdAt: string;
   updatedAt: string;
 };

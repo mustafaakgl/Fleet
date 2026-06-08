@@ -16,17 +16,30 @@ export interface AuthUser {
   role: Role;
   department?: Department;
   language?: string;
+  fleet_ops?: boolean;
   companyIds?: string[];
   companyId?: string | null;
   companies?: CustomerCompanySummary[];
 }
 
 export interface AuthResponse {
-  accessToken: string;
+  accessToken?: string;
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
-  user: AuthUser;
+  mfa_required?: boolean;
+  mfa_token?: string;
+  user?: AuthUser;
+}
+
+export interface MfaStatus {
+  mfa_enabled: boolean;
+  mfa_setup_pending: boolean;
+}
+
+export interface MfaSetupResponse {
+  secret: string;
+  otpauth_url: string;
 }
 
 // ─── Customer Portal ────────────────────────────────────────────────────────
@@ -61,6 +74,9 @@ export interface CustomerAssignment {
   vehiclePlateNumber: string;
   driverDisplayName: string;
   notes?: string;
+  proofCount?: number;
+  proofRequired?: boolean;
+  proofPending?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -255,6 +271,21 @@ export interface VehicleHandover {
 export interface PaginatedAssignments {
   date?: string;
   data: Assignment[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  pages?: number;
+}
+
+export interface CustomerAssignmentMessage {
+  id: string;
+  assignmentId: string;
+  body: string;
+  senderUserId: string;
+  senderName: string;
+  senderRole: string;
+  isFromCustomer: boolean;
+  createdAt: string;
 }
 
 // ─── Cargo Damage ───────────────────────────────────────────────────────────

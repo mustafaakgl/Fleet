@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { CircleHelp, Globe } from 'lucide-react';
+import { CircleHelp, Globe, ShieldCheck } from 'lucide-react';
 import { getUser } from '@/lib/auth';
 import { useState } from 'react';
 import type { AuthUser } from '@/lib/types';
@@ -56,6 +56,14 @@ export function Header({ title }: HeaderProps) {
         >
           <CircleHelp className="h-3.5 w-3.5" />
           {t('nav.help')}
+        </Link>
+
+        <Link
+          href="/security"
+          className="hidden items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:inline-flex"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          {t('nav.security')}
         </Link>
 
         <NotificationCenter />

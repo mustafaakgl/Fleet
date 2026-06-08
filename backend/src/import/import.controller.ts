@@ -49,4 +49,28 @@ export class ImportController {
     const content = file?.buffer?.toString('utf8') ?? '';
     return this.importService.importVehiclesCsv(content, actorUserId);
   }
+
+  @Post('companies')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  importCompanies(
+    @UploadedFile() file: UploadedCsvFile,
+    @CurrentUser('id') actorUserId: string,
+  ) {
+    const content = file?.buffer?.toString('utf8') ?? '';
+    return this.importService.importCompaniesCsv(content, actorUserId);
+  }
+
+  @Post('users')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  importUsers(
+    @UploadedFile() file: UploadedCsvFile,
+    @CurrentUser('id') actorUserId: string,
+  ) {
+    const content = file?.buffer?.toString('utf8') ?? '';
+    return this.importService.importUsersCsv(content, actorUserId);
+  }
 }

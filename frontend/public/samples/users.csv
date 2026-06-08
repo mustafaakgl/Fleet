@@ -1,0 +1,4 @@
+full_name,email,role,status,language
+Max Admin,office@example.com,office,active,de
+Eva Buchhaltung,accounting@example.com,accounting,active,de
+Tom Chef,boss@example.com,boss,active,de

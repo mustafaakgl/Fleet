@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { ADMIN_ONLY_ROLES } from '../common/utils/permissions';
 import { AnonymizeDriverDto } from './dto/anonymize-driver.dto';
+import { AnonymizeUserDto } from './dto/anonymize-user.dto';
 import { PrivacyService } from './privacy.service';
 
 @Controller('privacy')
@@ -69,5 +70,17 @@ export class PrivacyController {
     @Body() dto: AnonymizeDriverDto,
   ) {
     return this.privacyService.anonymizeDriver(id, dto.reason, actorUserId);
+  }
+
+  @Post('delete/user/:id')
+  @RequiresWrite()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  anonymizeUser(
+    @Param('id') id: string,
+    @CurrentUser('id') actorUserId: string,
+    @Body() dto: AnonymizeUserDto,
+  ) {
+    return this.privacyService.anonymizeUser(id, dto.reason, actorUserId);
   }
 }

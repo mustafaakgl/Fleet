@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { toCustomerAssignmentDto } from './customer-assignment.mapper';
 import type { CustomerAssignmentDto, CustomerDashboardStats } from './customer-assignment.types';
+import { CUSTOMER_PROOF_DOCUMENT_TYPE, CustomerProofsService } from './customer-proofs.service';
 import type { ListCustomerAssignmentsQueryDto } from './dto/list-customer-assignments-query.dto';
 
 const ACTIVE_STATUSES: AssignmentStatus[] = [
@@ -57,6 +58,7 @@ export class CustomerAssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly customerProofsService: CustomerProofsService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -148,7 +150,7 @@ export class CustomerAssignmentsService {
     const todayEnd = this.getEndOfDay(todayStart);
     const companyScope = this.buildCompanyScope(companyIds);
 
-    const [activeTransports, inProgress, completedToday, upcoming] = await Promise.all([
+    const [activeTransports, inProgress, completedToday, upcoming, pendingProofs] = await Promise.all([
       this.prisma.assignment.count({
         where: {
           ...companyScope,
@@ -179,6 +181,7 @@ export class CustomerAssignmentsService {
           workDate: { gt: todayEnd },
         },
       }),
+      this.customerProofsService.countPendingProofs(companyIds),
     ]);
 
     await this.safeAuditLog({
@@ -194,8 +197,27 @@ export class CustomerAssignmentsService {
       inProgress,
       completedToday,
       upcoming,
-      pendingProofs: 0,
+      pendingProofs,
     };
+  }
+
+  private async loadProofCounts(assignmentIds: string[]): Promise<Map<string, number>> {
+    if (assignmentIds.length === 0) {
+      return new Map();
+    }
+
+    const grouped = await this.prisma.document.groupBy({
+      by: ['ownerId'],
+      where: {
+        ownerType: 'assignment',
+        ownerId: { in: assignmentIds },
+        documentType: CUSTOMER_PROOF_DOCUMENT_TYPE,
+        fileUrl: { not: null },
+      },
+      _count: { _all: true },
+    });
+
+    return new Map(grouped.map((row) => [row.ownerId, row._count._all]));
   }
 
   async listAssignments(
@@ -236,8 +258,17 @@ export class CustomerAssignmentsService {
       },
     });
 
+    const proofCounts = await this.loadProofCounts(rows.map((row) => row.id));
+
     return {
-      data: rows.map(toCustomerAssignmentDto),
+      data: rows.map((row) => {
+        const dto = toCustomerAssignmentDto(row);
+        const proofCount = proofCounts.get(row.id) ?? 0;
+        dto.proofCount = proofCount;
+        dto.proofRequired = row.status === AssignmentStatus.completed;
+        dto.proofPending = dto.proofRequired && proofCount === 0;
+        return dto;
+      }),
       page,
       limit,
       total,
@@ -273,6 +304,19 @@ export class CustomerAssignmentsService {
       },
     });
 
-    return toCustomerAssignmentDto(assignment);
+    const dto = toCustomerAssignmentDto(assignment);
+    const proofCount = await this.prisma.document.count({
+      where: {
+        ownerType: 'assignment',
+        ownerId: assignmentId,
+        documentType: CUSTOMER_PROOF_DOCUMENT_TYPE,
+        fileUrl: { not: null },
+      },
+    });
+    dto.proofCount = proofCount;
+    dto.proofRequired = assignment.status === AssignmentStatus.completed;
+    dto.proofPending = dto.proofRequired && proofCount === 0;
+
+    return dto;
   }
 }

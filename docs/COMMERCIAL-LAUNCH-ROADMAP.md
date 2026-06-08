@@ -116,7 +116,7 @@ Woche 1–2          Woche 2–3          Woche 3–4
 |---|---------|--------|-------------------|
 | 2.1.1 | `POST /onboarding/setup` | ✅ | Tenant in <2 Min |
 | 2.1.2 | Onboarding-UI `/onboarding` | ✅ | Formular DE |
-| 2.1.3 | **Super-Admin**: Fleet-Ops legt Tenant an | 🟡 | `docs/ops/SAME-WEEK-ONBOARDING-PLAYBOOK.md` |
+| 2.1.3 | **Super-Admin**: Fleet-Ops legt Tenant an | ✅ | `/admin/tenants` + `POST /fleet-ops/tenants` |
 | 2.1.4 | Tenant-Settings (Name, Kontakt, Sprache) | ✅ | `PATCH /onboarding/tenant` + Getting-Started |
 | 2.1.5 | Onboarding-Checkliste UI (5 Schritte) | ✅ | `/getting-started` + `GET /onboarding/progress` |
 

@@ -218,6 +218,23 @@ export class InvitationsService {
         },
       });
 
+      if (row.role === UserRole.driver) {
+        const driver = await tx.driver.findFirst({
+          where: {
+            tenantId: row.tenantId,
+            email: row.email,
+            userId: null,
+          },
+          select: { id: true },
+        });
+        if (driver) {
+          await tx.driver.update({
+            where: { id: driver.id },
+            data: { userId: created.id },
+          });
+        }
+      }
+
       return created;
     });
 

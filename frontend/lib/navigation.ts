@@ -16,6 +16,7 @@ import {
   Upload,
   CreditCard,
   Rocket,
+  ScrollText,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -89,6 +90,12 @@ const PRIVACY_ITEM: NavItem = {
   icon: Shield,
 };
 
+const AUDIT_ITEM: NavItem = {
+  href: '/audit',
+  labelKey: 'nav.audit',
+  icon: ScrollText,
+};
+
 const IMPORT_ITEM: NavItem = {
   href: '/import',
   labelKey: 'nav.import',
@@ -113,16 +120,22 @@ export function getNavigationForRole(role: Role): NavGroup[] {
       ? OFFICE_NAV.map((group) => ({ ...group, items: [...group.items] }))
       : DEFAULT_NAV.map((group) => ({ ...group, items: [...group.items] }));
 
-  if (role === 'admin') {
+  if (role === 'admin' || role === 'boss') {
     const complianceGroup = groups.find((group) => group.id === 'compliance');
     if (complianceGroup) {
-      complianceGroup.items.unshift(GETTING_STARTED_ITEM);
-      complianceGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+      if (role === 'admin') {
+        complianceGroup.items.unshift(GETTING_STARTED_ITEM);
+        complianceGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+      }
+      complianceGroup.items.push(AUDIT_ITEM);
     } else {
       const operationsGroup = groups.find((group) => group.id === 'operations');
       if (operationsGroup) {
-        operationsGroup.items.unshift(GETTING_STARTED_ITEM);
-        operationsGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+        if (role === 'admin') {
+          operationsGroup.items.unshift(GETTING_STARTED_ITEM);
+          operationsGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+        }
+        operationsGroup.items.push(AUDIT_ITEM);
       }
     }
   }

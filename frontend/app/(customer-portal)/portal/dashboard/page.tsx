@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   CalendarClock,
@@ -149,8 +150,11 @@ export default function CustomerPortalDashboardPage() {
         </div>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle>Recent assignments</CardTitle>
+            <Link href="/portal/assignments" className="text-sm font-medium text-blue-700 hover:underline">
+              View all
+            </Link>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -172,6 +176,7 @@ export default function CustomerPortalDashboardPage() {
                       <TableHead>Driver</TableHead>
                       <TableHead>Vehicle</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -199,6 +204,14 @@ export default function CustomerPortalDashboardPage() {
                           <Badge className={assignmentStatusColor(assignment.status)}>
                             {formatStatusLabel(assignment.status)}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Link
+                            href={`/portal/assignments/${assignment.id}`}
+                            className="text-sm font-medium text-blue-700 hover:underline"
+                          >
+                            Details
+                          </Link>
                         </TableCell>
                       </TableRow>
                     ))}

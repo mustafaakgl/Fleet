@@ -168,9 +168,33 @@ export class AssignmentsService {
     return { start, end };
   }
 
+  private parseMinutes(time: string): number {
+    const [hours, minutes] = time.split(':').map((part) => Number(part));
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+    return hours * 60 + minutes;
+  }
+
+  private timesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+    const aStart = this.parseMinutes(startA);
+    const aEnd = this.parseMinutes(endA);
+    const bStart = this.parseMinutes(startB);
+    const bEnd = this.parseMinutes(endB);
+    if (aEnd <= aStart || bEnd <= bStart) {
+      return true;
+    }
+    return aStart < bEnd && bStart < aEnd;
+  }
+
   private async validateAvailability(
     tx: Prisma.TransactionClient,
-    input: { driverId: string; vehicleId: string; date: Date; excludeAssignmentId?: string },
+    input: {
+      driverId: string;
+      vehicleId: string;
+      date: Date;
+      startTime: string;
+      endTime: string;
+      excludeAssignmentId?: string;
+    },
   ): Promise<string | null> {
     const { start, end } = this.getDayRange(input.date);
 
@@ -193,16 +217,21 @@ export class AssignmentsService {
       return `Driver has ${driverBlockedByCalendar.status} on selected date`;
     }
 
-    const driverActive = await tx.assignment.findFirst({
+    const driverAssignments = await tx.assignment.findMany({
       where: {
         driverId: input.driverId,
         workDate: { gte: start, lt: end },
         status: { in: ACTIVE_ASSIGNMENT_STATUSES },
         ...(input.excludeAssignmentId ? { id: { not: input.excludeAssignmentId } } : {}),
       },
-      select: { id: true },
+      select: { id: true, startTime: true, endTime: true },
     });
-    if (driverActive) return 'Driver already has an active assignment on selected date';
+    const driverOverlap = driverAssignments.find((row) =>
+      this.timesOverlap(input.startTime, input.endTime, row.startTime, row.endTime),
+    );
+    if (driverOverlap) {
+      return 'Driver already has an overlapping assignment on selected date/time';
+    }
 
     const vehicle = await tx.vehicle.findUnique({
       where: { id: input.vehicleId },
@@ -213,21 +242,33 @@ export class AssignmentsService {
       return `Vehicle is not available due to status ${vehicle.status}`;
     }
 
-    const vehicleActive = await tx.assignment.findFirst({
+    const vehicleAssignments = await tx.assignment.findMany({
       where: {
         vehicleId: input.vehicleId,
         workDate: { gte: start, lt: end },
         status: { in: ACTIVE_ASSIGNMENT_STATUSES },
         ...(input.excludeAssignmentId ? { id: { not: input.excludeAssignmentId } } : {}),
       },
-      select: { id: true },
+      select: { id: true, startTime: true, endTime: true },
     });
-    if (vehicleActive) return 'Vehicle already has an active assignment on selected date';
+    const vehicleOverlap = vehicleAssignments.find((row) =>
+      this.timesOverlap(input.startTime, input.endTime, row.startTime, row.endTime),
+    );
+    if (vehicleOverlap) {
+      return 'Vehicle already has an overlapping assignment on selected date/time';
+    }
 
     return null;
   }
 
-  async list(query: { date?: string; driver_id?: string; vehicle_id?: string; status?: string }) {
+  async list(query: {
+    date?: string;
+    driver_id?: string;
+    vehicle_id?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
     await dedupeDriverDayAssignments(this.prisma, {
       date: query.date,
       driverId: query.driver_id,
@@ -251,16 +292,43 @@ export class AssignmentsService {
       where.status = query.status as AssignmentStatus;
     }
 
-    const rows = await this.prisma.assignment.findMany({
-      where,
-      orderBy: [{ workDate: 'asc' }, { startTime: 'asc' }],
-      include: clientInclude,
-    });
+    const usePagination =
+      Number.isFinite(query.page) || Number.isFinite(query.limit);
+    const page = usePagination ? Math.max(1, query.page ?? 1) : 1;
+    const limit = usePagination
+      ? Math.min(500, Math.max(1, query.limit ?? 100))
+      : undefined;
 
-    return {
+    const [total, rows] = await Promise.all([
+      usePagination ? this.prisma.assignment.count({ where }) : Promise.resolve(0),
+      this.prisma.assignment.findMany({
+        where,
+        orderBy: [{ workDate: 'asc' }, { startTime: 'asc' }],
+        include: clientInclude,
+        ...(usePagination ? { skip: (page - 1) * (limit ?? 100), take: limit } : {}),
+      }),
+    ]);
+
+    const response: {
+      date?: string;
+      data: ReturnType<typeof toClientAssignment>[];
+      total?: number;
+      page?: number;
+      limit?: number;
+      pages?: number;
+    } = {
       date: query.date,
       data: rows.map(toClientAssignment),
     };
+
+    if (usePagination && limit) {
+      response.total = total;
+      response.page = page;
+      response.limit = limit;
+      response.pages = Math.ceil(total / limit);
+    }
+
+    return response;
   }
 
   async getById(id: string) {
@@ -294,6 +362,8 @@ export class AssignmentsService {
         driverId: dto.driver_id,
         vehicleId,
         date: workDate,
+        startTime: dto.start_time,
+        endTime: dto.end_time,
       });
       if (conflict) throw new BadRequestException(conflict);
 
@@ -380,6 +450,8 @@ export class AssignmentsService {
         vehicleId: true,
         workDate: true,
         companyId: true,
+        startTime: true,
+        endTime: true,
       },
     });
     if (!existing) throw new NotFoundException('Assignment not found');
@@ -410,11 +482,17 @@ export class AssignmentsService {
       const dateChanged = dto.work_date && newDate.getTime() !== existing.workDate.getTime();
       const vehicleChanged = nextVehicleId !== existing.vehicleId;
 
-      if (dateChanged || vehicleChanged) {
+      const timeChanged =
+        (dto.start_time !== undefined && dto.start_time !== existing.startTime) ||
+        (dto.end_time !== undefined && dto.end_time !== existing.endTime);
+
+      if (dateChanged || vehicleChanged || timeChanged) {
         const conflict = await this.validateAvailability(tx, {
           driverId: existing.driverId,
           vehicleId: nextVehicleId,
           date: newDate,
+          startTime: dto.start_time ?? existing.startTime,
+          endTime: dto.end_time ?? existing.endTime,
           excludeAssignmentId: id,
         });
         if (conflict) throw new BadRequestException(conflict);

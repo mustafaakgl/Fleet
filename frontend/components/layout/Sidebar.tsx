@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CircleHelp, LogOut, Menu, X } from 'lucide-react';
+import { Building2, CircleHelp, LogOut, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
@@ -22,6 +22,7 @@ export function Sidebar() {
 
   const role = (user?.role ?? 'office') as Role;
   const navGroups = getNavigationForRole(role);
+  const isFleetOps = Boolean(user?.fleet_ops);
 
   function handleLogout() {
     clearAuth();
@@ -92,6 +93,22 @@ export function Sidebar() {
         </nav>
 
         <div className="border-t border-gray-100 px-3 pb-4 pt-3 space-y-0.5">
+          {isFleetOps && (
+            <Link
+              href="/admin/tenants"
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900',
+                tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
+                pathname === '/admin/tenants' ? 'bg-blue-50 text-blue-700' : '',
+              )}
+            >
+              <Building2 className="h-5 w-5" />
+              <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>
+                {t('nav.fleetOps')}
+              </span>
+            </Link>
+          )}
           <Link
             href="/hilfe"
             onClick={() => setMobileOpen(false)}

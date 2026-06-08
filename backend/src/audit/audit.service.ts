@@ -21,6 +21,8 @@ type AuditLogFilters = {
   entityId?: string;
   dateFrom?: string;
   dateTo?: string;
+  page?: number;
+  limit?: number;
 };
 
 @Injectable()
@@ -71,21 +73,65 @@ export class AuditService {
       }
     }
 
-    return this.prisma.auditLog.findMany({
-      where,
-      include: {
-        actorUser: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            role: true,
+    const page = Math.max(1, filters.page ?? 1);
+    const limit = Math.min(500, Math.max(1, filters.limit ?? 100));
+    const skip = (page - 1) * limit;
+
+    const [total, rows] = await Promise.all([
+      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.findMany({
+        where,
+        include: {
+          actorUser: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              role: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      data: rows,
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
+    };
+  }
+
+  async exportAuditLogsCsv(filters: AuditLogFilters): Promise<string> {
+    const allRows: Awaited<ReturnType<typeof this.listAuditLogs>>['data'] = [];
+    const pageSize = 500;
+    let page = 1;
+    let pages = 1;
+
+    do {
+      const result = await this.listAuditLogs({ ...filters, page, limit: pageSize });
+      allRows.push(...result.data);
+      pages = result.pages;
+      page += 1;
+    } while (page <= pages && page <= 20);
+
+    const header = 'created_at,action,entity_type,entity_id,actor_email,summary';
+    const lines = allRows.map((row) => {
+      const cols = [
+        row.createdAt.toISOString(),
+        row.action,
+        row.entityType,
+        row.entityId ?? '',
+        row.actorUser?.email ?? '',
+        (row.summary ?? '').replace(/"/g, '""'),
+      ];
+      return cols.map((value) => `"${value}"`).join(',');
     });
+    return [header, ...lines].join('\n');
   }
 
   async getEntityAuditLogs(entityType: string, entityId: string) {

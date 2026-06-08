@@ -2,6 +2,8 @@ import axios from 'axios';
 import { clearAuth } from './auth';
 import type {
   AuthResponse,
+  MfaSetupResponse,
+  MfaStatus,
   DashboardSummary,
   DashboardRevenueAnalytics,
   Driver,
@@ -36,6 +38,7 @@ import type {
   CustomerAssignment,
   PaginatedCustomerAssignments,
   CustomerPortalMe,
+  CustomerAssignmentMessage,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -105,7 +108,22 @@ export const authApi = {
   signIn: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data),
 
-  me: () => api.get<AuthResponse['user']>('/auth/me').then((r) => r.data),
+  me: () =>
+    api
+      .get<NonNullable<AuthResponse['user']> & { mfa_enabled?: boolean }>('/auth/me')
+      .then((r) => r.data),
+
+  meWithToken: (token: string) =>
+    api
+      .get<NonNullable<AuthResponse['user']> & { mfa_enabled?: boolean }>('/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((r) => r.data),
+
+  oidcConfig: () =>
+    api.get<{ enabled: boolean; label: string }>('/auth/oidc/config').then((r) => r.data),
+
+  oidcLoginUrl: () => `${BASE_URL}/auth/oidc/login`,
 
   requestPasswordReset: (userId: string) =>
     api
@@ -127,6 +145,42 @@ export const authApi = {
     api
       .post<{ success: boolean }>('/auth/password-reset/confirm', { token, password })
       .then((r) => r.data),
+
+  forgotPassword: (email: string) =>
+    api
+      .post<{ success: boolean; message: string }>('/auth/password-reset/forgot', { email })
+      .then((r) => r.data),
+
+  signup: (data: {
+    fleet_name: string;
+    admin_full_name: string;
+    admin_email: string;
+    admin_password: string;
+    contact_email?: string;
+  }) =>
+    api
+      .post<{ tenant: TenantProfile; admin: { id: string; email: string; full_name: string } }>(
+        '/auth/signup',
+        data,
+      )
+      .then((r) => r.data),
+
+  verifyMfaLogin: (mfaToken: string, code: string) =>
+    api
+      .post<AuthResponse>('/auth/mfa/verify-login', { mfa_token: mfaToken, code })
+      .then((r) => r.data),
+
+  mfaStatus: () => api.get<MfaStatus>('/auth/mfa/status').then((r) => r.data),
+
+  mfaSetup: () => api.post<MfaSetupResponse>('/auth/mfa/setup').then((r) => r.data),
+
+  mfaConfirm: (code: string) =>
+    api.post<{ success: boolean; mfa_enabled: boolean }>('/auth/mfa/confirm', { code }).then((r) => r.data),
+
+  mfaDisable: (password: string, code: string) =>
+    api
+      .post<{ success: boolean; mfa_enabled: boolean }>('/auth/mfa/disable', { password, code })
+      .then((r) => r.data),
 };
 
 // ─── Audit logs (admin) ───────────────────────────────────────────────────────
@@ -146,7 +200,26 @@ export interface AuditLogRow {
   } | null;
 }
 
+export interface PaginatedAuditLogs {
+  data: AuditLogRow[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
 export const auditApi = {
+  listPage: (params?: {
+    actorUserId?: string;
+    action?: string;
+    entityType?: string;
+    entityId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get<PaginatedAuditLogs>('/audit-logs', { params }).then((r) => r.data),
+
   list: (params?: {
     actorUserId?: string;
     action?: string;
@@ -154,7 +227,19 @@ export const auditApi = {
     entityId?: string;
     dateFrom?: string;
     dateTo?: string;
-  }) => api.get<AuditLogRow[]>('/audit-logs', { params }).then((r) => r.data),
+    page?: number;
+    limit?: number;
+  }) => auditApi.listPage(params).then((r) => r.data),
+
+  exportCsv: (params?: {
+    actorUserId?: string;
+    action?: string;
+    entityType?: string;
+    entityId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }) =>
+    api.get<string>('/audit-logs/export', { params, responseType: 'text' }).then((r) => r.data),
 };
 
 // ─── Privacy / DSGVO (admin) ──────────────────────────────────────────────────
@@ -174,6 +259,24 @@ export interface DriverAnonymizeResult {
   };
 }
 
+export interface UserAnonymizeResult {
+  user_id: string;
+  anonymized_at: string;
+  removed: {
+    personal_fields: boolean;
+    notifications: number;
+    password_reset_tokens: number;
+    company_memberships: number;
+    messages_anonymized: number;
+    linked_driver_anonymized: boolean;
+  };
+  retained: {
+    assignments_created: boolean;
+    audit_logs: boolean;
+    legal_basis: string;
+  };
+}
+
 export const privacyApi = {
   exportDriver: (id: string) =>
     api.get<Blob>(`/privacy/export/driver/${id}`, { responseType: 'blob' }).then((r) => r.data),
@@ -184,6 +287,14 @@ export const privacyApi = {
   anonymizeDriver: (id: string, reason: string) =>
     api
       .post<DriverAnonymizeResult>(`/privacy/delete/driver/${id}`, {
+        confirm: 'DELETE',
+        reason,
+      })
+      .then((r) => r.data),
+
+  anonymizeUser: (id: string, reason: string) =>
+    api
+      .post<UserAnonymizeResult>(`/privacy/delete/user/${id}`, {
         confirm: 'DELETE',
         reason,
       })
@@ -211,6 +322,26 @@ export const customerPortalApi = {
 
   getAssignment: (id: string) =>
     api.get<CustomerAssignment>(`/customer/assignments/${id}`).then((r) => r.data),
+
+  listProofs: (assignmentId: string) =>
+    api.get<Document[]>(`/customer/assignments/${assignmentId}/proofs`).then((r) => r.data),
+
+  uploadProof: (assignmentId: string, formData: FormData) =>
+    api
+      .post<Document>(`/customer/assignments/${assignmentId}/proofs`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data),
+
+  listMessages: (assignmentId: string) =>
+    api
+      .get<CustomerAssignmentMessage[]>(`/customer/assignments/${assignmentId}/messages`)
+      .then((r) => r.data),
+
+  sendMessage: (assignmentId: string, body: string) =>
+    api
+      .post<CustomerAssignmentMessage>(`/customer/assignments/${assignmentId}/messages`, { body })
+      .then((r) => r.data),
 };
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -354,6 +485,8 @@ export interface AssignmentListParams {
   driver_id?: string;
   vehicle_id?: string;
   status?: string;
+  page?: number;
+  limit?: number;
 }
 
 export const assignmentsApi = {
@@ -374,6 +507,14 @@ export const assignmentsApi = {
 
   transition: (id: string, to: 'confirmed' | 'in_progress' | 'completed') =>
     api.post<Assignment>(`/assignments/${id}/transition`, { to }).then((r) => r.data),
+
+  listCustomerMessages: (id: string) =>
+    api.get<CustomerAssignmentMessage[]>(`/assignments/${id}/customer-messages`).then((r) => r.data),
+
+  sendCustomerMessage: (id: string, body: string) =>
+    api
+      .post<CustomerAssignmentMessage>(`/assignments/${id}/customer-messages`, { body })
+      .then((r) => r.data),
 };
 
 // ─── Morning check-ins ───────────────────────────────────────────────────────
@@ -871,6 +1012,50 @@ export const mailApi = {
       .then((r) => r.data),
 };
 
+// ─── Fleet Ops (platform admin) ─────────────────────────────────────────────
+
+export interface FleetOpsTenant {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  contact_email?: string;
+  created_at: string;
+  counts: { users: number; drivers: number; vehicles: number };
+  subscription?: { plan: string; status: string; billing_mode: string };
+}
+
+export const fleetOpsApi = {
+  listTenants: () => api.get<FleetOpsTenant[]>('/fleet-ops/tenants').then((r) => r.data),
+
+  provisionTenant: (data: {
+    fleet_name: string;
+    slug?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    address?: string;
+    admin_full_name: string;
+    admin_email: string;
+    admin_password: string;
+  }) =>
+    api
+      .post<{
+        tenant: TenantProfile;
+        admin: { id: string; email: string; full_name: string; role: string };
+        welcome_mail_sent: boolean;
+        mail_mode: string;
+      }>('/fleet-ops/tenants', data)
+      .then((r) => r.data),
+
+  updateTenantStatus: (tenantId: string, status: string) =>
+    api
+      .patch<{ id: string; name: string; slug: string; status: string }>(
+        `/fleet-ops/tenants/${tenantId}/status`,
+        { status },
+      )
+      .then((r) => r.data),
+};
+
 // ─── Invitations ──────────────────────────────────────────────────────────────
 
 export interface UserInvitation {
@@ -1004,6 +1189,18 @@ export const importApi = {
     const form = new FormData();
     form.append('file', file);
     return api.post<ImportResult>('/import/vehicles', form).then((r) => r.data);
+  },
+
+  companies: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<ImportResult>('/import/companies', form).then((r) => r.data);
+  },
+
+  users: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<ImportResult>('/import/users', form).then((r) => r.data);
   },
 };
 

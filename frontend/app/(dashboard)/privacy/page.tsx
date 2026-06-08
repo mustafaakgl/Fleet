@@ -177,8 +177,11 @@ export default function PrivacyPage() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>{t('privacy.section.audit')}</CardTitle>
+          <Link href="/audit" className="text-sm font-medium text-blue-700 hover:underline">
+            {t('privacy.openAuditLog')}
+          </Link>
         </CardHeader>
         <CardContent className="p-0">
           {auditError ? (

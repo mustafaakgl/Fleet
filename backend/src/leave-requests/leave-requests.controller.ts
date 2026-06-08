@@ -73,14 +73,14 @@ export class LeaveRequestsController {
   @Post(':id/cancel')
   @Roles(...OPERATIONAL_WRITE_ROLES)
   @HttpCode(HttpStatus.OK)
-  cancel(@Param('id') id: string) {
-    return this.leaveRequests.cancelLeaveRequest(id);
+  cancel(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.leaveRequests.cancelLeaveRequest(id, req.user.id);
   }
 
   @Post(':id/needs-review')
   @Roles(...OPERATIONAL_WRITE_ROLES)
   @HttpCode(HttpStatus.OK)
-  needsReview(@Param('id') id: string) {
-    return this.leaveRequests.moveToNeedsReview(id);
+  needsReview(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.leaveRequests.moveToNeedsReview(id, req.user.id);
   }
 }

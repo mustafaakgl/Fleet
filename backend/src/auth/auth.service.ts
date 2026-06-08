@@ -13,7 +13,12 @@ import { getFrontendUrl } from '../config/env.validation';
 import { passwordResetMail } from '../mail/mail-templates';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { isFleetOpsEmail } from '../config/fleet-ops';
+import { isPublicSignupEnabled } from '../config/public-signup';
+import { OnboardingService } from '../onboarding/onboarding.service';
+import { SetupTenantDto } from '../onboarding/dto/setup-tenant.dto';
 import { resolveCustomerCompanyContext } from './customer-company-context';
+import { MfaService } from './mfa.service';
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
@@ -23,6 +28,7 @@ interface AuthUserPayload {
   name: string;
   role: string;
   language: string;
+  fleet_ops?: boolean;
   companyIds?: string[];
   companyId?: string | null;
   companies?: { id: string; name: string }[];
@@ -35,6 +41,8 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly auditService: AuditService,
     private readonly mailService: MailService,
+    private readonly onboarding: OnboardingService,
+    private readonly mfaService: MfaService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -67,6 +75,7 @@ export class AuthService {
       name: user.fullName,
       role: user.role,
       language: user.language,
+      fleet_ops: isFleetOpsEmail(user.email),
     };
 
     if (user.role === 'customer') {
@@ -85,10 +94,17 @@ export class AuthService {
     email: string,
     password: string,
     context?: { ipAddress?: string; userAgent?: string },
-  ): Promise<{
-    accessToken: string;
-    user: AuthUserPayload;
-  }> {
+  ): Promise<
+    | {
+        accessToken: string;
+        user: AuthUserPayload;
+        mfa_required?: false;
+      }
+    | {
+        mfa_required: true;
+        mfa_token: string;
+      }
+  > {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.prisma.unscoped.user.findFirst({
       where: { email: normalizedEmail },
@@ -120,11 +136,30 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.mfaEnabled && user.mfaSecret) {
+      const mfaToken = await this.mfaService.createMfaPendingToken(user);
+      await this.safeAuditLog({
+        actorUserId: user.id,
+        action: 'auth.mfa_challenge_issued',
+        entityType: 'auth',
+        entityId: user.id,
+        summary: 'MFA challenge issued after password login',
+        metadata: { role: user.role },
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+      });
+      return {
+        mfa_required: true,
+        mfa_token: mfaToken,
+      };
+    }
+
     const accessToken = await this.jwt.signAsync({
       sub: user.id,
       email: user.email,
       role: user.role,
       tenantId: user.tenantId,
+      fleetOps: isFleetOpsEmail(user.email),
     });
 
     await this.safeAuditLog({
@@ -141,19 +176,153 @@ export class AuthService {
     return {
       accessToken,
       user: await this.buildAuthUserPayload(user),
+      mfa_required: false,
     };
   }
 
-  async getById(id: string): Promise<AuthUserPayload> {
+  async issueSessionForUser(
+    userId: string,
+    context?: {
+      method?: 'oidc' | 'password';
+      ipAddress?: string;
+      userAgent?: string;
+    },
+  ): Promise<{ accessToken: string; user: AuthUserPayload }> {
+    const user = await this.prisma.unscoped.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== 'active') {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const accessToken = await this.jwt.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      fleetOps: isFleetOpsEmail(user.email),
+    });
+
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: context?.method === 'oidc' ? 'auth.oidc_login_success' : 'auth.login_success',
+      entityType: 'auth',
+      entityId: user.id,
+      summary: context?.method === 'oidc' ? 'OIDC login successful' : 'User login successful',
+      metadata: { role: user.role, method: context?.method ?? 'password' },
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+
+    return {
+      accessToken,
+      user: await this.buildAuthUserPayload(user),
+    };
+  }
+
+  async completeMfaLogin(
+    mfaToken: string,
+    code: string,
+    context?: { ipAddress?: string; userAgent?: string },
+  ) {
+    const { user, accessToken } = await this.mfaService.completeLogin(mfaToken, code, context);
+    return {
+      accessToken,
+      user: await this.buildAuthUserPayload(user),
+    };
+  }
+
+  async getById(id: string): Promise<AuthUserPayload & { mfa_enabled: boolean }> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user || user.status !== 'active') {
       throw new UnauthorizedException('User not found');
     }
-    return this.buildAuthUserPayload(user);
+    return {
+      ...(await this.buildAuthUserPayload(user)),
+      mfa_enabled: user.mfaEnabled,
+    };
   }
 
   private hashResetToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  async signup(dto: SetupTenantDto) {
+    if (!isPublicSignupEnabled()) {
+      throw new BadRequestException('Public signup is not enabled');
+    }
+    return this.onboarding.provisionTenant(dto);
+  }
+
+  async forgotPassword(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.unscoped.user.findFirst({
+      where: { email: normalizedEmail, status: 'active' },
+      select: { id: true, email: true },
+    });
+
+    if (user) {
+      await this.issuePasswordResetToken(user.id, user.email, undefined);
+    }
+
+    return {
+      success: true,
+      message: 'If an account exists, a reset link has been sent.',
+    };
+  }
+
+  private async issuePasswordResetToken(
+    userId: string,
+    userEmail: string,
+    createdById?: string,
+  ) {
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashResetToken(rawToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+    await this.prisma.passwordResetToken.updateMany({
+      where: {
+        userId,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: { usedAt: new Date() },
+    });
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash,
+        expiresAt,
+        createdById,
+      },
+    });
+
+    const resetUrl = `${getFrontendUrl()}/reset-password?token=${rawToken}`;
+    const template = passwordResetMail({
+      resetUrl,
+      expiresAt: expiresAt.toISOString(),
+    });
+    const mailResult = await this.mailService.sendMail({
+      to: userEmail,
+      subject: template.subject,
+      text: template.text,
+      html: template.html,
+    });
+
+    await this.safeAuditLog({
+      actorUserId: createdById,
+      action: 'auth.password_reset_requested',
+      entityType: 'user',
+      entityId: userId,
+      summary: 'Password reset link created',
+      metadata: {
+        self_service: !createdById,
+        expiresAt: expiresAt.toISOString(),
+        mail_mode: mailResult.mode,
+        mail_sent: mailResult.sent,
+      },
+    });
+
+    return { resetUrl, expiresAt, mailResult };
   }
 
   async requestPasswordReset(adminUserId: string, targetUserId: string) {
@@ -168,53 +337,11 @@ export class AuthService {
       throw new BadRequestException('Cannot reset password for inactive user');
     }
 
-    const rawToken = randomBytes(32).toString('hex');
-    const tokenHash = this.hashResetToken(rawToken);
-    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-
-    await this.prisma.passwordResetToken.updateMany({
-      where: {
-        userId: targetUser.id,
-        usedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      data: { usedAt: new Date() },
-    });
-
-    await this.prisma.passwordResetToken.create({
-      data: {
-        userId: targetUser.id,
-        tokenHash,
-        expiresAt,
-        createdById: adminUserId,
-      },
-    });
-
-    const resetUrl = `${getFrontendUrl()}/reset-password?token=${rawToken}`;
-
-    const template = passwordResetMail({
-      resetUrl,
-      expiresAt: expiresAt.toISOString(),
-    });
-    const mailResult = await this.mailService.sendMail({
-      to: targetUser.email,
-      subject: template.subject,
-      text: template.text,
-      html: template.html,
-    });
-
-    await this.safeAuditLog({
-      actorUserId: adminUserId,
-      action: 'auth.password_reset_requested',
-      entityType: 'user',
-      entityId: targetUser.id,
-      summary: 'Password reset link created',
-      metadata: {
-        expiresAt: expiresAt.toISOString(),
-        mail_mode: mailResult.mode,
-        mail_sent: mailResult.sent,
-      },
-    });
+    const { resetUrl, expiresAt, mailResult } = await this.issuePasswordResetToken(
+      targetUser.id,
+      targetUser.email,
+      adminUserId,
+    );
 
     return {
       reset_url: resetUrl,

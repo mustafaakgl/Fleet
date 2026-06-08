@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Driver, DriverStatus } from '@prisma/client';
+import { Prisma, Driver, DriverStatus, UserRole } from '@prisma/client';
 import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
+import { InvitationsService } from '../invitations/invitations.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantContext } from '../tenant/tenant-context';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 
@@ -65,6 +67,7 @@ export class DriversService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly invitations: InvitationsService,
   ) {}
 
   async listDrivers(query: { status?: string; search?: string; page?: number; limit?: number }) {
@@ -203,6 +206,21 @@ export class DriversService {
       entityId: driver.id,
       summary: 'Driver created',
     });
+
+    const tenantId = TenantContext.getTenantId();
+    const email = dto.email?.trim().toLowerCase();
+    if (tenantId && email && actorUserId) {
+      try {
+        await this.invitations.create(tenantId, actorUserId, {
+          email,
+          full_name: `${dto.first_name} ${dto.last_name}`.trim(),
+          role: UserRole.driver,
+          language: 'de',
+        });
+      } catch {
+        // Invitation skipped when user already exists or seat limits apply
+      }
+    }
 
     return toClientDriver(driver);
   }

@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyRound, Mail, Pencil, Power, UserPlus, X } from 'lucide-react';
+import { Download, KeyRound, Mail, Pencil, Power, ShieldOff, UserPlus, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { authApi, invitationsApi, usersApi } from '@/lib/api';
+import { authApi, invitationsApi, privacyApi, usersApi } from '@/lib/api';
+import { downloadBlob } from '@/lib/download-blob';
+import { getUser } from '@/lib/auth';
 import { isPasswordStrong } from '@/lib/password-policy';
 import type { User, UserRole, UserStatus } from '@/lib/types';
 
@@ -54,6 +56,14 @@ export function Benutzerverwaltung() {
   const [formData, setFormData] = useState<UserFormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [gdprUserId, setGdprUserId] = useState<string | null>(null);
+
+  const currentUserId = getUser()?.id;
+  const isAdmin = getUser()?.role === 'admin';
+
+  function isAnonymizedUser(user: User): boolean {
+    return user.full_name === 'ANONYMIZED' && user.email.endsWith('@anonymized.local');
+  }
 
   const roleLabel = useCallback((role: UserRole) => t(`usersAdmin.roles.${role}`), [t]);
   const languageLabel = useCallback(
@@ -201,6 +211,36 @@ export function Benutzerverwaltung() {
     }
   }
 
+  async function handleGdprExport(user: User) {
+    setGdprUserId(user.id);
+    try {
+      const blob = await privacyApi.exportUser(user.id);
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(blob, `user-export-${user.id}-${stamp}.zip`);
+    } catch {
+      setLoadError(t('usersAdmin.gdprExportError'));
+    } finally {
+      setGdprUserId(null);
+    }
+  }
+
+  async function handleGdprAnonymize(user: User) {
+    if (!window.confirm(t('usersAdmin.gdprAnonymizeConfirm', { name: user.full_name }))) return;
+    const reason = window.prompt(t('usersAdmin.gdprReasonPrompt'));
+    if (!reason || reason.trim().length < 3) return;
+
+    setGdprUserId(user.id);
+    try {
+      await privacyApi.anonymizeUser(user.id, reason.trim());
+      window.alert(t('usersAdmin.gdprAnonymizeDone'));
+      await load();
+    } catch {
+      setLoadError(t('usersAdmin.gdprAnonymizeError'));
+    } finally {
+      setGdprUserId(null);
+    }
+  }
+
   async function toggleStatus(user: User) {
     const nextStatus: UserStatus = user.status === 'active' ? 'inactive' : 'active';
     const confirmed =
@@ -333,6 +373,34 @@ export function Benutzerverwaltung() {
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
+                        {isAdmin ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void handleGdprExport(user)}
+                              disabled={gdprUserId === user.id}
+                              className="rounded border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                              aria-label={t('usersAdmin.gdprExportAction')}
+                              title={t('usersAdmin.gdprExport')}
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleGdprAnonymize(user)}
+                              disabled={
+                                gdprUserId === user.id ||
+                                isAnonymizedUser(user) ||
+                                user.id === currentUserId
+                              }
+                              className="rounded border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                              aria-label={t('usersAdmin.gdprAnonymizeAction')}
+                              title={t('usersAdmin.gdprAnonymize')}
+                            >
+                              <ShieldOff className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : null}
                         {user.status === 'active' ? (
                           <button
                             type="button"

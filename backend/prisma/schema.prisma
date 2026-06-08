@@ -290,6 +290,7 @@ model Tenant {
   auditLogs             AuditLog[]
   driverLocationHistory DriverLocationHistory[]
   driverLocationLatest  DriverLocationLatest[]
+  customerAssignmentMessages CustomerAssignmentMessage[]
 }
 
 model TenantSubscription {
@@ -329,6 +330,9 @@ model User {
   status       UserStatus @default(active)
   language     String     @default("de")
   expoPushToken String?
+  mfaEnabled       Boolean @default(false)
+  mfaSecret        String?
+  mfaPendingSecret String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -346,6 +350,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   createdPasswordResets PasswordResetToken[] @relation("PasswordResetCreatedBy")
   sentInvitations   UserInvitation[] @relation("InvitationSentBy")
+  customerAssignmentMessages CustomerAssignmentMessage[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -554,11 +559,30 @@ model Assignment {
   vehicleHandovers VehicleHandover[]
   accidents        Accident[]
   morningCheckins  MorningCheckin[]
+  customerMessages CustomerAssignmentMessage[]
 
   @@index([tenantId])
   @@index([driverId, workDate])
   @@index([vehicleId, workDate])
   @@index([companyId, workDate])
+}
+
+model CustomerAssignmentMessage {
+  id           String   @id @default(cuid())
+  tenantId     String   @default("default-tenant")
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  assignmentId String
+  senderUserId String
+  body         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  sender     User       @relation(fields: [senderUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([assignmentId, createdAt])
+  @@index([senderUserId, createdAt])
 }
 
 model DriverLocationLatest {

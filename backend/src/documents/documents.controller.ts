@@ -94,6 +94,8 @@ export class DocumentsController {
     @Query('status') status?: string,
     @Query('document_type') document_type?: string,
     @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.documentsService.listDocuments({
       ownerType: owner_type,
@@ -101,6 +103,8 @@ export class DocumentsController {
       status,
       documentType: document_type,
       search,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
     });
   }
 

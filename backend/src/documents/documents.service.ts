@@ -70,7 +70,12 @@ export class DocumentsService {
   }
 
   async assertCanDownloadDocument(
-    document: { ownerType: string; ownerId: string; fileUrl: string | null },
+    document: {
+      ownerType: string;
+      ownerId: string;
+      fileUrl: string | null;
+      documentType?: string;
+    },
     actor: { userId: string; role: string },
   ): Promise<void> {
     if (!document.fileUrl) {
@@ -79,6 +84,26 @@ export class DocumentsService {
 
     if (OPERATIONAL_ROLES.includes(actor.role as UserRole)) {
       return;
+    }
+
+    if (actor.role === 'customer') {
+      if (document.ownerType === 'assignment' && document.documentType === 'delivery_proof') {
+        const membership = await this.prisma.companyUser.findFirst({
+          where: {
+            userId: actor.userId,
+            company: {
+              assignments: {
+                some: { id: document.ownerId },
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (membership) {
+          return;
+        }
+      }
+      throw new ForbiddenException('You do not have access to this document');
     }
 
     if (actor.role !== 'driver') {
@@ -352,6 +377,8 @@ export class DocumentsService {
     status?: string;
     documentType?: string;
     search?: string;
+    page?: number;
+    limit?: number;
   }) {
     const where: Record<string, unknown> = {};
 
@@ -379,17 +406,40 @@ export class DocumentsService {
       ];
     }
 
+    const usePagination =
+      Number.isFinite(filters.page) || Number.isFinite(filters.limit);
+    const page = usePagination ? Math.max(1, filters.page ?? 1) : 1;
+    const limit = usePagination
+      ? Math.min(500, Math.max(1, filters.limit ?? 100))
+      : undefined;
+
     const db = this.prisma as any;
-    const rows = await db.document.findMany({
-      where,
-      include: {
-        uploadedBy: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-    return this.mapDocumentsToClient(rows);
+    const [total, rows] = await Promise.all([
+      usePagination ? db.document.count({ where }) : Promise.resolve(0),
+      db.document.findMany({
+        where,
+        include: {
+          uploadedBy: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        ...(usePagination ? { skip: (page - 1) * (limit ?? 100), take: limit } : {}),
+      }),
+    ]);
+
+    const data = this.mapDocumentsToClient(rows);
+    if (!usePagination) {
+      return data;
+    }
+
+    return {
+      data,
+      total,
+      page,
+      limit: limit ?? 100,
+      pages: Math.ceil(total / (limit ?? 100)),
+    };
   }
 
   async getDocumentById(id: string) {

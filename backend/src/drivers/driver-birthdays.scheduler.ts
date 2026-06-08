@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { DriverBirthdaysService } from './driver-birthdays.service';
+import { QueueService } from '../queue/queue.service';
 
 @Injectable()
 export class DriverBirthdaysScheduler {
   private readonly logger = new Logger(DriverBirthdaysScheduler.name);
 
-  constructor(private readonly driverBirthdays: DriverBirthdaysService) {}
+  constructor(private readonly queue: QueueService) {}
 
   /** Daily at 08:00 UTC. Set BIRTHDAY_CRON_ENABLED=false to disable. */
   @Cron('0 8 * * *', { timeZone: 'UTC' })
@@ -16,10 +16,8 @@ export class DriverBirthdaysScheduler {
     }
 
     try {
-      const result = await this.driverBirthdays.sendTodayBirthdayNotifications();
-      this.logger.log(
-        `Birthday cron finished: sent=${result.sent}, skipped=${result.skipped}, candidates=${result.candidates}`,
-      );
+      await this.queue.enqueue('drivers.birthdays');
+      this.logger.log(`Birthday job dispatched (${this.queue.mode} mode)`);
     } catch (error) {
       this.logger.error(`Birthday cron failed: ${error}`);
     }

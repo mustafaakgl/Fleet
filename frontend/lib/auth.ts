@@ -55,6 +55,7 @@ export function getUser(): AuthUser | null {
       name: parsed.name ?? parsed.email,
       department: parsed.department,
       language: parsed.language,
+      fleet_ops: parsed.fleet_ops,
       companyIds: parsed.companyIds,
       companyId: parsed.companyId,
       companies: parsed.companies,

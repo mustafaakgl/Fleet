@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getTodayDate, type FleetAssignment, useFleetData } from '@/context/FleetDataContext';
+import { CustomerAssignmentMessagesPanel } from '@/components/customer-portal/CustomerAssignmentMessagesPanel';
 import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
 import { groupAssignmentsByCompany, TRAILER_BY_VEHICLE } from './companyBoard';
 
@@ -380,6 +381,7 @@ export function TagesuebersichtTab({ planningDate }: { planningDate?: string }) 
               <DrawerEditableRow label={t('tagesueber.startTime')} value={editMode ? String(editDraft.startTime ?? '') : selectedAssignment.startTime || '-'} onChange={(value) => setEditDraft((current) => ({ ...current, startTime: value }))} editMode={editMode} />
               <DrawerEditableRow label={t('tagesueber.endTime')} value={editMode ? String(editDraft.endTime ?? '') : selectedAssignment.endTime || '-'} onChange={(value) => setEditDraft((current) => ({ ...current, endTime: value }))} editMode={editMode} />
               <DrawerEditableRow label={t('tagesueber.notes')} value={editMode ? String(editDraft.notes ?? '') : selectedAssignment.notes || '-'} onChange={(value) => setEditDraft((current) => ({ ...current, notes: value }))} editMode={editMode} />
+              <CustomerAssignmentMessagesPanel assignmentId={selectedAssignment.id} variant="fleet" />
             </div>
 
             <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-slate-300 bg-white px-4 py-3">

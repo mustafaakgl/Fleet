@@ -1,6 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { Button } from '@/components/ui/button';
@@ -10,8 +11,15 @@ interface CustomerPortalShellProps {
   children: React.ReactNode;
 }
 
+const NAV_ITEMS = [
+  { href: '/portal/dashboard', label: 'Dashboard' },
+  { href: '/portal/assignments', label: 'Assignments' },
+  { href: '/security', label: 'Security' },
+];
+
 export function CustomerPortalShell({ children }: CustomerPortalShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const user = getUser();
   const companyLabel =
     user?.companies?.map((company) => company.name).join(', ') ??
@@ -46,6 +54,26 @@ export function CustomerPortalShell({ children }: CustomerPortalShellProps) {
           </div>
         </div>
       </header>
+      <nav className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-6xl gap-1 px-4 sm:px-6">
+          {NAV_ITEMS.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`border-b-2 px-3 py-3 text-sm font-medium ${
+                  active
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{children}</main>
     </div>
   );

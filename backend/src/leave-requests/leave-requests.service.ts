@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, RequestStatus, RequestType } from '@prisma/client';
+import { changedFieldNames, safeAuditLog } from '../audit/audit-helper';
+import { AuditService } from '../audit/audit.service';
 import { CalendarService } from '../calendar/calendar.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { OperationalNotifyService } from '../notifications/operational-notify.service';
@@ -23,6 +25,7 @@ export class LeaveRequestsService {
     private readonly calendarService: CalendarService,
     private readonly driverNotify: DriverNotifyService,
     private readonly operationalNotify: OperationalNotifyService,
+    private readonly auditService: AuditService,
   ) {}
 
   async list(query: { driver_id?: string; status?: string; type?: string }) {
@@ -98,10 +101,18 @@ export class LeaveRequestsService {
       relatedEntityId: created.id,
     });
 
+    await safeAuditLog(this.auditService, {
+      action: 'leave_request.created',
+      entityType: 'request',
+      entityId: created.id,
+      summary: 'Leave request created',
+      metadata: { driverId: created.driverId, type: created.type },
+    });
+
     return created;
   }
 
-  async moveToNeedsReview(requestId: string) {
+  async moveToNeedsReview(requestId: string, actorUserId?: string) {
     const request = await this.prisma.request.findUnique({
       where: { id: requestId },
       select: { id: true, status: true },
@@ -110,11 +121,21 @@ export class LeaveRequestsService {
     if (request.status !== RequestStatus.pending) {
       throw new BadRequestException('Only pending requests can be moved to needs_review');
     }
-    return this.prisma.request.update({
+    const updated = await this.prisma.request.update({
       where: { id: requestId },
       data: { status: RequestStatus.needs_review },
       include: { driver: { select: { id: true, firstName: true, lastName: true } } },
     });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'leave_request.needs_review',
+      entityType: 'request',
+      entityId: requestId,
+      summary: 'Leave request moved to needs review',
+    });
+
+    return updated;
   }
 
   private mapRequestTypeToCalendarStatus(type: RequestType): string {
@@ -209,6 +230,15 @@ export class LeaveRequestsService {
       });
     }
 
+    await safeAuditLog(this.auditService, {
+      actorUserId: currentUserId,
+      action: 'leave_request.approved',
+      entityType: 'request',
+      entityId: result.request.id,
+      summary: 'Leave request approved',
+      metadata: { driverId: result.request.driverId },
+    });
+
     return result;
   }
 
@@ -254,10 +284,19 @@ export class LeaveRequestsService {
       });
     }
 
+    await safeAuditLog(this.auditService, {
+      actorUserId: currentUserId,
+      action: 'leave_request.rejected',
+      entityType: 'request',
+      entityId: result.id,
+      summary: 'Leave request rejected',
+      metadata: { driverId: result.driverId },
+    });
+
     return result;
   }
 
-  async cancelLeaveRequest(requestId: string) {
+  async cancelLeaveRequest(requestId: string, actorUserId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
       const db = tx as any;
 
@@ -281,6 +320,15 @@ export class LeaveRequestsService {
           status: 'cancelled',
         },
       });
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'leave_request.cancelled',
+      entityType: 'request',
+      entityId: result.id,
+      summary: 'Leave request cancelled',
+      metadata: { changedFields: changedFieldNames({ status: 'cancelled' }) },
     });
 
     return result;

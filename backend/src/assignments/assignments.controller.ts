@@ -18,6 +18,8 @@ import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { CustomerMessagesService } from '../customer-portal/customer-messages.service';
+import { SendCustomerMessageDto } from '../customer-portal/dto/send-customer-message.dto';
 import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -31,7 +33,10 @@ interface AuthenticatedRequest extends Request {
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)
 export class AssignmentsController {
-  constructor(private readonly assignments: AssignmentsService) {}
+  constructor(
+    private readonly assignments: AssignmentsService,
+    private readonly customerMessages: CustomerMessagesService,
+  ) {}
 
   @Get()
   list(
@@ -39,8 +44,33 @@ export class AssignmentsController {
     @Query('driver_id') driver_id?: string,
     @Query('vehicle_id') vehicle_id?: string,
     @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.assignments.list({ date, driver_id, vehicle_id, status });
+    return this.assignments.list({
+      date,
+      driver_id,
+      vehicle_id,
+      status,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get(':id/customer-messages')
+  listCustomerMessages(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.customerMessages.listForFleet(id, req.user.id);
+  }
+
+  @Post(':id/customer-messages')
+  @RequiresWrite()
+  @HttpCode(HttpStatus.CREATED)
+  sendCustomerMessage(
+    @Param('id') id: string,
+    @Body() dto: SendCustomerMessageDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.customerMessages.sendFromFleet(id, req.user.id, dto.body);
   }
 
   @Get(':id')
