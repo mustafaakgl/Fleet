@@ -75,8 +75,15 @@ export function LandingFooter() {
             <Link href="/datenschutz" className="transition hover:text-white">
               {t('footer.privacy')}
             </Link>
-            <span>{t('footer.terms')}</span>
-            <span>{t('footer.imprint')}</span>
+            <Link href="/agb" className="transition hover:text-white">
+              {t('footer.terms')}
+            </Link>
+            <Link href="/impressum" className="transition hover:text-white">
+              {t('footer.imprint')}
+            </Link>
+            <Link href="/kvkk" className="transition hover:text-white">
+              KVKK
+            </Link>
             <Link href="/login" className="font-semibold text-white transition hover:text-blue-200">
               {t('nav.signIn')}
             </Link>

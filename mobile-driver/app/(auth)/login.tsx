@@ -50,7 +50,7 @@ export default function LoginScreen() {
       });
       void registerPushTokenAfterLogin();
       const docs = await driverApi.listDocuments().catch(() => null);
-      if (docs && docs.missingRequired.length > 0) {
+      if (docs && (docs.missingUploadableRequired?.length ?? docs.missingRequired.length) > 0) {
         router.replace('/(app)/document-onboarding');
       } else {
         router.replace('/(app)/today');

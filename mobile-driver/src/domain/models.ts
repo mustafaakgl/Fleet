@@ -32,6 +32,7 @@ export type RequestType =
   | 'special_leave'
   | 'overtime_compensation'
   | 'free_day'
+  | 'uniform_delivery'
   | 'other';
 
 export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';

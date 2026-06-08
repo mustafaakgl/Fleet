@@ -14,7 +14,7 @@ import {
 } from '@/features/documents/pick-document-image';
 import { useTranslation } from '@/i18n/useTranslation';
 import {
-  DRIVER_REQUIRED_DOCUMENT_TYPES,
+  DRIVER_SELF_UPLOAD_REQUIRED_TYPES,
   documentTypeLabelKey,
 } from '@/lib/driver-documents';
 import { colors, radius, spacing, typography } from '@/theme';
@@ -66,7 +66,7 @@ export default function DocumentOnboardingScreen() {
     return translated === key ? type : translated;
   };
 
-  const missingRequired = data?.missingRequired ?? [...DRIVER_REQUIRED_DOCUMENT_TYPES];
+  const missingRequired = data?.missingUploadableRequired ?? [...DRIVER_SELF_UPLOAD_REQUIRED_TYPES];
 
   const allRequiredUploaded = !isLoading && missingRequired.length === 0;
 
@@ -137,7 +137,7 @@ export default function DocumentOnboardingScreen() {
         <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />
       ) : (
         <View style={styles.list}>
-          {DRIVER_REQUIRED_DOCUMENT_TYPES.map((documentType) => {
+          {DRIVER_SELF_UPLOAD_REQUIRED_TYPES.map((documentType) => {
             const done = !missingRequired.includes(documentType);
             const uploading =
               uploadMutation.isPending && uploadMutation.variables?.documentType === documentType;

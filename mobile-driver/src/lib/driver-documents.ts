@@ -10,7 +10,14 @@ export const DRIVER_UPLOAD_DOCUMENT_TYPES = [
 export type DriverUploadDocumentType = (typeof DRIVER_UPLOAD_DOCUMENT_TYPES)[number];
 
 /** Must be uploaded before using the app (matches backend). */
-export const DRIVER_REQUIRED_DOCUMENT_TYPES = ['Driving License', 'Passport'] as const;
+export const DRIVER_SELF_UPLOAD_REQUIRED_TYPES = ['Driving License', 'Passport'] as const;
+
+export const DRIVER_OFFICE_DOCUMENT_TYPES = ['Contract', 'Salary Document'] as const;
+
+export const DRIVER_REQUIRED_DOCUMENT_TYPES = [
+  ...DRIVER_SELF_UPLOAD_REQUIRED_TYPES,
+  ...DRIVER_OFFICE_DOCUMENT_TYPES,
+] as const;
 
 export type DriverRequiredDocumentType = (typeof DRIVER_REQUIRED_DOCUMENT_TYPES)[number];
 

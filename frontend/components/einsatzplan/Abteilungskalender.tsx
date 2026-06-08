@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
   ChevronDown,
@@ -14,6 +14,7 @@ import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { useFleetData } from '@/context/FleetDataContext';
+import { calendarApi } from '@/lib/api';
 import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | AbsenceTypeAbbreviation | '';
@@ -74,45 +75,27 @@ interface SelectedEmptyCell {
   year: number;
 }
 
-const departments: Department[] = [
-  { id: 'office', name: 'Office', kind: 'internal' },
-  { id: 'krage', name: 'Krage', kind: 'external' },
-  { id: 'raben-trans', name: 'Raben Trans', kind: 'external' },
-  { id: 'weliver', name: 'Weliver', kind: 'external' },
-  { id: 'go', name: 'Go', kind: 'external' },
-  { id: 'kunzendorf', name: 'Kunzendorf', kind: 'external' },
-  { id: 'penny', name: 'Penny', kind: 'external' },
-  { id: 'securitas', name: 'Securitas', kind: 'external' },
-  { id: 'werkstatt', name: 'Werkstatt', kind: 'internal' },
-  { id: 'netto', name: 'Netto', kind: 'external' },
-  { id: 'schnellecke', name: 'Schnellecke', kind: 'external' },
-  { id: 'weidler', name: 'Weidler', kind: 'external' },
-  { id: 'lidl', name: 'Lidl', kind: 'external' },
-];
+function slugifyDepartment(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'general';
+}
 
-const employees: Employee[] = [
-  { id: 'ozdemir-hakan', name: 'Ozdemir Hakan', departmentId: 'office' },
-  { id: 'office-2', name: 'Anna Muller', departmentId: 'office' },
-  { id: 'sita-diallo', name: 'Sita Diallo', departmentId: 'krage' },
-  { id: 'andrii-dudiak', name: 'Andrii Dudiak', departmentId: 'krage' },
-  { id: 'nesrin-feyzula', name: 'Nesrin Feyzula', departmentId: 'krage' },
-  { id: 'krage-4', name: 'Gundrum Andreas', departmentId: 'krage' },
-  { id: 'krage-5', name: 'Kosching Fritz', departmentId: 'krage' },
-  { id: 'krage-6', name: 'Marinov Karamfil', departmentId: 'krage' },
-  { id: 'ilker-cukur', name: 'Ilker Cukur', departmentId: 'go' },
-  { id: 'thomas-scharein', name: 'Thomas Scharein', departmentId: 'go' },
-  { id: 'werkstatt-1', name: 'Mehmet Yilmaz', departmentId: 'werkstatt' },
-  { id: 'werkstatt-2', name: 'Piotr Kowalski', departmentId: 'werkstatt' },
-  { id: 'raben-1', name: 'John Smith', departmentId: 'raben-trans' },
-  { id: 'raben-2', name: 'Tomasz Nowak', departmentId: 'raben-trans' },
-  { id: 'weliver-1', name: 'Marco Rossi', departmentId: 'weliver' },
-  { id: 'penny-1', name: 'Sarah Becker', departmentId: 'penny' },
-  { id: 'securitas-1', name: 'Lucas Martin', departmentId: 'securitas' },
-  { id: 'netto-1', name: 'Elena Weber', departmentId: 'netto' },
-  { id: 'schnellecke-1', name: 'Ahmed Ali', departmentId: 'schnellecke' },
-  { id: 'weidler-1', name: 'Daniel Hoffmann', departmentId: 'weidler' },
-  { id: 'lidl-1', name: 'Julia Schneider', departmentId: 'lidl' },
-];
+function formatMonthDate(year: number, month: number, day: number) {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function toCalendarApiStatus(status: Exclude<CalendarStatus, ''>): string {
+  const map: Record<string, string> = {
+    SU: 'US',
+    PU: 'FR',
+    BH: 'AB',
+    KA: 'FR',
+    SA: 'AB',
+    Aus: 'AB',
+    'k. Auftrag': 'MT',
+    'unent.Fehlen': 'WE',
+  };
+  return map[status] ?? status;
+}
 
 const monthLabels = [
   'Januar',
@@ -189,85 +172,32 @@ function isWeekend(year: number, month: number, day: number) {
   return value === 0 || value === 6;
 }
 
-function createMonthlyStatusMap() {
-  const map: Record<string, Record<string, StatusEntry>> = {};
-
-  const setEntry = (
-    employeeId: string,
-    month: number,
-    day: number,
-    status: Exclude<CalendarStatus, ''>,
-    notes: string,
-    metadata?: Pick<StatusEntry, 'source' | 'sourceDate' | 'requestId' | 'assignmentId'>,
-  ) => {
-    map[employeeId] ??= {};
-    map[employeeId][`${month}-${day}`] = { status, notes, ...metadata };
-  };
-
-  setEntry('ozdemir-hakan', 4, 1, 'FT', 'Labour Day holiday.');
-  setEntry('ozdemir-hakan', 4, 5, 'AT', 'Office planning day.');
-  setEntry('ozdemir-hakan', 4, 12, 'UT', 'Approved vacation day.');
-  setEntry('ozdemir-hakan', 4, 13, 'UT', 'Approved vacation day.');
-  setEntry('ozdemir-hakan', 4, 20, 'KT', 'Krankmeldung eingegangen.', {
-    source: 'request',
-    sourceDate: '2026-05-20',
-    requestId: 'REQ-2026-0520',
-  });
-  setEntry('ozdemir-hakan', 4, 21, 'AT', 'Einsatzbestatigung vorhanden.', {
-    source: 'assignment',
-    sourceDate: '2026-05-21',
-    assignmentId: 'ASSIGN-2026-0521',
-  });
-  setEntry('office-2', 4, 7, 'KT', 'Medical leave.');
-  setEntry('office-2', 4, 8, 'KT', 'Medical leave.');
-
-  setEntry('sita-diallo', 4, 10, 'UT', 'Private travel approved.');
-  setEntry('andrii-dudiak', 4, 15, 'AT', 'Customer deployment.');
-  setEntry('nesrin-feyzula', 4, 15, 'UT', 'Vacation overlap.');
-  setEntry('krage-4', 4, 15, 'UT', 'Vacation overlap.');
-  setEntry('krage-5', 4, 3, 'FT', 'Regional holiday.');
-  setEntry('krage-6', 4, 21, 'KT', 'Sick leave.');
-
-  setEntry('ilker-cukur', 4, 2, 'AT', 'Shift planned.');
-  setEntry('ilker-cukur', 4, 18, 'UT', 'Leave planned.');
-  setEntry('thomas-scharein', 4, 18, 'UT', 'Leave planned.');
-
-  setEntry('werkstatt-1', 4, 9, 'AT', 'Workshop inspection.');
-  setEntry('werkstatt-2', 4, 22, 'KT', 'Sick note received.');
-  setEntry('raben-1', 4, 6, 'AT', 'Loading shift.');
-  setEntry('raben-2', 4, 20, 'UT', 'Annual leave.');
-  setEntry('weliver-1', 4, 11, 'AT', 'Route assignment.');
-  setEntry('penny-1', 4, 17, 'UT', 'Requested leave entered.');
-  setEntry('securitas-1', 4, 4, 'AT', 'Security shift.');
-  setEntry('netto-1', 4, 24, 'KT', 'Short illness.');
-  setEntry('schnellecke-1', 4, 14, 'AT', 'Dispatch support.');
-  setEntry('weidler-1', 4, 28, 'UT', 'Approved leave.');
-  setEntry('lidl-1', 4, 26, 'AT', 'Store supply route.');
-
-  return map;
-}
-
-const monthlyStatusMap = createMonthlyStatusMap();
-
 export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' }) {
   const { t } = useTranslation();
   const { drivers, getCalendarStatusEntry, getAssignmentById } = useFleetData();
-  const [statusMap, setStatusMap] = useState<Record<string, Record<string, StatusEntry>>>(monthlyStatusMap);
-  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([
-    'office',
-    'krage',
-    'raben-trans',
-    'weliver',
-    'go',
-    'kunzendorf',
-    'penny',
-    'securitas',
-    'werkstatt',
-    'netto',
-    'schnellecke',
-  ]);
-  const [month, setMonth] = useState(4);
-  const [year, setYear] = useState(2026);
+  const now = new Date();
+  const [statusMap, setStatusMap] = useState<Record<string, Record<string, StatusEntry>>>({});
+  const [apiCalendarMap, setApiCalendarMap] = useState<Record<string, Record<string, StatusEntry>>>({});
+  const departments = useMemo<Department[]>(() => {
+    const names = [...new Set(drivers.map((driver) => driver.department).filter(Boolean))].sort();
+    return names.map((name) => ({
+      id: slugifyDepartment(name),
+      name,
+      kind: name === 'Operations' || name === 'Office' ? 'internal' : 'external',
+    }));
+  }, [drivers]);
+  const employees = useMemo<Employee[]>(
+    () =>
+      drivers.map((driver) => ({
+        id: driver.id,
+        name: driver.name,
+        departmentId: slugifyDepartment(driver.department),
+      })),
+    [drivers],
+  );
+  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([]);
+  const [month, setMonth] = useState(now.getMonth());
+  const [year, setYear] = useState(now.getFullYear());
   const [workTimeMode, setWorkTimeMode] = useState<WorkTimeMode>('inklusive Arbeitszeiten');
   const [viewMode, setViewMode] = useState<ViewMode>('Überlappung');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -279,16 +209,72 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedEmptyCell, setSelectedEmptyCell] = useState<SelectedEmptyCell | null>(null);
 
+  useEffect(() => {
+    if (departments.length === 0) {
+      return;
+    }
+    setSelectedDepartmentIds((current) =>
+      current.length > 0 ? current : departments.map((department) => department.id),
+    );
+  }, [departments]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const from = formatMonthDate(year, month, 1);
+    const to = formatMonthDate(year, month, daysInMonth(year, month));
+
+    void calendarApi
+      .list({ from, to })
+      .then((events) => {
+        if (cancelled) {
+          return;
+        }
+        const map: Record<string, Record<string, StatusEntry>> = {};
+        for (const event of events) {
+          if (event.source !== 'manual') {
+            continue;
+          }
+          const dateStr = (event.date ?? '').slice(0, 10);
+          const parts = dateStr.split('-').map(Number);
+          if (parts.length !== 3) {
+            continue;
+          }
+          const monthPart = parts[1];
+          const dayPart = parts[2];
+          if (monthPart - 1 !== month) {
+            continue;
+          }
+          map[event.driverId] ??= {};
+          map[event.driverId][`${month}-${dayPart}`] = {
+            status: event.status as CalendarStatus,
+            notes: 'Manuell eingetragen.',
+            source: 'manual',
+            sourceDate: dateStr,
+          };
+        }
+        setApiCalendarMap(map);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setApiCalendarMap({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [year, month]);
+
   const visibleDepartments = useMemo(() => {
     return departments.filter((department) => selectedDepartmentIds.includes(department.id));
-  }, [selectedDepartmentIds]);
+  }, [departments, selectedDepartmentIds]);
 
   const departmentEmployeeMap = useMemo(() => {
     return visibleDepartments.map((department) => ({
       department,
       employees: employees.filter((employee) => employee.departmentId === department.id),
     }));
-  }, [visibleDepartments]);
+  }, [employees, visibleDepartments]);
 
   const dayCount = useMemo(() => daysInMonth(year, month), [month, year]);
 
@@ -311,12 +297,17 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
         };
       }
 
+      const persisted = apiCalendarMap[employeeId]?.[`${month}-${day}`];
+      if (persisted) {
+        return persisted;
+      }
+
       return statusMap[employeeId]?.[`${month}-${day}`] ?? {
         status: '',
         notes: 'Kein Eintrag vorhanden.',
       };
     };
-  }, [getCalendarStatusEntry, month, statusMap, year]);
+  }, [apiCalendarMap, getCalendarStatusEntry, month, statusMap, year]);
 
   const overlapSummary = useMemo(() => {
     let vacationDays = 0;
@@ -380,34 +371,51 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
     setContextMenuPosition({ x: event.clientX + 8, y: event.clientY + 8 });
   };
 
-  const applyManualStatus = (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
-    const sourceDate = `${target.year}-${String(target.month + 1).padStart(2, '0')}-${String(target.day).padStart(2, '0')}`;
+  const applyManualStatus = async (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
+    const sourceDate = formatMonthDate(target.year, target.month, target.day);
+    const entry: StatusEntry = {
+      status,
+      notes: 'Manuell eingetragen.',
+      source: 'manual',
+      sourceDate,
+    };
 
-    setStatusMap((current) => ({
+    setApiCalendarMap((current) => ({
       ...current,
       [target.employee.id]: {
         ...(current[target.employee.id] ?? {}),
-        [`${target.month}-${target.day}`]: {
-          status,
-          notes: 'Manuell eingetragen.',
-          source: 'manual',
-          sourceDate,
-        },
+        [`${target.month}-${target.day}`]: entry,
       },
     }));
+
+    try {
+      await calendarApi.create({
+        driver_id: target.employee.id,
+        date: sourceDate,
+        status: toCalendarApiStatus(status),
+      });
+    } catch {
+      setStatusMap((current) => ({
+        ...current,
+        [target.employee.id]: {
+          ...(current[target.employee.id] ?? {}),
+          [`${target.month}-${target.day}`]: entry,
+        },
+      }));
+    }
   };
 
   const handleContextMenuAction = (action: CalendarCellContextMenuAction) => {
     if (!selectedEmptyCell) return;
 
     if (action === 'urlaub') {
-      applyManualStatus(selectedEmptyCell, 'UT');
+      void applyManualStatus(selectedEmptyCell, 'UT');
       closeContextMenu();
       return;
     }
 
     if (action === 'krank') {
-      applyManualStatus(selectedEmptyCell, 'KT');
+      void applyManualStatus(selectedEmptyCell, 'KT');
       closeContextMenu();
       return;
     }
@@ -416,7 +424,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
       setPendingAbsenceSelection(selectedEmptyCell);
       setSelectedAbsenceTypeId(null);
     } else {
-      applyManualStatus(selectedEmptyCell, 'SA');
+      void applyManualStatus(selectedEmptyCell, 'SA');
     }
 
     closeContextMenu();
@@ -874,18 +882,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
           const selectedAbsenceType = absenceTypes.find((item) => item.id === selectedAbsenceTypeId);
           if (!selectedAbsenceType) return;
 
-          setStatusMap((current) => ({
-            ...current,
-            [pendingAbsenceSelection.employee.id]: {
-              ...(current[pendingAbsenceSelection.employee.id] ?? {}),
-              [`${pendingAbsenceSelection.month}-${pendingAbsenceSelection.day}`]: {
-                status: selectedAbsenceType.abkuerzung,
-                notes: `${selectedAbsenceType.bezeichnung} wurde lokal zugewiesen.`,
-                source: 'manual',
-                sourceDate: `${pendingAbsenceSelection.year}-${String(pendingAbsenceSelection.month + 1).padStart(2, '0')}-${String(pendingAbsenceSelection.day).padStart(2, '0')}`,
-              },
-            },
-          }));
+          void applyManualStatus(pendingAbsenceSelection, selectedAbsenceType.abkuerzung);
 
           setPendingAbsenceSelection(null);
           setSelectedAbsenceTypeId(null);

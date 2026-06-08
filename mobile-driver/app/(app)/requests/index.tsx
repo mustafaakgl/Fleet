@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Stack } from 'expo-router';
@@ -57,6 +57,9 @@ export default function RequestsScreen() {
   const [routeEndTime, setRouteEndTime] = useState('');
   const [leaveAttachments, setLeaveAttachments] = useState<PickedAttachment[]>([]);
   const [transportAttachments, setTransportAttachments] = useState<PickedAttachment[]>([]);
+  const [uniformNotes, setUniformNotes] = useState('');
+
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['driver-requests'],
@@ -92,6 +95,24 @@ export default function RequestsScreen() {
       setLeaveAttachments([]);
       void queryClient.invalidateQueries({ queryKey: ['driver-requests'] });
       showSuccess(t('requests.submitted'));
+    },
+    onError: (mutationError) => {
+      showError(getErrorMessage(mutationError, t('common.error')));
+    },
+  });
+
+  const uniformMutation = useMutation({
+    mutationFn: () =>
+      driverApi.createRequest({
+        type: 'uniform_delivery',
+        startDate: todayIso,
+        endDate: todayIso,
+        reason: uniformNotes.trim() || t('requests.uniform.defaultReason'),
+      }),
+    onSuccess: () => {
+      setUniformNotes('');
+      void queryClient.invalidateQueries({ queryKey: ['driver-requests'] });
+      showSuccess(t('requests.uniform.submitted'));
     },
     onError: (mutationError) => {
       showError(getErrorMessage(mutationError, t('common.error')));
@@ -218,6 +239,26 @@ export default function RequestsScreen() {
             label={mutation.isPending ? t('requests.submitting') : t('requests.submit')}
             onPress={onSubmit}
             disabled={mutation.isPending}
+            variant="primary"
+          />
+        </View>
+
+        <View style={styles.formCard}>
+          <Text style={styles.formTitle}>{t('requests.uniform.title')}</Text>
+          <Text style={styles.hint}>{t('requests.uniform.subtitle')}</Text>
+          <Text style={styles.label}>{t('requests.uniform.date')}</Text>
+          <Text style={styles.uniformDate}>{todayIso}</Text>
+          <TextInput
+            style={[styles.input, styles.notesInput]}
+            placeholder={t('requests.uniform.notesPlaceholder')}
+            value={uniformNotes}
+            onChangeText={setUniformNotes}
+            multiline
+          />
+          <ActionButton
+            label={uniformMutation.isPending ? t('requests.submitting') : t('requests.uniform.submit')}
+            onPress={() => uniformMutation.mutate()}
+            disabled={uniformMutation.isPending}
             variant="primary"
           />
         </View>
@@ -429,5 +470,14 @@ const styles = StyleSheet.create({
   requestMeta: {
     color: colors.subtext,
     fontSize: 13,
+  },
+  uniformDate: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  notesInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
   },
 });

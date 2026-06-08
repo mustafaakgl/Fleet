@@ -331,5 +331,6 @@ export type DriverDocumentsResponse = {
   uploadTypes: string[];
   requiredTypes: string[];
   missingRequired: string[];
+  missingUploadableRequired: string[];
   items: DriverDocumentItem[];
 };

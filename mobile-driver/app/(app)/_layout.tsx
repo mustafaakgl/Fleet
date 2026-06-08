@@ -26,7 +26,9 @@ export default function AppLayout() {
   const documentsIncomplete =
     Boolean(accessToken) &&
     !documentsLoading &&
-    (documentsError || !documents || documents.missingRequired.length > 0);
+    (documentsError ||
+      !documents ||
+      (documents.missingUploadableRequired?.length ?? documents.missingRequired.length) > 0);
 
   const { data: unread } = useQuery({
     queryKey: ['messenger-unread-count'],

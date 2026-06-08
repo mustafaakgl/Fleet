@@ -16,6 +16,7 @@ import { showError, showSuccess } from '@/utils/feedback';
 import { colors, radius, spacing, typography } from '@/theme';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import {
+  DRIVER_OFFICE_DOCUMENT_TYPES,
   DRIVER_UPLOAD_DOCUMENT_TYPES,
   documentTypeLabelKey,
 } from '@/lib/driver-documents';
@@ -82,6 +83,14 @@ export default function DriverDocumentsScreen() {
     const translated = t(key);
     return translated === key ? type : translated;
   };
+
+  const missingOffice = useMemo(
+    () =>
+      (data?.missingRequired ?? []).filter((type) =>
+        (DRIVER_OFFICE_DOCUMENT_TYPES as readonly string[]).includes(type),
+      ),
+    [data?.missingRequired],
+  );
 
   const missingLabels = useMemo(
     () => (data?.missingRequired ?? []).map(typeLabel).join(', '),
@@ -195,6 +204,15 @@ export default function DriverDocumentsScreen() {
                 <Feather name="alert-circle" size={18} color={colors.warning} />
                 <Text style={styles.alertText}>
                   {t('documents.missingRequired', { types: missingLabels })}
+                </Text>
+              </View>
+            ) : null}
+
+            {missingOffice.length > 0 ? (
+              <View style={styles.alert}>
+                <Feather name="info" size={18} color={colors.accent} />
+                <Text style={styles.alertText}>
+                  {t('documents.officeProvidedHint')} {missingOffice.map(typeLabel).join(', ')}
                 </Text>
               </View>
             ) : null}

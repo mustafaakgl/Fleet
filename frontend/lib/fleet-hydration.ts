@@ -113,8 +113,8 @@ export async function hydrateFleetData(
   let calendarStatuses: FleetCalendarStatus[] = [];
   try {
     const now = new Date();
-    const from = formatDate(addDays(now, -7));
-    const to = formatDate(addDays(now, 7));
+    const from = formatDate(addDays(now, -90));
+    const to = formatDate(addDays(now, 90));
     const events = await calendarApi.list({ from, to });
     const allowed = new Set(['UT', 'KT', 'FT', 'AT', 'HO', 'GR', 'SCH']);
     const sourceMap: Record<string, CalendarStatusSource> = {
@@ -256,6 +256,7 @@ export async function hydrateFleetData(
       special_leave: 'Sonstige Abwesenheit',
       overtime_compensation: 'Sonstige Abwesenheit',
       free_day: 'Sonstige Abwesenheit',
+      uniform_delivery: 'Arbeitskleidung bestätigen',
       other: 'Sonstige Abwesenheit',
     };
     requests = apiLeave.map((r) => ({

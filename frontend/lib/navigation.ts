@@ -17,6 +17,7 @@ import {
   CreditCard,
   Rocket,
   ScrollText,
+  Clock,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -46,6 +47,7 @@ const ALL_ITEMS: Record<string, NavItem> = {
   reminders: { href: '/reminders', labelKey: 'nav.reminders', icon: Bell },
   cargoDamage: { href: '/cargo-damage', labelKey: 'nav.cargoDamage', icon: ClipboardList },
   serviceHistory: { href: '/service-history', labelKey: 'nav.serviceHistory', icon: Wrench },
+  workSessions: { href: '/work-sessions', labelKey: 'nav.workSessions', icon: Clock },
 };
 
 function group(id: string, labelKey: string, keys: (keyof typeof ALL_ITEMS)[]): NavGroup {
@@ -63,7 +65,7 @@ const OFFICE_NAV: NavGroup[] = [
     'messenger',
   ]),
   group('fleet', 'nav.group.fleet', ['drivers', 'vehicles', 'companies']),
-  group('compliance', 'nav.group.compliance', ['documents', 'reminders', 'cargoDamage']),
+  group('compliance', 'nav.group.compliance', ['documents', 'reminders', 'cargoDamage', 'workSessions']),
   group('more', 'nav.group.more', ['serviceHistory']),
 ];
 
@@ -80,6 +82,7 @@ const DEFAULT_NAV: NavGroup[] = [
     'cargoDamage',
     'serviceHistory',
     'reminders',
+    'workSessions',
     'messenger',
   ]),
 ];

@@ -50,6 +50,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { UploadDriverDocumentDto } from './dto/upload-driver-document.dto';
 import {
   DRIVER_REQUIRED_DOCUMENT_TYPES,
+  DRIVER_SELF_UPLOAD_REQUIRED_TYPES,
   DRIVER_UPLOAD_DOCUMENT_TYPES,
   isDriverUploadDocumentType,
 } from './driver-document-types';
@@ -1516,11 +1517,15 @@ export class DriverMobileService {
     const missingRequired = DRIVER_REQUIRED_DOCUMENT_TYPES.filter(
       (documentType) => !presentTypes.has(documentType),
     );
+    const missingUploadableRequired = DRIVER_SELF_UPLOAD_REQUIRED_TYPES.filter(
+      (documentType) => !presentTypes.has(documentType),
+    );
 
     return {
       uploadTypes: [...DRIVER_UPLOAD_DOCUMENT_TYPES],
       requiredTypes: [...DRIVER_REQUIRED_DOCUMENT_TYPES],
       missingRequired,
+      missingUploadableRequired,
       items,
     };
   }
