@@ -438,6 +438,8 @@ model Driver {
   riskLevel          RiskLevel    @default(green)
   notes              String?
   dateOfBirth        DateTime?    @db.Date
+  vacationEntitlementDays Decimal @default(24) @db.Decimal(5, 2)
+  vacationCarryOverDays   Decimal @default(0) @db.Decimal(5, 2)
   lastBirthdayNotifiedYear Int?
   locationTrackingConsentAt DateTime?
   locationTrackingStatus    LocationTrackingStatus @default(paused)

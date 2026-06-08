@@ -54,6 +54,8 @@ export interface FleetDriver {
   department: string;
   accidentCount: number;
   riskScore: DriverRiskScore;
+  vacationEntitlementDays: number;
+  vacationCarryOverDays: number;
 }
 
 export interface FleetCalendarStatus {
@@ -255,13 +257,13 @@ const today = formatDate(now);
 const tomorrow = formatDate(addDays(now, 1));
 
 const initialDrivers: FleetDriver[] = [
-  { id: 'ilker-cukur', name: 'Ilker Cukur', department: 'Go', accidentCount: 1, riskScore: getDriverRiskScore(1) },
-  { id: 'thomas-scharein', name: 'Thomas Scharein', department: 'Go', accidentCount: 2, riskScore: getDriverRiskScore(2) },
-  { id: 'sita-diallo', name: 'Sita Diallo', department: 'Krage', accidentCount: 3, riskScore: getDriverRiskScore(3) },
-  { id: 'andrii-dudiak', name: 'Andrii Dudiak', department: 'Krage', accidentCount: 0, riskScore: getDriverRiskScore(0) },
-  { id: 'nesrin-feyzula', name: 'Nesrin Feyzula', department: 'Krage', accidentCount: 1, riskScore: getDriverRiskScore(1) },
-  { id: 'gundrum-andreas', name: 'Gundrum Andreas', department: 'Krage', accidentCount: 0, riskScore: getDriverRiskScore(0) },
-  { id: 'ozdemir-hakan', name: 'Ozdemir Hakan', department: 'Office', accidentCount: 0, riskScore: getDriverRiskScore(0) },
+  { id: 'ilker-cukur', name: 'Ilker Cukur', department: 'Go', accidentCount: 1, riskScore: getDriverRiskScore(1), vacationEntitlementDays: 28, vacationCarryOverDays: 3 },
+  { id: 'thomas-scharein', name: 'Thomas Scharein', department: 'Go', accidentCount: 2, riskScore: getDriverRiskScore(2), vacationEntitlementDays: 26, vacationCarryOverDays: 1 },
+  { id: 'sita-diallo', name: 'Sita Diallo', department: 'Krage', accidentCount: 3, riskScore: getDriverRiskScore(3), vacationEntitlementDays: 24, vacationCarryOverDays: 0 },
+  { id: 'andrii-dudiak', name: 'Andrii Dudiak', department: 'Krage', accidentCount: 0, riskScore: getDriverRiskScore(0), vacationEntitlementDays: 24, vacationCarryOverDays: 0 },
+  { id: 'nesrin-feyzula', name: 'Nesrin Feyzula', department: 'Krage', accidentCount: 1, riskScore: getDriverRiskScore(1), vacationEntitlementDays: 24, vacationCarryOverDays: 2 },
+  { id: 'gundrum-andreas', name: 'Gundrum Andreas', department: 'Krage', accidentCount: 0, riskScore: getDriverRiskScore(0), vacationEntitlementDays: 24, vacationCarryOverDays: 0 },
+  { id: 'ozdemir-hakan', name: 'Ozdemir Hakan', department: 'Office', accidentCount: 0, riskScore: getDriverRiskScore(0), vacationEntitlementDays: 24, vacationCarryOverDays: -1 },
 ];
 
 const COMPANY_DEFAULT_REVENUE: Record<string, number> = {

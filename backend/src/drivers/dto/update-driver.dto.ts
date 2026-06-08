@@ -1,4 +1,4 @@
-import { IsDateString, IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
 import { DriverStatus, RiskLevel } from '@prisma/client';
 
 export class UpdateDriverDto {
@@ -55,4 +55,16 @@ export class UpdateDriverDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(365)
+  vacation_entitlement_days?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-365)
+  @Max(365)
+  vacation_carry_over_days?: number;
 }

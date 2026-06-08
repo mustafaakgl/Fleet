@@ -6,8 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
+import { DriverVacationEntitlementEditor } from '@/components/drivers/DriverVacationEntitlementEditor';
 import { useFleetData } from '@/context/FleetDataContext';
 import { calendarApi } from '@/lib/api';
+import { getUser } from '@/lib/auth';
 import { fromCalendarApiStatus, toCalendarApiStatus } from '@/lib/calendar-status-map';
 import {
   buildPendingVacationDateSet,
@@ -15,6 +17,7 @@ import {
   clampYearOption,
   DEFAULT_VACATION_ENTITLEMENT,
 } from '@/lib/calendar-vacation';
+import { canEditDriverVacationEntitlement } from '@/lib/permissions';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | 'PENDING_UT' | 'APPROVED_UT' | AbsenceTypeAbbreviation | '';
 
@@ -501,6 +504,11 @@ export function Jahreskalender() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [manualYearByDate, setManualYearByDate] = useState<Record<string, CalendarEntry>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [entitlementOverrides, setEntitlementOverrides] = useState<
+    Record<string, { entitlementDays: number; carryOverDays: number }>
+  >({});
+
+  const canEditVacationEntitlement = canEditDriverVacationEntitlement(getUser()?.role ?? 'customer');
 
   const isLiveDriver = useMemo(
     () => fleetDrivers.some((driver) => driver.id === selectedDriverId),
@@ -545,17 +553,20 @@ export function Jahreskalender() {
 
   const driverOptions = useMemo<Driver[]>(() => {
     if (fleetDrivers.length > 0) {
-      return fleetDrivers.map((driver) => ({
-        id: driver.id,
-        name: driver.name,
-        annualVacationEntitlement: DEFAULT_VACATION_ENTITLEMENT,
-        carryOverFromPreviousPeriod: 0,
-      }));
+      return fleetDrivers.map((driver) => {
+        const override = entitlementOverrides[driver.id];
+        return {
+          id: driver.id,
+          name: driver.name,
+          annualVacationEntitlement:
+            override?.entitlementDays ?? driver.vacationEntitlementDays ?? DEFAULT_VACATION_ENTITLEMENT,
+          carryOverFromPreviousPeriod:
+            override?.carryOverDays ?? driver.vacationCarryOverDays ?? 0,
+        };
+      });
     }
     return drivers;
-  }, [fleetDrivers]);
-
-  const usesDefaultEntitlement = fleetDrivers.length > 0;
+  }, [entitlementOverrides, fleetDrivers]);
 
   const pendingVacationDates = useMemo(
     () =>
@@ -811,12 +822,6 @@ export function Jahreskalender() {
 
   return (
     <div className="space-y-5">
-      {usesDefaultEntitlement && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {t('jk.entitlementWarning', { days: DEFAULT_VACATION_ENTITLEMENT })}
-        </div>
-      )}
-
       {saveError && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           {saveError}
@@ -868,7 +873,25 @@ export function Jahreskalender() {
 
       <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">{t('jk.vacationOverview')}</h2>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">{t('jk.vacationOverview')}</h2>
+            {isLiveDriver && (
+              <DriverVacationEntitlementEditor
+                driverId={selectedDriverId}
+                entitlementDays={selectedDriver.annualVacationEntitlement}
+                carryOverDays={selectedDriver.carryOverFromPreviousPeriod}
+                canEdit={canEditVacationEntitlement}
+                compact
+                onSaved={(values) => {
+                  setEntitlementOverrides((current) => ({
+                    ...current,
+                    [selectedDriverId]: values,
+                  }));
+                  refetchHydrate();
+                }}
+              />
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-auto p-4">

@@ -24,6 +24,11 @@ type DriverWithCurrent = Driver & {
   }[];
 };
 
+function toDecimalNumber(value: Prisma.Decimal | null | undefined): number {
+  if (value == null) return 0;
+  return Number(value);
+}
+
 function toClientDriver(row: DriverWithCurrent) {
   return {
     id: row.id,
@@ -39,6 +44,8 @@ function toClientDriver(row: DriverWithCurrent) {
     status: row.status,
     risk_level: row.riskLevel,
     date_of_birth: row.dateOfBirth?.toISOString().slice(0, 10) ?? null,
+    vacation_entitlement_days: toDecimalNumber(row.vacationEntitlementDays),
+    vacation_carry_over_days: toDecimalNumber(row.vacationCarryOverDays),
     current_vehicle_plate: row.assignments[0]?.vehicle.plateNumber ?? null,
     current_company_name: row.assignments[0]?.company.name ?? null,
     created_at: row.createdAt.toISOString(),
@@ -195,6 +202,8 @@ export class DriversService {
         status: dto.status,
         riskLevel: dto.risk_level,
         notes: dto.notes,
+        vacationEntitlementDays: dto.vacation_entitlement_days ?? 24,
+        vacationCarryOverDays: dto.vacation_carry_over_days ?? 0,
       },
       include: currentAssignmentInclude,
     });
@@ -251,6 +260,12 @@ export class DriversService {
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.risk_level !== undefined) data.riskLevel = dto.risk_level;
     if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.vacation_entitlement_days !== undefined) {
+      data.vacationEntitlementDays = dto.vacation_entitlement_days;
+    }
+    if (dto.vacation_carry_over_days !== undefined) {
+      data.vacationCarryOverDays = dto.vacation_carry_over_days;
+    }
 
     const updated = await this.prisma.driver.update({
       where: { id },

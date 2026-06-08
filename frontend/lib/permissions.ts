@@ -31,3 +31,7 @@ export function canEditVehicleHandovers(role: Role) {
 export function canEditServiceRecords(role: Role) {
   return role === 'admin' || role === 'boss' || role === 'office';
 }
+
+export function canEditDriverVacationEntitlement(role: Role) {
+  return role === 'admin' || role === 'boss' || role === 'office';
+}

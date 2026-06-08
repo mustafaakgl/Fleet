@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { driversApi } from '@/lib/api';
+import { getUser } from '@/lib/auth';
+import { canEditDriverVacationEntitlement } from '@/lib/permissions';
 import type { DriverStatus } from '@/lib/types';
 
 const schema = z.object({
@@ -28,6 +30,8 @@ const schema = z.object({
   passport_expiry_date: z.string().optional(),
   date_of_birth: z.string().optional(),
   status: z.enum(['active', 'inactive', 'on_leave', 'sick', 'terminated']),
+  vacation_entitlement_days: z.coerce.number().min(0).max(365).optional(),
+  vacation_carry_over_days: z.coerce.number().min(-365).max(365).optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -79,6 +83,7 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const { t } = useTranslation();
+  const canEditVacation = canEditDriverVacationEntitlement(getUser()?.role ?? 'customer');
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -107,6 +112,8 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
           passport_expiry_date: toDateInputValue(driver.passport_expiry_date),
           date_of_birth: toDateInputValue(driver.date_of_birth ?? undefined),
           status: driver.status as DriverStatus,
+          vacation_entitlement_days: driver.vacation_entitlement_days ?? 24,
+          vacation_carry_over_days: driver.vacation_carry_over_days ?? 0,
         });
       })
       .catch(() => setNotFound(true))
@@ -217,6 +224,30 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
             </div>
           </CardContent>
         </Card>
+
+        {canEditVacation && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('drivers.vacationEntitlementSection')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field
+                  label={t('drivers.vacationEntitlement')}
+                  error={t(errors.vacation_entitlement_days?.message ?? '')}
+                >
+                  <Input type="number" step="0.5" min={0} max={365} {...register('vacation_entitlement_days')} />
+                </Field>
+                <Field
+                  label={t('drivers.vacationCarryOver')}
+                  error={t(errors.vacation_carry_over_days?.message ?? '')}
+                >
+                  <Input type="number" step="0.5" min={-365} max={365} {...register('vacation_carry_over_days')} />
+                </Field>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {serverError && (
           <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">

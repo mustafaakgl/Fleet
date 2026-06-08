@@ -1,4 +1,5 @@
 import { toLocalCalendarDate } from '@/lib/calendar-date';
+import { DEFAULT_VACATION_ENTITLEMENT } from '@/lib/calendar-vacation';
 import { getDriverRiskScore } from '@/lib/utils';
 import {
   assignmentsApi,
@@ -105,6 +106,8 @@ export async function hydrateFleetData(
       department: dept(d.id),
       accidentCount: d.accident_count ?? 0,
       riskScore: getDriverRiskScore(d.accident_count ?? 0),
+      vacationEntitlementDays: d.vacation_entitlement_days ?? DEFAULT_VACATION_ENTITLEMENT,
+      vacationCarryOverDays: d.vacation_carry_over_days ?? 0,
     }));
   } catch {
     errors.push('drivers');

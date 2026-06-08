@@ -113,6 +113,8 @@ export interface Driver {
   passport_number?: string;
   passport_expiry_date?: string;
   date_of_birth?: string | null;
+  vacation_entitlement_days?: number;
+  vacation_carry_over_days?: number;
   status: DriverStatus;
   risk_level: RiskLevel;
   created_at?: string;
