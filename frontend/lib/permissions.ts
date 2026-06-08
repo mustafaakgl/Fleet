@@ -27,3 +27,7 @@ export function canViewVehicleHandovers(role: Role) {
 export function canEditVehicleHandovers(role: Role) {
   return role === 'admin' || role === 'office';
 }
+
+export function canEditServiceRecords(role: Role) {
+  return role === 'admin' || role === 'boss' || role === 'office';
+}

@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Lock, RefreshCw, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { useFleetData } from '@/context/FleetDataContext';
+import { calendarApi } from '@/lib/api';
+import { fromCalendarApiStatus, toCalendarApiStatus } from '@/lib/calendar-status-map';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | 'PENDING_UT' | 'APPROVED_UT' | AbsenceTypeAbbreviation | '';
 type YearOption = 2025 | 2026 | 2027;
@@ -303,15 +305,80 @@ function cloneDriverCalendars(): DriverCalendarData[] {
   return JSON.parse(JSON.stringify(driverCalendars)) as DriverCalendarData[];
 }
 
-function calculateVacationOverview(driver: Driver, selectedYear: YearOption): VacationOverview {
-  const yearEntries = driverCalendars.find((calendar) => calendar.driverId === driver.id)?.years[selectedYear] ?? {};
+type CalendarStatusLookup = (
+  driverId: string,
+  date: string,
+) =>
+  | {
+      status: string;
+      source?: TooltipSource;
+      requestId?: string;
+      assignmentId?: string;
+    }
+  | undefined;
 
+function formatYearDate(year: number, monthIndex: number, day: number) {
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function resolveCalendarEntry(
+  driverId: string,
+  year: YearOption,
+  monthIndex: number,
+  day: number,
+  localCalendar: Record<number, Record<number, CalendarEntry>>,
+  manualYearByDate: Record<string, CalendarEntry>,
+  getCalendarStatusEntry: CalendarStatusLookup,
+): CalendarEntry {
+  const dateKey = formatYearDate(year, monthIndex, day);
+  const shared = getCalendarStatusEntry(driverId, dateKey);
+  if (shared) {
+    return {
+      status: shared.status as CalendarStatus,
+      notes: shared.source === 'request'
+        ? `Automatisch aus Request ${shared.requestId ?? ''} aktualisiert.`
+        : shared.source === 'assignment'
+        ? `Automatisch aus Einsatz ${shared.assignmentId ?? ''} aktualisiert.`
+        : 'Automatisch aus gemeinsamer Planung aktualisiert.',
+      source: shared.source,
+      sourceDate: dateKey,
+      requestId: shared.requestId,
+      assignmentId: shared.assignmentId,
+    };
+  }
+
+  const manual = manualYearByDate[dateKey];
+  if (manual) {
+    return manual;
+  }
+
+  return localCalendar[monthIndex]?.[day] ?? { status: '', notes: 'Kein Eintrag vorhanden.' };
+}
+
+function calculateVacationOverview(
+  driver: Driver,
+  selectedYear: YearOption,
+  localYearCalendar: Record<number, Record<number, CalendarEntry>>,
+  manualYearByDate: Record<string, CalendarEntry>,
+  getCalendarStatusEntry: CalendarStatusLookup,
+): VacationOverview {
   let consumed = 0;
   let pending = 0;
   let approved = 0;
 
-  Object.values(yearEntries).forEach((month) => {
-    Object.values(month).forEach((entry) => {
+  for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
+    const days = daysInMonth(selectedYear, monthIndex);
+    for (let day = 1; day <= days; day += 1) {
+      const entry = resolveCalendarEntry(
+        driver.id,
+        selectedYear,
+        monthIndex,
+        day,
+        localYearCalendar,
+        manualYearByDate,
+        getCalendarStatusEntry,
+      );
+
       if (entry.status === 'PENDING_UT') {
         pending += 1;
       }
@@ -320,8 +387,8 @@ function calculateVacationOverview(driver: Driver, selectedYear: YearOption): Va
         consumed += 1;
         approved += 1;
       }
-    });
-  });
+    }
+  }
 
   const currentClaim = driver.carryOverFromPreviousPeriod + driver.annualVacationEntitlement;
   const remaining = currentClaim - approved - pending;
@@ -412,6 +479,47 @@ export function Jahreskalender() {
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedEmptyCell, setSelectedEmptyCell] = useState<SelectedEmptyCell | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [manualYearByDate, setManualYearByDate] = useState<Record<string, CalendarEntry>>({});
+
+  const isLiveDriver = useMemo(
+    () => fleetDrivers.some((driver) => driver.id === selectedDriverId),
+    [fleetDrivers, selectedDriverId],
+  );
+
+  const loadManualYearEvents = useCallback(async () => {
+    if (!isLiveDriver) {
+      setManualYearByDate({});
+      return;
+    }
+
+    try {
+      const events = await calendarApi.list({
+        driver_id: selectedDriverId,
+        from: `${selectedYear}-01-01`,
+        to: `${selectedYear}-12-31`,
+      });
+      const map: Record<string, CalendarEntry> = {};
+      for (const event of events) {
+        if (event.source !== 'manual') {
+          continue;
+        }
+        const dateStr = (event.date ?? '').slice(0, 10);
+        map[dateStr] = {
+          status: fromCalendarApiStatus(event.status) as CalendarStatus,
+          notes: 'Manuell eingetragen.',
+          source: 'manual',
+          sourceDate: dateStr,
+        };
+      }
+      setManualYearByDate(map);
+    } catch {
+      setManualYearByDate({});
+    }
+  }, [isLiveDriver, selectedDriverId, selectedYear]);
+
+  useEffect(() => {
+    void loadManualYearEvents();
+  }, [loadManualYearEvents]);
 
   const driverOptions = useMemo<Driver[]>(() => {
     if (fleetDrivers.length > 0) {
@@ -453,31 +561,27 @@ export function Jahreskalender() {
   }, [getAssignmentById, selectedDay]);
 
   const getMergedEntry = useMemo(() => {
-    return (monthIndex: number, day: number): CalendarEntry => {
-      const dateKey = `${selectedYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const shared = getCalendarStatusEntry(selectedDriverId, dateKey);
-      if (shared) {
-        return {
-          status: shared.status as CalendarStatus,
-          notes: shared.source === 'request'
-            ? `Automatisch aus Request ${shared.requestId ?? ''} aktualisiert.`
-            : shared.source === 'assignment'
-            ? `Automatisch aus Einsatz ${shared.assignmentId ?? ''} aktualisiert.`
-            : 'Automatisch aus gemeinsamer Planung aktualisiert.',
-          source: shared.source,
-          sourceDate: dateKey,
-          requestId: shared.requestId,
-          assignmentId: shared.assignmentId,
-        };
-      }
-
-      return selectedCalendar[monthIndex]?.[day] ?? { status: '', notes: 'Kein Eintrag vorhanden.' };
-    };
-  }, [getCalendarStatusEntry, selectedCalendar, selectedDriverId, selectedYear]);
+    return (monthIndex: number, day: number): CalendarEntry =>
+      resolveCalendarEntry(
+        selectedDriverId,
+        selectedYear,
+        monthIndex,
+        day,
+        selectedCalendar,
+        manualYearByDate,
+        getCalendarStatusEntry,
+      );
+  }, [getCalendarStatusEntry, manualYearByDate, selectedCalendar, selectedDriverId, selectedYear]);
 
   const vacationOverview = useMemo(() => {
-    return calculateVacationOverview(selectedDriver, selectedYear);
-  }, [selectedDriver, selectedYear]);
+    return calculateVacationOverview(
+      selectedDriver,
+      selectedYear,
+      selectedCalendar,
+      manualYearByDate,
+      getCalendarStatusEntry,
+    );
+  }, [getCalendarStatusEntry, manualYearByDate, selectedCalendar, selectedDriver, selectedYear]);
 
   const vacationOverviewRows = [
     { label: 'jk.rowCarryOver', current: formatDays(vacationOverview.currentPeriod.carryOver), next: formatDays(vacationOverview.nextPeriod.carryOver) },
@@ -506,8 +610,34 @@ export function Jahreskalender() {
     setContextMenuPosition({ x: event.clientX + 8, y: event.clientY + 8 });
   };
 
-  const applyManualStatus = (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
-    const sourceDate = `${target.year}-${String(target.monthIndex + 1).padStart(2, '0')}-${String(target.day).padStart(2, '0')}`;
+  const applyManualStatus = async (target: SelectedEmptyCell, status: Exclude<CalendarStatus, ''>) => {
+    const sourceDate = formatYearDate(target.year, target.monthIndex, target.day);
+    const entry: CalendarEntry = {
+      status,
+      notes: 'Manuell eingetragen.',
+      source: 'manual',
+      sourceDate,
+    };
+
+    if (isLiveDriver) {
+      setManualYearByDate((current) => ({ ...current, [sourceDate]: entry }));
+
+      try {
+        await calendarApi.create({
+          driver_id: selectedDriverId,
+          date: sourceDate,
+          status: toCalendarApiStatus(status),
+        });
+        refetchHydrate();
+      } catch {
+        setManualYearByDate((current) => {
+          const next = { ...current };
+          delete next[sourceDate];
+          return next;
+        });
+      }
+      return;
+    }
 
     setCalendarState((current) =>
       current.map((calendar) => {
@@ -520,12 +650,7 @@ export function Jahreskalender() {
               ...calendar.years[target.year],
               [target.monthIndex]: {
                 ...(calendar.years[target.year]?.[target.monthIndex] ?? {}),
-                [target.day]: {
-                  status,
-                  notes: 'Manuell eingetragen.',
-                  source: 'manual',
-                  sourceDate,
-                },
+                [target.day]: entry,
               },
             },
           },
@@ -538,13 +663,13 @@ export function Jahreskalender() {
     if (!selectedEmptyCell) return;
 
     if (action === 'urlaub') {
-      applyManualStatus(selectedEmptyCell, 'UT');
+      void applyManualStatus(selectedEmptyCell, 'UT');
       closeContextMenu();
       return;
     }
 
     if (action === 'krank') {
-      applyManualStatus(selectedEmptyCell, 'KT');
+      void applyManualStatus(selectedEmptyCell, 'KT');
       closeContextMenu();
       return;
     }
@@ -553,14 +678,16 @@ export function Jahreskalender() {
       setPendingAbsenceSelection(selectedEmptyCell);
       setSelectedAbsenceTypeId(null);
     } else {
-      applyManualStatus(selectedEmptyCell, 'SA');
+      void applyManualStatus(selectedEmptyCell, 'SA');
     }
 
     closeContextMenu();
   };
 
   const handleRefresh = () => {
-    setCalendarState(cloneDriverCalendars());
+    if (!isLiveDriver) {
+      setCalendarState(cloneDriverCalendars());
+    }
     setSelectedDay(null);
     setPendingAbsenceSelection(null);
     setSelectedAbsenceTypeId(null);
@@ -568,6 +695,7 @@ export function Jahreskalender() {
     closeContextMenu();
     setIsRefreshing(true);
     refetchHydrate();
+    void loadManualYearEvents();
   };
 
   return (
@@ -899,29 +1027,7 @@ export function Jahreskalender() {
           const selectedAbsenceType = absenceTypes.find((item) => item.id === selectedAbsenceTypeId);
           if (!selectedAbsenceType) return;
 
-          setCalendarState((current) =>
-            current.map((calendar) => {
-              if (calendar.driverId !== selectedDriverId) return calendar;
-              return {
-                ...calendar,
-                years: {
-                  ...calendar.years,
-                  [pendingAbsenceSelection.year]: {
-                    ...calendar.years[pendingAbsenceSelection.year],
-                    [pendingAbsenceSelection.monthIndex]: {
-                      ...(calendar.years[pendingAbsenceSelection.year]?.[pendingAbsenceSelection.monthIndex] ?? {}),
-                      [pendingAbsenceSelection.day]: {
-                        status: selectedAbsenceType.abkuerzung,
-                        notes: `${selectedAbsenceType.bezeichnung} wurde lokal zugewiesen.`,
-                        source: 'manual',
-                        sourceDate: `${pendingAbsenceSelection.year}-${String(pendingAbsenceSelection.monthIndex + 1).padStart(2, '0')}-${String(pendingAbsenceSelection.day).padStart(2, '0')}`,
-                      },
-                    },
-                  },
-                },
-              };
-            }),
-          );
+          void applyManualStatus(pendingAbsenceSelection, selectedAbsenceType.abkuerzung);
 
           setPendingAbsenceSelection(null);
           setSelectedAbsenceTypeId(null);

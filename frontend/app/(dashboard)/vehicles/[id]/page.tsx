@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ChevronLeft, Pencil, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,10 @@ import type { VehicleDetail, Document, ServiceRecord } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 import { formatDate, statusColor } from '@/lib/utils';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
+import { ServiceRecordInlineField } from '@/components/service-records/ServiceRecordInlineField';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
+import { getUser } from '@/lib/auth';
+import { canEditServiceRecords } from '@/lib/permissions';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 
@@ -66,6 +69,11 @@ function currency(value?: number | string | null) {
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t } = useTranslation();
+  const canEditServiceHistory = canEditServiceRecords(getUser()?.role ?? 'customer');
+
+  const handleServiceRecordUpdated = useCallback((updated: ServiceRecord) => {
+    setServiceRecords((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+  }, []);
 
   const [vehicle, setVehicle] = useState<VehicleDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -497,12 +505,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   <TableHead>{t('serviceHistory.colRepairCompany')}</TableHead>
                   <TableHead>{t('serviceHistory.colMileage')}</TableHead>
                   <TableHead>{t('serviceHistory.colCost')}</TableHead>
+                  <TableHead>{t('serviceHistory.colNotes')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {serviceRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                    <TableCell colSpan={7} className="text-center text-sm text-gray-500">
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
@@ -511,7 +520,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                     <TableRow key={row.id}>
                       <TableCell>{formatDate(row.date)}</TableCell>
                       <TableCell>{row.driver_name ?? '-'}</TableCell>
-                      <TableCell>{row.service_type}</TableCell>
+                      <TableCell>
+                        <ServiceRecordInlineField
+                          record={row}
+                          field="service_type"
+                          canEdit={canEditServiceHistory}
+                          onUpdated={handleServiceRecordUpdated}
+                        />
+                      </TableCell>
                       <TableCell>{row.repair_company}</TableCell>
                       <TableCell>
                         {row.mileage_km !== null && row.mileage_km !== undefined
@@ -519,6 +535,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                           : '-'}
                       </TableCell>
                       <TableCell>{currency(row.cost_amount)}</TableCell>
+                      <TableCell>
+                        <ServiceRecordInlineField
+                          record={row}
+                          field="notes"
+                          canEdit={canEditServiceHistory}
+                          onUpdated={handleServiceRecordUpdated}
+                        />
+                      </TableCell>
                     </TableRow>
                   ))
                 )}

@@ -6,9 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ServiceRecordInlineField } from '@/components/service-records/ServiceRecordInlineField';
 import { serviceRecordsApi } from '@/lib/api';
+import { getUser } from '@/lib/auth';
+import { canEditServiceRecords } from '@/lib/permissions';
 import type { ServiceRecord } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
@@ -22,6 +24,7 @@ function currency(value: number) {
 
 export default function ServiceHistoryPage() {
   const { t } = useTranslation();
+  const canEdit = canEditServiceRecords(getUser()?.role ?? 'customer');
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [repairCompanies, setRepairCompanies] = useState<string[]>([]);
   const [repairCompany, setRepairCompany] = useState('');
@@ -54,6 +57,10 @@ export default function ServiceHistoryPage() {
     () => records.reduce((sum, row) => sum + (Number(row.cost_amount) || 0), 0),
     [records],
   );
+
+  const handleRecordUpdated = useCallback((updated: ServiceRecord) => {
+    setRecords((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -134,11 +141,25 @@ export default function ServiceHistoryPage() {
                     <TableCell>{formatDate(row.date)}</TableCell>
                     <TableCell className="font-semibold text-gray-900">{row.vehicle_plate}</TableCell>
                     <TableCell>{row.driver_name ?? '-'}</TableCell>
-                    <TableCell>{row.service_type}</TableCell>
+                    <TableCell>
+                      <ServiceRecordInlineField
+                        record={row}
+                        field="service_type"
+                        canEdit={canEdit}
+                        onUpdated={handleRecordUpdated}
+                      />
+                    </TableCell>
                     <TableCell>{row.repair_company}</TableCell>
                     <TableCell>{row.mileage_km !== null && row.mileage_km !== undefined ? row.mileage_km.toLocaleString('de-DE') : '-'}</TableCell>
                     <TableCell>{currency(Number(row.cost_amount))}</TableCell>
-                    <TableCell className="text-xs text-gray-600">{row.notes ?? '-'}</TableCell>
+                    <TableCell>
+                      <ServiceRecordInlineField
+                        record={row}
+                        field="notes"
+                        canEdit={canEdit}
+                        onUpdated={handleRecordUpdated}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

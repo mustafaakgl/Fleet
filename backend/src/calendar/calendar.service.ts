@@ -51,11 +51,24 @@ export class CalendarService {
       throw new NotFoundException('Driver not found');
     }
 
+    const normalizedDate = new Date(input.date);
+    normalizedDate.setHours(0, 0, 0, 0);
+
+    if (input.source === CalendarSource.manual) {
+      await this.prisma.calendarEvent.deleteMany({
+        where: {
+          driverId: input.driverId,
+          date: normalizedDate,
+          source: CalendarSource.manual,
+        },
+      });
+    }
+
     const event = await this.prisma.calendarEvent.create({
       data: {
         driverId: input.driverId,
         assignmentId: input.assignmentId,
-        date: input.date,
+        date: normalizedDate,
         status: input.status,
         source: input.source,
       },

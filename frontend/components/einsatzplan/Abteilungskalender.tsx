@@ -15,6 +15,7 @@ import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './C
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { useFleetData } from '@/context/FleetDataContext';
 import { calendarApi } from '@/lib/api';
+import { toCalendarApiStatus } from '@/lib/calendar-status-map';
 import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | AbsenceTypeAbbreviation | '';
@@ -81,20 +82,6 @@ function slugifyDepartment(name: string) {
 
 function formatMonthDate(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function toCalendarApiStatus(status: Exclude<CalendarStatus, ''>): string {
-  const map: Record<string, string> = {
-    SU: 'US',
-    PU: 'FR',
-    BH: 'AB',
-    KA: 'FR',
-    SA: 'AB',
-    Aus: 'AB',
-    'k. Auftrag': 'MT',
-    'unent.Fehlen': 'WE',
-  };
-  return map[status] ?? status;
 }
 
 const monthLabels = [

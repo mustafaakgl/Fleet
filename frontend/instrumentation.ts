@@ -1,7 +1,9 @@
 import * as Sentry from '@sentry/nextjs';
 
+const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN?.trim());
+
 export async function register() {
-  if (!process.env.NEXT_PUBLIC_SENTRY_DSN?.trim()) {
+  if (!sentryEnabled) {
     return;
   }
 
@@ -10,4 +12,9 @@ export async function register() {
   }
 }
 
-export const onRequestError = Sentry.captureRequestError;
+export const onRequestError: typeof Sentry.captureRequestError = (...args) => {
+  if (!sentryEnabled) {
+    return;
+  }
+  return Sentry.captureRequestError(...args);
+};

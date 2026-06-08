@@ -52,6 +52,20 @@ function fail(message) {
   process.exit(1);
 }
 
+function resetNextCacheIfProductionBuild() {
+  const nextDir = path.join(frontendDir, '.next');
+  const productionMarkers = [
+    path.join(nextDir, 'required-server-files.json'),
+    path.join(nextDir, 'export-marker.json'),
+    path.join(nextDir, 'next-server.js.nft.json'),
+  ];
+
+  if (productionMarkers.some((marker) => fs.existsSync(marker))) {
+    console.log('[dev] Clearing stale production .next cache before dev startup.');
+    fs.rmSync(nextDir, { recursive: true, force: true });
+  }
+}
+
 function assertPortIsFree() {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -112,6 +126,10 @@ async function main() {
   const nodeChoice = pickNodeBinary();
   if (!nodeChoice) {
     fail('No supported Node.js found. Install Node 22 LTS or Node >=20.9 and <23.');
+  }
+
+  if (command === 'dev') {
+    resetNextCacheIfProductionBuild();
   }
 
   await assertPortIsFree();

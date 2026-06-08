@@ -632,8 +632,10 @@ export const serviceRecordsApi = {
     notes?: string;
   }) => api.post<ServiceRecord>('/service-records', data).then((r) => r.data),
 
-  update: (id: string, data: Partial<ServiceRecord>) =>
-    api.patch<ServiceRecord>(`/service-records/${id}`, data).then((r) => r.data),
+  update: (
+    id: string,
+    data: Partial<Pick<ServiceRecord, 'service_type' | 'notes' | 'date' | 'repair_company' | 'cost_amount' | 'mileage_km' | 'driver_id'>>,
+  ) => api.patch<ServiceRecord>(`/service-records/${id}`, data).then((r) => r.data),
 
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/service-records/${id}`).then((r) => r.data),
