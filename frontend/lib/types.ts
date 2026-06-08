@@ -480,6 +480,7 @@ export interface CompanyEmail {
   date: string;
   subject: string;
   body: string;
+  recipientEmail?: string;
   status: CompanyEmailStatus;
   lastSentAt?: string | null;
   company?: { name: string };
@@ -652,9 +653,12 @@ export interface MessengerMessage {
   readByCurrentUser: boolean;
 }
 
+export type MessengerDepartment = 'dispatch' | 'hr' | 'accounting' | 'maintenance' | 'general';
+
 export interface ConversationListItem {
   id: string;
   subject: string | null;
+  department?: MessengerDepartment;
   driver: MessengerDriverSummary;
   participants: ConversationParticipant[];
   lastMessage: {
@@ -675,6 +679,7 @@ export interface ConversationListItem {
 export interface ConversationDetail {
   id: string;
   subject: string | null;
+  department?: MessengerDepartment;
   driver: MessengerDriverSummary;
   participants: ConversationParticipant[];
   lastMessageAt: string | null;

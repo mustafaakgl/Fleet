@@ -40,6 +40,7 @@ jobs:
       - run: npm ci
       - run: npx prisma migrate deploy
       - run: npm run build
+      - run: npm run test
       - run: npx ts-node --transpile-only scripts/tenant-isolation-check.ts
       - run: npm audit --audit-level=high
       - name: Load test script present

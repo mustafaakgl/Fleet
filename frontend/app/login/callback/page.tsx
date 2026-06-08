@@ -1,33 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '@/lib/api';
 import { getPostLoginPath, saveAuth } from '@/lib/auth';
 
-export default function LoginCallbackPage() {
+function LoginCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = searchParams.get('access_token');
-    if (!token) {
+    const code = searchParams.get('code');
+    if (!code) {
       setError(t('auth.sso.missingToken'));
       return;
     }
 
     authApi
-      .meWithToken(token)
-      .then((user) => {
+      .oidcExchange(code)
+      .then((res) => {
+        if (res.mfa_required && res.mfa_token) {
+          router.replace(`/login?mfa_token=${encodeURIComponent(res.mfa_token)}`);
+          return;
+        }
+
+        const token = res.accessToken ?? res.access_token;
+        if (!token || !res.user) {
+          setError(t('auth.errors.noToken'));
+          return;
+        }
+
         saveAuth(token, {
-          ...user,
-          name: user.name ?? user.email,
+          ...res.user,
+          name: res.user.name ?? res.user.email,
         });
-        router.replace(getPostLoginPath(user.role));
+        router.replace(getPostLoginPath(res.user.role));
       })
       .catch(() => {
         setError(t('auth.sso.callbackError'));
@@ -47,5 +58,19 @@ export default function LoginCallbackPage() {
       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       {t('auth.sso.completing')}
     </div>
+  );
+}
+
+export default function LoginCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center p-6 text-sm text-slate-600">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        </div>
+      }
+    >
+      <LoginCallbackContent />
+    </Suspense>
   );
 }

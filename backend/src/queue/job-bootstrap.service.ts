@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { CompanyEmailsService } from '../company-emails/company-emails.service';
 import { DriverBirthdaysService } from '../drivers/driver-birthdays.service';
 import { PrivacyService } from '../privacy/privacy.service';
 import { RemindersService } from '../reminders/reminders.service';
@@ -13,6 +14,7 @@ export class JobBootstrapService implements OnModuleInit {
     private readonly reminders: RemindersService,
     private readonly privacy: PrivacyService,
     private readonly driverBirthdays: DriverBirthdaysService,
+    private readonly companyEmails: CompanyEmailsService,
   ) {}
 
   onModuleInit(): void {
@@ -43,6 +45,20 @@ export class JobBootstrapService implements OnModuleInit {
       const result = await this.driverBirthdays.sendTodayBirthdayNotifications();
       this.logger.log(
         `Birthday notifications: sent=${result.sent}, skipped=${result.skipped}, candidates=${result.candidates}`,
+      );
+    });
+
+    this.queue.registerHandler('company_emails.tomorrow', async (payload) => {
+      const date =
+        payload && typeof payload === 'object' && 'date' in payload && typeof payload.date === 'string'
+          ? payload.date
+          : undefined;
+      if (!date) {
+        throw new Error('company_emails.tomorrow job requires { date: "YYYY-MM-DD" }');
+      }
+      const result = await this.companyEmails.runScheduledEmailsForDate(date);
+      this.logger.log(
+        `Company emails for ${result.date}: drafts=${result.draftsCreated}, sent=${result.sent}, failed=${result.failed}, skipped=${result.skipped}`,
       );
     });
   }

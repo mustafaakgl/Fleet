@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getTodayDate, getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
+import { companiesApi, companyEmailsApi } from '@/lib/api';
+import type { CompanyEmail, CompanyEmailStatus } from '@/lib/types';
 
 type EmailStatus = 'Not Prepared' | 'Draft Ready' | 'Sent' | 'Failed' | 'Needs Review';
 
@@ -26,6 +28,9 @@ interface CompanyAssignmentItem {
 }
 
 interface CompanyNotificationRecord {
+  key: string;
+  emailId?: string;
+  companyId: string;
   company: string;
   date: string;
   recipientEmail: string;
@@ -36,7 +41,6 @@ interface CompanyNotificationRecord {
   status: EmailStatus;
   subject: string;
   body: string;
-  assignmentSignature: string;
   lastSent: string | null;
 }
 
@@ -44,16 +48,8 @@ interface CompanyNotificationsProps {
   onAttentionCountChange?: (count: number) => void;
 }
 
-const COMPANY_EMAILS: Record<string, string> = {
-  DHL: 'dispo@dhl-example.com',
-  Amazon: 'logistics@amazon-example.com',
-  UPS: 'dispatch@ups-example.com',
-  Hermes: 'touren@hermes-example.com',
-  'DB Schenker': 'planung@dbschenker-example.com',
-};
-
-function keyFor(company: string, date: string) {
-  return `${company}__${date}`;
+function keyFor(companyId: string, date: string) {
+  return `${companyId}__${date}`;
 }
 
 function badgeClass(status: EmailStatus) {
@@ -73,16 +69,6 @@ function badgeClass(status: EmailStatus) {
   }
 }
 
-function buildAssignmentSignature(items: CompanyAssignmentItem[]) {
-  return items
-    .map(
-      (item) =>
-        `${item.assignmentId}|${item.driverName}|${item.vehiclePlate}|${item.startTime}|${item.route}|${item.cargo ?? ''}|${item.pickupAddress ?? ''}|${item.deliveryAddress ?? ''}`,
-    )
-    .sort()
-    .join('||');
-}
-
 function formatRowsForBody(items: CompanyAssignmentItem[]) {
   return items
     .map(
@@ -92,13 +78,40 @@ function formatRowsForBody(items: CompanyAssignmentItem[]) {
     .join('\n');
 }
 
+function mapApiStatus(status?: CompanyEmailStatus): EmailStatus {
+  switch (status) {
+    case 'draft_ready':
+      return 'Draft Ready';
+    case 'sent':
+      return 'Sent';
+    case 'failed':
+      return 'Failed';
+    case 'needs_review':
+    case 'draft':
+      return 'Needs Review';
+    default:
+      return 'Not Prepared';
+  }
+}
+
+function formatLastSent(value?: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleString('de-DE');
+}
+
 export function CompanyNotifications({ onAttentionCountChange }: CompanyNotificationsProps) {
   const { t } = useTranslation();
   const { assignments, drivers } = useFleetData();
-  const [notificationState, setNotificationState] = useState<Record<string, CompanyNotificationRecord>>({});
+  const [companyDirectory, setCompanyDirectory] = useState<
+    Record<string, { id: string; name: string; email?: string | null }>
+  >({});
+  const [apiEmails, setApiEmails] = useState<CompanyEmail[]>([]);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const previousSignaturesRef = useRef<Record<string, string>>({});
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [loadingEmails, setLoadingEmails] = useState(true);
 
   const dates = useMemo(() => [getTodayDate(), getTomorrowDate()], []);
 
@@ -108,6 +121,41 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
       return acc;
     }, {});
   }, [drivers]);
+
+  const refreshEmails = useCallback(async () => {
+    setLoadingEmails(true);
+    try {
+      const results = await Promise.all(dates.map((date) => companyEmailsApi.list({ date })));
+      setApiEmails(results.flat());
+    } catch {
+      showToast(t('compNotif.loadFailed'));
+    } finally {
+      setLoadingEmails(false);
+    }
+  }, [dates, t]);
+
+  useEffect(() => {
+    companiesApi
+      .list({ limit: 200 })
+      .then((response) => {
+        const next: Record<string, { id: string; name: string; email?: string | null }> = {};
+        for (const company of response.data) {
+          next[company.name] = {
+            id: company.id,
+            name: company.name,
+            email: company.email,
+          };
+        }
+        setCompanyDirectory(next);
+      })
+      .catch(() => {
+        showToast(t('compNotif.loadFailed'));
+      });
+  }, [t]);
+
+  useEffect(() => {
+    void refreshEmails();
+  }, [refreshEmails]);
 
   function groupAssignmentsByCompany(date: string) {
     const grouped = new Map<string, CompanyAssignmentItem[]>();
@@ -146,174 +194,50 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
     return output;
   }, [assignments, dates, driverNameById]);
 
-  const assignmentSignatures = useMemo(() => {
-    const signatures: Record<string, string> = {};
+  const notificationRows = useMemo(() => {
+    const emailByKey = new Map<string, CompanyEmail>();
+    for (const email of apiEmails) {
+      const date = (email.date ?? '').slice(0, 10);
+      emailByKey.set(keyFor(email.companyId, date), email);
+    }
+
+    const rows: CompanyNotificationRecord[] = [];
 
     dates.forEach((date) => {
-      groupedByDate[date].forEach((items, company) => {
-        signatures[keyFor(company, date)] = buildAssignmentSignature(items);
-      });
-    });
+      groupedByDate[date].forEach((items, companyName) => {
+        const company = companyDirectory[companyName];
+        if (!company) return;
 
-    return signatures;
-  }, [dates, groupedByDate]);
+        const rowKey = keyFor(company.id, date);
+        const email = emailByKey.get(rowKey);
+        const assignedDrivers = [...new Set(items.map((item) => item.driverName))];
+        const vehicles = [...new Set(items.map((item) => item.vehiclePlate).filter(Boolean))];
+        const plannedJobs = [...new Set(items.map((item) => item.route).filter(Boolean))];
 
-  function generateCompanyEmailDraft(company: string, date: string) {
-    const items = groupedByDate[date].get(company) ?? [];
-    const rows = formatRowsForBody(items);
-    const subject = `Einsatzplan für ${date} – ${company}`;
-    const body = [
-      'Sehr geehrte Damen und Herren,',
-      '',
-      `anbei erhalten Sie den Einsatzplan für ${date}.`,
-      '',
-      `Firma: ${company}`,
-      '',
-      'Geplante Fahrer und Fahrzeuge:',
-      '',
-      rows,
-      '',
-      'Mit freundlichen Grüßen',
-      'Fleet Management Team',
-    ].join('\n');
-
-    const nextKey = keyFor(company, date);
-    const nextSignature = assignmentSignatures[nextKey] ?? '';
-
-    setNotificationState((current) => {
-      const existing = current[nextKey];
-      return {
-        ...current,
-        [nextKey]: {
-          company,
+        rows.push({
+          key: rowKey,
+          emailId: email?.id,
+          companyId: company.id,
+          company: companyName,
           date,
-          recipientEmail: COMPANY_EMAILS[company] ?? `ops@${company.toLowerCase().replace(/\s+/g, '-')}-example.com`,
+          recipientEmail: email?.recipientEmail?.trim() || company.email?.trim() || '-',
           assignments: items,
-          assignedDrivers: [...new Set(items.map((item) => item.driverName))],
-          vehicles: [...new Set(items.map((item) => item.vehiclePlate).filter(Boolean))],
-          plannedJobs: [...new Set(items.map((item) => item.route).filter(Boolean))],
-          status: 'Draft Ready',
-          subject,
-          body,
-          assignmentSignature: nextSignature,
-          lastSent: existing?.lastSent ?? null,
-        },
-      };
-    });
-  }
-
-  function markCompanyEmailAsSent(company: string, date: string) {
-    const nextKey = keyFor(company, date);
-    const sentAt = new Date().toLocaleString('de-DE');
-
-    setNotificationState((current) => {
-      const existing = current[nextKey];
-      if (!existing) return current;
-
-      return {
-        ...current,
-        [nextKey]: {
-          ...existing,
-          status: 'Sent',
-          lastSent: sentAt,
-        },
-      };
-    });
-  }
-
-  function updateCompanyNotificationAfterAssignmentChange(company: string, date: string) {
-    const nextKey = keyFor(company, date);
-    const nextSignature = assignmentSignatures[nextKey] ?? '';
-
-    if (!nextSignature) return;
-
-    const items = groupedByDate[date].get(company) ?? [];
-
-    setNotificationState((current) => {
-      const existing = current[nextKey];
-
-      if (!existing) {
-        return {
-          ...current,
-          [nextKey]: {
-            company,
-            date,
-            recipientEmail: COMPANY_EMAILS[company] ?? `ops@${company.toLowerCase().replace(/\s+/g, '-')}-example.com`,
-            assignments: items,
-            assignedDrivers: [...new Set(items.map((item) => item.driverName))],
-            vehicles: [...new Set(items.map((item) => item.vehiclePlate).filter(Boolean))],
-            plannedJobs: [...new Set(items.map((item) => item.route).filter(Boolean))],
-            status: 'Not Prepared',
-            subject: '',
-            body: '',
-            assignmentSignature: nextSignature,
-            lastSent: null,
-          },
-        };
-      }
-
-      if (existing.assignmentSignature === nextSignature) {
-        return {
-          ...current,
-          [nextKey]: {
-            ...existing,
-            assignments: items,
-            assignedDrivers: [...new Set(items.map((item) => item.driverName))],
-            vehicles: [...new Set(items.map((item) => item.vehiclePlate).filter(Boolean))],
-            plannedJobs: [...new Set(items.map((item) => item.route).filter(Boolean))],
-          },
-        };
-      }
-
-      const hasDraft = existing.subject.trim().length > 0 || existing.body.trim().length > 0;
-
-      return {
-        ...current,
-        [nextKey]: {
-          ...existing,
-          assignments: items,
-          assignedDrivers: [...new Set(items.map((item) => item.driverName))],
-          vehicles: [...new Set(items.map((item) => item.vehiclePlate).filter(Boolean))],
-          plannedJobs: [...new Set(items.map((item) => item.route).filter(Boolean))],
-          assignmentSignature: nextSignature,
-          status: hasDraft ? 'Needs Review' : 'Not Prepared',
-        },
-      };
-    });
-  }
-
-  useEffect(() => {
-    const activeKeys = new Set(Object.keys(assignmentSignatures));
-
-    setNotificationState((current) => {
-      const next: Record<string, CompanyNotificationRecord> = {};
-      Object.entries(current).forEach(([currentKey, value]) => {
-        if (activeKeys.has(currentKey)) {
-          next[currentKey] = value;
-        }
+          assignedDrivers,
+          vehicles,
+          plannedJobs,
+          status: email ? mapApiStatus(email.status) : 'Not Prepared',
+          subject: email?.subject ?? '',
+          body: email?.body ?? formatRowsForBody(items),
+          lastSent: formatLastSent(email?.lastSentAt),
+        });
       });
-      return next;
     });
 
-    Object.keys(assignmentSignatures).forEach((currentKey) => {
-      const previousSignature = previousSignaturesRef.current[currentKey];
-      const nextSignature = assignmentSignatures[currentKey];
-      if (previousSignature !== nextSignature) {
-        const [company, date] = currentKey.split('__');
-        updateCompanyNotificationAfterAssignmentChange(company, date);
-      }
+    return rows.sort((a, b) => {
+      if (a.date === b.date) return a.company.localeCompare(b.company);
+      return a.date.localeCompare(b.date);
     });
-
-    previousSignaturesRef.current = assignmentSignatures;
-  }, [assignmentSignatures]);
-
-  const notificationRows = useMemo(() => {
-    return Object.values(notificationState)
-      .sort((a, b) => {
-        if (a.date === b.date) return a.company.localeCompare(b.company);
-        return a.date.localeCompare(b.date);
-      });
-  }, [notificationState]);
+  }, [apiEmails, companyDirectory, dates, groupedByDate]);
 
   const attentionCount = useMemo(() => {
     return notificationRows.filter((row) => row.status === 'Not Prepared' || row.status === 'Needs Review').length;
@@ -323,11 +247,74 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
     onAttentionCountChange?.(attentionCount);
   }, [attentionCount, onAttentionCountChange]);
 
-  const previewRecord = previewKey ? notificationState[previewKey] : null;
+  const previewRecord = previewKey ? notificationRows.find((row) => row.key === previewKey) ?? null : null;
 
   function showToast(message: string) {
     setToastMessage(message);
-    setTimeout(() => setToastMessage(null), 2200);
+    setTimeout(() => setToastMessage(null), 2800);
+  }
+
+  async function generateCompanyEmailDraft(row: CompanyNotificationRecord) {
+    setBusyKey(row.key);
+    try {
+      await companyEmailsApi.generateForCompany(row.date, row.companyId);
+      await refreshEmails();
+      showToast(t('compNotif.draftGenerated'));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('compNotif.generateFailed'));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function sendCompanyEmail(row: CompanyNotificationRecord) {
+    if (!row.emailId) {
+      showToast(t('compNotif.generateFirst'));
+      return;
+    }
+
+    setBusyKey(row.key);
+    try {
+      const result = await companyEmailsApi.send(row.emailId);
+      await refreshEmails();
+      if (result.mail_sent || result.mail_mode === 'log') {
+        showToast(t('compNotif.sendSuccess'));
+      } else {
+        showToast(t('compNotif.sendFailed'));
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('compNotif.sendFailed'));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function markCompanyEmailAsSent(row: CompanyNotificationRecord) {
+    if (!row.emailId) {
+      showToast(t('compNotif.generateFirst'));
+      return;
+    }
+
+    setBusyKey(row.key);
+    try {
+      await companyEmailsApi.markSent(row.emailId);
+      await refreshEmails();
+      showToast(t('compNotif.markedSent'));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('compNotif.generateFailed'));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function savePreviewDraft(subject: string, body: string) {
+    if (!previewRecord?.emailId) return;
+    try {
+      await companyEmailsApi.update(previewRecord.emailId, { subject, body });
+      await refreshEmails();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('compNotif.generateFailed'));
+    }
   }
 
   return (
@@ -355,10 +342,10 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
             </thead>
             <tbody>
               {notificationRows.map((row) => {
-                const rowKey = keyFor(row.company, row.date);
+                const isBusy = busyKey === row.key;
 
                 return (
-                  <tr key={rowKey} className="border-t border-slate-100 hover:bg-slate-50">
+                  <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-3 py-2.5 font-medium text-slate-900">{row.company}</td>
                     <td className="px-3 py-2.5 text-slate-700">{row.date}</td>
                     <td className="px-3 py-2.5 text-slate-700">{row.assignedDrivers.join(', ') || '-'}</td>
@@ -375,29 +362,33 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => generateCompanyEmailDraft(row.company, row.date)}
-                          className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                          disabled={isBusy}
+                          onClick={() => void generateCompanyEmailDraft(row)}
+                          className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                         >
                           {t('compNotif.generateDraft')}
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPreviewKey(rowKey)}
-                          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                          disabled={!row.emailId}
+                          onClick={() => setPreviewKey(row.key)}
+                          className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                         >
                           {t('compNotif.preview')}
                         </button>
                         <button
                           type="button"
-                          onClick={() => markCompanyEmailAsSent(row.company, row.date)}
-                          className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                          disabled={isBusy || !row.emailId}
+                          onClick={() => void markCompanyEmailAsSent(row)}
+                          className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                         >
                           {t('compNotif.markSent')}
                         </button>
                         <button
                           type="button"
-                          onClick={() => showToast(t('compNotif.sendToast'))}
-                          className="rounded-md border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
+                          disabled={isBusy || !row.emailId}
+                          onClick={() => void sendCompanyEmail(row)}
+                          className="rounded-md border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
                         >
                           {t('compNotif.sendEmail')}
                         </button>
@@ -407,10 +398,18 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
                 );
               })}
 
-              {notificationRows.length === 0 && (
+              {!loadingEmails && notificationRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-500">
                     {t('compNotif.empty')}
+                  </td>
+                </tr>
+              )}
+
+              {loadingEmails && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-500">
+                    {t('common.loading')}
                   </td>
                 </tr>
               )}
@@ -442,16 +441,9 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
               <label className="space-y-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('compNotif.subject')}</span>
                 <input
-                  value={previewRecord.subject}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setNotificationState((current) => ({
-                      ...current,
-                      [keyFor(previewRecord.company, previewRecord.date)]: {
-                        ...previewRecord,
-                        subject: value,
-                      },
-                    }));
+                  defaultValue={previewRecord.subject}
+                  onBlur={(event) => {
+                    void savePreviewDraft(event.target.value, previewRecord.body);
                   }}
                   className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900"
                 />
@@ -460,16 +452,9 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
               <label className="space-y-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('compNotif.body')}</span>
                 <textarea
-                  value={previewRecord.body}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setNotificationState((current) => ({
-                      ...current,
-                      [keyFor(previewRecord.company, previewRecord.date)]: {
-                        ...previewRecord,
-                        body: value,
-                      },
-                    }));
+                  defaultValue={previewRecord.body}
+                  onBlur={(event) => {
+                    void savePreviewDraft(previewRecord.subject, event.target.value);
                   }}
                   rows={14}
                   className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
@@ -492,15 +477,17 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
             <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-slate-200 bg-white px-5 py-4">
               <button
                 type="button"
-                onClick={() => markCompanyEmailAsSent(previewRecord.company, previewRecord.date)}
-                className="rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+                disabled={busyKey === previewRecord.key}
+                onClick={() => void markCompanyEmailAsSent(previewRecord)}
+                className="rounded-md border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
               >
                 {t('compNotif.markSent')}
               </button>
               <button
                 type="button"
-                onClick={() => showToast(t('compNotif.sendToast'))}
-                className="rounded-md border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
+                disabled={busyKey === previewRecord.key}
+                onClick={() => void sendCompanyEmail(previewRecord)}
+                className="rounded-md border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
               >
                 {t('compNotif.sendEmail')}
               </button>

@@ -42,6 +42,13 @@ export default function LoginPage() {
       return;
     }
 
+    if (typeof window !== 'undefined') {
+      const pendingMfaToken = new URLSearchParams(window.location.search).get('mfa_token');
+      if (pendingMfaToken) {
+        setMfaToken(pendingMfaToken);
+      }
+    }
+
     onboardingApi
       .status()
       .then((status) => {

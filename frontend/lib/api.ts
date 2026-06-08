@@ -125,6 +125,9 @@ export const authApi = {
 
   oidcLoginUrl: () => `${BASE_URL}/auth/oidc/login`,
 
+  oidcExchange: (code: string) =>
+    api.post<AuthResponse>('/auth/oidc/exchange', { code }).then((r) => r.data),
+
   requestPasswordReset: (userId: string) =>
     api
       .post<{ reset_url: string; expires_at: string; user_email: string }>(
@@ -434,6 +437,50 @@ export const vehiclesApi = {
 
   uploadPhoto: (id: string, formData: FormData) =>
     api.post<Vehicle>(`/vehicles/${id}/photo`, formData).then((r) => r.data),
+
+  listEquipment: (id: string, status?: 'active' | 'retired') =>
+    api.get<VehicleEquipmentItem[]>(`/vehicles/${id}/equipment`, { params: { status } }).then((r) => r.data),
+
+  createEquipment: (
+    id: string,
+    data: { name: string; quantity?: number; serialNumber?: string; notes?: string },
+  ) => api.post<VehicleEquipmentItem>(`/vehicles/${id}/equipment`, data).then((r) => r.data),
+
+  updateEquipment: (
+    vehicleId: string,
+    equipmentId: string,
+    data: Partial<{ name: string; quantity: number; serialNumber: string | null; notes: string | null; status: 'active' | 'retired' }>,
+  ) => api.patch<VehicleEquipmentItem>(`/vehicles/${vehicleId}/equipment/${equipmentId}`, data).then((r) => r.data),
+
+  removeEquipment: (vehicleId: string, equipmentId: string) =>
+    api.delete<{ id: string; deleted: boolean }>(`/vehicles/${vehicleId}/equipment/${equipmentId}`).then((r) => r.data),
+};
+
+export interface VehicleEquipmentItem {
+  id: string;
+  vehicleId: string;
+  name: string;
+  quantity: number;
+  serialNumber?: string | null;
+  notes?: string | null;
+  status: 'active' | 'retired';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkSessionRow {
+  id: string;
+  driverId: string;
+  startedAt: string;
+  endedAt?: string | null;
+  endReason?: 'manual' | 'app_background' | 'logout' | null;
+  status: 'active' | 'ended';
+  driver?: { id: string; firstName: string; lastName: string; employeeNumber: string };
+}
+
+export const workSessionsApi = {
+  list: (params?: { driver_id?: string; date_from?: string; date_to?: string; status?: 'active' | 'ended' }) =>
+    api.get<WorkSessionRow[]>('/work-sessions', { params }).then((r) => r.data),
 };
 
 // ─── Companies ───────────────────────────────────────────────────────────────
@@ -744,6 +791,7 @@ export interface MessengerConversationListParams {
   driverId?: string;
   status?: string;
   search?: string;
+  department?: string;
 }
 
 export interface MessengerListMessagesParams {
@@ -756,9 +804,9 @@ export const messengerApi = {
   listConversations: (params?: MessengerConversationListParams) =>
     api.get<ConversationListItem[]>('/messenger/conversations', { params }).then((r) => r.data),
 
-  createConversation: (driverId: string, subject?: string) =>
+  createConversation: (driverId: string, subject?: string, department?: string) =>
     api
-      .post<ConversationDetail>('/messenger/conversations', { driverId, subject })
+      .post<ConversationDetail>('/messenger/conversations', { driverId, subject, department })
       .then((r) => r.data),
 
   getConversation: (id: string) =>

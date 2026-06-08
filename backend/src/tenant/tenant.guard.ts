@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
+import { TenantAccessService } from './tenant-access.service';
 import { SKIP_TENANT_KEY } from './skip-tenant.decorator';
 
 type RequestUser = {
@@ -16,9 +17,12 @@ type RequestUser = {
 
 @Injectable()
 export class TenantGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly tenantAccess: TenantAccessService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -45,6 +49,7 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('Tenant context is required for this operation');
     }
 
+    await this.tenantAccess.assertTenantAllowsLogin(user.tenantId);
     return true;
   }
 }

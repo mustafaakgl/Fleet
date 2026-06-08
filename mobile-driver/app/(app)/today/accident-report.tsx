@@ -3,6 +3,10 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ScreenLayout } from '@/components/ScreenLayout';
+import {
+  RequestAttachmentsPicker,
+  type PickedAttachment,
+} from '@/components/RequestAttachmentsPicker';
 import { driverApi } from '@/api/endpoints';
 import { LoadingState } from '@/components/LoadingState';
 import { ErrorState } from '@/components/ErrorState';
@@ -18,6 +22,7 @@ export default function AccidentReportScreen() {
   const [assignmentId, setAssignmentId] = useState(params.assignmentId ?? '');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const {
@@ -31,20 +36,30 @@ export default function AccidentReportScreen() {
   });
 
   const mutation = useMutation({
-    mutationFn: () =>
-      driverApi.createAccident({
+    mutationFn: async () => {
+      const created = await driverApi.createAccident({
         type: 'vehicle_accident',
         vehicleId,
         assignmentId: assignmentId || undefined,
         incidentDateTime: new Date().toISOString(),
         description,
         location,
-      }),
+      });
+      for (const file of attachments) {
+        try {
+          await driverApi.uploadAccidentAttachment(created.id, file, 'Scene Photo');
+        } catch {
+          throw new Error(t('requests.attachments.uploadFailed'));
+        }
+      }
+      return created;
+    },
     onSuccess: () => {
       setVehicleId('');
       setAssignmentId('');
       setDescription('');
       setLocation('');
+      setAttachments([]);
       void queryClient.invalidateQueries({ queryKey: ['driver-accidents', 'vehicle_accident'] });
       showSuccess(t('accidentReport.success'));
     },
@@ -93,6 +108,7 @@ export default function AccidentReportScreen() {
           value={description}
           onChangeText={setDescription}
         />
+        <RequestAttachmentsPicker files={attachments} onChange={setAttachments} maxFiles={8} />
         {validationError ? <Text style={styles.error}>{validationError}</Text> : null}
         <Pressable
           style={[styles.button, mutation.isPending && styles.buttonDisabled]}

@@ -204,6 +204,8 @@ interface FleetDataContextValue {
   calculateDailyRevenue: (date: string) => number;
   calculateMonthlyRevenue: (month: number, year: number) => number;
   updateAssignment: (assignmentId: string, updates: Partial<FleetAssignment>) => void;
+  completeAssignment: (assignmentId: string) => Promise<{ success: boolean; message: string }>;
+  cancelAssignment: (assignmentId: string) => Promise<{ success: boolean; message: string }>;
   validateMorningCheckin: (checkin: MorningCheckin) => MorningCheckinValidation;
   addCheckinToEinsatzplan: (checkinId: string) => { success: boolean; message: string };
   rejectMorningCheckin: (checkinId: string) => void;
@@ -1178,6 +1180,48 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
+  async function tryAssignmentTransition(
+    assignmentId: string,
+    to: 'confirmed' | 'in_progress' | 'completed',
+  ): Promise<boolean> {
+    try {
+      await assignmentsApi.transition(assignmentId, to);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function completeAssignment(assignmentId: string) {
+    if (isPlanningDraftAssignmentId(assignmentId)) {
+      return { success: false, message: 'Save the assignment before marking it completed.' };
+    }
+
+    await tryAssignmentTransition(assignmentId, 'confirmed');
+    await tryAssignmentTransition(assignmentId, 'in_progress');
+    const completed = await tryAssignmentTransition(assignmentId, 'completed');
+    if (!completed) {
+      return { success: false, message: 'Could not mark assignment as completed.' };
+    }
+
+    refetchHydrate();
+    return { success: true, message: 'Assignment marked completed.' };
+  }
+
+  async function cancelAssignment(assignmentId: string) {
+    if (isPlanningDraftAssignmentId(assignmentId)) {
+      return { success: false, message: 'Save the assignment before cancelling it.' };
+    }
+
+    try {
+      await assignmentsApi.cancel(assignmentId);
+      refetchHydrate();
+      return { success: true, message: 'Assignment cancelled.' };
+    } catch {
+      return { success: false, message: 'Could not cancel assignment.' };
+    }
+  }
+
   function updateAssignment(assignmentId: string, updates: Partial<FleetAssignment>) {
     setAssignments((current) => {
       let working = current;
@@ -1405,6 +1449,8 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       calculateDailyRevenue,
       calculateMonthlyRevenue,
       updateAssignment,
+      completeAssignment,
+      cancelAssignment,
       validateMorningCheckin,
       addCheckinToEinsatzplan,
       rejectMorningCheckin,

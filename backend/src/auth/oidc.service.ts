@@ -5,16 +5,21 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { randomBytes } from 'node:crypto';
 import { getFrontendUrl } from '../config/env.validation';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantAccessService } from '../tenant/tenant-access.service';
 import { AuthService } from './auth.service';
+import { MfaService } from './mfa.service';
 
 type OidcDiscovery = {
+  issuer: string;
   authorization_endpoint: string;
   token_endpoint: string;
   userinfo_endpoint?: string;
+  jwks_uri?: string;
 };
 
 type OidcStatePayload = {
@@ -22,14 +27,29 @@ type OidcStatePayload = {
   nonce: string;
 };
 
+type ExchangePayload =
+  | {
+      accessToken: string;
+      user: Awaited<ReturnType<AuthService['issueSessionForUser']>>['user'];
+      mfa_required: false;
+    }
+  | {
+      mfa_required: true;
+      mfa_token: string;
+    };
+
 @Injectable()
 export class OidcService {
   private discoveryCache: { value: OidcDiscovery; expiresAt: number } | null = null;
+  private jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+  private exchangeCodes = new Map<string, { payload: ExchangePayload; expiresAt: number }>();
 
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
+    private readonly mfa: MfaService,
+    private readonly tenantAccess: TenantAccessService,
   ) {}
 
   isEnabled(): boolean {
@@ -62,6 +82,31 @@ export class OidcService {
     return { issuer: issuer.replace(/\/$/, ''), clientId, clientSecret, redirectUri };
   }
 
+  private pruneExchangeCodes() {
+    const now = Date.now();
+    for (const [code, entry] of this.exchangeCodes.entries()) {
+      if (entry.expiresAt <= now) {
+        this.exchangeCodes.delete(code);
+      }
+    }
+  }
+
+  private createExchangeCode(payload: ExchangePayload): string {
+    const code = randomBytes(32).toString('hex');
+    this.exchangeCodes.set(code, { payload, expiresAt: Date.now() + 60_000 });
+    this.pruneExchangeCodes();
+    return code;
+  }
+
+  exchangeCode(code: string): ExchangePayload {
+    const entry = this.exchangeCodes.get(code);
+    if (!entry || entry.expiresAt <= Date.now()) {
+      throw new UnauthorizedException('Invalid or expired SSO exchange code');
+    }
+    this.exchangeCodes.delete(code);
+    return entry.payload;
+  }
+
   private async getDiscovery(): Promise<OidcDiscovery> {
     const now = Date.now();
     if (this.discoveryCache && this.discoveryCache.expiresAt > now) {
@@ -77,6 +122,36 @@ export class OidcService {
     const discovery = (await response.json()) as OidcDiscovery;
     this.discoveryCache = { value: discovery, expiresAt: now + 60 * 60 * 1000 };
     return discovery;
+  }
+
+  private getJwks(jwksUri: string) {
+    if (!this.jwksCache.has(jwksUri)) {
+      this.jwksCache.set(jwksUri, createRemoteJWKSet(new URL(jwksUri)));
+    }
+    return this.jwksCache.get(jwksUri)!;
+  }
+
+  private async verifyIdToken(
+    idToken: string,
+    discovery: OidcDiscovery,
+    clientId: string,
+    expectedNonce: string,
+  ): Promise<string | undefined> {
+    if (!discovery.jwks_uri) {
+      throw new ServiceUnavailableException('OIDC provider did not publish jwks_uri');
+    }
+
+    const { payload } = await jwtVerify(idToken, this.getJwks(discovery.jwks_uri), {
+      issuer: discovery.issuer,
+      audience: clientId,
+    });
+
+    if (typeof payload.nonce !== 'string' || payload.nonce !== expectedNonce) {
+      throw new UnauthorizedException('OIDC nonce mismatch');
+    }
+
+    const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : undefined;
+    return email;
   }
 
   async buildAuthorizationUrl(): Promise<string> {
@@ -155,13 +230,14 @@ export class OidcService {
     }
 
     if (!email && tokenData.id_token) {
-      const payloadPart = tokenData.id_token.split('.')[1];
-      if (payloadPart) {
-        const decoded = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8')) as {
-          email?: string;
-        };
-        email = decoded.email?.trim().toLowerCase();
-      }
+      email = await this.verifyIdToken(
+        tokenData.id_token,
+        discovery,
+        clientId,
+        statePayload.nonce,
+      );
+    } else if (tokenData.id_token) {
+      await this.verifyIdToken(tokenData.id_token, discovery, clientId, statePayload.nonce);
     }
 
     if (!email) {
@@ -185,14 +261,35 @@ export class OidcService {
       throw new UnauthorizedException('No active Fleet account for this SSO identity');
     }
 
+    await this.tenantAccess.assertTenantAllowsLogin(user.tenantId);
+
+    const frontend = getFrontendUrl().replace(/\/$/, '');
+
+    if (user.mfaEnabled && user.mfaSecret) {
+      const mfaToken = await this.mfa.createMfaPendingToken(user);
+      const exchangeCode = this.createExchangeCode({
+        mfa_required: true,
+        mfa_token: mfaToken,
+      });
+      return {
+        redirectUrl: `${frontend}/login/callback?code=${encodeURIComponent(exchangeCode)}`,
+      };
+    }
+
     const session = await this.auth.issueSessionForUser(user.id, {
       method: 'oidc',
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
     });
 
-    const frontend = getFrontendUrl().replace(/\/$/, '');
-    const redirectUrl = `${frontend}/login/callback?access_token=${encodeURIComponent(session.accessToken)}`;
-    return { redirectUrl };
+    const exchangeCode = this.createExchangeCode({
+      accessToken: session.accessToken,
+      user: session.user,
+      mfa_required: false,
+    });
+
+    return {
+      redirectUrl: `${frontend}/login/callback?code=${encodeURIComponent(exchangeCode)}`,
+    };
   }
 }

@@ -14,7 +14,7 @@ interface CustomerPortalShellProps {
 const NAV_ITEMS = [
   { href: '/portal/dashboard', label: 'Dashboard' },
   { href: '/portal/assignments', label: 'Assignments' },
-  { href: '/security', label: 'Security' },
+  { href: '/portal/security', label: 'Security' },
 ];
 
 export function CustomerPortalShell({ children }: CustomerPortalShellProps) {

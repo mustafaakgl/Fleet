@@ -7,6 +7,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { TrackingModule } from '../tracking/tracking.module';
 import { DocumentsModule } from '../documents/documents.module';
+import { WorkSessionsModule } from '../work-sessions/work-sessions.module';
 import { DriverMobileController } from './driver-mobile.controller';
 import { DriverMobileService } from './driver-mobile.service';
 
@@ -19,6 +20,7 @@ import { DriverMobileService } from './driver-mobile.service';
     NotificationsModule,
     PushNotificationsModule,
     TrackingModule,
+    WorkSessionsModule,
     MulterModule.register({}),
   ],
   controllers: [DriverMobileController],

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -19,6 +20,7 @@ import { OnboardingService } from '../onboarding/onboarding.service';
 import { SetupTenantDto } from '../onboarding/dto/setup-tenant.dto';
 import { resolveCustomerCompanyContext } from './customer-company-context';
 import { MfaService } from './mfa.service';
+import { TenantAccessService } from '../tenant/tenant-access.service';
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
@@ -43,6 +45,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly onboarding: OnboardingService,
     private readonly mfaService: MfaService,
+    private readonly tenantAccess: TenantAccessService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -90,6 +93,42 @@ export class AuthService {
     return payload;
   }
 
+  private async assertTenantActiveForAuth(
+    tenantId: string,
+    options?: {
+      genericError?: boolean;
+      ipAddress?: string;
+      userAgent?: string;
+      email?: string;
+      userId?: string;
+    },
+  ): Promise<void> {
+    try {
+      await this.tenantAccess.assertTenantAllowsLogin(tenantId);
+    } catch (error) {
+      await this.safeAuditLog({
+        actorUserId: options?.userId,
+        action: 'auth.login_failed',
+        entityType: 'auth',
+        entityId: options?.userId,
+        summary: 'Login blocked by tenant status',
+        metadata: {
+          email: options?.email,
+          reason: error instanceof ForbiddenException ? 'tenant_blocked' : 'tenant_not_found',
+        },
+        ipAddress: options?.ipAddress,
+        userAgent: options?.userAgent,
+      });
+      if (options?.genericError) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Invalid credentials');
+    }
+  }
+
   async login(
     email: string,
     password: string,
@@ -135,6 +174,14 @@ export class AuthService {
       });
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    await this.assertTenantActiveForAuth(user.tenantId, {
+      genericError: true,
+      email: normalizedEmail,
+      userId: user.id,
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
 
     if (user.mfaEnabled && user.mfaSecret) {
       const mfaToken = await this.mfaService.createMfaPendingToken(user);
@@ -192,6 +239,13 @@ export class AuthService {
     if (!user || user.status !== 'active') {
       throw new UnauthorizedException('User not found');
     }
+
+    await this.assertTenantActiveForAuth(user.tenantId, {
+      email: user.email,
+      userId: user.id,
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
 
     const accessToken = await this.jwt.signAsync({
       sub: user.id,

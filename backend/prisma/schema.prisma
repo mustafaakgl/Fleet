@@ -149,6 +149,7 @@ enum DocumentOwnerType {
   vehicle_handover
   assignment
   service_record
+  vehicle_equipment
 }
 
 enum DocumentStatus {
@@ -175,6 +176,30 @@ enum HandoverPhotoStatus {
 enum HandoverStatus {
   pending
   completed
+}
+
+enum WorkSessionEndReason {
+  manual
+  app_background
+  logout
+}
+
+enum WorkSessionStatus {
+  active
+  ended
+}
+
+enum MessengerDepartment {
+  dispatch
+  hr
+  accounting
+  maintenance
+  general
+}
+
+enum VehicleEquipmentStatus {
+  active
+  retired
 }
 
 enum IncidentType {
@@ -291,6 +316,8 @@ model Tenant {
   driverLocationHistory DriverLocationHistory[]
   driverLocationLatest  DriverLocationLatest[]
   customerAssignmentMessages CustomerAssignmentMessage[]
+  workSessions          WorkSession[]
+  vehicleEquipment      VehicleEquipment[]
 }
 
 model TenantSubscription {
@@ -432,6 +459,7 @@ model Driver {
   conversations     Conversation[]
   locationLatest    DriverLocationLatest?
   locationHistory   DriverLocationHistory[]
+  workSessions      WorkSession[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -467,6 +495,7 @@ model Vehicle {
   serviceRecords    ServiceRecord[]
   locationLatestSnapshots DriverLocationLatest[]
   locationHistory   DriverLocationHistory[]
+  equipment         VehicleEquipment[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -746,6 +775,12 @@ model VehicleHandover {
   photoStatus       HandoverPhotoStatus @default(not_required)
   damageDetected    Boolean             @default(false)
   damageNotes       String?
+  equipmentFirstAidKit      Boolean?
+  equipmentFireExtinguisher Boolean?
+  equipmentStraps           Boolean?
+  equipmentSafetyVest       Boolean?
+  equipmentNotes            String?
+  equipmentVerifiedAt       DateTime?
   status            HandoverStatus      @default(pending)
   notes             String?
   createdAt         DateTime            @default(now())
@@ -759,6 +794,42 @@ model VehicleHandover {
   @@index([driverId, handoverDateTime])
   @@index([vehicleId, handoverDateTime])
   @@index([assignmentId])
+}
+
+model WorkSession {
+  id        String                @id @default(uuid())
+  tenantId  String                @default("default-tenant")
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId  String
+  driver    Driver                @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  startedAt DateTime              @default(now())
+  endedAt   DateTime?
+  endReason WorkSessionEndReason?
+  status    WorkSessionStatus     @default(active)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@index([tenantId])
+  @@index([driverId, status])
+  @@index([driverId, startedAt])
+}
+
+model VehicleEquipment {
+  id           String                 @id @default(uuid())
+  tenantId     String                 @default("default-tenant")
+  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId    String
+  vehicle      Vehicle                @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  name         String
+  quantity     Int                    @default(1)
+  serialNumber String?
+  notes        String?
+  status       VehicleEquipmentStatus @default(active)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([tenantId])
+  @@index([vehicleId, status])
 }
 
 model Accident {
@@ -915,11 +986,12 @@ model ServiceRecord {
 }
 
 model Conversation {
-  id            String    @id @default(cuid())
-  tenantId      String    @default("default-tenant")
-  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  id            String              @id @default(cuid())
+  tenantId      String              @default("default-tenant")
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId      String
   createdById   String
+  department    MessengerDepartment @default(general)
   subject       String?
   lastMessageAt DateTime?
   createdAt     DateTime  @default(now())
@@ -933,6 +1005,7 @@ model Conversation {
   @@index([tenantId])
   @@index([driverId, updatedAt])
   @@index([lastMessageAt])
+  @@index([department])
 }
 
 model ConversationParticipant {

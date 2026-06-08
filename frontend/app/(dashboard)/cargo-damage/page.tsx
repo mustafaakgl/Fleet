@@ -7,7 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
-import { accidentsApi } from '@/lib/api';
+import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
+import { accidentsApi, documentsApi } from '@/lib/api';
+import type { Document } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 
 type IncidentStatus = 'reported' | 'under_review' | 'resolved' | 'rejected';
@@ -51,6 +53,8 @@ export default function CargoDamagePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<Document[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -88,6 +92,20 @@ export default function CargoDamagePage() {
     () => reports.find((r) => r.id === selectedId) ?? null,
     [reports, selectedId],
   );
+
+  useEffect(() => {
+    if (!selectedId) {
+      setAttachments([]);
+      return;
+    }
+
+    setAttachmentsLoading(true);
+    documentsApi
+      .list('accident', selectedId)
+      .then(setAttachments)
+      .catch(() => setAttachments([]))
+      .finally(() => setAttachmentsLoading(false));
+  }, [selectedId]);
 
   async function setStatus(id: string, status: IncidentStatus) {
     try {
@@ -237,6 +255,25 @@ export default function CargoDamagePage() {
                 value={currency(selectedReport.damageValue)}
               />
               <DetailRow label={t('cargoDamage.colStatus')} value={t(`cargoDamage.status.${selectedReport.status}`)} />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {t('cargoDamage.attachments')}
+                </p>
+                {attachmentsLoading ? (
+                  <p className="mt-2 text-sm text-slate-500">{t('common.loading')}</p>
+                ) : attachments.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">{t('cargoDamage.noAttachments')}</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {attachments.map((doc) => (
+                      <li key={doc.id} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                        <span className="text-slate-700">{doc.documentType ?? doc.fileName}</span>
+                        <DocumentFileLink document={doc} variant="link" />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <div className="sticky bottom-0 flex gap-2 border-t border-slate-200 bg-white px-5 py-4">

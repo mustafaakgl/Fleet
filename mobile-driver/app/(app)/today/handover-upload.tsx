@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { ScreenLayout } from '@/components/ScreenLayout';
@@ -41,6 +41,11 @@ export default function VehicleHandoverUploadScreen() {
   const vehicleId = params.vehicleId ?? '';
   const assignmentId = params.assignmentId ?? '';
   const [uploadingSlot, setUploadingSlot] = useState<HandoverPhotoSlot | null>(null);
+  const [firstAidKit, setFirstAidKit] = useState(false);
+  const [fireExtinguisher, setFireExtinguisher] = useState(false);
+  const [straps, setStraps] = useState(false);
+  const [safetyVest, setSafetyVest] = useState(false);
+  const [equipmentNotes, setEquipmentNotes] = useState('');
 
   const {
     data: handover,
@@ -112,6 +117,28 @@ export default function VehicleHandoverUploadScreen() {
     },
     onSettled: () => {
       setUploadingSlot(null);
+    },
+  });
+
+  const checklistMutation = useMutation({
+    mutationFn: () => {
+      if (!handover?.id) {
+        throw new Error('Handover not ready');
+      }
+      return driverApi.submitHandoverEquipmentChecklist(handover.id, {
+        firstAidKit,
+        fireExtinguisher,
+        straps,
+        safetyVest,
+        notes: equipmentNotes.trim() || undefined,
+      });
+    },
+    onSuccess: async () => {
+      showSuccess(t('handover.equipmentSaved'));
+      await queryClient.invalidateQueries({ queryKey: ['driver-handover', vehicleId, assignmentId] });
+    },
+    onError: (mutationError) => {
+      showError(getErrorMessage(mutationError, t('handover.equipmentFailed')));
     },
   });
 
@@ -289,6 +316,47 @@ export default function VehicleHandoverUploadScreen() {
                   );
                 })}
               </View>
+
+              <View style={styles.checklistCard}>
+                <Text style={styles.slotTitle}>{t('handover.equipmentTitle')}</Text>
+                <ChecklistRow
+                  label={t('handover.equipmentFirstAid')}
+                  value={firstAidKit}
+                  onChange={setFirstAidKit}
+                />
+                <ChecklistRow
+                  label={t('handover.equipmentExtinguisher')}
+                  value={fireExtinguisher}
+                  onChange={setFireExtinguisher}
+                />
+                <ChecklistRow
+                  label={t('handover.equipmentStraps')}
+                  value={straps}
+                  onChange={setStraps}
+                />
+                <ChecklistRow
+                  label={t('handover.equipmentVest')}
+                  value={safetyVest}
+                  onChange={setSafetyVest}
+                />
+                <TextInput
+                  style={styles.notesInput}
+                  placeholder={t('handover.equipmentNotes')}
+                  value={equipmentNotes}
+                  onChangeText={setEquipmentNotes}
+                />
+                <Pressable
+                  style={[styles.slotButton, checklistMutation.isPending && styles.slotButtonDisabled]}
+                  onPress={() => checklistMutation.mutate()}
+                  disabled={checklistMutation.isPending}
+                >
+                  <Text style={styles.slotButtonText}>
+                    {checklistMutation.isPending
+                      ? t('handover.equipmentSaving')
+                      : t('handover.equipmentSave')}
+                  </Text>
+                </Pressable>
+              </View>
             </>
           ) : (
             <Text style={styles.doneHint}>{t('handover.sameVehicle')}</Text>
@@ -296,6 +364,23 @@ export default function VehicleHandoverUploadScreen() {
         </View>
       ) : null}
     </ScreenLayout>
+  );
+}
+
+function ChecklistRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <View style={styles.checklistRow}>
+      <Text style={styles.checklistLabel}>{label}</Text>
+      <Switch value={value} onValueChange={onChange} />
+    </View>
   );
 }
 
@@ -366,5 +451,32 @@ const styles = StyleSheet.create({
   doneHint: {
     color: colors.subtext,
     fontSize: 14,
+  },
+  checklistCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: colors.card,
+  },
+  checklistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  checklistLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.primary,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.background,
   },
 });

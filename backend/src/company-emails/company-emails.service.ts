@@ -6,8 +6,14 @@ import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyEmailDto } from './dto/update-company-email.dto';
 
-type CompanyEmailStatus = 'draft' | 'needs_review' | 'sent' | 'failed';
-const COMPANY_EMAIL_STATUSES: CompanyEmailStatus[] = ['draft', 'needs_review', 'sent', 'failed'];
+type CompanyEmailStatus = 'draft' | 'draft_ready' | 'needs_review' | 'sent' | 'failed';
+const COMPANY_EMAIL_STATUSES: CompanyEmailStatus[] = [
+  'draft',
+  'draft_ready',
+  'needs_review',
+  'sent',
+  'failed',
+];
 
 type EmailRow = {
   companyId: string;
@@ -457,6 +463,64 @@ export class CompanyEmailsService {
     });
 
     return updated;
+  }
+
+  async runScheduledEmailsForDate(
+    dateInput: string | Date,
+    options?: { autoSend?: boolean; actorUserId?: string },
+  ) {
+    const autoSend =
+      options?.autoSend ??
+      (process.env.COMPANY_EMAIL_AUTO_SEND ?? 'true').toLowerCase() === 'true';
+    const date = this.normalizeDate(dateInput);
+    const drafts = await this.generateDraftsForDate(date, options?.actorUserId);
+
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (const draft of drafts as Array<{ id: string; status: CompanyEmailStatus; recipientEmail?: string | null }>) {
+      if (draft.status === 'sent') {
+        skipped += 1;
+        continue;
+      }
+
+      if (!autoSend) {
+        skipped += 1;
+        continue;
+      }
+
+      if (!draft.recipientEmail?.trim()) {
+        await this.markAsFailed(draft.id, options?.actorUserId);
+        failed += 1;
+        continue;
+      }
+
+      if (draft.status === 'draft') {
+        await this.markAsDraftReady(draft.id, options?.actorUserId);
+      }
+
+      try {
+        const result = await this.sendEmail(draft.id, options?.actorUserId);
+        if (result.mail_sent || result.mail_mode === 'log') {
+          sent += 1;
+        } else {
+          failed += 1;
+        }
+      } catch {
+        await this.markAsFailed(draft.id, options?.actorUserId);
+        failed += 1;
+      }
+    }
+
+    return {
+      date: date.toISOString().slice(0, 10),
+      draftsCreated: drafts.length,
+      sent,
+      failed,
+      skipped,
+      autoSend,
+    };
   }
 
   async updateEmailStatusAfterAssignmentChange(companyId: string, dateInput: string | Date) {

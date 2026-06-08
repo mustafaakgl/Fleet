@@ -105,7 +105,7 @@ export async function exportCurrentTagesuebersichtToExcel({
 
 export function TagesuebersichtTab({ planningDate }: { planningDate?: string }) {
   const { t } = useTranslation();
-  const { assignments, drivers, requests, getDriverAvailability, updateAssignment } = useFleetData();
+  const { assignments, drivers, requests, getDriverAvailability, updateAssignment, completeAssignment, cancelAssignment } = useFleetData();
 
   const [selectedDate, setSelectedDate] = useState(planningDate ?? getTodayDate());
 
@@ -236,26 +236,21 @@ export function TagesuebersichtTab({ planningDate }: { planningDate?: string }) 
     showToast(t('tagesueber.toastUpdated'));
   }
 
-  function removeAssignment() {
+  async function removeAssignment() {
     if (!selectedAssignment) return;
-    updateAssignment(selectedAssignment.id, {
-      company: '',
-      vehicle: '',
-      routeJob: '',
-      notes: `${selectedAssignment.notes ? `${selectedAssignment.notes} | ` : ''}Removed from Tagesuebersicht`,
-      status: 'Unavailable',
-      availability: 'Not Assigned',
-    });
-    setSelectedAssignmentId(null);
-    showToast(t('tagesueber.toastRemoved'));
+    const result = await cancelAssignment(selectedAssignment.id);
+    if (result.success) {
+      setSelectedAssignmentId(null);
+      showToast(t('tagesueber.toastRemoved'));
+      return;
+    }
+    showToast(result.message);
   }
 
-  function markCompleted() {
+  async function markCompleted() {
     if (!selectedAssignment) return;
-    updateAssignment(selectedAssignment.id, {
-      notes: `${selectedAssignment.notes ? `${selectedAssignment.notes} | ` : ''}Marked completed`,
-    });
-    showToast(t('tagesueber.toastCompleted'));
+    const result = await completeAssignment(selectedAssignment.id);
+    showToast(result.success ? t('tagesueber.toastCompleted') : result.message);
   }
 
   return (

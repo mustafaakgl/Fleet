@@ -19,8 +19,9 @@ export class MessengerController {
     @Query('driverId') driverId?: string,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('department') department?: string,
   ) {
-    return this.messengerService.listConversations(userId, { driverId, status, search });
+    return this.messengerService.listConversations(userId, { driverId, status, search, department });
   }
 
   @Post('conversations')

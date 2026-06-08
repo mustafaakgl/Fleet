@@ -3,6 +3,7 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, Fragment, StyleSheet, View } from 'react-native';
 import { LocationSessionHost } from '@/components/LocationSessionHost';
+import { WorkSessionHost } from '@/components/WorkSessionHost';
 import { authStore } from '@/features/auth/store';
 import { driverApi, messengerApi } from '@/api/endpoints';
 import { useTranslation } from '@/i18n/useTranslation';
@@ -66,6 +67,7 @@ export default function AppLayout() {
   return (
     <Fragment>
       {!documentsIncomplete ? <LocationSessionHost /> : null}
+      {!documentsIncomplete ? <WorkSessionHost /> : null}
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: colors.card },

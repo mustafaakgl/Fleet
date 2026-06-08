@@ -5,12 +5,13 @@ import { BillingModule } from '../billing/billing.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
 import { VehiclesController } from './vehicles.controller';
+import { VehicleEquipmentService } from './vehicle-equipment.service';
 import { VehiclesService } from './vehicles.service';
 
 @Module({
   imports: [PrismaModule, AuditModule, BillingModule, StorageModule, MulterModule.register({})],
   controllers: [VehiclesController],
-  providers: [VehiclesService],
-  exports: [VehiclesService],
+  providers: [VehiclesService, VehicleEquipmentService],
+  exports: [VehiclesService, VehicleEquipmentService],
 })
 export class VehiclesModule {}

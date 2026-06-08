@@ -28,6 +28,7 @@ import { LoginDto } from './dto/login.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { VerifyMfaCodeDto } from './dto/verify-mfa-code.dto';
 import { VerifyMfaLoginDto } from './dto/verify-mfa-login.dto';
+import { OidcExchangeDto } from './dto/oidc-exchange.dto';
 import { MfaService } from './mfa.service';
 import { OidcService } from './oidc.service';
 
@@ -72,6 +73,14 @@ export class AuthController {
       userAgent: req.get('user-agent') ?? undefined,
     });
     return res.redirect(redirectUrl);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post('oidc/exchange')
+  @HttpCode(HttpStatus.OK)
+  oidcExchange(@Body() dto: OidcExchangeDto) {
+    return this.oidc.exchangeCode(dto.code);
   }
 
   @Public()

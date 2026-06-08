@@ -66,6 +66,11 @@ export const authStore = create<AuthState>((set) => ({
   },
   clearSession: async () => {
     try {
+      await driverApi.endWorkSession('logout');
+    } catch {
+      // ignore when offline
+    }
+    try {
       await driverApi.clearPushToken();
     } catch {
       // ignore when offline or already logged out

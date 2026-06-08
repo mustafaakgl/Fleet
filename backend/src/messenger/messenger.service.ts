@@ -11,6 +11,11 @@ import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { TranslationService } from '../translation/translation.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import {
+  allowedDepartmentsForRole,
+  canAccessDepartment,
+  normalizeMessengerDepartment,
+} from './messenger-departments.util';
 
 type MessengerUser = {
   id: string;
@@ -22,6 +27,7 @@ type ConversationListQuery = {
   driverId?: string;
   status?: string;
   search?: string;
+  department?: string;
 };
 
 type ConversationMessagesQuery = {
@@ -344,12 +350,15 @@ export class MessengerService {
     conversationId: string,
   ): Promise<void> {
     if (currentUser.role !== 'driver') {
-      const exists = await this.prisma.conversation.findUnique({
+      const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { id: true },
+        select: { id: true, department: true },
       });
-      if (!exists) {
+      if (!conversation) {
         throw new NotFoundException('Conversation not found');
+      }
+      if (!canAccessDepartment(currentUser.role, conversation.department)) {
+        throw new ForbiddenException('You cannot access this messenger department');
       }
       return;
     }
@@ -425,6 +434,7 @@ export class MessengerService {
     if (query.search?.trim()) {
       const value = query.search.trim();
       where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
         {
           OR: [
             { subject: { contains: value, mode: 'insensitive' } },
@@ -433,6 +443,16 @@ export class MessengerService {
           ],
         },
       ];
+    }
+
+    if (query.department?.trim()) {
+      const department = normalizeMessengerDepartment(query.department);
+      if (!canAccessDepartment(currentUser.role, department)) {
+        throw new ForbiddenException('You cannot access this messenger department');
+      }
+      where.department = department;
+    } else if (currentUser.role !== 'driver') {
+      where.department = { in: allowedDepartmentsForRole(currentUser.role) };
     }
 
     const conversations = await this.prisma.conversation.findMany({
@@ -451,6 +471,7 @@ export class MessengerService {
       return {
         id: conversation.id,
         subject: conversation.subject,
+        department: conversation.department,
         driver: {
           id: conversation.driver.id,
           firstName: conversation.driver.firstName,
@@ -497,11 +518,16 @@ export class MessengerService {
     }
 
     const normalizedSubject = dto.subject?.trim() || null;
+    const department = normalizeMessengerDepartment(dto.department);
+    if (!canAccessDepartment(currentUser.role, department)) {
+      throw new ForbiddenException('You cannot create conversations in this department');
+    }
 
     const existing = await this.prisma.conversation.findFirst({
       where: {
         driverId: driver.id,
         subject: normalizedSubject,
+        department,
         participants: {
           some: {
             userId: currentUser.id,
@@ -532,6 +558,7 @@ export class MessengerService {
         driverId: driver.id,
         createdById: currentUser.id,
         subject: normalizedSubject,
+        department,
         participants: {
           create: participantIds.map((participantId) => ({
             userId: participantId,
@@ -575,6 +602,7 @@ export class MessengerService {
     return {
       id: conversation.id,
       subject: conversation.subject,
+      department: conversation.department,
       driver: {
         id: conversation.driver.id,
         firstName: conversation.driver.firstName,

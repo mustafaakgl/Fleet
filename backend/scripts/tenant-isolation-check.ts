@@ -70,6 +70,23 @@ async function main() {
       }
     }
 
+    const totalMessages = await base.customerAssignmentMessage.count();
+    const scopedMessagesA = await TenantContext.run(tenantA, () =>
+      scoped.customerAssignmentMessage.count(),
+    );
+    console.log(`CustomerAssignmentMessage total: ${totalMessages}, tenant A scoped: ${scopedMessagesA}`);
+
+    if (tenantA !== tenantB) {
+      const crossMessage = await TenantContext.run(tenantA, () =>
+        scoped.customerAssignmentMessage.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossMessage) {
+        throw new Error('Isolation failure: tenant A context read tenant B customer message');
+      }
+    }
+
     console.log('Tenant isolation check passed.');
   } finally {
     await base.$disconnect();

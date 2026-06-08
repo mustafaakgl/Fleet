@@ -8,4 +8,9 @@ export class CreateConversationDto {
   @IsString()
   @MaxLength(200)
   subject?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  department?: string;
 }

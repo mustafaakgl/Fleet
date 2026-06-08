@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { vehiclesApi, documentsApi } from '@/lib/api';
+import { vehiclesApi, documentsApi, type VehicleEquipmentItem } from '@/lib/api';
 import type { VehicleDetail, Document } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 import { formatDate, statusColor } from '@/lib/utils';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
+import { Input } from '@/components/ui/input';
 
 interface VehicleAssignmentRow {
   id: string;
@@ -79,6 +80,12 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [documents, setDocuments] = useState<Document[]>([]);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
 
+  const [equipment, setEquipment] = useState<VehicleEquipmentItem[]>([]);
+  const [equipmentError, setEquipmentError] = useState<string | null>(null);
+  const [equipmentName, setEquipmentName] = useState('');
+  const [equipmentQty, setEquipmentQty] = useState('1');
+  const [equipmentSaving, setEquipmentSaving] = useState(false);
+
   useEffect(() => {
     vehiclesApi
       .getById(id)
@@ -105,7 +112,29 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       .list('vehicle', id)
       .then(setDocuments)
       .catch((e) => setDocumentsError(e?.message ?? 'Failed'));
+    vehiclesApi
+      .listEquipment(id)
+      .then(setEquipment)
+      .catch((e) => setEquipmentError(e?.message ?? 'Failed'));
   }, [id]);
+
+  async function addEquipmentItem() {
+    if (!equipmentName.trim()) return;
+    setEquipmentSaving(true);
+    try {
+      const created = await vehiclesApi.createEquipment(id, {
+        name: equipmentName.trim(),
+        quantity: Number.parseInt(equipmentQty, 10) || 1,
+      });
+      setEquipment((current) => [...current, created]);
+      setEquipmentName('');
+      setEquipmentQty('1');
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : t('vehicleDetail.equipmentSaveError'));
+    } finally {
+      setEquipmentSaving(false);
+    }
+  }
 
   const currentAssignment = vehicle?.recent_assignments?.[0] ?? null;
   const currentDriver =
@@ -300,6 +329,54 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                     </TableRow>
                   ))
                 )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('vehicleDetail.equipment')}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={equipmentName}
+              onChange={(e) => setEquipmentName(e.target.value)}
+              placeholder={t('vehicleDetail.equipmentNamePlaceholder')}
+            />
+            <Input
+              value={equipmentQty}
+              onChange={(e) => setEquipmentQty(e.target.value)}
+              className="sm:w-24"
+              placeholder="Qty"
+            />
+            <Button onClick={() => void addEquipmentItem()} disabled={equipmentSaving || !equipmentName.trim()}>
+              {t('vehicleDetail.equipmentAdd')}
+            </Button>
+          </div>
+          {equipmentError ? (
+            <p className="text-sm text-gray-500">{equipmentError}</p>
+          ) : equipment.length === 0 ? (
+            <p className="text-sm text-gray-500">{t('vehicleDetail.equipmentEmpty')}</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('vehicleDetail.equipmentColName')}</TableHead>
+                  <TableHead>{t('vehicleDetail.equipmentColQty')}</TableHead>
+                  <TableHead>{t('vehicleDetail.status')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {equipment.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.name}</TableCell>
+                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>{item.status}</TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}

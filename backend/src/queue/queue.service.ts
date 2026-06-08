@@ -7,6 +7,7 @@ const KNOWN_JOBS = [
   'reminders.generate',
   'privacy.retention',
   'drivers.birthdays',
+  'company_emails.tomorrow',
 ] as const;
 
 export type KnownJobName = (typeof KNOWN_JOBS)[number];

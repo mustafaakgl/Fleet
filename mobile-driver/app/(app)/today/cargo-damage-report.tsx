@@ -3,6 +3,10 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ScreenLayout } from '@/components/ScreenLayout';
+import {
+  RequestAttachmentsPicker,
+  type PickedAttachment,
+} from '@/components/RequestAttachmentsPicker';
 import { driverApi } from '@/api/endpoints';
 import { LoadingState } from '@/components/LoadingState';
 import { ErrorState } from '@/components/ErrorState';
@@ -19,6 +23,7 @@ export default function CargoDamageReportScreen() {
   const [cargoName, setCargoName] = useState('');
   const [cargoOwner, setCargoOwner] = useState('');
   const [description, setDescription] = useState('');
+  const [attachments, setAttachments] = useState<PickedAttachment[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const {
@@ -32,8 +37,8 @@ export default function CargoDamageReportScreen() {
   });
 
   const mutation = useMutation({
-    mutationFn: () =>
-      driverApi.createAccident({
+    mutationFn: async () => {
+      const created = await driverApi.createAccident({
         type: 'cargo_damage',
         vehicleId: vehicleId || undefined,
         assignmentId: assignmentId || undefined,
@@ -41,13 +46,23 @@ export default function CargoDamageReportScreen() {
         cargoName,
         cargoOwner,
         description,
-      }),
+      });
+      for (const file of attachments) {
+        try {
+          await driverApi.uploadAccidentAttachment(created.id, file, 'Damage Photo');
+        } catch {
+          throw new Error(t('requests.attachments.uploadFailed'));
+        }
+      }
+      return created;
+    },
     onSuccess: () => {
       setVehicleId('');
       setAssignmentId('');
       setCargoName('');
       setCargoOwner('');
       setDescription('');
+      setAttachments([]);
       void queryClient.invalidateQueries({ queryKey: ['driver-accidents', 'cargo_damage'] });
       showSuccess(t('cargoDamage.success'));
     },
@@ -102,6 +117,7 @@ export default function CargoDamageReportScreen() {
           value={description}
           onChangeText={setDescription}
         />
+        <RequestAttachmentsPicker files={attachments} onChange={setAttachments} maxFiles={8} />
         {validationError ? <Text style={styles.error}>{validationError}</Text> : null}
         <Pressable
           style={[styles.button, mutation.isPending && styles.buttonDisabled]}

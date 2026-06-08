@@ -17,10 +17,12 @@ import { CreateDriverRequestDto } from './dto/create-driver-request.dto';
 import { CreateDriverTransportRequestDto } from './dto/create-driver-transport-request.dto';
 import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
+import { SubmitHandoverEquipmentChecklistDto } from './dto/submit-handover-equipment.dto';
 import { StorageService } from '../storage/storage.service';
 import { OperationalNotifyService } from '../notifications/operational-notify.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { TrackingService } from '../tracking/tracking.service';
+import { WorkSessionsService } from '../work-sessions/work-sessions.service';
 import type { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import {
   allRequiredHandoverPhotosUploaded,
@@ -34,6 +36,12 @@ import {
 } from '../vehicle-handovers/handover-photo.util';
 import { dedupeDriverDayAssignments } from '../assignments/assignment-dedupe';
 import { MAX_REQUEST_ATTACHMENTS } from './driver-upload.config';
+import {
+  accidentAttachmentNotes,
+  loadAccidentAttachmentsByOwner,
+  MAX_ACCIDENT_ATTACHMENTS,
+  normalizeAccidentDocumentType,
+} from './accident-attachments.util';
 import {
   loadRequestAttachmentsByOwner,
   requestAttachmentDocumentType,
@@ -82,6 +90,7 @@ export class DriverMobileService {
     private readonly operationalNotify: OperationalNotifyService,
     private readonly tracking: TrackingService,
     private readonly documentsService: DocumentsService,
+    private readonly workSessions: WorkSessionsService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -409,6 +418,7 @@ export class DriverMobileService {
 
   async createMorningCheckin(userId: string, dto: CreateDriverMorningCheckinDto) {
     const { driver } = await this.resolveDriver(userId);
+    await this.assertHandoverGateForDriver(driver.id, new Date(dto.date));
     const driverWithConsent = await this.prisma.driver.findUniqueOrThrow({
       where: { id: driver.id },
       select: { id: true, locationTrackingConsentAt: true },
@@ -515,19 +525,199 @@ export class DriverMobileService {
     return this.enrichHandover(handover);
   }
 
+  private isHandoverEquipmentChecklistComplete(handover: {
+    equipmentFirstAidKit: boolean | null;
+    equipmentFireExtinguisher: boolean | null;
+    equipmentStraps: boolean | null;
+    equipmentSafetyVest: boolean | null;
+  }) {
+    return (
+      handover.equipmentFirstAidKit === true
+      && handover.equipmentFireExtinguisher === true
+      && handover.equipmentStraps === true
+      && handover.equipmentSafetyVest === true
+    );
+  }
+
+  private buildEquipmentChecklist(handover: {
+    equipmentFirstAidKit: boolean | null;
+    equipmentFireExtinguisher: boolean | null;
+    equipmentStraps: boolean | null;
+    equipmentSafetyVest: boolean | null;
+    equipmentNotes: string | null;
+    equipmentVerifiedAt: Date | null;
+  }) {
+    return {
+      firstAidKit: handover.equipmentFirstAidKit ?? false,
+      fireExtinguisher: handover.equipmentFireExtinguisher ?? false,
+      straps: handover.equipmentStraps ?? false,
+      safetyVest: handover.equipmentSafetyVest ?? false,
+      notes: handover.equipmentNotes ?? '',
+      verifiedAt: handover.equipmentVerifiedAt?.toISOString() ?? null,
+      complete: this.isHandoverEquipmentChecklistComplete(handover),
+    };
+  }
+
+  private async maybeCompleteHandover(handoverId: string) {
+    const handover = await this.prisma.vehicleHandover.findUnique({
+      where: { id: handoverId },
+    });
+    if (!handover || !handover.photoRequired) {
+      return;
+    }
+
+    const photos = await loadHandoverPhotosBySlot(this.prisma, handoverId);
+    const photosComplete = allRequiredHandoverPhotosUploaded(handover.photoRequired, photos);
+    const checklistComplete = this.isHandoverEquipmentChecklistComplete(handover);
+    if (!photosComplete || !checklistComplete) {
+      return;
+    }
+
+    await this.prisma.vehicleHandover.update({
+      where: { id: handoverId },
+      data: {
+        photoStatus: 'uploaded',
+        status: 'completed',
+      },
+    });
+  }
+
+  private async assertHandoverGateForDriver(driverId: string, referenceDate = new Date()) {
+    const { start, end } = this.dayRange(referenceDate.toISOString().slice(0, 10));
+    const pending = await this.prisma.vehicleHandover.findMany({
+      where: {
+        driverId,
+        handoverDateTime: { gte: start, lt: end },
+        photoRequired: true,
+        status: { not: 'completed' },
+      },
+      select: {
+        id: true,
+        photoStatus: true,
+        equipmentVerifiedAt: true,
+      },
+    });
+
+    if (pending.length === 0) {
+      return;
+    }
+
+    for (const handover of pending) {
+      const photos = await loadHandoverPhotosBySlot(this.prisma, handover.id);
+      const photosComplete = allRequiredHandoverPhotosUploaded(true, photos);
+      if (!photosComplete || !handover.equipmentVerifiedAt) {
+        throw new BadRequestException(
+          'Complete vehicle handover photos and equipment checklist before morning check-in',
+        );
+      }
+    }
+  }
+
+  async getCurrentWorkSession(userId: string) {
+    const { driver } = await this.resolveDriver(userId);
+    const session = await this.workSessions.getActiveSessionForDriver(driver.id);
+    if (!session) {
+      return { active: false, session: null };
+    }
+    return {
+      active: true,
+      session: {
+        id: session.id,
+        startedAt: session.startedAt.toISOString(),
+        status: session.status,
+      },
+    };
+  }
+
+  async startWorkSession(userId: string) {
+    const { driver } = await this.resolveDriver(userId);
+    const session = await this.workSessions.startSession(driver.id);
+    return {
+      id: session.id,
+      startedAt: session.startedAt.toISOString(),
+      status: session.status,
+    };
+  }
+
+  async endWorkSession(userId: string, reason: 'manual' | 'app_background' | 'logout' = 'manual') {
+    const { driver } = await this.resolveDriver(userId);
+    const session = await this.workSessions.endSession(driver.id, reason);
+    if (!session) {
+      return { ended: false, session: null };
+    }
+    return {
+      ended: true,
+      session: {
+        id: session.id,
+        startedAt: session.startedAt.toISOString(),
+        endedAt: session.endedAt?.toISOString() ?? null,
+        endReason: session.endReason,
+        status: session.status,
+      },
+    };
+  }
+
+  async submitHandoverEquipmentChecklist(
+    userId: string,
+    handoverId: string,
+    dto: SubmitHandoverEquipmentChecklistDto,
+  ) {
+    const { driver } = await this.resolveDriver(userId);
+    const handover = await this.prisma.vehicleHandover.findUnique({
+      where: { id: handoverId },
+      include: handoverInclude,
+    });
+    if (!handover) {
+      throw new NotFoundException('Vehicle handover not found');
+    }
+    if (handover.driverId !== driver.id) {
+      throw new ForbiddenException('You can only update your own handovers');
+    }
+    if (!handover.photoRequired) {
+      throw new BadRequestException('Equipment checklist is only required when photos are required');
+    }
+
+    const updated = await this.prisma.vehicleHandover.update({
+      where: { id: handoverId },
+      data: {
+        equipmentFirstAidKit: dto.firstAidKit,
+        equipmentFireExtinguisher: dto.fireExtinguisher,
+        equipmentStraps: dto.straps,
+        equipmentSafetyVest: dto.safetyVest,
+        equipmentNotes: dto.notes?.trim() || null,
+        equipmentVerifiedAt: new Date(),
+      },
+      include: handoverInclude,
+    });
+
+    await this.maybeCompleteHandover(handoverId);
+    const refreshed = await this.prisma.vehicleHandover.findUnique({
+      where: { id: handoverId },
+      include: handoverInclude,
+    });
+    return this.enrichHandover(refreshed ?? updated);
+  }
+
   private async enrichHandover(
     handover: Prisma.VehicleHandoverGetPayload<{ include: typeof handoverInclude }>,
   ) {
     const photos = await loadHandoverPhotosBySlot(this.prisma, handover.id);
     const missingSlots = missingHandoverPhotoSlots(handover.photoRequired, photos);
+    const equipmentChecklist = this.buildEquipmentChecklist(handover);
+    const photosComplete = allRequiredHandoverPhotosUploaded(handover.photoRequired, photos);
 
     return {
       ...handover,
       handoverDateTime: handover.handoverDateTime.toISOString(),
+      equipmentVerifiedAt: handover.equipmentVerifiedAt?.toISOString() ?? null,
       requiredPhotoSlots: handover.photoRequired ? [...HANDOVER_PHOTO_SLOTS] : [],
       photos,
       missingSlots,
-      photosComplete: allRequiredHandoverPhotosUploaded(handover.photoRequired, photos),
+      photosComplete,
+      equipmentChecklist,
+      handoverComplete:
+        !handover.photoRequired
+        || (photosComplete && equipmentChecklist.complete && handover.status === 'completed'),
     };
   }
 
@@ -641,8 +831,14 @@ export class DriverMobileService {
       where: { id: handoverId },
       data: {
         photoStatus: photosComplete ? 'uploaded' : 'missing',
-        status: 'pending',
       },
+      include: handoverInclude,
+    });
+
+    await this.maybeCompleteHandover(handoverId);
+
+    const refreshedHandover = await this.prisma.vehicleHandover.findUnique({
+      where: { id: handoverId },
       include: handoverInclude,
     });
 
@@ -661,7 +857,7 @@ export class DriverMobileService {
       },
     });
 
-    const enriched = await this.enrichHandover(updatedHandover);
+    const enriched = await this.enrichHandover(refreshedHandover ?? updatedHandover);
 
     return {
       handover: enriched,
@@ -1063,11 +1259,21 @@ export class DriverMobileService {
       where.status = status as IncidentStatus;
     }
 
-    return this.prisma.accident.findMany({
+    const rows = await this.prisma.accident.findMany({
       where,
       include: incidentInclude,
       orderBy: { incidentDateTime: 'desc' },
     });
+
+    const attachmentMap = await loadAccidentAttachmentsByOwner(
+      this.prisma,
+      rows.map((row) => row.id),
+    );
+
+    return rows.map((row) => ({
+      ...row,
+      attachments: attachmentMap.get(row.id) ?? [],
+    }));
   }
 
   async createAccident(userId: string, dto: CreateDriverAccidentDto) {
@@ -1131,7 +1337,73 @@ export class DriverMobileService {
       },
     });
 
-    return created;
+    return {
+      ...created,
+      attachments: [],
+    };
+  }
+
+  async uploadAccidentAttachment(
+    userId: string,
+    accidentId: string,
+    file: { originalname: string; filename: string },
+    documentTypeInput?: string,
+  ) {
+    const { user, driver } = await this.resolveDriver(userId);
+    const accident = await this.prisma.accident.findUnique({
+      where: { id: accidentId },
+      select: { id: true, driverId: true, type: true },
+    });
+    if (!accident) {
+      throw new NotFoundException('Incident not found');
+    }
+    if (accident.driverId !== driver.id) {
+      throw new ForbiddenException('You can only upload files for your own incidents');
+    }
+
+    const existingCount = await this.prisma.document.count({
+      where: {
+        ownerType: 'accident',
+        ownerId: accidentId,
+        status: { not: 'archived' },
+      },
+    });
+    if (existingCount >= MAX_ACCIDENT_ATTACHMENTS) {
+      throw new BadRequestException(`Maximum ${MAX_ACCIDENT_ATTACHMENTS} attachments per incident`);
+    }
+
+    const documentType = normalizeAccidentDocumentType(documentTypeInput);
+    const document = await this.documentsService.createUploadedDocument(
+      {
+        ownerType: 'accident',
+        ownerId: accidentId,
+        documentType,
+        notes: accidentAttachmentNotes(accident.type, documentType),
+      },
+      {
+        originalName: file.originalname,
+        storedFileName: file.filename,
+        fileUrl: this.storage.buildStoredPath('documents', file.filename),
+      },
+      user.id,
+    );
+
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.incident_attachment_uploaded',
+      entityType: 'incident',
+      entityId: accidentId,
+      summary: 'Driver uploaded incident attachment',
+      metadata: { documentId: document.id, fileName: document.fileName, documentType },
+    });
+
+    return {
+      id: document.id,
+      fileName: document.fileName,
+      documentType: document.documentType,
+      download_url: `/driver/documents/${document.id}/download`,
+      attachmentCount: existingCount + 1,
+    };
   }
 
   async listNotifications(userId: string, status?: string) {

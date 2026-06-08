@@ -66,6 +66,7 @@ export default function MessengerPage() {
   const [selectedConversation, setSelectedConversation] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<MessengerMessage[]>([]);
   const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
@@ -81,6 +82,7 @@ export default function MessengerPage() {
   const [driversLoading, setDriversLoading] = useState(false);
   const [newConversationDriverId, setNewConversationDriverId] = useState('');
   const [newConversationSubject, setNewConversationSubject] = useState('');
+  const [newConversationDepartment, setNewConversationDepartment] = useState<string>('dispatch');
   const [creatingConversation, setCreatingConversation] = useState(false);
 
   const messageEndRef = useRef<HTMLDivElement | null>(null);
@@ -129,6 +131,7 @@ export default function MessengerPage() {
       try {
         const list = await messengerApi.listConversations({
           search: search.trim() || undefined,
+          department: departmentFilter === 'all' ? undefined : departmentFilter,
         });
         setConversations(list);
         if (!silent) {
@@ -144,7 +147,7 @@ export default function MessengerPage() {
         if (!silent) setLoadingConversations(false);
       }
     },
-    [search, selectedConversationId, t],
+    [search, departmentFilter, selectedConversationId, t],
   );
 
   const refreshLeftPanel = useCallback(async () => {
@@ -323,6 +326,7 @@ export default function MessengerPage() {
       const created = await messengerApi.createConversation(
         newConversationDriverId,
         newConversationSubject.trim() || undefined,
+        newConversationDepartment,
       );
       setNewConversationOpen(false);
       setNewConversationSubject('');
@@ -405,6 +409,14 @@ export default function MessengerPage() {
                 className="pl-9"
               />
             </div>
+            <Select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
+              <option value="all">{t('messenger.allDepartments')}</option>
+              <option value="dispatch">{t('messenger.dept.dispatch')}</option>
+              <option value="hr">{t('messenger.dept.hr')}</option>
+              <option value="accounting">{t('messenger.dept.accounting')}</option>
+              <option value="maintenance">{t('messenger.dept.maintenance')}</option>
+              <option value="general">{t('messenger.dept.general')}</option>
+            </Select>
           </CardHeader>
           <CardContent className="space-y-2">
             {loadingConversations ? (
@@ -608,6 +620,20 @@ export default function MessengerPage() {
                     {`${driver.first_name} ${driver.last_name}`.trim()}
                   </option>
                 ))}
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{t('messenger.department')}</label>
+              <Select
+                value={newConversationDepartment}
+                onChange={(e) => setNewConversationDepartment(e.target.value)}
+                disabled={creatingConversation}
+              >
+                <option value="dispatch">{t('messenger.dept.dispatch')}</option>
+                <option value="hr">{t('messenger.dept.hr')}</option>
+                <option value="accounting">{t('messenger.dept.accounting')}</option>
+                <option value="maintenance">{t('messenger.dept.maintenance')}</option>
+                <option value="general">{t('messenger.dept.general')}</option>
               </Select>
             </div>
             <div>

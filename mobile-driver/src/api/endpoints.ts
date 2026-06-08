@@ -180,6 +180,42 @@ export const driverApi = {
     );
     return data;
   },
+  async submitHandoverEquipmentChecklist(
+    handoverId: string,
+    payload: {
+      firstAidKit: boolean;
+      fireExtinguisher: boolean;
+      straps: boolean;
+      safetyVest: boolean;
+      notes?: string;
+    },
+  ) {
+    const { data } = await apiClient.post<DriverHandover>(
+      `/driver/vehicle-handovers/${handoverId}/equipment-checklist`,
+      payload,
+    );
+    return data;
+  },
+  async startWorkSession() {
+    const { data } = await apiClient.post<{ id: string; startedAt: string; status: string }>(
+      '/driver/work-sessions/start',
+    );
+    return data;
+  },
+  async endWorkSession(reason: 'manual' | 'app_background' | 'logout' = 'manual') {
+    const { data } = await apiClient.post<{
+      ended: boolean;
+      session: { id: string; startedAt: string; endedAt: string | null; endReason: string | null } | null;
+    }>('/driver/work-sessions/end', { reason });
+    return data;
+  },
+  async getCurrentWorkSession() {
+    const { data } = await apiClient.get<{
+      active: boolean;
+      session: { id: string; startedAt: string; status: string } | null;
+    }>('/driver/work-sessions/current');
+    return data;
+  },
   async listRequests(params?: { status?: string; type?: string }) {
     const { data } = await apiClient.get<DriverRequest[]>('/driver/requests', { params });
     return data;
@@ -268,6 +304,23 @@ export const driverApi = {
     cargoOwner?: string;
   }) {
     const { data } = await apiClient.post<DriverIncident>('/driver/accidents', payload);
+    return data;
+  },
+  async uploadAccidentAttachment(
+    accidentId: string,
+    file: { uri: string; name: string; type: string },
+    documentType?: string,
+  ) {
+    const formData = new FormData();
+    formData.append('file', file as unknown as Blob);
+    const { data } = await apiClient.post<{ id: string; fileName: string; download_url: string | null }>(
+      `/driver/accidents/${accidentId}/attachments`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params: documentType ? { documentType } : undefined,
+      },
+    );
     return data;
   },
   async listNotifications(status?: string) {

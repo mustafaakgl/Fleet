@@ -26,6 +26,11 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import {
+  CreateVehicleEquipmentDto,
+  UpdateVehicleEquipmentDto,
+} from './dto/vehicle-equipment.dto';
+import { VehicleEquipmentService } from './vehicle-equipment.service';
 import { VehiclesService } from './vehicles.service';
 import {
   UploadedVehiclePhotoFile,
@@ -37,7 +42,10 @@ import {
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)
 export class VehiclesController {
-  constructor(private readonly vehiclesService: VehiclesService) {}
+  constructor(
+    private readonly vehiclesService: VehiclesService,
+    private readonly vehicleEquipmentService: VehicleEquipmentService,
+  ) {}
 
   @Get()
   listVehicles(
@@ -142,5 +150,36 @@ export class VehiclesController {
   @Get(':id/incidents')
   getIncidents(@Param('id') id: string) {
     return this.vehiclesService.getIncidents(id);
+  }
+
+  @Get(':id/equipment')
+  listEquipment(@Param('id') id: string, @Query('status') status?: 'active' | 'retired') {
+    return this.vehicleEquipmentService.listByVehicle(id, status);
+  }
+
+  @Post(':id/equipment')
+  @RequiresWrite()
+  @HttpCode(HttpStatus.CREATED)
+  createEquipment(@Param('id') id: string, @Body() dto: CreateVehicleEquipmentDto) {
+    return this.vehicleEquipmentService.create(id, dto);
+  }
+
+  @Patch(':vehicleId/equipment/:equipmentId')
+  @RequiresWrite()
+  updateEquipment(
+    @Param('vehicleId') vehicleId: string,
+    @Param('equipmentId') equipmentId: string,
+    @Body() dto: UpdateVehicleEquipmentDto,
+  ) {
+    return this.vehicleEquipmentService.update(vehicleId, equipmentId, dto);
+  }
+
+  @Delete(':vehicleId/equipment/:equipmentId')
+  @RequiresWrite()
+  removeEquipment(
+    @Param('vehicleId') vehicleId: string,
+    @Param('equipmentId') equipmentId: string,
+  ) {
+    return this.vehicleEquipmentService.remove(vehicleId, equipmentId);
   }
 }

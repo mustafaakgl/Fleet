@@ -40,6 +40,7 @@ import { QueueModule } from './queue/queue.module';
 import { BillingModule } from './billing/billing.module';
 import { FleetOpsModule } from './fleet-ops/fleet-ops.module';
 import { TenantModule } from './tenant/tenant.module';
+import { WorkSessionsModule } from './work-sessions/work-sessions.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { StorageModule } from './storage/storage.module';
@@ -95,6 +96,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     BillingModule,
     FleetOpsModule,
     TenantModule,
+    WorkSessionsModule,
     HealthModule,
     MetricsModule,
     StorageModule,

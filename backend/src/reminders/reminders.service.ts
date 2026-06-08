@@ -341,6 +341,64 @@ export class RemindersService {
     });
   }
 
+  private async notifyDriverForDocumentExpiry(item: {
+    targetId: string;
+    reminderType: ReminderType;
+    dueDate: Date;
+    notifyBeforeDays: number;
+    priority: NotificationPriority;
+  }) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: item.targetId },
+      select: {
+        userId: true,
+        firstName: true,
+        lastName: true,
+        user: { select: { language: true } },
+      },
+    });
+
+    if (!driver?.userId) {
+      return;
+    }
+
+    const dueDate = this.normalizeDate(item.dueDate).toISOString().slice(0, 10);
+    const isLicense = item.reminderType === 'license_expiry';
+    const lang = driver.user?.language?.toLowerCase() ?? 'de';
+
+    const copyByLang: Record<string, { title: string; message: string }> = {
+      de: {
+        title: isLicense ? 'Führerschein läuft ab' : 'Reisepass läuft ab',
+        message: isLicense
+          ? `Ihr Führerschein läuft am ${dueDate} ab (${item.notifyBeforeDays} Tage Vorlauf). Bitte rechtzeitig verlängern.`
+          : `Ihr Reisepass läuft am ${dueDate} ab (${item.notifyBeforeDays} Tage Vorlauf). Bitte rechtzeitig verlängern.`,
+      },
+      en: {
+        title: isLicense ? 'Driving license expiring' : 'Passport expiring',
+        message: isLicense
+          ? `Your driving license expires on ${dueDate} (${item.notifyBeforeDays}-day notice). Please renew in time.`
+          : `Your passport expires on ${dueDate} (${item.notifyBeforeDays}-day notice). Please renew in time.`,
+      },
+      tr: {
+        title: isLicense ? 'Ehliyet süresi doluyor' : 'Pasaport süresi doluyor',
+        message: isLicense
+          ? `Ehliyetiniz ${dueDate} tarihinde sona eriyor (${item.notifyBeforeDays} gün önceden bildirim). Lütfen zamanında yenileyin.`
+          : `Pasaportunuz ${dueDate} tarihinde sona eriyor (${item.notifyBeforeDays} gün önceden bildirim). Lütfen zamanında yenileyin.`,
+      },
+    };
+
+    const copy = copyByLang[lang] ?? copyByLang.de;
+
+    await this.notificationsService.notifyUsers([driver.userId], {
+      title: copy.title,
+      message: copy.message,
+      type: 'reminder',
+      priority: item.priority,
+      relatedEntityType: 'driver',
+      relatedEntityId: item.targetId,
+    });
+  }
+
   async generateReminders(actorUserId?: string) {
     const dueDrivers = await this.getDueDrivers();
     const dueVehicles = await this.getDueVehicles();
@@ -371,6 +429,13 @@ export class RemindersService {
           relatedEntityType: item.targetType,
           relatedEntityId: item.targetId,
         });
+
+        if (
+          item.targetType === 'driver'
+          && (item.reminderType === 'license_expiry' || item.reminderType === 'passport_expiry')
+        ) {
+          await this.notifyDriverForDocumentExpiry(item);
+        }
       }
     }
 
