@@ -10,7 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DocumentActionsMenu } from '@/components/documents/DocumentActionsMenu';
+import { DocumentImportDialog } from '@/components/documents/DocumentImportDialog';
 import { documentsApi, driversApi, vehiclesApi, companiesApi, type MissingDocumentRow } from '@/lib/api';
+import { getUser } from '@/lib/auth';
+import { downloadDocumentsCsv } from '@/lib/documents-csv';
+import { canImportCsv } from '@/lib/permissions';
 import type { Document, Driver, Vehicle, Company } from '@/lib/types';
 import {
   Dialog,
@@ -22,7 +27,18 @@ import {
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { documentHasFile, openAuthenticatedDocument } from '@/lib/file-access';
-import { formatDate } from '@/lib/utils';
+import {
+  FLEET_LINK_ACTION,
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW_CLICKABLE,
+} from '@/lib/fleet-table';
+import { cn, formatDate } from '@/lib/utils';
 
 const OWNER_TYPES: Array<Document['ownerType']> = [
   'driver',
@@ -40,7 +56,7 @@ const DOCUMENT_TYPES_BY_OWNER: Record<Document['ownerType'], string[]> = {
   request: ['Request Attachment'],
   accident: ['Accident Report'],
   cargo_damage: ['Cargo Damage Report'],
-  service_record: ['Receipt'],
+  service_record: ['Receipt', 'Photo', 'Service Document'],
 };
 
 type DocumentRow =
@@ -92,6 +108,10 @@ export default function DocumentsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<DrawerMode>('add');
   const [formDocument, setFormDocument] = useState<Document | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const user = getUser();
+  const canImport = canImportCsv(user?.role ?? 'customer');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -206,6 +226,18 @@ export default function DocumentsPage() {
     } catch {
       return false;
     }
+  }
+
+  async function openDocument(doc: Document) {
+    const opened = await openFileIfAvailable(doc);
+    if (!opened) {
+      openDetail(doc);
+    }
+  }
+
+  function handleExport() {
+    if (documents.length === 0) return;
+    downloadDocumentsCsv(documents, ownerNameMap);
   }
 
   function openForm(mode: DrawerMode, doc?: Document, missingRow?: MissingDocumentRow) {
@@ -327,11 +359,24 @@ export default function DocumentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">{t('documents.title')}</h1>
         </div>
 
-        <Button onClick={() => openForm('add')}>
-          <Plus className="mr-1 h-4 w-4" />
-          {t('documents.addDocument')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <DocumentActionsMenu
+            canImport={canImport}
+            onImport={() => setImportOpen(true)}
+            onExport={handleExport}
+          />
+          <Button onClick={() => openForm('add')}>
+            <Plus className="mr-1 h-4 w-4" />
+            {t('documents.addDocument')}
+          </Button>
+        </div>
       </div>
+
+      <DocumentImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => void reload()}
+      />
 
       <Card>
         <CardHeader>
@@ -384,7 +429,7 @@ export default function DocumentsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={FLEET_LIST_CARD}>
         {loading ? (
           <div className="p-6 text-center text-sm text-gray-500">Loading...</div>
         ) : error ? (
@@ -409,37 +454,37 @@ export default function DocumentsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('documents.ownerType')}</TableHead>
-                  <TableHead>{t('documents.ownerName')}</TableHead>
-                  <TableHead>{t('documents.documentType')}</TableHead>
-                  <TableHead>{t('documents.fileName')}</TableHead>
-                  <TableHead>{t('documents.expiryDate')}</TableHead>
-                  <TableHead>{t('common.status')}</TableHead>
-                  <TableHead>{t('documents.uploadedAt')}</TableHead>
-                  <TableHead>{t('common.actions')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('documents.ownerType')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('documents.ownerName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('documents.documentType')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('documents.fileName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('documents.expiryDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('common.status')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('documents.uploadedAt')}</TableHead>
+                  <TableHead className={cn(FLEET_TABLE_HEAD, 'w-36')} />
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {filtered.map((entry) => {
                   if (entry.kind === 'missing') {
                     return (
                       <TableRow key={`missing-${entry.row.owner_type}-${entry.row.owner_id}-${entry.row.document_type}`}>
-                        <TableCell className="capitalize">{entry.row.owner_type}</TableCell>
-                        <TableCell>{entry.row.owner_name}</TableCell>
-                        <TableCell>{entry.row.document_type}</TableCell>
-                        <TableCell>—</TableCell>
-                        <TableCell>—</TableCell>
-                        <TableCell>
+                        <TableCell className={cn(FLEET_TABLE_CELL, 'capitalize')}>{entry.row.owner_type}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{entry.row.owner_name}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{entry.row.document_type}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>—</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>—</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
                           <Badge className={badgeClass('missing')}>missing</Badge>
                         </TableCell>
-                        <TableCell>—</TableCell>
-                        <TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>—</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
                           <button
                             type="button"
-                            className="text-xs font-medium text-blue-600 hover:underline"
+                            className={FLEET_LINK_ACTION}
                             onClick={() => openForm('add', undefined, entry.row)}
                           >
                             Upload
@@ -450,26 +495,28 @@ export default function DocumentsPage() {
                   }
                   const doc = entry.doc;
                   return (
-                    <TableRow key={doc.id}>
-                      <TableCell className="capitalize">{doc.ownerType}</TableCell>
-                      <TableCell>{ownerName(doc.ownerType, doc.ownerId)}</TableCell>
-                      <TableCell>{doc.documentType}</TableCell>
-                      <TableCell>{doc.fileName}</TableCell>
-                      <TableCell>{formatDate(doc.expiryDate)}</TableCell>
-                      <TableCell>
+                    <TableRow
+                      key={doc.id}
+                      className={FLEET_TABLE_ROW_CLICKABLE}
+                      onClick={() => void openDocument(doc)}
+                    >
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'capitalize')}>{doc.ownerType}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>
+                        {ownerName(doc.ownerType, doc.ownerId)}
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{doc.documentType}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>{doc.fileName}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDate(doc.expiryDate)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <Badge className={badgeClass(doc.status)}>{doc.status}</Badge>
                       </TableCell>
-                      <TableCell>{formatDate(doc.uploadedAt)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2 text-xs">
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDate(doc.uploadedAt)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL} onClick={(event) => event.stopPropagation()}>
+                        <div className="flex flex-wrap gap-2 text-[13px]">
                           <button
                             type="button"
-                            className="font-medium text-blue-600 hover:underline"
-                            onClick={() => {
-                              void openFileIfAvailable(doc).then((opened) => {
-                                if (!opened) openDetail(doc);
-                              });
-                            }}
+                            className={FLEET_LINK_ACTION}
+                            onClick={() => void openDocument(doc)}
                           >
                             Open
                           </button>

@@ -796,6 +796,117 @@ export class DashboardService {
     return routineKeywords.some((keyword) => normalized.includes(keyword));
   }
 
+  private readNotesField(notes: string | null | undefined, key: string): string | null {
+    if (!notes?.trim()) return null;
+    const pattern = new RegExp(`^${key}:\\s*(.+)$`, 'im');
+    const match = notes.match(pattern);
+    return match?.[1]?.trim() ?? null;
+  }
+
+  private getRepairPriorityClass(
+    serviceType: string,
+    notes?: string | null,
+  ): 'scheduled' | 'non_scheduled' | 'emergency' | 'none' {
+    const fromNotes = this.readNotesField(notes, 'Priority');
+    if (
+      fromNotes === 'scheduled' ||
+      fromNotes === 'non_scheduled' ||
+      fromNotes === 'emergency' ||
+      fromNotes === 'none'
+    ) {
+      return fromNotes;
+    }
+
+    const normalized = serviceType.trim().toLowerCase();
+    if (!normalized) return 'none';
+
+    const emergencyKeywords = [
+      'emergency',
+      'breakdown',
+      'notfall',
+      'panne',
+      'urgent',
+      'dringend',
+      'unfall',
+      'defekt',
+      'ausfall',
+    ];
+    if (emergencyKeywords.some((keyword) => normalized.includes(keyword))) {
+      return 'emergency';
+    }
+    if (this.isRoutineServiceType(serviceType)) return 'scheduled';
+    return 'non_scheduled';
+  }
+
+  async getRepairPriorityTrends(date: Date) {
+    const end = this.normalizeDate(date);
+    const monthKeys = this.buildMonthlySeries(6, end);
+    const monthStart = new Date(end.getFullYear(), end.getMonth() - 5, 1);
+    const dayAfterEnd = new Date(end);
+    dayAfterEnd.setDate(dayAfterEnd.getDate() + 1);
+
+    const db = this.prisma as any;
+    const records = await db.serviceRecord.findMany({
+      where: {
+        date: { gte: monthStart, lt: dayAfterEnd },
+      },
+      select: {
+        date: true,
+        serviceType: true,
+        notes: true,
+      },
+    });
+
+    type PriorityCounts = {
+      scheduled: number;
+      non_scheduled: number;
+      emergency: number;
+      none: number;
+    };
+
+    const countsByMonth = new Map<string, PriorityCounts>(
+      monthKeys.map((key) => [
+        key,
+        { scheduled: 0, non_scheduled: 0, emergency: 0, none: 0 },
+      ]),
+    );
+
+    for (const row of records) {
+      const monthKey = this.toMonthKey(new Date(row.date));
+      const bucket = countsByMonth.get(monthKey);
+      if (!bucket) continue;
+      const priority = this.getRepairPriorityClass(
+        String(row.serviceType ?? ''),
+        row.notes,
+      );
+      bucket[priority] += 1;
+    }
+
+    const toPercent = (value: number, total: number) =>
+      total === 0 ? 0 : Math.round((value / total) * 1000) / 10;
+
+    return monthKeys.map((label) => {
+      const counts = countsByMonth.get(label) ?? {
+        scheduled: 0,
+        non_scheduled: 0,
+        emergency: 0,
+        none: 0,
+      };
+      const total =
+        counts.scheduled + counts.non_scheduled + counts.emergency + counts.none;
+
+      return {
+        label,
+        shortLabel: this.formatMonthShortLabel(label),
+        scheduled: toPercent(counts.scheduled, total),
+        nonScheduled: toPercent(counts.non_scheduled, total),
+        emergency: toPercent(counts.emergency, total),
+        none: toPercent(counts.none, total),
+        total,
+      };
+    });
+  }
+
   private formatMonthShortLabel(monthKey: string): string {
     const [yearRaw, monthRaw] = monthKey.split('-');
     const year = Number(yearRaw);
@@ -892,6 +1003,7 @@ export class DashboardService {
       chartAnalytics,
       fleetWidgets,
       costAnalytics,
+      priorityTrends,
     ] = await Promise.all([
       this.getKpis(selectedDate),
       includeCriticalAlerts ? this.getCriticalAlerts(selectedDate) : Promise.resolve([]),
@@ -905,6 +1017,7 @@ export class DashboardService {
       this.canViewFinancials(currentUserRole)
         ? this.getCostAnalytics(selectedDate)
         : Promise.resolve(null),
+      this.getRepairPriorityTrends(selectedDate),
     ]);
 
     const dashboardData = {
@@ -918,6 +1031,7 @@ export class DashboardService {
       chartAnalytics,
       fleetWidgets,
       costAnalytics,
+      priorityTrends,
     };
 
     return maskFinancialFields(dashboardData, currentUserRole);

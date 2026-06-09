@@ -5,6 +5,8 @@ import { Printer, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFleetData } from '@/context/FleetDataContext';
 import { createAntraegeFromRequests } from '@/lib/request-antraege';
+import { FLEET_LIST_CARD, FLEET_RAW_TH, FLEET_RAW_THEAD } from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 function statusClass(value: string) {
   if (value === 'angenommen') return 'bg-emerald-100 text-emerald-700';
@@ -85,7 +87,7 @@ export function Antragsverwaltung() {
 
   return (
     <div className="space-y-4 print:space-y-2" id="antragsverwaltung-print">
-      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+      <div className="rounded-lg border border-[#d4e3f2] bg-[#e8f0f8] px-4 py-3 text-xs text-[#0b2342]">
         {t('antrag.banner')}
       </div>
 
@@ -142,24 +144,24 @@ export function Antragsverwaltung() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         <div className="overflow-x-auto">
-          <table className="min-w-[1960px] border-collapse text-[11px]">
-            <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+          <table className="min-w-[1960px] border-collapse text-[13px]">
+            <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAntragsdatum')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAntragsart')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colSonstige')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAntragsteller')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colKommentar')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colBearbeitungsdatum')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colBearbeitetVon')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colVertretung')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colAnmerkungen')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colStartdatum')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colEnddatum')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colDauer')}</th>
-                <th className="border border-slate-300 px-2 py-2">{t('antrag.colStatus')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colAntragsdatum')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colAntragsart')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colSonstige')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colAntragsteller')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colKommentar')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colBearbeitungsdatum')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colBearbeitetVon')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colVertretung')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colAnmerkungen')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colStartdatum')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colEnddatum')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colDauer')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border border-slate-200')}>{t('antrag.colStatus')}</th>
               </tr>
               <tr className="bg-white">
                 <th className="border border-slate-300 p-1"><input value={filters.antragsdatum} onChange={(e) => setFilters((cur) => ({ ...cur, antragsdatum: e.target.value }))} className="h-6 w-full rounded border border-slate-300 px-1 text-[10px]" /></th>
@@ -187,7 +189,7 @@ export function Antragsverwaltung() {
                   const isSelected = selectedRowId === row.id;
                   const isCancelled = row.status === 'storniert';
                   const baseRowClass = isSelected
-                    ? 'bg-blue-50'
+                    ? 'bg-[#e8f0f8]'
                     : index % 2 === 0
                     ? 'bg-white'
                     : 'bg-slate-50/60';
@@ -197,28 +199,28 @@ export function Antragsverwaltung() {
                     <tr
                       key={row.id}
                       onClick={() => setSelectedRowId(row.id)}
-                      className={`${baseRowClass} hover:bg-blue-50/60 ${cancelledClass}`}
+                      className={`${baseRowClass} hover:bg-[#e8f0f8]/60 ${cancelledClass}`}
                     >
-                      <td className="border border-slate-300 px-2 py-1.5">{row.antragsdatum}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.antragsart}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.sonstigeAbwesenheit ?? '-'}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">
+                      <td className="border border-slate-200 px-3 py-2">{row.antragsdatum}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.antragsart}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.sonstigeAbwesenheit ?? '-'}</td>
+                      <td className="border border-slate-200 px-3 py-2">
                         <div>{row.driverName}</div>
                         {row.source === 'request_auto' && (
-                          <span className="inline-flex rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <span className="inline-flex rounded border border-[#d4e3f2] bg-[#e8f0f8] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a4d7a]">
                             {t('antrag.autoFromRequest')}
                           </span>
                         )}
                       </td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.kommentar}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.bearbeitungsdatum}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.bearbeitetVon}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.vertretung}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.anmerkungen}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.dateFrom}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.dateTo}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{row.dauer}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">
+                      <td className="border border-slate-200 px-3 py-2">{row.kommentar}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.bearbeitungsdatum}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.bearbeitetVon}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.vertretung}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.anmerkungen}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.dateFrom}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.dateTo}</td>
+                      <td className="border border-slate-200 px-3 py-2">{row.dauer}</td>
+                      <td className="border border-slate-200 px-3 py-2">
                         <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${statusClass(row.status)}`}>
                           {statusLabel(row.status)}
                         </span>

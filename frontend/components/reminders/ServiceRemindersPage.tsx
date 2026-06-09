@@ -34,6 +34,15 @@ import {
 } from '@/lib/service-reminders';
 import type { Vehicle } from '@/lib/types';
 import { vehicleAbbreviation } from '@/lib/timeline-utils';
+import {
+  FLEET_LINK_ACTION,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TH,
+  FLEET_RAW_TH_CHECKBOX,
+  FLEET_RAW_THEAD,
+} from '@/lib/fleet-table';
 import { cn, formatDate } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
@@ -123,8 +132,8 @@ export function ServiceRemindersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [vehicleFilter, setVehicleFilter] = useState('');
-  const [taskFilter, setTaskFilter] = useState('');
+  const [vehicleFilter, setVehicleFilter] = useState(searchParams.get('vehicle_id') ?? '');
+  const [taskFilter, setTaskFilter] = useState(searchParams.get('task') ?? '');
   const [page, setPage] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedRow, setSelectedRow] = useState<ServiceReminderRow | null>(null);
@@ -389,25 +398,25 @@ export function ServiceRemindersPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <table className={FLEET_RAW_TABLE}>
+                <thead className={FLEET_RAW_THEAD}>
                   <tr>
-                    <th className="w-10 px-4 py-3">
+                    <th className={FLEET_RAW_TH_CHECKBOX}>
                       <input type="checkbox" aria-label={t('expenseHistory.selectAll')} />
                     </th>
-                    <th className="px-4 py-3">{t('serviceReminders.colVehicle')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colServiceTask')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colStatus')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colNextDue')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colWorkOrder')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colLastCompleted')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colCompliance')}</th>
-                    <th className="px-4 py-3">{t('expenseHistory.colWatchers')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colAssignee')}</th>
-                    <th className="px-4 py-3">{t('serviceReminders.colAssignedAt')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colVehicle')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colServiceTask')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colStatus')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colNextDue')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colWorkOrder')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colLastCompleted')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colCompliance')}</th>
+                    <th className={FLEET_RAW_TH}>{t('expenseHistory.colWatchers')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colAssignee')}</th>
+                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colAssignedAt')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className={FLEET_RAW_TBODY}>
                   {pageRows.map((row) => {
                     const badge = vehicleAbbreviation(row.vehicleBrand, row.vehicleModel, row.vehiclePlate);
                     const isSelected = selectedRow?.id === row.id;
@@ -420,7 +429,7 @@ export function ServiceRemindersPage() {
                         )}
                         onClick={() => setSelectedRow(row)}
                       >
-                        <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                        <td className={FLEET_RAW_TD} onClick={(event) => event.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={selectedIds.has(row.id)}
@@ -434,7 +443,7 @@ export function ServiceRemindersPage() {
                             }
                           />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className={FLEET_RAW_TD}>
                           <div className="flex items-center gap-2">
                             <span className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded bg-slate-100 px-1.5 text-[10px] font-bold uppercase text-slate-600">
                               {badge}
@@ -443,11 +452,11 @@ export function ServiceRemindersPage() {
                             <span className="font-semibold text-blue-700">{row.vehiclePlate}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className={FLEET_RAW_TD}>
                           <span className="font-medium text-blue-700">{row.serviceTask}</span>
-                          <p className="mt-0.5 text-xs text-slate-500">{row.intervalLabel}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">{row.intervalLabel}</p>
                         </td>
-                        <td className={cn('px-4 py-3 font-medium', statusClass(row.status))}>
+                        <td className={cn(FLEET_RAW_TD, 'font-medium', statusClass(row.status))}>
                           <span className="inline-flex items-center gap-1.5">
                             <span
                               className={cn(
@@ -461,7 +470,7 @@ export function ServiceRemindersPage() {
                             {statusLabel(row.status, t)}
                           </span>
                         </td>
-                        <td className={cn('px-4 py-3', statusClass(row.status))}>
+                        <td className={cn(FLEET_RAW_TD, statusClass(row.status))}>
                           <div>{formatRelativeDueDate(row.nextDueDate, i18n.language)}</div>
                           {row.remainingKm != null ? (
                             <div className="text-xs">
@@ -473,8 +482,8 @@ export function ServiceRemindersPage() {
                             <div className="text-xs">{formatDate(row.nextDueDate)}</div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-400">—</td>
-                        <td className="px-4 py-3">
+                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
+                        <td className={FLEET_RAW_TD}>
                           {row.lastCompletedDate ? (
                             <>
                               <div>{formatDate(row.lastCompletedDate)}</div>
@@ -488,9 +497,9 @@ export function ServiceRemindersPage() {
                             '—'
                           )}
                         </td>
-                        <td className="px-4 py-3 font-medium">{row.compliancePercent}%</td>
-                        <td className="px-4 py-3 text-slate-400">—</td>
-                        <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                        <td className={cn(FLEET_RAW_TD, 'font-medium')}>{row.compliancePercent}%</td>
+                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
+                        <td className={FLEET_RAW_TD} onClick={(event) => event.stopPropagation()}>
                           {row.reminderId ? (
                             <Button type="button" variant="outline" size="sm" onClick={() => void handleResolve(row)}>
                               {t('reminders.resolve')}
@@ -498,13 +507,13 @@ export function ServiceRemindersPage() {
                           ) : (
                             <Link
                               href={`/service-history?vehicle_id=${row.vehicleId}`}
-                              className="text-sm font-medium text-blue-700 hover:underline"
+                              className={FLEET_LINK_ACTION}
                             >
                               {t('serviceReminders.logService')}
                             </Link>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-400">—</td>
+                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
                       </tr>
                     );
                   })}

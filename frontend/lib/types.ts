@@ -101,6 +101,7 @@ export type RiskLevel = 'green' | 'yellow' | 'red';
 
 export interface Driver {
   id: string;
+  employee_number?: string;
   first_name: string;
   last_name: string;
   accident_count: number;
@@ -142,6 +143,8 @@ export interface Vehicle {
   plate_number: string;
   brand: string;
   model: string;
+  vin?: string;
+  internal_code?: string;
   year?: number;
   status: VehicleStatus;
   tuv_expiry_date?: string;
@@ -660,6 +663,16 @@ export interface DashboardCostAnalytics {
   topRepairReasons: DashboardRepairReason[];
 }
 
+export interface DashboardPriorityTrendPoint {
+  label: string;
+  shortLabel: string;
+  scheduled: number;
+  nonScheduled: number;
+  emergency: number;
+  none: number;
+  total: number;
+}
+
 export interface DashboardSummary {
   kpis: DashboardKpis;
   criticalAlerts: DashboardCriticalAlert[];
@@ -671,6 +684,7 @@ export interface DashboardSummary {
   chartAnalytics?: DashboardChartAnalytics | null;
   fleetWidgets?: DashboardFleetWidgets;
   costAnalytics?: DashboardCostAnalytics | null;
+  priorityTrends?: DashboardPriorityTrendPoint[];
 }
 
 // ─── Messenger ─────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import type { FleetAssignment } from '@/context/FleetDataContext';
+import { BRAND_BADGE_PLANNED, BRAND_COMPANY_HEADER_TONES } from '@/lib/brand-colors';
 
 export interface BoardCompany {
   key: string;
@@ -16,26 +17,30 @@ export interface CompanyAssignmentGroup {
   rows: FleetAssignment[];
 }
 
-export const BOARD_COMPANIES: BoardCompany[] = [
-  { key: 'dhl', label: 'DHL', aliases: ['dhl'], headerClass: 'bg-yellow-50 text-yellow-900' },
-  { key: 'krage', label: 'Krage', aliases: ['krage'], headerClass: 'bg-blue-50 text-blue-800' },
-  { key: 'ups', label: 'UPS', aliases: ['ups'], headerClass: 'bg-amber-50 text-amber-800' },
-  { key: 'schnellecke', label: 'Schnellecke', aliases: ['schnellecke'], headerClass: 'bg-cyan-50 text-cyan-800' },
-  { key: 'kunzendorf', label: 'Kunzendorf', aliases: ['kunzendorf'], headerClass: 'bg-violet-50 text-violet-800' },
-  { key: 'raben', label: 'Raben', aliases: ['raben', 'raben trans'], headerClass: 'bg-indigo-50 text-indigo-800' },
-  { key: 'weliver', label: 'Weliver', aliases: ['weliver'], headerClass: 'bg-lime-50 text-lime-800' },
-  { key: 'penny', label: 'Penny', aliases: ['penny'], headerClass: 'bg-yellow-50 text-yellow-800' },
-  { key: 'weidler', label: 'Weidler', aliases: ['weidler'], headerClass: 'bg-slate-100 text-slate-800' },
+const boardCompanyDefs: Array<Omit<BoardCompany, 'headerClass'>> = [
+  { key: 'dhl', label: 'DHL', aliases: ['dhl'] },
+  { key: 'krage', label: 'Krage', aliases: ['krage'] },
+  { key: 'ups', label: 'UPS', aliases: ['ups'] },
+  { key: 'schnellecke', label: 'Schnellecke', aliases: ['schnellecke'] },
+  { key: 'kunzendorf', label: 'Kunzendorf', aliases: ['kunzendorf'] },
+  { key: 'raben', label: 'Raben', aliases: ['raben', 'raben trans'] },
+  { key: 'weliver', label: 'Weliver', aliases: ['weliver'] },
+  { key: 'penny', label: 'Penny', aliases: ['penny'] },
+  { key: 'weidler', label: 'Weidler', aliases: ['weidler'] },
   {
     key: 'go-immanuel-klinikum',
     label: 'GO-Immanuel Klinikum',
     aliases: ['go-immanuel klinikum', 'go immanuel klinikum', 'immanuel klinikum', 'go'],
-    headerClass: 'bg-emerald-50 text-emerald-800',
   },
-  { key: 'securitas', label: 'Securitas', aliases: ['securitas'], headerClass: 'bg-rose-50 text-rose-800' },
-  { key: 'amazon', label: 'Amazon', aliases: ['amazon'], headerClass: 'bg-orange-50 text-orange-800' },
-  { key: 'hermes', label: 'Hermes', aliases: ['hermes'], headerClass: 'bg-teal-50 text-teal-800' },
+  { key: 'securitas', label: 'Securitas', aliases: ['securitas'] },
+  { key: 'amazon', label: 'Amazon', aliases: ['amazon'] },
+  { key: 'hermes', label: 'Hermes', aliases: ['hermes'] },
 ];
+
+export const BOARD_COMPANIES: BoardCompany[] = boardCompanyDefs.map((company, index) => ({
+  ...company,
+  headerClass: BRAND_COMPANY_HEADER_TONES[index % BRAND_COMPANY_HEADER_TONES.length],
+}));
 
 export const TRAILER_BY_VEHICLE: Record<string, string> = {
   N165: '1734',
@@ -107,7 +112,7 @@ export function groupAssignmentsByCompany(assignments: FleetAssignment[]): Compa
 }
 
 export function assignmentStatusBadge(status: string) {
-  if (status === 'Planned') return 'bg-blue-50 text-blue-700 border-blue-200';
+  if (status === 'Planned') return BRAND_BADGE_PLANNED;
   if (status === 'In Progress') return 'bg-amber-50 text-amber-700 border-amber-200';
   return 'bg-slate-50 text-slate-700 border-slate-200';
 }

@@ -1,5 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
+import { cn } from '@/lib/utils';
 import type { EinsatzplanFilters } from './types';
 
 interface FilterBarProps {
@@ -19,27 +21,30 @@ export function FilterBar({ filters, companies, vehicles, onChange }: FilterBarP
             <button
               type="button"
               onClick={() => onChange({ ...filters, dateMode: 'today' })}
-              className={`rounded-md px-3 py-2 text-xs font-medium ${
-                filters.dateMode === 'today' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-              }`}
+              className={cn(
+                'rounded-md px-3 py-2 text-xs font-medium',
+                filters.dateMode === 'today' ? BRAND_BTN_PRIMARY : 'bg-gray-100 text-gray-700',
+              )}
             >
               Today
             </button>
             <button
               type="button"
               onClick={() => onChange({ ...filters, dateMode: 'tomorrow' })}
-              className={`rounded-md px-3 py-2 text-xs font-medium ${
-                filters.dateMode === 'tomorrow' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-              }`}
+              className={cn(
+                'rounded-md px-3 py-2 text-xs font-medium',
+                filters.dateMode === 'tomorrow' ? BRAND_BTN_PRIMARY : 'bg-gray-100 text-gray-700',
+              )}
             >
               Tomorrow
             </button>
             <button
               type="button"
               onClick={() => onChange({ ...filters, dateMode: 'custom' })}
-              className={`rounded-md px-3 py-2 text-xs font-medium ${
-                filters.dateMode === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-              }`}
+              className={cn(
+                'rounded-md px-3 py-2 text-xs font-medium',
+                filters.dateMode === 'custom' ? BRAND_BTN_PRIMARY : 'bg-gray-100 text-gray-700',
+              )}
             >
               Custom
             </button>

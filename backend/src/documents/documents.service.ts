@@ -11,10 +11,17 @@ import { OPERATIONAL_ROLES, type UserRole } from '../common/utils/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { mimeTypeFromFileName } from '../storage/file-path.util';
 import { ObjectStorageService } from '../storage/object-storage.service';
+import { parseCsv, pickField } from '../import/csv.util';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { StorageService } from '../storage/storage.service';
 import type { Readable } from 'node:stream';
+
+type DocumentImportResult = {
+  created: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+};
 
 type DocumentOwnerType =
   | 'driver'
@@ -839,5 +846,165 @@ export class DocumentsService {
     }
 
     return missing;
+  }
+
+  async importFromCsv(fileContent: string, actorUserId?: string): Promise<DocumentImportResult> {
+    const { rows } = parseCsv(fileContent);
+    if (rows.length === 0) {
+      throw new BadRequestException('CSV file is empty or has no data rows');
+    }
+
+    const result: DocumentImportResult = { created: 0, skipped: 0, errors: [] };
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const rowNumber = index + 2;
+      const row = rows[index];
+
+      try {
+        const ownerTypeRaw = pickField(row, ['owner_type', 'ownertype', 'owner']);
+        const ownerRef =
+          pickField(row, ['owner_ref', 'ownerref', 'owner_name', 'ownername', 'plate_number', 'plate']) ||
+          pickField(row, ['owner_id', 'ownerid']);
+        const documentType = pickField(row, ['document_type', 'documenttype', 'type']);
+        const fileName = pickField(row, ['file_name', 'filename', 'file']);
+
+        if (!ownerTypeRaw || !ownerRef || !documentType || !fileName) {
+          result.errors.push({
+            row: rowNumber,
+            message: 'owner_type, owner_ref, document_type, and file_name are required',
+          });
+          continue;
+        }
+
+        const ownerType = this.ensureOwnerType(ownerTypeRaw);
+        const ownerId = await this.resolveDocumentOwnerId(ownerType, ownerRef);
+        if (!ownerId) {
+          result.errors.push({
+            row: rowNumber,
+            message: `Owner not found for ${ownerType}: ${ownerRef}`,
+          });
+          continue;
+        }
+
+        const db = this.prisma as any;
+        const existing = await db.document.findFirst({
+          where: {
+            ownerType,
+            ownerId,
+            documentType,
+            fileName,
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          result.skipped += 1;
+          continue;
+        }
+
+        const expiryDate = pickField(row, ['expiry_date', 'expirydate', 'expiry']) || undefined;
+        const notes = pickField(row, ['notes', 'notizen']) || undefined;
+
+        await this.createDocument(
+          {
+            ownerType,
+            ownerId,
+            documentType,
+            fileName,
+            expiryDate,
+            notes,
+          },
+          actorUserId,
+        );
+        result.created += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Import failed';
+        result.errors.push({ row: rowNumber, message });
+      }
+    }
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'import.documents_csv',
+      entityType: 'import',
+      summary: 'Documents CSV import completed',
+      metadata: {
+        created: result.created,
+        skipped: result.skipped,
+        error_count: result.errors.length,
+      },
+    });
+
+    return result;
+  }
+
+  private async resolveDocumentOwnerId(
+    ownerType: DocumentOwnerType,
+    ownerRef: string,
+  ): Promise<string | null> {
+    const ref = ownerRef.trim();
+    if (!ref) return null;
+
+    if (ownerType === 'driver') {
+      const byEmployeeOrEmail = await this.prisma.driver.findFirst({
+        where: {
+          OR: [
+            { employeeNumber: { equals: ref, mode: 'insensitive' } },
+            { email: { equals: ref, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (byEmployeeOrEmail) return byEmployeeOrEmail.id;
+
+      const parts = ref.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        const firstName = parts[0];
+        const lastName = parts.slice(1).join(' ');
+        const byName = await this.prisma.driver.findFirst({
+          where: {
+            firstName: { equals: firstName, mode: 'insensitive' },
+            lastName: { equals: lastName, mode: 'insensitive' },
+          },
+          select: { id: true },
+        });
+        if (byName) return byName.id;
+      }
+
+      const byUuid = await this.prisma.driver.findUnique({
+        where: { id: ref },
+        select: { id: true },
+      });
+      return byUuid?.id ?? null;
+    }
+
+    if (ownerType === 'vehicle') {
+      const byPlate = await this.prisma.vehicle.findFirst({
+        where: { plateNumber: { equals: ref, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (byPlate) return byPlate.id;
+
+      const byUuid = await this.prisma.vehicle.findUnique({
+        where: { id: ref },
+        select: { id: true },
+      });
+      return byUuid?.id ?? null;
+    }
+
+    if (ownerType === 'company') {
+      const byName = await this.prisma.company.findFirst({
+        where: { name: { equals: ref, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (byName) return byName.id;
+
+      const byUuid = await this.prisma.company.findUnique({
+        where: { id: ref },
+        select: { id: true },
+      });
+      return byUuid?.id ?? null;
+    }
+
+    return ref;
   }
 }

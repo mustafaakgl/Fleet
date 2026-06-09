@@ -174,6 +174,7 @@ export class OnboardingService {
       userCount,
       driverCount,
       vehicleCount,
+      companyCount,
       assignmentCount,
       pendingInvites,
     ] = await Promise.all([
@@ -181,6 +182,7 @@ export class OnboardingService {
       this.prisma.user.count({ where: { tenantId, status: UserStatus.active } }),
       this.prisma.driver.count({ where: { tenantId } }),
       this.prisma.vehicle.count({ where: { tenantId } }),
+      this.prisma.company.count({ where: { tenantId } }),
       this.prisma.assignment.count({ where: { tenantId } }),
       this.prisma.userInvitation.count({
         where: { tenantId, status: UserInvitationStatus.pending },
@@ -194,18 +196,32 @@ export class OnboardingService {
     const steps = [
       {
         id: 'tenant_profile',
-        complete: Boolean(tenant.contactEmail?.trim() && tenant.name?.trim()),
+        complete: Boolean(
+          tenant.name?.trim() &&
+            tenant.contactEmail?.trim() &&
+            tenant.contactPhone?.trim(),
+        ),
         href: '/getting-started#tenant',
       },
       {
         id: 'invite_team',
         complete: userCount > 1 || pendingInvites > 0,
-        href: '/einsatzplan',
+        href: '/assignments?panel=users',
       },
       {
-        id: 'import_data',
-        complete: driverCount > 0 && vehicleCount > 0,
-        href: '/import',
+        id: 'drivers',
+        complete: driverCount > 0,
+        href: '/import#drivers',
+      },
+      {
+        id: 'vehicles',
+        complete: vehicleCount > 0,
+        href: '/import#vehicles',
+      },
+      {
+        id: 'companies',
+        complete: companyCount > 0,
+        href: '/import#companies',
       },
       {
         id: 'first_assignment',
@@ -228,6 +244,7 @@ export class OnboardingService {
         users: userCount,
         drivers: driverCount,
         vehicles: vehicleCount,
+        companies: companyCount,
         assignments: assignmentCount,
         pending_invitations: pendingInvites,
       },

@@ -16,7 +16,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatDate } from '@/lib/utils';
+import {
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
+import { cn, formatDate } from '@/lib/utils';
 
 export default function AuditPage() {
   const { t } = useTranslation();
@@ -118,7 +128,7 @@ export default function AuditPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={FLEET_LIST_CARD}>
         <CardContent className="p-0">
           {error ? (
             <p className="px-6 py-4 text-sm text-rose-600">{error}</p>
@@ -131,32 +141,32 @@ export default function AuditPage() {
             <p className="px-6 py-8 text-sm text-gray-500">{t('audit.empty')}</p>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className={FLEET_TABLE}>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('audit.colWhen')}</TableHead>
-                    <TableHead>{t('audit.colActor')}</TableHead>
-                    <TableHead>{t('audit.colAction')}</TableHead>
-                    <TableHead>{t('audit.colEntity')}</TableHead>
-                    <TableHead>{t('audit.colSummary')}</TableHead>
+                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('audit.colWhen')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('audit.colActor')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('audit.colAction')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('audit.colEntity')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('audit.colSummary')}</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className={FLEET_TABLE_BODY}>
                   {result.data.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className="whitespace-nowrap text-xs">
+                    <TableRow key={row.id} className={FLEET_TABLE_ROW}>
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
                         {formatDate(row.createdAt)}
                       </TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <div>{row.actorUser?.fullName ?? '—'}</div>
-                        <div className="text-gray-500">{row.actorUser?.email ?? ''}</div>
+                        <div className="text-[11px] text-gray-500">{row.actorUser?.email ?? ''}</div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{row.action}</TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'font-mono')}>{row.action}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>
                         {row.entityType}
                         {row.entityId ? ` / ${row.entityId.slice(0, 8)}…` : ''}
                       </TableCell>
-                      <TableCell className="max-w-xs truncate text-xs text-gray-600">
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-xs truncate')}>
                         {row.summary ?? '—'}
                       </TableCell>
                     </TableRow>

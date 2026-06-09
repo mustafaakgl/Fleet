@@ -132,6 +132,7 @@ export default function ImportPage() {
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
 
+      <div id="drivers">
       <ImportCard
         title={t('import.driversTitle')}
         hint={t('import.driversHint')}
@@ -145,7 +146,9 @@ export default function ImportPage() {
         onFileChange={setDriverFile}
         t={t}
       />
+      </div>
 
+      <div id="vehicles">
       <ImportCard
         title={t('import.vehiclesTitle')}
         hint={t('import.vehiclesHint')}
@@ -159,7 +162,9 @@ export default function ImportPage() {
         onFileChange={setVehicleFile}
         t={t}
       />
+      </div>
 
+      <div id="companies">
       <ImportCard
         title={t('import.companiesTitle')}
         hint={t('import.companiesHint')}
@@ -173,7 +178,9 @@ export default function ImportPage() {
         onFileChange={setCompanyFile}
         t={t}
       />
+      </div>
 
+      <div id="users">
       <ImportCard
         title={t('import.usersTitle')}
         hint={t('import.usersHint')}
@@ -187,6 +194,7 @@ export default function ImportPage() {
         onFileChange={setUserFile}
         t={t}
       />
+      </div>
     </div>
   );
 }

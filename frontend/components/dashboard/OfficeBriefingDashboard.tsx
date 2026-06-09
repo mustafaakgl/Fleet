@@ -27,6 +27,7 @@ import { einsatzplanHref, officeQueueHref } from '@/lib/office-deep-links';
 import type { DashboardCriticalAlert, DashboardSummary } from '@/lib/types';
 import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
+import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
 import { WatchedExpensesWidget } from '@/components/dashboard/WatchedExpensesWidget';
 import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 
@@ -287,6 +288,10 @@ export function OfficeBriefingDashboard() {
           <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />
 
           <WatchedExpensesWidget />
+
+          {summary?.priorityTrends ? (
+            <RepairPriorityTrendsChart trends={summary.priorityTrends} />
+          ) : null}
 
           {summary?.costAnalytics ? <FleetCostCharts analytics={summary.costAnalytics} /> : null}
 

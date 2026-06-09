@@ -10,15 +10,24 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
-import { canViewFinancialFields, maskFinancialFields, OPERATIONAL_ROLES } from '../common/utils/permissions';
+import {
+  canViewFinancialFields,
+  CSV_IMPORT_ROLES,
+  maskFinancialFields,
+  OPERATIONAL_ROLES,
+} from '../common/utils/permissions';
 import { ServiceRecordsService } from './service-records.service';
 import { CreateServiceRecordDto } from './dto/create-service-record.dto';
 import { UpdateServiceRecordDto } from './dto/update-service-record.dto';
@@ -50,6 +59,19 @@ export class ServiceRecordsController {
   @Get(':id')
   getOne(@Param('id') id: string, @CurrentUser('role') role?: string) {
     return this.serviceRecords.getById(id).then((data) => maskFinancialFields(data, role));
+  }
+
+  @Post('import')
+  @Roles(...CSV_IMPORT_ROLES)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  importCsv(
+    @UploadedFile() file: { buffer: Buffer },
+    @CurrentUser('id') actorUserId?: string,
+  ) {
+    const content = file?.buffer?.toString('utf8') ?? '';
+    return this.serviceRecords.importFromCsv(content, actorUserId);
   }
 
   @Post()

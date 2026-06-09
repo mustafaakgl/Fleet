@@ -4,6 +4,7 @@ export const OPERATIONAL_ROLES: UserRole[] = ['admin', 'boss', 'accounting', 'of
 export const OPERATIONAL_WRITE_ROLES: UserRole[] = ['admin', 'boss', 'office'];
 export const FINANCIAL_ROLES: UserRole[] = ['admin', 'boss', 'accounting'];
 export const ADMIN_ONLY_ROLES: UserRole[] = ['admin'];
+export const CSV_IMPORT_ROLES: UserRole[] = ['admin', 'office'];
 
 const SENSITIVE_FINANCIAL_KEYS = new Set([
   'revenueAnalytics',

@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   HttpStatus,
   Param,
   ParseFilePipeBuilder,
@@ -25,7 +26,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { CSV_IMPORT_ROLES, OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { DocumentsService } from './documents.service';
@@ -154,6 +155,19 @@ export class DocumentsController {
     const finalUploadedById = userId ?? uploadedById;
     const created = await this.documentsService.createDocument(dto, finalUploadedById);
     return this.documentsService.mapDocumentToClient(created);
+  }
+
+  @Post('import')
+  @Roles(...CSV_IMPORT_ROLES)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  importCsv(
+    @UploadedFile() file: { buffer: Buffer },
+    @CurrentUser('id') actorUserId?: string,
+  ) {
+    const content = file?.buffer?.toString('utf8') ?? '';
+    return this.documentsService.importFromCsv(content, actorUserId);
   }
 
   @Post('upload')

@@ -1,6 +1,17 @@
 'use client';
 
 import { Check, Minus, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import {
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 export type AbsenceTypeAbbreviation =
   | 'SU'
@@ -63,51 +74,55 @@ export function AbsenceTypeModal({
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
           <div className="flex flex-wrap gap-2">
             <button type="button" className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Plus className="h-4 w-4 text-blue-600" />
+              <Plus className="h-4 w-4 text-[#1a4d7a]" />
               Abwesenheitstyp hinzufügen
             </button>
             <button type="button" className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Trash2 className="h-4 w-4 text-blue-600" />
+              <Trash2 className="h-4 w-4 text-[#1a4d7a]" />
               Abwesenheitstyp löschen
             </button>
             <button type="button" className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <RefreshCw className="h-4 w-4 text-blue-600" />
+              <RefreshCw className="h-4 w-4 text-[#1a4d7a]" />
               Aktualisieren
             </button>
           </div>
         </div>
 
         <div className="max-h-[60vh] overflow-auto p-5">
-          <table className="min-w-full text-sm">
-            <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <table className={FLEET_RAW_TABLE}>
+            <thead className={cn('sticky top-0', FLEET_RAW_THEAD)}>
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">Bezeichnung</th>
-                <th className="border-b border-slate-200 px-3 py-3">Abkürzung</th>
-                <th className="border-b border-slate-200 px-3 py-3">Gutschrift als bezahlte Nichtarbeitszeit</th>
-                <th className="border-b border-slate-200 px-3 py-3">Erlaube Überschreitung der Regelarbeitszeit</th>
-                <th className="border-b border-slate-200 px-3 py-3">Antragstyp</th>
-                <th className="border-b border-slate-200 px-3 py-3">Aktiv</th>
+                <th className={FLEET_RAW_TH}>Bezeichnung</th>
+                <th className={FLEET_RAW_TH}>Abkürzung</th>
+                <th className={FLEET_RAW_TH}>Gutschrift als bezahlte Nichtarbeitszeit</th>
+                <th className={FLEET_RAW_TH}>Erlaube Überschreitung der Regelarbeitszeit</th>
+                <th className={FLEET_RAW_TH}>Antragstyp</th>
+                <th className={FLEET_RAW_TH}>Aktiv</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {absenceTypes.map((absenceType) => {
                 const selected = selectedTypeId === absenceType.id;
                 return (
                   <tr
                     key={absenceType.id}
                     onClick={() => onSelect(absenceType.id)}
-                    className={`cursor-pointer border-t border-slate-100 ${selected ? 'bg-blue-50' : 'bg-white hover:bg-slate-50'}`}
+                    className={cn(
+                      'cursor-pointer',
+                      FLEET_RAW_TR,
+                      selected ? 'bg-[#e8f0f8]' : 'bg-white',
+                    )}
                   >
-                    <td className="px-3 py-3 font-medium text-slate-900">{absenceType.bezeichnung}</td>
-                    <td className="px-3 py-3 text-slate-700">{absenceType.abkuerzung}</td>
-                    <td className="px-3 py-3">
+                    <td className={FLEET_RAW_TD_PRIMARY}>{absenceType.bezeichnung}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{absenceType.abkuerzung}</td>
+                    <td className={FLEET_RAW_TD}>
                       {absenceType.gutschrift ? <Check className="h-4 w-4 text-emerald-600" /> : <Minus className="h-4 w-4 text-rose-600" />}
                     </td>
-                    <td className="px-3 py-3">
+                    <td className={FLEET_RAW_TD}>
                       {absenceType.allowOvertime ? <Check className="h-4 w-4 text-emerald-600" /> : <Minus className="h-4 w-4 text-rose-600" />}
                     </td>
-                    <td className="px-3 py-3 text-slate-700">{absenceType.antragstyp}</td>
-                    <td className="px-3 py-3">
+                    <td className={FLEET_RAW_TD_MUTED}>{absenceType.antragstyp}</td>
+                    <td className={FLEET_RAW_TD}>
                       {absenceType.aktiv ? <Check className="h-4 w-4 text-emerald-600" /> : <Minus className="h-4 w-4 text-rose-600" />}
                     </td>
                   </tr>
@@ -125,7 +140,7 @@ export function AbsenceTypeModal({
             type="button"
             onClick={onApply}
             disabled={!selectedTypeId}
-            className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-[#1a4d7a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b2342] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Übernehmen
           </button>

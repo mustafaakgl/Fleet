@@ -124,11 +124,25 @@ export function ServiceReminderDetailDrawer({
             </Button>
           ) : (
             <Button type="button" className="bg-blue-600 hover:bg-blue-700" asChild>
-              <Link href={`/service-history?vehicle_id=${row.vehicleId}`}>{t('serviceReminders.logService')}</Link>
+              <Link
+                href={
+                  row.serviceRecordId
+                    ? `/service-history/${row.serviceRecordId}`
+                    : `/service-history?vehicle_id=${row.vehicleId}`
+                }
+              >
+                {t('serviceReminders.logService')}
+              </Link>
             </Button>
           )}
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link href={`/service-history?vehicle_id=${row.vehicleId}`}>
+            <Link
+              href={
+                row.serviceRecordId
+                  ? `/service-history/${row.serviceRecordId}`
+                  : `/service-history?vehicle_id=${row.vehicleId}`
+              }
+            >
               <Pencil className="mr-1.5 h-3.5 w-3.5" />
               {t('serviceReminders.detail.edit')}
             </Link>
@@ -189,10 +203,19 @@ export function ServiceReminderDetailDrawer({
             </div>
           </DetailField>
 
-          <DetailField label={t('serviceReminders.colLastCompleted')}>
+          <DetailField label={t('serviceHistory.create.completionDate')}>
             {row.lastCompletedDate ? (
               <>
-                <div>{formatDate(row.lastCompletedDate)}</div>
+                {row.serviceRecordId ? (
+                  <Link
+                    href={`/service-history/${row.serviceRecordId}`}
+                    className="font-medium text-blue-700 hover:underline"
+                  >
+                    {formatDate(row.lastCompletedDate)}
+                  </Link>
+                ) : (
+                  <div>{formatDate(row.lastCompletedDate)}</div>
+                )}
                 {row.lastCompletedMileage != null ? (
                   <div className="text-xs text-slate-500">
                     {row.lastCompletedMileage.toLocaleString(i18n.language)} km

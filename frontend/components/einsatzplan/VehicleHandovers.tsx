@@ -7,6 +7,18 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { canEditVehicleHandovers } from '@/lib/permissions';
 import { vehicleHandoversApi, type VehicleHandoverRecord } from '@/lib/api';
+import {
+  FLEET_LIST_CARD,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 type TableStatusFilter = 'all' | 'completed' | 'pending' | 'missing';
 type DisplayStatus = 'Completed' | 'Pending' | 'Missing';
@@ -168,7 +180,7 @@ export function VehicleHandovers() {
             type="date"
             value={dateFilter}
             onChange={(event) => setDateFilter(event.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
           />
         </div>
 
@@ -185,7 +197,7 @@ export function VehicleHandovers() {
             value={driverQuery}
             onChange={(event) => setDriverQuery(event.target.value)}
             placeholder={t('handover.searchDriver')}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
           />
         </div>
 
@@ -202,7 +214,7 @@ export function VehicleHandovers() {
             value={vehicleQuery}
             onChange={(event) => setVehicleQuery(event.target.value)}
             placeholder={t('handover.searchVehicle')}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
           />
         </div>
 
@@ -217,7 +229,7 @@ export function VehicleHandovers() {
             id="handover-status"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as TableStatusFilter)}
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
           >
             <option value="all">{t('handover.filterAll')}</option>
             <option value="completed">{t('handover.filterCompleted')}</option>
@@ -243,7 +255,7 @@ export function VehicleHandovers() {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         {loading ? (
           <div className="p-6 text-center text-sm text-slate-500">{t('handover.loading')}</div>
         ) : error ? (
@@ -273,21 +285,21 @@ export function VehicleHandovers() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-[1260px] text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <table className={cn(FLEET_RAW_TABLE, 'min-w-[1260px]')}>
+              <thead className={FLEET_RAW_THEAD}>
                 <tr>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colDate')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colDriver')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colPreviousVehicle')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colCurrentVehicle')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colPhotoRequired')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colPhotoStatus')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colDamageDetected')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colStatus')}</th>
-                  <th className="border-b border-slate-200 px-3 py-3">{t('handover.colActions')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colDate')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colDriver')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colPreviousVehicle')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colCurrentVehicle')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colPhotoRequired')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colPhotoStatus')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colDamageDetected')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colStatus')}</th>
+                  <th className={FLEET_RAW_TH}>{t('handover.colActions')}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={FLEET_RAW_TBODY}>
                 {filteredRows.map((row) => {
                   const driverName = row.driver
                     ? `${row.driver.firstName} ${row.driver.lastName}`
@@ -295,36 +307,36 @@ export function VehicleHandovers() {
                   const vehiclePlate = row.vehicle?.plateNumber ?? row.vehicleId;
                   const displayStatus = getDisplayStatus(row);
                   return (
-                    <tr key={row.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-3 py-2.5 text-slate-700">
+                    <tr key={row.id} className={FLEET_RAW_TR}>
+                      <td className={FLEET_RAW_TD_MUTED}>
                         {toDisplayDate(row.handoverDateTime)}
                       </td>
-                      <td className="px-3 py-2.5 font-medium text-slate-900">{driverName}</td>
-                      <td className="px-3 py-2.5 text-slate-700">
+                      <td className={FLEET_RAW_TD_PRIMARY}>{driverName}</td>
+                      <td className={FLEET_RAW_TD_MUTED}>
                         {row.previousVehicleId ?? '-'}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700">{vehiclePlate}</td>
-                      <td className="px-3 py-2.5 text-slate-700">
+                      <td className={FLEET_RAW_TD_MUTED}>{vehiclePlate}</td>
+                      <td className={FLEET_RAW_TD_MUTED}>
                         {row.photoRequired ? t('handover.yes') : t('handover.no')}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={FLEET_RAW_TD}>
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${photoStatusClass(row.photoStatus)}`}
                         >
                           {t(photoStatusLabelKey(row.photoStatus))}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700">
+                      <td className={FLEET_RAW_TD_MUTED}>
                         {row.damageDetected ? t('handover.yes') : t('handover.no')}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={FLEET_RAW_TD}>
                         <span
                           className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${displayStatusClass(displayStatus)}`}
                         >
                           {dispStatusLabel(displayStatus)}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={FLEET_RAW_TD}>
                         <button
                           type="button"
                           onClick={() => setSelectedId(row.id)}
@@ -393,7 +405,7 @@ export function VehicleHandovers() {
                 type="button"
                 onClick={handleMarkCompleted}
                 disabled={!canEdit || selected.status === 'completed'}
-                className="rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md border border-[#163a5c] px-3 py-2 text-sm font-medium text-[#1a4d7a] hover:bg-[#e8f0f8] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('handover.markCompleted')}
               </button>

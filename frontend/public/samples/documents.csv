@@ -1,0 +1,4 @@
+owner_type,owner_ref,document_type,file_name,expiry_date,notes
+driver,EMP-001,Driving License,license-max-mustermann.pdf,2027-06-30,
+vehicle,M-AB 1234,TUV,tuv-actros.pdf,2026-09-30,
+company,Muster Spedition GmbH,Contract,contract-muster.pdf,,

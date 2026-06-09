@@ -384,7 +384,7 @@ export function TagesuebersichtTab({ planningDate }: { planningDate?: string }) 
                 <button
                   type="button"
                   onClick={saveEdit}
-                  className="rounded border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  className="rounded border border-[#163a5c] px-3 py-1.5 text-xs font-semibold text-[#1a4d7a] hover:bg-[#e8f0f8]"
                 >
                   {t('tagesueber.save')}
                 </button>

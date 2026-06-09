@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Building2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
@@ -9,14 +10,37 @@ import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { CompanyActionsMenu } from '@/components/companies/CompanyActionsMenu';
+import { CompanyImportDialog } from '@/components/companies/CompanyImportDialog';
 import { companiesApi } from '@/lib/api';
+import { getUser } from '@/lib/auth';
+import { downloadCompaniesCsv } from '@/lib/companies-csv';
+import { canImportCsv } from '@/lib/permissions';
 import type { Company } from '@/lib/types';
+import {
+  FLEET_LINK_ACTION,
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_CELL_PRIMARY,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW_CLICKABLE,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 export default function CompaniesPage() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+
+  const user = getUser();
+  const canImport = canImportCsv(user?.role ?? 'customer');
 
   const fetchCompanies = useCallback(async () => {
     setLoading(true);
@@ -36,6 +60,27 @@ export default function CompaniesPage() {
     fetchCompanies();
   }, [fetchCompanies]);
 
+  function openCompany(id: string) {
+    router.push(`/companies/${id}`);
+  }
+
+  async function handleExport() {
+    const allCompanies: Company[] = [];
+    let exportPage = 1;
+    const exportLimit = 200;
+
+    while (true) {
+      const res = await companiesApi.list({ page: exportPage, limit: exportLimit });
+      allCompanies.push(...res.data);
+      if (allCompanies.length >= res.total || res.data.length === 0) break;
+      exportPage += 1;
+    }
+
+    if (allCompanies.length > 0) {
+      downloadCompaniesCsv(allCompanies);
+    }
+  }
+
   return (
     <div className="space-y-5 pb-6">
       <div className="flex items-center justify-between gap-3">
@@ -48,15 +93,28 @@ export default function CompaniesPage() {
             </span>
           )}
         </div>
-        <Button asChild>
-          <Link href="/companies/new">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Company
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <CompanyActionsMenu
+            canImport={canImport}
+            onImport={() => setImportOpen(true)}
+            onExport={() => void handleExport()}
+          />
+          <Button asChild>
+            <Link href="/companies/new">
+              <Plus className="w-4 h-4 mr-2" />
+              {t('form.addCompany')}
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Card>
+      <CompanyImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => void fetchCompanies()}
+      />
+
+      <Card className={FLEET_LIST_CARD}>
         {loading ? (
           <div className="space-y-3 p-4">
             {Array.from({ length: 6 }).map((_, index) => (
@@ -94,7 +152,8 @@ export default function CompaniesPage() {
               {companies.map((company) => (
                 <div
                   key={`company-card-${company.id}`}
-                  className="rounded-lg border border-slate-200 bg-white p-3"
+                  className="cursor-pointer rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50"
+                  onClick={() => openCompany(company.id)}
                 >
                   <p className="font-semibold text-slate-900">{company.name}</p>
                   <p className="text-xs text-slate-600">{company.contact_person || '-'}</p>
@@ -105,44 +164,48 @@ export default function CompaniesPage() {
                     Drivers: {company.current_drivers_count ?? 0} · Vehicles:{' '}
                     {company.current_vehicles_count ?? 0}
                   </p>
-                  <Link
-                    href={`/companies/${company.id}`}
-                    className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline"
+                  <span
+                    className="mt-2 inline-block text-sm font-medium text-blue-600"
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    {t('common.view')}
-                  </Link>
+                    <Link href={`/companies/${company.id}`}>{t('common.view')}</Link>
+                  </span>
                 </div>
               ))}
             </div>
             <div className="hidden md:block">
-              <Table>
+              <Table className={FLEET_TABLE}>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('companies.companyName')}</TableHead>
-                    <TableHead>{t('companies.contactPerson')}</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>{t('companies.currentDrivers')}</TableHead>
-                    <TableHead>{t('companies.currentVehicles')}</TableHead>
-                    <TableHead>{t('companies.activeAssignments')}</TableHead>
-                    <TableHead>{t('common.actions')}</TableHead>
+                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('companies.companyName')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('companies.contactPerson')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>Email</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>Phone</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('companies.currentDrivers')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('companies.currentVehicles')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('companies.activeAssignments')}</TableHead>
+                    <TableHead className={cn(FLEET_TABLE_HEAD, 'w-24')} />
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className={FLEET_TABLE_BODY}>
                   {companies.map((company) => (
-                    <TableRow key={company.id}>
-                      <TableCell className="font-semibold text-gray-900">{company.name}</TableCell>
-                      <TableCell>{company.contact_person || '-'}</TableCell>
-                      <TableCell>{company.email || '-'}</TableCell>
-                      <TableCell>{company.phone || '-'}</TableCell>
-                      <TableCell>{company.current_drivers_count ?? 0}</TableCell>
-                      <TableCell>{company.current_vehicles_count ?? 0}</TableCell>
-                      <TableCell>{company.active_assignments_count}</TableCell>
-                      <TableCell>
-                        <Link
-                          href={`/companies/${company.id}`}
-                          className="text-sm font-medium text-blue-600 hover:underline"
-                        >
+                    <TableRow
+                      key={company.id}
+                      className={FLEET_TABLE_ROW_CLICKABLE}
+                      onClick={() => openCompany(company.id)}
+                    >
+                      <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{company.name}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>{company.contact_person || '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>{company.email || '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>{company.phone || '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{company.current_drivers_count ?? 0}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{company.current_vehicles_count ?? 0}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{company.active_assignments_count}</TableCell>
+                      <TableCell
+                        className={cn(FLEET_TABLE_CELL, 'text-right')}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Link href={`/companies/${company.id}`} className={FLEET_LINK_ACTION}>
                           {t('common.view')}
                         </Link>
                       </TableCell>

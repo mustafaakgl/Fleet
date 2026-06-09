@@ -17,7 +17,16 @@ import type {
 } from '@/lib/types';
 import { canViewFinancials } from '@/lib/permissions';
 import { getUser } from '@/lib/auth';
-import { formatDate, statusColor } from '@/lib/utils';
+import {
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
+import { cn, formatDate, statusColor } from '@/lib/utils';
 
 interface CompanyAssignmentRow {
   id: string;
@@ -287,37 +296,37 @@ export default function CompanyProfilePage({
           {assignmentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('companyDetail.assignmentsLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('companyDetail.colDate')}</TableHead>
-                  <TableHead>{t('companyDetail.colDriver')}</TableHead>
-                  <TableHead>{t('companyDetail.colVehicle')}</TableHead>
-                  <TableHead>{t('companyDetail.colCargo')}</TableHead>
-                  <TableHead>{t('companyDetail.colStartTime')}</TableHead>
-                  <TableHead>{t('companyDetail.colEndTime')}</TableHead>
-                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDriver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colVehicle')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colCargo')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colStartTime')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colEndTime')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colStatus')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {currentAssignments.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={7} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   currentAssignments.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{formatDate(row.workDate)}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={row.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.workDate)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {row.driver.firstName} {row.driver.lastName}
                       </TableCell>
-                      <TableCell>{row.vehicle.plateNumber}</TableCell>
-                      <TableCell>{row.cargoName || '-'}</TableCell>
-                      <TableCell>{row.startTime}</TableCell>
-                      <TableCell>{row.endTime}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.vehicle.plateNumber}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.cargoName || '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.startTime}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.endTime}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <Badge className={statusColor(row.status)}>{row.status}</Badge>
                       </TableCell>
                     </TableRow>
@@ -337,33 +346,33 @@ export default function CompanyProfilePage({
           {assignmentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('companyDetail.assignmentsLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('companyDetail.colDate')}</TableHead>
-                  <TableHead>{t('companyDetail.colDriver')}</TableHead>
-                  <TableHead>{t('companyDetail.colVehicle')}</TableHead>
-                  <TableHead>{t('companyDetail.colCargo')}</TableHead>
-                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDriver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colVehicle')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colCargo')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colStatus')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {assignmentHistory.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={5} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   assignmentHistory.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{formatDate(row.workDate)}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={row.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.workDate)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {row.driver.firstName} {row.driver.lastName}
                       </TableCell>
-                      <TableCell>{row.vehicle.plateNumber}</TableCell>
-                      <TableCell>{row.cargoName || '-'}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.vehicle.plateNumber}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.cargoName || '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <Badge className={statusColor(row.status)}>{row.status}</Badge>
                       </TableCell>
                     </TableRow>
@@ -380,29 +389,29 @@ export default function CompanyProfilePage({
           <CardTitle>{t('companyDetail.driverHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table className={FLEET_TABLE}>
             <TableHeader>
-              <TableRow>
-                <TableHead>{t('companyDetail.colDriver')}</TableHead>
-                <TableHead>{t('companyDetail.colFirstAssignment')}</TableHead>
-                <TableHead>{t('companyDetail.colLastAssignment')}</TableHead>
-                <TableHead>{t('companyDetail.colTotal')}</TableHead>
+              <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDriver')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colFirstAssignment')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colLastAssignment')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colTotal')}</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className={FLEET_TABLE_BODY}>
               {driverHistory.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                <TableRow className={FLEET_TABLE_ROW}>
+                  <TableCell colSpan={4} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                     {t('common.noRecords')}
                   </TableCell>
                 </TableRow>
               ) : (
                 driverHistory.map((row) => (
-                  <TableRow key={row.driverId}>
-                    <TableCell>{row.driverName}</TableCell>
-                    <TableCell>{formatDate(row.firstAssignmentDate)}</TableCell>
-                    <TableCell>{formatDate(row.lastAssignmentDate)}</TableCell>
-                    <TableCell>{row.totalAssignments}</TableCell>
+                  <TableRow className={FLEET_TABLE_ROW} key={row.driverId}>
+                    <TableCell className={FLEET_TABLE_CELL}>{row.driverName}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.firstAssignmentDate)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.lastAssignmentDate)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{row.totalAssignments}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -416,29 +425,29 @@ export default function CompanyProfilePage({
           <CardTitle>{t('companyDetail.vehicleHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table className={FLEET_TABLE}>
             <TableHeader>
-              <TableRow>
-                <TableHead>{t('companyDetail.colVehicle')}</TableHead>
-                <TableHead>{t('companyDetail.colFirstAssignment')}</TableHead>
-                <TableHead>{t('companyDetail.colLastAssignment')}</TableHead>
-                <TableHead>{t('companyDetail.colTotal')}</TableHead>
+              <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colVehicle')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colFirstAssignment')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colLastAssignment')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colTotal')}</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className={FLEET_TABLE_BODY}>
               {vehicleHistory.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                <TableRow className={FLEET_TABLE_ROW}>
+                  <TableCell colSpan={4} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                     {t('common.noRecords')}
                   </TableCell>
                 </TableRow>
               ) : (
                 vehicleHistory.map((row) => (
-                  <TableRow key={row.vehicleId}>
-                    <TableCell>{row.plateNumber}</TableCell>
-                    <TableCell>{formatDate(row.firstAssignmentDate)}</TableCell>
-                    <TableCell>{formatDate(row.lastAssignmentDate)}</TableCell>
-                    <TableCell>{row.totalAssignments}</TableCell>
+                  <TableRow className={FLEET_TABLE_ROW} key={row.vehicleId}>
+                    <TableCell className={FLEET_TABLE_CELL}>{row.plateNumber}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.firstAssignmentDate)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.lastAssignmentDate)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{row.totalAssignments}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -455,31 +464,31 @@ export default function CompanyProfilePage({
           {emailsError ? (
             <p className="p-4 text-sm text-gray-500">{t('companyDetail.emailsLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('companyDetail.colDate')}</TableHead>
-                  <TableHead>{t('companyDetail.colSubject')}</TableHead>
-                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
-                  <TableHead>{t('companyDetail.colLastSent')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colSubject')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colStatus')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colLastSent')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {emails.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={4} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   emails.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{formatDate(row.date)}</TableCell>
-                      <TableCell>{row.subject}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={row.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.date)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.subject}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <Badge className={statusColor(row.status)}>{row.status}</Badge>
                       </TableCell>
-                      <TableCell>{row.lastSentAt ? formatDate(row.lastSentAt) : '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.lastSentAt ? formatDate(row.lastSentAt) : '-'}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -497,31 +506,31 @@ export default function CompanyProfilePage({
           {documentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('companyDetail.documentsLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('companyDetail.colDocType')}</TableHead>
-                  <TableHead>{t('companyDetail.colFileName')}</TableHead>
-                  <TableHead>{t('companyDetail.colExpiryDate')}</TableHead>
-                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDocType')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colFileName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colExpiryDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colStatus')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {documents.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={4} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   documents.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{row.documentType}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={row.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.documentType}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <DocumentFileLink document={row} variant="link" />
                       </TableCell>
-                      <TableCell>{formatDate(row.expiryDate)}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.expiryDate)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <Badge className={statusColor(row.status)}>{row.status}</Badge>
                       </TableCell>
                     </TableRow>
@@ -541,41 +550,41 @@ export default function CompanyProfilePage({
           {cargoDamagesError ? (
             <p className="p-4 text-sm text-gray-500">{t('companyDetail.cargoLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('companyDetail.colDate')}</TableHead>
-                  <TableHead>{t('companyDetail.colDriver')}</TableHead>
-                  <TableHead>{t('companyDetail.colVehicle')}</TableHead>
-                  <TableHead>{t('companyDetail.colCargoName')}</TableHead>
-                  <TableHead>{t('companyDetail.colStatus')}</TableHead>
-                  {showFinancials && <TableHead>{t('companyDetail.colDamageValue')}</TableHead>}
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDriver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colVehicle')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colCargoName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colStatus')}</TableHead>
+                  {showFinancials && <TableHead className={FLEET_TABLE_HEAD}>{t('companyDetail.colDamageValue')}</TableHead>}
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {cargoDamages.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={showFinancials ? 6 : 5}
-                      className="text-center text-sm text-gray-500"
+                      className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}
                     >
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   cargoDamages.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{formatDate(row.incidentDateTime)}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={row.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.incidentDateTime)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {row.driver
                           ? `${row.driver.firstName} ${row.driver.lastName}`
                           : '-'}
                       </TableCell>
-                      <TableCell>{row.vehicle?.plateNumber ?? '-'}</TableCell>
-                      <TableCell>{row.cargoName ?? '-'}</TableCell>
-                      <TableCell>{row.status}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.vehicle?.plateNumber ?? '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.cargoName ?? '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.status}</TableCell>
                       {showFinancials && (
-                        <TableCell>{currency(row.damageValue)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{currency(row.damageValue)}</TableCell>
                       )}
                     </TableRow>
                   ))

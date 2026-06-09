@@ -10,6 +10,17 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { accidentsApi, documentsApi } from '@/lib/api';
 import type { Document } from '@/lib/types';
+import {
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_CELL_PRIMARY,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
 import { formatDate } from '@/lib/utils';
 
 type IncidentStatus = 'reported' | 'under_review' | 'resolved' | 'rejected';
@@ -128,7 +139,7 @@ export default function CargoDamagePage() {
         )}
       </div>
 
-      <Card>
+      <Card className={FLEET_LIST_CARD}>
         {loading ? (
           <div className="p-6 text-center text-sm text-gray-500">{t('cargoDamage.loading')}</div>
         ) : error ? (
@@ -151,41 +162,41 @@ export default function CargoDamagePage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('cargoDamage.colDate')}</TableHead>
-                  <TableHead>{t('cargoDamage.colDriver')}</TableHead>
-                  <TableHead>{t('cargoDamage.colVehicle')}</TableHead>
-                  <TableHead>{t('cargoDamage.colCompany')}</TableHead>
-                  <TableHead>{t('cargoDamage.colCargoName')}</TableHead>
-                  <TableHead>{t('cargoDamage.colCargoOwner')}</TableHead>
-                  <TableHead>{t('cargoDamage.colDamageValue')}</TableHead>
-                  <TableHead>{t('cargoDamage.colStatus')}</TableHead>
-                  <TableHead>{t('cargoDamage.colActions')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colDriver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colVehicle')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colCompany')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colCargoName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colCargoOwner')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colDamageValue')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colStatus')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colActions')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {visibleReports.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{formatDate(r.incidentDateTime)}</TableCell>
-                    <TableCell>
+                  <TableRow key={r.id} className={FLEET_TABLE_ROW}>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDate(r.incidentDateTime)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
                       {r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '-'}
                     </TableCell>
-                    <TableCell>{r.vehicle?.plateNumber ?? '-'}</TableCell>
-                    <TableCell>{r.company?.name ?? '-'}</TableCell>
-                    <TableCell>{r.cargoName ?? '-'}</TableCell>
-                    <TableCell>{r.cargoOwner ?? '-'}</TableCell>
-                    <TableCell>{currency(r.damageValue)}</TableCell>
-                    <TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.vehicle?.plateNumber ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.company?.name ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.cargoName ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.cargoOwner ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{currency(r.damageValue)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(r.status)}`}
                       >
                         {t(`cargoDamage.status.${r.status}`)}
                       </span>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
+                    <TableCell className={FLEET_TABLE_CELL}>
+                      <div className="flex flex-wrap gap-2 text-[13px]">
                         <button
                           type="button"
                           onClick={() => setSelectedId(r.id)}

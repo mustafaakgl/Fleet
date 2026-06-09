@@ -1,4 +1,5 @@
 import { isRoutineServiceType } from '@/lib/service-record-categories';
+import { parseServiceRecordTasks } from '@/lib/service-record-notes';
 import type { Reminder, ServiceRecord, Vehicle } from '@/lib/types';
 import { daysUntil } from '@/lib/utils';
 import { getReminderCategory, normalizeReminder } from '@/lib/reminder-utils';
@@ -26,6 +27,7 @@ export interface ServiceReminderRow {
   lastCompletedMileage?: number | null;
   compliancePercent: number;
   reminderId?: string;
+  serviceRecordId?: string;
   source: 'service_record' | 'reminder';
 }
 
@@ -136,46 +138,53 @@ export function buildServiceReminderRows(
   const rows: ServiceReminderRow[] = [];
   const seen = new Set<string>();
 
-  const latestByVehicleTask = new Map<string, ServiceRecord>();
+  const latestByVehicleTask = new Map<
+    string,
+    { record: ServiceRecord; task: string; completionDate: string }
+  >();
+
   for (const record of serviceRecords) {
-    const key = `${record.vehicle_id}:${record.service_type.toLowerCase()}`;
-    const existing = latestByVehicleTask.get(key);
-    if (!existing || record.date.slice(0, 10) > existing.date.slice(0, 10)) {
-      latestByVehicleTask.set(key, record);
+    const completionDate = record.date.slice(0, 10);
+    for (const task of parseServiceRecordTasks(record)) {
+      const key = `${record.vehicle_id}:${task.toLowerCase()}`;
+      const existing = latestByVehicleTask.get(key);
+      if (!existing || completionDate > existing.completionDate) {
+        latestByVehicleTask.set(key, { record, task, completionDate });
+      }
     }
   }
 
-  for (const record of latestByVehicleTask.values()) {
+  for (const { record, task, completionDate } of latestByVehicleTask.values()) {
     const vehicle = vehicleById.get(record.vehicle_id);
     if (!vehicle) continue;
 
-    const interval = intervalForTask(record.service_type);
-    const lastDate = record.date.slice(0, 10);
-    const nextDueDate = addMonthsIso(lastDate, interval.months);
+    const interval = intervalForTask(task);
+    const nextDueDate = addMonthsIso(completionDate, interval.months);
     const status = classifyStatus(nextDueDate);
     const vehicleMileageKm = mileageByVehicle.get(vehicle.id) ?? record.mileage_km ?? null;
-    const key = `${vehicle.id}:${record.service_type.toLowerCase()}`;
+    const key = `${vehicle.id}:${task.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
     rows.push({
-      id: `service-record:${record.id}`,
+      id: `service-record:${record.id}:${task.toLowerCase()}`,
       vehicleId: vehicle.id,
       vehiclePlate: vehicle.plate_number,
       vehicleBrand: vehicle.brand,
       vehicleModel: vehicle.model,
       vehicleStatus: vehicle.status,
       vehicleMileageKm,
-      serviceTask: record.service_type,
+      serviceTask: task,
       intervalLabel: intervalLabel(interval, locale),
       timeIntervalMonths: interval.months,
       meterIntervalKm: interval.km,
       status,
       nextDueDate,
       remainingKm: remainingKm(record.mileage_km, interval.km, vehicleMileageKm),
-      lastCompletedDate: lastDate,
+      lastCompletedDate: completionDate,
       lastCompletedMileage: record.mileage_km ?? null,
       compliancePercent: complianceFromStatus(status),
+      serviceRecordId: record.id,
       source: 'service_record',
     });
   }
@@ -232,6 +241,19 @@ export function filterServiceReminderRows(
   if (tab === 'due_soon') return rows.filter((row) => row.status === 'due_soon');
   if (tab === 'overdue') return rows.filter((row) => row.status === 'overdue');
   return rows.filter((row) => row.status === 'snoozed');
+}
+
+export function serviceReminderHref(params: {
+  vehicleId?: string;
+  task?: string;
+  tab?: ServiceReminderTab;
+}): string {
+  const query = new URLSearchParams();
+  if (params.vehicleId) query.set('vehicle_id', params.vehicleId);
+  if (params.task) query.set('task', params.task);
+  if (params.tab) query.set('tab', params.tab);
+  const qs = query.toString();
+  return qs ? `/reminders/service?${qs}` : '/reminders/service';
 }
 
 export function serviceReminderCounts(rows: ServiceReminderRow[]) {

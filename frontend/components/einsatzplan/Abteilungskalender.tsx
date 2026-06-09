@@ -12,6 +12,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
+import {
+  CALENDAR_DAY_CELL_CONTENT_HOVER,
+  CALENDAR_DAY_CELL_HOVER,
+  CalendarDayHoverPlus,
+} from './CalendarDayHoverPlus';
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { useFleetData } from '@/context/FleetDataContext';
 import { calendarApi } from '@/lib/api';
@@ -123,10 +128,10 @@ const statusColors: Record<Exclude<CalendarStatus, ''>, string> = {
   FT: 'bg-pink-400 text-pink-700',
   UT: 'bg-emerald-500 text-emerald-700',
   KT: 'bg-red-500 text-red-700',
-  AT: 'bg-blue-500 text-blue-700',
+  AT: 'bg-[#1a4d7a] text-[#1a4d7a]',
   SU: 'bg-violet-500 text-violet-700',
   PU: 'bg-violet-500 text-violet-700',
-  SCH: 'bg-blue-500 text-blue-700',
+  SCH: 'bg-[#1a4d7a] text-[#1a4d7a]',
   BH: 'bg-slate-500 text-slate-700',
   KA: 'bg-violet-500 text-violet-700',
   SA: 'bg-violet-500 text-violet-700',
@@ -495,7 +500,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
   return (
     <div className="space-y-5">
       {statusFocus && (
-        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
+        <div className="rounded-md border border-[#d4e3f2] bg-[#e8f0f8] px-3 py-2 text-xs font-medium text-[#0b2342]">
           {t('abt.focusBanner', { status: statusFocus })}
         </div>
       )}
@@ -553,7 +558,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                                   : [...current, department.id],
                               );
                             }}
-                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            className="h-4 w-4 rounded border-slate-300 text-[#1a4d7a] focus:ring-[#1a4d7a]"
                           />
                           <Building2 className="h-4 w-4 text-slate-500" />
                           <span className="text-sm text-slate-800">{department.name}</span>
@@ -577,7 +582,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               <select
                 value={month}
                 onChange={(event) => setMonth(Number(event.target.value))}
-                className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
               >
                 {monthLabels.map((label, index) => (
                   <option key={label} value={index}>
@@ -598,7 +603,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
             <select
               value={year}
               onChange={(event) => setYear(Number(event.target.value))}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
             >
               {yearOptions.map((optionYear) => (
                 <option key={optionYear} value={optionYear}>
@@ -610,7 +615,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
             <select
               value={viewMode}
               onChange={(event) => setViewMode(event.target.value as ViewMode)}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
             >
               <option value="Überlappung">{t('abt.viewOverlap')}</option>
               <option value="Einzelansicht">{t('abt.viewSingle')}</option>
@@ -620,7 +625,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
               <select
                 value={focusedEmployeeId}
                 onChange={(event) => setFocusedEmployeeId(event.target.value)}
-                className="h-10 min-w-[220px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="h-10 min-w-[220px] rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
               >
                 {employees.map((employee) => (
                   <option key={employee.id} value={employee.id}>
@@ -680,17 +685,17 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
 
               return (
                 <div key={department.id}>
-                  <div className="grid grid-cols-[160px_220px_repeat(31,minmax(42px,1fr))] border-b border-slate-200 bg-blue-50/70">
+                  <div className="grid grid-cols-[160px_220px_repeat(31,minmax(42px,1fr))] border-b border-slate-200 bg-[#e8f0f8]/70">
                     <button
                       type="button"
                       onClick={() => setCollapsedDepartments((current) => ({ ...current, [department.id]: !isCollapsed }))}
-                      className="sticky left-0 z-10 flex items-center gap-2 border-r border-slate-200 bg-blue-50/70 px-3 py-3 text-left text-sm font-semibold text-blue-900"
+                      className="sticky left-0 z-10 flex items-center gap-2 border-r border-slate-200 bg-[#e8f0f8]/70 px-3 py-3 text-left text-sm font-semibold text-[#0b2342]"
                     >
                       {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       {department.name}
                     </button>
-                    <div className="sticky left-[160px] z-10 flex items-center border-r border-slate-200 bg-blue-50/70 px-3 py-3">
-                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-blue-700 shadow-sm">
+                    <div className="sticky left-[160px] z-10 flex items-center border-r border-slate-200 bg-[#e8f0f8]/70 px-3 py-3">
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#1a4d7a] shadow-sm">
                         {departmentEmployees.length}
                       </span>
                     </div>
@@ -802,13 +807,24 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                                 if (event.button !== 0) return;
                                 openContextMenu(event, { employee, department, day, month, year });
                               }}
-                              className={`border-l border-slate-200 px-1 py-1.5 hover:bg-blue-50 ${
+                              className={`${CALENDAR_DAY_CELL_HOVER} ${
                                 weekend ? 'bg-slate-100/70' : 'bg-white'
                               } ${currentDay ? 'bg-amber-50' : ''} ${shouldDimForFocus ? 'opacity-40' : ''}`}
                             >
                               <div className="relative flex min-h-[40px] flex-col items-center justify-center rounded-sm text-[11px] font-semibold">
-                                <span className={entry.status ? colorClass.split(' ')[1] : 'text-slate-300'}>{entry.status}</span>
-                                <span className={`mt-1 h-1 w-6 rounded-full ${colorClass.split(' ')[0]}`} />
+                                <CalendarDayHoverPlus />
+                                <span
+                                  className={`${entry.status ? colorClass.split(' ')[1] : 'text-slate-300'} ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${
+                                    !entry.status ? 'group-hover:opacity-0' : ''
+                                  }`}
+                                >
+                                  {entry.status}
+                                </span>
+                                <span
+                                  className={`mt-1 h-1 w-6 rounded-full ${colorClass.split(' ')[0]} ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${
+                                    !entry.status ? 'group-hover:opacity-0' : ''
+                                  }`}
+                                />
                                 {entry.status &&
                                   hoveredStatusCell?.employeeId === employee.id &&
                                   hoveredStatusCell?.day === day &&

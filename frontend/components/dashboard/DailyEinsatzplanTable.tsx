@@ -12,7 +12,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { einsatzplanHref } from '@/lib/office-deep-links';
 import type { DashboardTodayOperation } from '@/lib/types';
-import { statusColor } from '@/lib/utils';
+import {
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_CELL_PRIMARY,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW_CLICKABLE,
+} from '@/lib/fleet-table';
+import { cn, statusColor } from '@/lib/utils';
 
 function cell(value?: string | null) {
   const text = value?.trim();
@@ -46,7 +57,7 @@ export function DailyEinsatzplanTable({
         </Button>
       </div>
 
-      <Card className="overflow-hidden">
+      <Card className={FLEET_LIST_CARD}>
         {loading ? (
           <div className="space-y-2 p-4">
             <Skeleton className="h-8" />
@@ -66,43 +77,67 @@ export function DailyEinsatzplanTable({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('planning.colDriver', { ns: 'einsatzplan' })}</TableHead>
-                  <TableHead>{t('planning.colVehicle', { ns: 'einsatzplan' })}</TableHead>
-                  <TableHead>{t('planning.colCompany', { ns: 'einsatzplan' })}</TableHead>
-                  <TableHead>{t('planning.colStartTime', { ns: 'einsatzplan' })}</TableHead>
-                  <TableHead>{t('planning.colCargo', { ns: 'einsatzplan' })}</TableHead>
-                  <TableHead>{t('planning.colPickup', { ns: 'einsatzplan' })}</TableHead>
-                  <TableHead>{t('planning.colDelivery', { ns: 'einsatzplan' })}</TableHead>
-                  <TableHead>{t('planning.colStatus', { ns: 'einsatzplan' })}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colDriver', { ns: 'einsatzplan' })}
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colVehicle', { ns: 'einsatzplan' })}
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colCompany', { ns: 'einsatzplan' })}
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colStartTime', { ns: 'einsatzplan' })}
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colCargo', { ns: 'einsatzplan' })}
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colPickup', { ns: 'einsatzplan' })}
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colDelivery', { ns: 'einsatzplan' })}
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('planning.colStatus', { ns: 'einsatzplan' })}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {rows.map((row) => (
                   <TableRow
                     key={row.id}
-                    className="cursor-pointer hover:bg-slate-50"
+                    className={FLEET_TABLE_ROW_CLICKABLE}
                     onClick={() => router.push(einsatzplanLink)}
                   >
-                    <TableCell className="font-medium text-slate-900">{row.driverName}</TableCell>
-                    <TableCell>{row.vehiclePlate}</TableCell>
-                    <TableCell>{row.companyName}</TableCell>
-                    <TableCell className="whitespace-nowrap">{row.startTime}</TableCell>
-                    <TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{row.driverName}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{row.vehiclePlate}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{row.companyName}</TableCell>
+                    <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
+                      {row.startTime}
+                    </TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>
                       <div>{cell(row.cargoName)}</div>
                       {row.cargoOwner ? (
-                        <div className="text-xs text-slate-500">{row.cargoOwner}</div>
+                        <div className="text-[11px] text-slate-500">{row.cargoOwner}</div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="max-w-[220px] truncate" title={row.pickupAddress ?? undefined}>
+                    <TableCell
+                      className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[220px] truncate')}
+                      title={row.pickupAddress ?? undefined}
+                    >
                       {cell(row.pickupAddress)}
                     </TableCell>
-                    <TableCell className="max-w-[220px] truncate" title={row.deliveryAddress ?? undefined}>
+                    <TableCell
+                      className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[220px] truncate')}
+                      title={row.deliveryAddress ?? undefined}
+                    >
                       {cell(row.deliveryAddress)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>
                       <Badge className={statusColor(row.status)}>{row.status}</Badge>
                     </TableCell>
                   </TableRow>

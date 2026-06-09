@@ -5,6 +5,11 @@ import { RefreshCw, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AbsenceTypeModal, type AbsenceType, type AbsenceTypeAbbreviation } from './AbsenceTypeModal';
 import { CalendarCellContextMenu, type CalendarCellContextMenuAction } from './CalendarCellContextMenu';
+import {
+  CALENDAR_DAY_CELL_CONTENT_HOVER,
+  CALENDAR_DAY_CELL_HOVER,
+  CalendarDayHoverPlus,
+} from './CalendarDayHoverPlus';
 import { CalendarStatusTooltip, type TooltipSource } from './CalendarStatusTooltip';
 import { DriverVacationEntitlementEditor } from '@/components/drivers/DriverVacationEntitlementEditor';
 import { useFleetData } from '@/context/FleetDataContext';
@@ -18,6 +23,16 @@ import {
   DEFAULT_VACATION_ENTITLEMENT,
 } from '@/lib/calendar-vacation';
 import { canEditDriverVacationEntitlement } from '@/lib/permissions';
+import {
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 type CalendarStatus = 'FT' | 'UT' | 'KT' | 'AT' | 'PENDING_UT' | 'APPROVED_UT' | AbsenceTypeAbbreviation | '';
 
@@ -124,12 +139,12 @@ const statusAccentClasses: Record<Exclude<CalendarStatus, ''>, string> = {
   FT: 'bg-pink-400',
   UT: 'bg-emerald-500',
   KT: 'bg-red-500',
-  AT: 'bg-blue-500',
+  AT: 'bg-[#1a4d7a]',
   PENDING_UT: 'bg-amber-500',
   APPROVED_UT: 'bg-emerald-700',
   SU: 'bg-violet-500',
   PU: 'bg-violet-500',
-  SCH: 'bg-blue-500',
+  SCH: 'bg-[#1a4d7a]',
   BH: 'bg-slate-500',
   KA: 'bg-violet-500',
   SA: 'bg-violet-500',
@@ -144,12 +159,12 @@ const statusTextClasses: Record<Exclude<CalendarStatus, ''>, string> = {
   FT: 'text-pink-700',
   UT: 'text-emerald-700',
   KT: 'text-red-700',
-  AT: 'text-blue-700',
+  AT: 'text-[#1a4d7a]',
   PENDING_UT: 'text-amber-700',
   APPROVED_UT: 'text-emerald-800',
   SU: 'text-violet-700',
   PU: 'text-violet-700',
-  SCH: 'text-blue-700',
+  SCH: 'text-[#1a4d7a]',
   BH: 'text-slate-700',
   KA: 'text-violet-700',
   SA: 'text-violet-700',
@@ -831,7 +846,7 @@ export function Jahreskalender() {
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-sm font-bold text-blue-700">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d4e3f2] bg-[#e8f0f8] text-sm font-bold text-[#1a4d7a]">
               {getInitials(selectedDriver.name)}
             </div>
 
@@ -847,7 +862,7 @@ export function Jahreskalender() {
                   setSelectedDay(null);
                   setPendingAbsenceSelection(null);
                 }}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
               >
                 {driverOptions.map((driver) => (
                   <option key={driver.id} value={driver.id}>
@@ -895,20 +910,20 @@ export function Jahreskalender() {
         </div>
 
         <div className="overflow-x-auto p-4">
-          <table className="min-w-full border border-slate-200 text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <th className="border-b border-r border-slate-200 px-4 py-3">{t('jk.colPosition')}</th>
-                <th className="border-b border-r border-slate-200 px-4 py-3">{t('jk.colCurrentPeriod')}</th>
-                <th className="border-b border-slate-200 px-4 py-3">{t('jk.colNextPeriod')}</th>
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-full border border-slate-200')}>
+            <thead className={FLEET_RAW_THEAD}>
+              <tr>
+                <th className={cn(FLEET_RAW_TH, 'border-r border-slate-200')}>{t('jk.colPosition')}</th>
+                <th className={cn(FLEET_RAW_TH, 'border-r border-slate-200')}>{t('jk.colCurrentPeriod')}</th>
+                <th className={FLEET_RAW_TH}>{t('jk.colNextPeriod')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {vacationOverviewRows.map((row) => (
-                <tr key={row.label} className="border-t border-slate-100">
-                  <td className="border-r border-slate-200 px-4 py-3 font-medium text-slate-800">{t(row.label)}</td>
-                  <td className="border-r border-slate-200 px-4 py-3 text-slate-700">{row.current}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.next}</td>
+                <tr key={row.label} className={FLEET_RAW_TR}>
+                  <td className={cn(FLEET_RAW_TD_PRIMARY, 'border-r border-slate-100')}>{t(row.label)}</td>
+                  <td className={cn(FLEET_RAW_TD, 'border-r border-slate-100')}>{row.current}</td>
+                  <td className={FLEET_RAW_TD}>{row.next}</td>
                 </tr>
               ))}
             </tbody>
@@ -928,7 +943,7 @@ export function Jahreskalender() {
                 setSelectedDay(null);
                 setPendingAbsenceSelection(null);
               }}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
             >
               {yearOptions.map((year) => (
                 <option key={year} value={year}>
@@ -1034,18 +1049,23 @@ export function Jahreskalender() {
                           if (event.button !== 0) return;
                           openContextMenu(event, { year: selectedYear, monthIndex, day });
                         }}
-                        className={`border-l border-slate-200 px-1 py-1.5 transition-colors hover:bg-blue-50 ${
+                        className={`${CALENDAR_DAY_CELL_HOVER} ${
                           weekend ? 'bg-slate-100/70' : 'bg-white'
                         } ${isSelected ? 'bg-amber-50' : ''}`}
                       >
                         <div className="relative flex min-h-[44px] flex-col items-center justify-center rounded-sm text-[11px] font-semibold">
-                          <span className={entry.status ? statusTextClasses[entry.status as Exclude<CalendarStatus, ''>] : 'text-slate-300'}>
+                          <CalendarDayHoverPlus />
+                          <span
+                            className={`${
+                              entry.status ? statusTextClasses[entry.status as Exclude<CalendarStatus, ''>] : 'text-slate-300'
+                            } ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${!entry.status ? 'group-hover:opacity-0' : ''}`}
+                          >
                             {getStatusLabel(entry.status)}
                           </span>
                           <span
                             className={`mt-1 h-1 w-6 rounded-full ${
                               entry.status ? statusAccentClasses[entry.status as Exclude<CalendarStatus, ''>] : 'bg-slate-200'
-                            }`}
+                            } ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${!entry.status ? 'group-hover:opacity-0' : ''}`}
                           />
                           {entry.status &&
                             hoveredStatusCell?.year === selectedYear &&
@@ -1073,7 +1093,7 @@ export function Jahreskalender() {
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-pink-400" />{t('jk.legendFT')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-500" />{t('jk.legendUT')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-red-500" />{t('jk.legendKT')}</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-blue-500" />{t('jk.legendAT')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-[#1a4d7a]" />{t('jk.legendAT')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-amber-500" />{t('jk.legendPending')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-700" />{t('jk.legendApproved')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm border border-slate-200 bg-white" />{t('jk.legendEmpty')}</div>

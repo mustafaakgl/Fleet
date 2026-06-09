@@ -1,0 +1,3 @@
+vehicle_plate,completion_date,service_task,driver_name,vendor,cost,mileage_km,reference,priority,labels,notes
+HV 101,2026-06-10,Brake Inspection; Spark Plugs Replacement,Thomas Weber,Werkstatt Nord GmbH,334.12,72850,WO-38,scheduled,"maintenance, brakes",Routine scheduled service
+AV 101,2026-06-09,Tire Rotation; Engine Oil & Filter Replacement,Anna Schneider,Fleet Service Berlin,147.93,45210,WO-19,scheduled,"maintenance, engine",

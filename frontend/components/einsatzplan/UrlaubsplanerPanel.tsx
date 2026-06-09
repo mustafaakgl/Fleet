@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Abteilungskalender } from './Abteilungskalender';
 import { Jahreskalender } from './Jahreskalender';
+import { BRAND_TAB_ACTIVE_PLAIN } from '@/lib/brand-colors';
+import { cn } from '@/lib/utils';
 import { Antragsverwaltung } from './Antragsverwaltung';
 
 type PlannerSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
@@ -38,11 +40,12 @@ export function UrlaubsplanerPanel({
             key={tab.id}
             type="button"
             onClick={() => setActiveSubtab(tab.id)}
-            className={`rounded-md border px-3 py-2 text-sm font-medium ${
+            className={cn(
+              'rounded-md border px-3 py-2 text-sm font-medium',
               activeSubtab === tab.id
-                ? 'border-blue-700 bg-blue-700 text-white'
-                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
+                ? BRAND_TAB_ACTIVE_PLAIN
+                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
+            )}
           >
             {tab.label}
           </button>

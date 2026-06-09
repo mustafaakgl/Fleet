@@ -6,6 +6,18 @@ import { Eye, FileText, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useFleetData } from '@/context/FleetDataContext';
 import { EmptyState } from '@/components/ui/empty-state';
+import {
+  FLEET_LINK_ACTION,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 type RequestTab = 'Pending' | 'Approved' | 'Rejected' | 'Needs Review' | 'Cancelled';
 
@@ -138,38 +150,40 @@ export function RequestsPage() {
           ))}
         </div>
         <div className="hidden md:block overflow-x-auto">
-          <table className="min-w-[1500px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1500px]')}>
+            <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colRequestId')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDriver')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDepartment')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colType')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDateFrom')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colDateTo')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colUploadedDoc')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colStatus')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colResponsibleDept')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colSubmittedAt')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('requests.colActions')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colRequestId')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colDriver')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colDepartment')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colType')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colDateFrom')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colDateTo')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colUploadedDoc')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colStatus')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colResponsibleDept')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colSubmittedAt')}</th>
+                <th className={FLEET_RAW_TH}>{t('requests.colActions')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {filteredRequests.map((request) => (
-                <tr key={request.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2.5 font-medium text-slate-900">{request.id}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{getDriverName(request.driverId, request.driverName)}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{request.department}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{request.type}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{request.dateFrom ?? '-'}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{request.dateTo ?? '-'}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{request.uploadedDocument}</td>
-                  <td className="px-3 py-2.5">
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{statusLabel(request.status)}</span>
+                <tr key={request.id} className={FLEET_RAW_TR}>
+                  <td className={FLEET_RAW_TD_PRIMARY}>{request.id}</td>
+                  <td className={FLEET_RAW_TD}>{getDriverName(request.driverId, request.driverName)}</td>
+                  <td className={FLEET_RAW_TD_MUTED}>{request.department}</td>
+                  <td className={FLEET_RAW_TD_MUTED}>{request.type}</td>
+                  <td className={FLEET_RAW_TD_MUTED}>{request.dateFrom ?? '-'}</td>
+                  <td className={FLEET_RAW_TD_MUTED}>{request.dateTo ?? '-'}</td>
+                  <td className={FLEET_RAW_TD_MUTED}>{request.uploadedDocument}</td>
+                  <td className={FLEET_RAW_TD}>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                      {statusLabel(request.status)}
+                    </span>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-700">{request.responsibleDepartment}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{request.submittedAt}</td>
-                  <td className="px-3 py-2.5">
+                  <td className={FLEET_RAW_TD_MUTED}>{request.responsibleDepartment}</td>
+                  <td className={FLEET_RAW_TD_MUTED}>{request.submittedAt}</td>
+                  <td className={FLEET_RAW_TD}>
                     <div className="flex flex-wrap gap-1">
                       <button
                         type="button"

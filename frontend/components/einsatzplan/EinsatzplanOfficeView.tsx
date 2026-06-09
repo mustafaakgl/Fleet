@@ -15,6 +15,8 @@ import {
 } from '@/lib/office-deep-links';
 import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
 import { groupAssignmentsByCompany } from './companyBoard';
+import { BRAND_LINK, BRAND_TAB_ACTIVE } from '@/lib/brand-colors';
+import { cn } from '@/lib/utils';
 import { Tagesplanung } from './Tagesplanung';
 
 export function EinsatzplanOfficeView() {
@@ -82,11 +84,10 @@ export function EinsatzplanOfficeView() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex min-w-fit items-center gap-2 rounded-t-md border px-4 py-2 text-sm font-semibold transition-colors ${
-                  isActive
-                    ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
-                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
+                className={cn(
+                  'flex min-w-fit items-center gap-2 rounded-t-md border px-4 py-2 text-sm font-semibold transition-colors',
+                  isActive ? BRAND_TAB_ACTIVE : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
+                )}
               >
                 <Icon className="h-4 w-4" />
                 {t(tab.labelKey)}
@@ -105,7 +106,7 @@ export function EinsatzplanOfficeView() {
               <button
                 type="button"
                 onClick={() => refetchHydrate()}
-                className="font-medium text-blue-700 underline"
+                className={cn('font-medium underline', BRAND_LINK)}
               >
                 {tCommon('errors.retry')}
               </button>
@@ -141,7 +142,7 @@ export function EinsatzplanOfficeView() {
                   <button
                     type="button"
                     onClick={() => setPlanningDate(today)}
-                    className="text-sm font-medium text-blue-700 hover:underline"
+                    className={cn('text-sm font-medium', BRAND_LINK)}
                   >
                     {t('office.backToToday')}
                   </button>

@@ -13,7 +13,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { ADMIN_ONLY_ROLES } from '../common/utils/permissions';
+import { CSV_IMPORT_ROLES } from '../common/utils/permissions';
 import { ImportService } from './import.service';
 
 type UploadedCsvFile = {
@@ -22,7 +22,7 @@ type UploadedCsvFile = {
 
 @Controller('import')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(...ADMIN_ONLY_ROLES)
+@Roles(...CSV_IMPORT_ROLES)
 export class ImportController {
   constructor(private readonly importService: ImportService) {}
 

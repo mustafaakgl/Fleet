@@ -2,14 +2,13 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Bell,
   Ellipsis,
   Loader2,
   Pencil,
-  Upload,
   Wallet,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -20,11 +19,15 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useExpenseWatchlist } from '@/hooks/useExpenseWatchlist';
-import { documentsApi, serviceRecordsApi, vehiclesApi } from '@/lib/api';
+import {
+  PendingFileUpload,
+  uploadServiceRecordFiles,
+} from '@/components/expense-history/ServiceRecordFileUpload';
+import { documentsApi, driversApi, serviceRecordsApi, vehiclesApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { documentHasFile, openAuthenticatedDocument } from '@/lib/file-access';
 import { canEditServiceRecords, canViewFinancials } from '@/lib/permissions';
-import type { Document, ServiceRecord, Vehicle } from '@/lib/types';
+import type { Document, Driver, ServiceRecord, Vehicle } from '@/lib/types';
 import { vehicleAbbreviation } from '@/lib/timeline-utils';
 import { cn } from '@/lib/utils';
 
@@ -68,6 +71,7 @@ function vehicleStatusDot(status?: Vehicle['status']) {
 
 type FormState = {
   vehicle_id: string;
+  driver_id: string;
   date: string;
   service_type: string;
   vendor: string;
@@ -79,6 +83,7 @@ type FormState = {
 function toFormState(record: ServiceRecord): FormState {
   return {
     vehicle_id: record.vehicle_id,
+    driver_id: record.driver_id ?? '',
     date: recordDateIso(record.date),
     service_type: record.service_type,
     vendor: record.vendor ?? '',
@@ -86,6 +91,10 @@ function toFormState(record: ServiceRecord): FormState {
     cost_amount: record.cost_amount != null ? String(record.cost_amount) : '',
     notes: record.notes ?? '',
   };
+}
+
+function driverLabel(driver: Driver): string {
+  return `${driver.first_name} ${driver.last_name}`.trim();
 }
 
 function DetailFieldRow({
@@ -110,7 +119,6 @@ function DetailFieldRow({
 export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const user = getUser();
   const canEdit = canEditServiceRecords(user?.role ?? 'customer');
   const showAmounts = canViewFinancials(user?.role ?? 'customer');
@@ -119,6 +127,9 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
 
   const [record, setRecord] = useState<ServiceRecord | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [photos, setPhotos] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [receipts, setReceipts] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,15 +143,19 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [entry, vehiclePage, receiptDocs] = await Promise.all([
+      const [entry, vehiclePage, driverPage, allDocs] = await Promise.all([
         serviceRecordsApi.getById(entryId),
         vehiclesApi.list({ limit: 200 }),
+        driversApi.list({ limit: 200 }),
         documentsApi.list('service_record', entryId),
       ]);
       setRecord(entry);
       setForm(toFormState(entry));
       setVehicles(vehiclePage.data);
-      setReceipts(receiptDocs.filter((doc) => doc.documentType === 'Receipt'));
+      setDrivers(driverPage.data);
+      setPhotos(allDocs.filter((doc) => doc.documentType === 'Photo'));
+      setDocuments(allDocs.filter((doc) => doc.documentType === 'Service Document'));
+      setReceipts(allDocs.filter((doc) => doc.documentType === 'Receipt'));
     } catch (e) {
       setRecord(null);
       setError(e instanceof Error ? e.message : t('expenseHistory.detail.loadError'));
@@ -158,7 +173,11 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     [form?.vehicle_id, record?.vehicle_id, vehicles],
   );
 
-  const receipt = receipts[0] ?? null;
+  const driverName = useMemo(() => {
+    if (record?.driver_name) return record.driver_name;
+    const driver = drivers.find((item) => item.id === (form?.driver_id ?? record?.driver_id));
+    return driver ? driverLabel(driver) : '—';
+  }, [drivers, form?.driver_id, record?.driver_id, record?.driver_name]);
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => (current ? { ...current, [key]: value } : current));
@@ -182,6 +201,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     try {
       const updated = await serviceRecordsApi.update(record.id, {
         vehicle_id: form.vehicle_id,
+        driver_id: form.driver_id || undefined,
         date: form.date,
         service_type: form.service_type.trim(),
         vendor: form.vendor.trim() || undefined,
@@ -199,26 +219,52 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     }
   }
 
-  async function handleReceiptUpload(file: File) {
-    if (!record) return;
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('ownerType', 'service_record');
-      formData.append('ownerId', record.id);
-      formData.append('documentType', 'Receipt');
-      formData.append('file', file);
+  async function reloadDocuments(recordId: string) {
+    const allDocs = await documentsApi.list('service_record', recordId);
+    setPhotos(allDocs.filter((doc) => doc.documentType === 'Photo'));
+    setDocuments(allDocs.filter((doc) => doc.documentType === 'Service Document'));
+    setReceipts(allDocs.filter((doc) => doc.documentType === 'Receipt'));
+  }
 
-      if (receipt?.id) {
-        await documentsApi.replaceUpload(receipt.id, formData);
-      } else {
-        await documentsApi.upload(formData);
-      }
-      const nextReceipts = await documentsApi.list('service_record', record.id);
-      setReceipts(nextReceipts.filter((doc) => doc.documentType === 'Receipt'));
+  async function uploadAddedFiles(
+    added: File[],
+    documentType: 'Photo' | 'Service Document',
+  ) {
+    if (!record || added.length === 0) return;
+
+    setUploading(true);
+    setSaveError(null);
+    try {
+      await uploadServiceRecordFiles(record.id, added, documentType, documentsApi.upload);
+      await reloadDocuments(record.id);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : t('expenseHistory.detail.uploadError'));
     } finally {
       setUploading(false);
     }
+  }
+
+  function renderDocumentList(items: Document[]) {
+    if (items.length === 0) return <span className="text-slate-500">—</span>;
+    return (
+      <ul className="space-y-1">
+        {items.map((doc) => (
+          <li key={doc.id}>
+            {documentHasFile(doc) ? (
+              <button
+                type="button"
+                onClick={() => void openAuthenticatedDocument(doc.id, doc.fileName)}
+                className="text-emerald-700 hover:underline"
+              >
+                {doc.fileName}
+              </button>
+            ) : (
+              <span className="text-slate-600">{doc.fileName || doc.documentType}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
   }
 
   if (loading) {
@@ -340,6 +386,25 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
               </DetailFieldRow>
 
               <DetailFieldRow
+                label={t('serviceHistory.colDriver')}
+                editing={editing}
+                view={displayText(driverName === '—' ? undefined : driverName)}
+              >
+                <Select
+                  value={form.driver_id}
+                  onChange={(event) => updateForm('driver_id', event.target.value)}
+                  className="max-w-md"
+                >
+                  <option value="">{t('serviceHistory.create.selectDriver')}</option>
+                  {drivers.map((driver) => (
+                    <option key={driver.id} value={driver.id}>
+                      {driverLabel(driver)}
+                    </option>
+                  ))}
+                </Select>
+              </DetailFieldRow>
+
+              <DetailFieldRow
                 label={t('expenseHistory.colDate')}
                 editing={editing}
                 view={
@@ -401,7 +466,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
                   value={form.cost_amount}
                   onChange={(event) => updateForm('cost_amount', event.target.value)}
                   className="max-w-xs"
-                  disabled={!showAmounts}
+                  disabled={!canEdit}
                 />
               </DetailFieldRow>
 
@@ -432,63 +497,48 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
               </DetailFieldRow>
 
               <DetailFieldRow
-                label={t('expenseHistory.colReceipt')}
-                editing={editing || canEdit}
-                view={
-                  receipt && documentHasFile(receipt) ? (
-                    <button
-                      type="button"
-                      onClick={() => void openAuthenticatedDocument(receipt.id, receipt.fileName)}
-                      className="text-emerald-700 hover:underline"
-                    >
-                      {receipt.fileName}
-                    </button>
-                  ) : (
-                    '—'
-                  )
-                }
+                label={t('serviceHistory.create.sectionPhotos')}
+                editing={canEdit}
+                view={renderDocumentList(photos)}
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  {receipt && documentHasFile(receipt) ? (
-                    <button
-                      type="button"
-                      onClick={() => void openAuthenticatedDocument(receipt.id, receipt.fileName)}
-                      className="text-emerald-700 hover:underline"
-                    >
-                      {receipt.fileName}
-                    </button>
-                  ) : (
-                    <span className="text-slate-500">—</span>
-                  )}
-                  {canEdit ? (
-                    <>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) void handleReceiptUpload(file);
-                          event.target.value = '';
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={uploading}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        {uploading ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Upload className="mr-2 h-4 w-4" />
-                        )}
-                        {t('expenseHistory.detail.uploadFile')}
-                      </Button>
-                    </>
+                <div className="max-w-xl space-y-3">
+                  {renderDocumentList(photos)}
+                  <PendingFileUpload
+                    label={t('serviceHistory.create.uploadPhotos')}
+                    hint={t('serviceHistory.create.uploadPhotosHint')}
+                    accept="image/*"
+                    files={[]}
+                    onChange={() => {}}
+                    onAddFiles={(added) => uploadAddedFiles(added, 'Photo')}
+                    disabled={uploading}
+                    icon="photo"
+                  />
+                  {uploading ? (
+                    <p className="flex items-center gap-2 text-xs text-slate-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {t('expenseHistory.detail.uploading')}
+                    </p>
                   ) : null}
+                </div>
+              </DetailFieldRow>
+
+              <DetailFieldRow
+                label={t('serviceHistory.create.sectionDocuments')}
+                editing={canEdit}
+                view={renderDocumentList([...documents, ...receipts])}
+              >
+                <div className="max-w-xl space-y-3">
+                  {renderDocumentList([...documents, ...receipts])}
+                  <PendingFileUpload
+                    label={t('serviceHistory.create.uploadDocuments')}
+                    hint={t('serviceHistory.create.uploadDocumentsHint')}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"
+                    files={[]}
+                    onChange={() => {}}
+                    onAddFiles={(added) => uploadAddedFiles(added, 'Service Document')}
+                    disabled={uploading}
+                    icon="document"
+                  />
                 </div>
               </DetailFieldRow>
 

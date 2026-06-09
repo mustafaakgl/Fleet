@@ -1058,6 +1058,7 @@ export const onboardingApi = {
           users: number;
           drivers: number;
           vehicles: number;
+          companies: number;
           assignments: number;
           pending_invitations: number;
         };
@@ -1263,6 +1264,18 @@ export const importApi = {
     const form = new FormData();
     form.append('file', file);
     return api.post<ImportResult>('/import/users', form).then((r) => r.data);
+  },
+
+  documents: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<ImportResult>('/documents/import', form).then((r) => r.data);
+  },
+
+  serviceRecords: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<ImportResult>('/service-records/import', form).then((r) => r.data);
   },
 };
 

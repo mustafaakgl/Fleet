@@ -8,6 +8,18 @@ import { downloadBlob } from '@/lib/download-blob';
 import { getUser } from '@/lib/auth';
 import { isPasswordStrong } from '@/lib/password-policy';
 import type { User, UserRole, UserStatus } from '@/lib/types';
+import {
+  FLEET_LIST_CARD,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 type DrawerMode = 'create' | 'edit' | 'invite';
 
@@ -272,7 +284,7 @@ export function Benutzerverwaltung() {
         <button
           type="button"
           onClick={openCreateDrawer}
-          className="inline-flex items-center gap-2 rounded-md border border-blue-700 bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+          className="inline-flex items-center gap-2 rounded-md border border-[#163a5c] bg-[#1a4d7a] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0b2342]"
         >
           <UserPlus className="h-4 w-4" />
           {t('usersAdmin.create')}
@@ -313,20 +325,20 @@ export function Benutzerverwaltung() {
         </select>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <table className={FLEET_RAW_TABLE}>
+            <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colName')}</th>
-                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colEmail')}</th>
-                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colRole')}</th>
-                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colLanguage')}</th>
-                <th className="border-b border-slate-200 px-4 py-3">{t('usersAdmin.colStatus')}</th>
-                <th className="border-b border-slate-200 px-4 py-3 text-right">{t('usersAdmin.colActions')}</th>
+                <th className={FLEET_RAW_TH}>{t('usersAdmin.colName')}</th>
+                <th className={FLEET_RAW_TH}>{t('usersAdmin.colEmail')}</th>
+                <th className={FLEET_RAW_TH}>{t('usersAdmin.colRole')}</th>
+                <th className={FLEET_RAW_TH}>{t('usersAdmin.colLanguage')}</th>
+                <th className={FLEET_RAW_TH}>{t('usersAdmin.colStatus')}</th>
+                <th className={cn(FLEET_RAW_TH, 'text-right')}>{t('usersAdmin.colActions')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {loading && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
@@ -353,17 +365,17 @@ export function Benutzerverwaltung() {
 
               {!loading && !loadError &&
                 sortedUsers.map((user) => (
-                  <tr key={user.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-2.5 font-medium text-slate-900">{user.full_name}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{user.email}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{roleLabel(user.role)}</td>
-                    <td className="px-4 py-2.5 text-slate-700">{languageLabel(user.language)}</td>
-                    <td className="px-4 py-2.5">
+                  <tr key={user.id} className={FLEET_RAW_TR}>
+                    <td className={FLEET_RAW_TD_PRIMARY}>{user.full_name}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{user.email}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{roleLabel(user.role)}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{languageLabel(user.language)}</td>
+                    <td className={FLEET_RAW_TD}>
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(user.status)}`}>
                         {user.status === 'active' ? t('usersAdmin.statusActive') : t('usersAdmin.statusInactive')}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <div className="flex justify-end gap-1">
                         <button
                           type="button"
@@ -506,7 +518,7 @@ export function Benutzerverwaltung() {
               <button type="button" onClick={closeDrawer} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                 {t('usersAdmin.cancel')}
               </button>
-              <button type="button" onClick={saveUser} disabled={saving} className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
+              <button type="button" onClick={saveUser} disabled={saving} className="rounded-md bg-[#1a4d7a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b2342] disabled:opacity-50">
                 {saving
                   ? t('usersAdmin.saving')
                   : drawerMode === 'invite'

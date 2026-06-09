@@ -1,3 +1,24 @@
+export type RepairPriorityClass = 'scheduled' | 'non_scheduled' | 'emergency' | 'none';
+
+export const REPAIR_PRIORITY_OPTIONS: RepairPriorityClass[] = [
+  'scheduled',
+  'non_scheduled',
+  'emergency',
+  'none',
+];
+
+const EMERGENCY_KEYWORDS = [
+  'emergency',
+  'breakdown',
+  'notfall',
+  'panne',
+  'urgent',
+  'dringend',
+  'unfall',
+  'defekt',
+  'ausfall',
+];
+
 const ROUTINE_KEYWORDS = [
   'routine',
   'periodic',
@@ -10,6 +31,31 @@ const ROUTINE_KEYWORDS = [
   'wartung',
   'inspektion',
 ];
+
+function readNotesField(notes: string | undefined, key: string): string | null {
+  if (!notes?.trim()) return null;
+  const pattern = new RegExp(`^${key}:\\s*(.+)$`, 'im');
+  const match = notes.match(pattern);
+  return match?.[1]?.trim() ?? null;
+}
+
+export function getRepairPriorityClass(
+  serviceType: string,
+  notes?: string,
+): RepairPriorityClass {
+  const fromNotes = readNotesField(notes, 'Priority') as RepairPriorityClass | null;
+  if (fromNotes && REPAIR_PRIORITY_OPTIONS.includes(fromNotes)) {
+    return fromNotes;
+  }
+
+  const normalized = serviceType.trim().toLowerCase();
+  if (!normalized) return 'none';
+  if (EMERGENCY_KEYWORDS.some((keyword) => normalized.includes(keyword))) {
+    return 'emergency';
+  }
+  if (isRoutineServiceType(serviceType)) return 'scheduled';
+  return 'non_scheduled';
+}
 
 export function isRoutineServiceType(serviceType: string): boolean {
   const normalized = serviceType.trim().toLowerCase();

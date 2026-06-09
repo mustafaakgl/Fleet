@@ -4,6 +4,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getTodayDate, getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { dashboardApi } from '@/lib/api';
+import {
+  FLEET_LIST_CARD,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 function currency(value: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
@@ -110,8 +121,8 @@ export function RevenueSummary() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={t('revenue.today')} value={currency(todayRevenue)} tone="text-emerald-700" />
-        <MetricCard label={t('revenue.tomorrow')} value={currency(tomorrowForecast)} tone="text-blue-700" />
+        <MetricCard label={t('revenue.today')} value={currency(todayRevenue)} tone="text-[#1a4d7a]" />
+        <MetricCard label={t('revenue.tomorrow')} value={currency(tomorrowForecast)} tone="text-[#0b2342]" />
         <MetricCard label={t('revenue.monthly')} value={currency(monthlyRevenue)} tone="text-slate-900" />
         <MetricCard
           label={t('revenue.lost')}
@@ -148,30 +159,30 @@ function RevenueTable({
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+    <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
+      <div className="border-b border-slate-200 px-3 py-2">
+        <h3 className="text-[13px] font-semibold text-slate-900">{title}</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+        <table className={FLEET_RAW_TABLE}>
+          <thead className={FLEET_RAW_THEAD}>
             <tr>
-              <th className="border-b border-slate-200 px-3 py-2.5">{t('revenue.colName')}</th>
-              <th className="border-b border-slate-200 px-3 py-2.5 text-right">{t('revenue.colRevenue')}</th>
+              <th className={FLEET_RAW_TH}>{t('revenue.colName')}</th>
+              <th className={cn(FLEET_RAW_TH, 'text-right')}>{t('revenue.colRevenue')}</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className={FLEET_RAW_TBODY}>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={2} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={2} className="px-3 py-6 text-center text-[13px] text-slate-500">
                   {t('common.noRecords')}
                 </td>
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.name} className="border-t border-slate-100">
-                  <td className="px-3 py-2.5 font-medium text-slate-900">{row.name}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{currency(row.amount)}</td>
+                <tr key={row.name} className={FLEET_RAW_TR}>
+                  <td className={FLEET_RAW_TD_PRIMARY}>{row.name}</td>
+                  <td className={cn(FLEET_RAW_TD, 'text-right font-semibold')}>{currency(row.amount)}</td>
                 </tr>
               ))
             )}

@@ -13,12 +13,26 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { dashboardApi } from '@/lib/api';
 import { canViewFinancials } from '@/lib/permissions';
-import { formatDate } from '@/lib/utils';
+import {
+  FLEET_LINK_ACTION,
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_CELL_PRIMARY,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
+import { cn, formatDate } from '@/lib/utils';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
+import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
 import { WatchedExpensesWidget } from '@/components/dashboard/WatchedExpensesWidget';
 import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
+import { OnboardingTasksWidget } from '@/components/dashboard/OnboardingTasksWidget';
 import type {
   AuthUser,
   DashboardSummary,
@@ -138,6 +152,8 @@ export function StandardDashboard() {
         </Card>
       )}
 
+      <OnboardingTasksWidget />
+
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.criticalAlerts')}</h2>
         {loading ? (
@@ -172,6 +188,12 @@ export function StandardDashboard() {
       <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />
 
       <WatchedExpensesWidget />
+
+      {summary?.priorityTrends ? (
+        <section className="space-y-3">
+          <RepairPriorityTrendsChart trends={summary.priorityTrends} />
+        </section>
+      ) : null}
 
       {showFinancials && summary?.costAnalytics ? (
         <FleetCostCharts analytics={summary.costAnalytics} />
@@ -285,32 +307,31 @@ export function StandardDashboard() {
             <RevenueCard title={t('dashboard.revMonth')} value={currency(summary.revenueAnalytics.monthlyRevenue)} />
           </div>
           {summary.revenueAnalytics.revenueByCompany && summary.revenueAnalytics.revenueByCompany.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">{t('dashboard.revenueByCompany')}</CardTitle>
+            <Card className={FLEET_LIST_CARD}>
+              <CardHeader className="px-3 py-2">
+                <CardTitle className="text-[13px]">{t('dashboard.revenueByCompany')}</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <Table>
+                <Table className={FLEET_TABLE}>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('dashboard.colCompany')}</TableHead>
-                      <TableHead>{t('dashboard.colAssignments')}</TableHead>
-                      <TableHead>{t('dashboard.colRevenue')}</TableHead>
+                    <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('dashboard.colCompany')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('dashboard.colAssignments')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('dashboard.colRevenue')}</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className={FLEET_TABLE_BODY}>
                     {summary.revenueAnalytics.revenueByCompany.map((row) => (
-                      <TableRow key={row.companyId}>
-                        <TableCell>
-                          <Link
-                            href={`/companies/${row.companyId}`}
-                            className="text-blue-600 hover:underline"
-                          >
+                      <TableRow key={row.companyId} className={FLEET_TABLE_ROW}>
+                        <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
+                          <Link href={`/companies/${row.companyId}`} className={FLEET_LINK_ACTION}>
                             {row.companyName}
                           </Link>
                         </TableCell>
-                        <TableCell>{row.assignments}</TableCell>
-                        <TableCell>{currency(row.revenue)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{row.assignments}</TableCell>
+                        <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'font-medium')}>
+                          {currency(row.revenue)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

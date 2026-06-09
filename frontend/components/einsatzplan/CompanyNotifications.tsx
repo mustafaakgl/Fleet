@@ -5,6 +5,18 @@ import { useTranslation } from 'react-i18next';
 import { getTodayDate, getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { companiesApi, companyEmailsApi } from '@/lib/api';
 import type { CompanyEmail, CompanyEmailStatus } from '@/lib/types';
+import {
+  FLEET_LIST_CARD,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 type EmailStatus = 'Not Prepared' | 'Draft Ready' | 'Sent' | 'Failed' | 'Needs Review';
 
@@ -57,7 +69,7 @@ function badgeClass(status: EmailStatus) {
     case 'Not Prepared':
       return 'border-slate-300 bg-slate-100 text-slate-700';
     case 'Draft Ready':
-      return 'border-blue-200 bg-blue-100 text-blue-700';
+      return 'border-[#d4e3f2] bg-[#e8f0f8] text-[#1a4d7a]';
     case 'Sent':
       return 'border-emerald-200 bg-emerald-100 text-emerald-700';
     case 'Failed':
@@ -324,47 +336,47 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
         <p className="text-sm text-slate-600">{t('compNotif.subtitle')}</p>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         <div className="overflow-x-auto">
-          <table className="min-w-[1520px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1520px]')}>
+            <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colCompany')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colDate')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colAssignedDrivers')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colVehicles')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colPlannedJobs')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colEmailStatus')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colRecipientEmail')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colLastSent')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('compNotif.colActions')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colCompany')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colDate')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colAssignedDrivers')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colVehicles')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colPlannedJobs')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colEmailStatus')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colRecipientEmail')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colLastSent')}</th>
+                <th className={FLEET_RAW_TH}>{t('compNotif.colActions')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {notificationRows.map((row) => {
                 const isBusy = busyKey === row.key;
 
                 return (
-                  <tr key={row.key} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{row.company}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.date}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.assignedDrivers.join(', ') || '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.vehicles.join(', ') || '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.plannedJobs.join(', ') || '-'}</td>
-                    <td className="px-3 py-2.5">
+                  <tr key={row.key} className={FLEET_RAW_TR}>
+                    <td className={FLEET_RAW_TD_PRIMARY}>{row.company}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{row.date}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{row.assignedDrivers.join(', ') || '-'}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{row.vehicles.join(', ') || '-'}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{row.plannedJobs.join(', ') || '-'}</td>
+                    <td className={FLEET_RAW_TD}>
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClass(row.status)}`}>
                         {t(EMAIL_STATUS_KEY[row.status])}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.recipientEmail}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{row.lastSent ?? '-'}</td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD_MUTED}>{row.recipientEmail}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{row.lastSent ?? '-'}</td>
+                    <td className={FLEET_RAW_TD}>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           disabled={isBusy}
                           onClick={() => void generateCompanyEmailDraft(row)}
-                          className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                          className="rounded-md border border-[#163a5c] px-2 py-1 text-xs font-medium text-[#1a4d7a] hover:bg-[#e8f0f8] disabled:opacity-50"
                         >
                           {t('compNotif.generateDraft')}
                         </button>

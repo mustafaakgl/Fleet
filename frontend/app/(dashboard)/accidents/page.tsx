@@ -10,6 +10,17 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { accidentsApi, documentsApi } from '@/lib/api';
 import type { Document } from '@/lib/types';
+import {
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_CELL_PRIMARY,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
 import { formatDate } from '@/lib/utils';
 
 type IncidentStatus = 'reported' | 'under_review' | 'resolved' | 'rejected';
@@ -128,7 +139,7 @@ export default function AccidentsPage() {
         )}
       </div>
 
-      <Card>
+      <Card className={FLEET_LIST_CARD}>
         {loading ? (
           <div className="p-6 text-center text-sm text-gray-500">{t('accidents.loading')}</div>
         ) : error ? (
@@ -151,39 +162,39 @@ export default function AccidentsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('accidents.colDate')}</TableHead>
-                  <TableHead>{t('accidents.colDriver')}</TableHead>
-                  <TableHead>{t('accidents.colVehicle')}</TableHead>
-                  <TableHead>{t('accidents.colCompany')}</TableHead>
-                  <TableHead>{t('accidents.colLocation')}</TableHead>
-                  <TableHead>{t('accidents.colDamageValue')}</TableHead>
-                  <TableHead>{t('accidents.colStatus')}</TableHead>
-                  <TableHead>{t('accidents.colActions')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colDriver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colVehicle')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colCompany')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colLocation')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colDamageValue')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colStatus')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('accidents.colActions')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {visibleReports.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{formatDate(r.incidentDateTime)}</TableCell>
-                    <TableCell>
+                  <TableRow key={r.id} className={FLEET_TABLE_ROW}>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDate(r.incidentDateTime)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
                       {r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '-'}
                     </TableCell>
-                    <TableCell>{r.vehicle?.plateNumber ?? '-'}</TableCell>
-                    <TableCell>{r.company?.name ?? '-'}</TableCell>
-                    <TableCell>{r.location ?? '-'}</TableCell>
-                    <TableCell>{currency(r.damageValue)}</TableCell>
-                    <TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.vehicle?.plateNumber ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.company?.name ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.location ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{currency(r.damageValue)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(r.status)}`}
                       >
                         {t(`accidents.status.${r.status}`)}
                       </span>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-2">
+                    <TableCell className={FLEET_TABLE_CELL}>
+                      <div className="flex flex-wrap gap-2 text-[13px]">
                         <button
                           type="button"
                           onClick={() => setSelectedId(r.id)}

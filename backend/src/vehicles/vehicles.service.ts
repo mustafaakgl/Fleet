@@ -30,6 +30,8 @@ function toClientVehicle(row: VehicleWithCurrentDriver) {
     plate_number: row.plateNumber,
     brand: row.brand,
     model: row.model,
+    vin: row.vin ?? undefined,
+    internal_code: row.internalCode,
     year: row.year ?? undefined,
     status: row.status,
     tuv_expiry_date: row.tuvExpiryDate?.toISOString(),

@@ -15,7 +15,7 @@ const emptyMenuItems: Array<{
 }> = [
   { id: 'urlaub', label: 'Urlaub eintragen', dotClass: 'bg-emerald-500' },
   { id: 'krank', label: 'Krankenstand eintragen', dotClass: 'bg-red-500' },
-  { id: 'sonstige', label: 'Sonstige Abwesenheit eintragen', dotClass: 'bg-blue-500' },
+  { id: 'sonstige', label: 'Sonstige Abwesenheit eintragen', dotClass: 'bg-[#1a4d7a]' },
 ];
 
 const manualMenuItems: Array<{
@@ -23,7 +23,7 @@ const manualMenuItems: Array<{
   label: string;
   dotClass: string;
 }> = [
-  { id: 'change', label: 'Status ändern', dotClass: 'bg-blue-500' },
+  { id: 'change', label: 'Status ändern', dotClass: 'bg-[#1a4d7a]' },
   { id: 'delete', label: 'Eintrag löschen', dotClass: 'bg-red-500' },
 ];
 

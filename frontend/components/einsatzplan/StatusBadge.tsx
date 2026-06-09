@@ -5,7 +5,7 @@ interface StatusBadgeProps {
 }
 
 const styleByStatus: Record<PlanStatus, string> = {
-  planned: 'bg-blue-100 text-blue-700',
+  planned: 'bg-[#e8f0f8] text-[#1a4d7a]',
   in_progress: 'bg-amber-100 text-amber-700',
   completed: 'bg-emerald-100 text-emerald-700',
   cancelled: 'bg-red-100 text-red-700',

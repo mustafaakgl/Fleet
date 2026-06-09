@@ -10,7 +10,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { vehiclesApi, documentsApi, serviceRecordsApi, type VehicleEquipmentItem } from '@/lib/api';
 import type { VehicleDetail, Document, ServiceRecord } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
-import { formatDate, statusColor } from '@/lib/utils';
+import {
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
+import { cn, formatDate, statusColor } from '@/lib/utils';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { ServiceRecordInlineField } from '@/components/service-records/ServiceRecordInlineField';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
@@ -390,32 +399,32 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {documentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.documentsLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('vehicleDetail.colDocType')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colFileName')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colExpiryDate')}</TableHead>
-                  <TableHead>{t('vehicleDetail.status')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colUploadedAt')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colDocType')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colFileName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colExpiryDate')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colUploadedAt')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {documents.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={5} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   documents.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell>{doc.documentType}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={doc.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{doc.documentType}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <DocumentFileLink document={doc} variant="link" />
                       </TableCell>
-                      <TableCell>{formatDate(doc.expiryDate)}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(doc.expiryDate)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <Badge
                           className={
                             doc.status === 'valid'
@@ -430,7 +439,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                           {doc.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatDate(doc.uploadedAt)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(doc.uploadedAt)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -466,20 +475,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           ) : equipment.length === 0 ? (
             <p className="text-sm text-gray-500">{t('vehicleDetail.equipmentEmpty')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('vehicleDetail.equipmentColName')}</TableHead>
-                  <TableHead>{t('vehicleDetail.equipmentColQty')}</TableHead>
-                  <TableHead>{t('vehicleDetail.status')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.equipmentColName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.equipmentColQty')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {equipment.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.quantity}</TableCell>
-                    <TableCell>{item.status}</TableCell>
+                  <TableRow className={FLEET_TABLE_ROW} key={item.id}>
+                    <TableCell className={FLEET_TABLE_CELL}>{item.name}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{item.quantity}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{item.status}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -496,31 +505,31 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {serviceRecordsError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.serviceHistoryLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('vehicleDetail.date')}</TableHead>
-                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
-                  <TableHead>{t('serviceHistory.colTask')}</TableHead>
-                  <TableHead>{t('serviceHistory.colRepairCompany')}</TableHead>
-                  <TableHead>{t('serviceHistory.colMileage')}</TableHead>
-                  <TableHead>{t('serviceHistory.colCost')}</TableHead>
-                  <TableHead>{t('serviceHistory.colNotes')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.colTask')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.colRepairCompany')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.colMileage')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.colCost')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.colNotes')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {serviceRecords.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={7} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   serviceRecords.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{formatDate(row.date)}</TableCell>
-                      <TableCell>{row.driver_name ?? '-'}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={row.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.date)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.driver_name ?? '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <ServiceRecordInlineField
                           record={row}
                           field="service_type"
@@ -528,14 +537,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                           onUpdated={handleServiceRecordUpdated}
                         />
                       </TableCell>
-                      <TableCell>{row.repair_company}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{row.repair_company}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {row.mileage_km !== null && row.mileage_km !== undefined
                           ? row.mileage_km.toLocaleString('de-DE')
                           : '-'}
                       </TableCell>
-                      <TableCell>{currency(row.cost_amount)}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{currency(row.cost_amount)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <ServiceRecordInlineField
                           record={row}
                           field="notes"
@@ -560,35 +569,35 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {assignmentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.assignmentsLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('vehicleDetail.date')}</TableHead>
-                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
-                  <TableHead>{t('vehicleDetail.company')}</TableHead>
-                  <TableHead>{t('vehicleDetail.startTime')}</TableHead>
-                  <TableHead>{t('vehicleDetail.endTime')}</TableHead>
-                  <TableHead>{t('vehicleDetail.status')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.company')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.startTime')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.endTime')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {assignments.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={6} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   assignments.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell>{formatDate(a.workDate)}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={a.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(a.workDate)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {a.driver.firstName} {a.driver.lastName}
                       </TableCell>
-                      <TableCell>{a.company.name}</TableCell>
-                      <TableCell>{a.startTime}</TableCell>
-                      <TableCell>{a.endTime}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{a.company.name}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{a.startTime}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{a.endTime}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <Badge className={statusColor(a.status)}>{a.status}</Badge>
                       </TableCell>
                     </TableRow>
@@ -605,29 +614,29 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           <CardTitle>{t('vehicleDetail.driverHistory')}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table className={FLEET_TABLE}>
             <TableHeader>
-              <TableRow>
-                <TableHead>{t('vehicleDetail.driver')}</TableHead>
-                <TableHead>{t('vehicleDetail.colFirstUsed')}</TableHead>
-                <TableHead>{t('vehicleDetail.colLastUsed')}</TableHead>
-                <TableHead>{t('vehicleDetail.colTotalAssignments')}</TableHead>
+              <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.driver')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colFirstUsed')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colLastUsed')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colTotalAssignments')}</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className={FLEET_TABLE_BODY}>
               {driverHistory.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-gray-500">
+                  <TableCell colSpan={4} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                     {t('common.noRecords')}
                   </TableCell>
                 </TableRow>
               ) : (
                 driverHistory.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.driver}</TableCell>
-                    <TableCell>{formatDate(row.firstUsed)}</TableCell>
-                    <TableCell>{formatDate(row.lastUsed)}</TableCell>
-                    <TableCell>{row.totalAssignments}</TableCell>
+                  <TableRow className={FLEET_TABLE_ROW} key={row.id}>
+                    <TableCell className={FLEET_TABLE_CELL}>{row.driver}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.firstUsed)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{formatDate(row.lastUsed)}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>{row.totalAssignments}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -644,35 +653,35 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {handoversError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.handoversLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('vehicleDetail.date')}</TableHead>
-                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colType')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colPhotoStatus')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colDamage')}</TableHead>
-                  <TableHead>{t('vehicleDetail.status')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colType')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colPhotoStatus')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colDamage')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {handovers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={6} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   handovers.map((h) => (
-                    <TableRow key={h.id}>
-                      <TableCell>{formatDate(h.handoverDateTime)}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={h.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(h.handoverDateTime)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {h.driver ? `${h.driver.firstName} ${h.driver.lastName}` : '-'}
                       </TableCell>
-                      <TableCell>{h.handoverType}</TableCell>
-                      <TableCell>{h.photoStatus.replace(/_/g, ' ')}</TableCell>
-                      <TableCell>{h.damageDetected ? h.damageNotes ?? t('vehicleDetail.yes') : '-'}</TableCell>
-                      <TableCell>{h.status}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{h.handoverType}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{h.photoStatus.replace(/_/g, ' ')}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{h.damageDetected ? h.damageNotes ?? t('vehicleDetail.yes') : '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{h.status}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -690,35 +699,35 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {incidentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.incidentsLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('vehicleDetail.date')}</TableHead>
-                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colDescription')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colDamageValue')}</TableHead>
-                  <TableHead>{t('vehicleDetail.status')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colDescription')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colDamageValue')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {accidentRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={5} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   accidentRows.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{formatDate(item.incidentDateTime)}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={item.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(item.incidentDateTime)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {item.driver
                           ? `${item.driver.firstName} ${item.driver.lastName}`
                           : '-'}
                       </TableCell>
-                      <TableCell>{item.description}</TableCell>
-                      <TableCell>{currency(item.damageValue)}</TableCell>
-                      <TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{item.description}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{currency(item.damageValue)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {item.status === 'reported' || item.status === 'under_review' ? (
                           <span className="inline-flex items-center gap-1 text-amber-700">
                             <AlertTriangle className="h-4 w-4" />
@@ -745,37 +754,37 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {incidentsError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.cargoLoadError')}</p>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('vehicleDetail.date')}</TableHead>
-                  <TableHead>{t('vehicleDetail.driver')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colCargoName')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colCargoOwner')}</TableHead>
-                  <TableHead>{t('vehicleDetail.colDamageValue')}</TableHead>
-                  <TableHead>{t('vehicleDetail.status')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.date')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.driver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colCargoName')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colCargoOwner')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colDamageValue')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {cargoRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-sm text-gray-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={6} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
                       {t('common.noRecords')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   cargoRows.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{formatDate(item.incidentDateTime)}</TableCell>
-                      <TableCell>
+                    <TableRow className={FLEET_TABLE_ROW} key={item.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(item.incidentDateTime)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {item.driver
                           ? `${item.driver.firstName} ${item.driver.lastName}`
                           : '-'}
                       </TableCell>
-                      <TableCell>{item.cargoName ?? '-'}</TableCell>
-                      <TableCell>{item.cargoOwner ?? '-'}</TableCell>
-                      <TableCell>{currency(item.damageValue)}</TableCell>
-                      <TableCell>{item.status}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{item.cargoName ?? '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{item.cargoOwner ?? '-'}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{currency(item.damageValue)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{item.status}</TableCell>
                     </TableRow>
                   ))
                 )}

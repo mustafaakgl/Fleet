@@ -8,7 +8,18 @@ import type { MorningCheckin } from '@/context/FleetDataContext';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { morningCheckinsApi } from '@/lib/api';
 import { liveTrackingHref } from '@/lib/office-deep-links';
-import { formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
+import {
+  FLEET_LIST_CARD,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn, formatAccidentCountLabel, getDriverRiskBadgeClass, getDriverRiskLabel } from '@/lib/utils';
 
 function formatApiError(error: unknown, fallback: string) {
   if (typeof error === 'object' && error !== null && 'response' in error) {
@@ -36,7 +47,7 @@ function statusPill(status: MorningCheckin['status']) {
     case 'Confirmed':
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'Added to Einsatzplan':
-      return 'bg-blue-100 text-blue-700 border-blue-200';
+      return 'bg-[#e8f0f8] text-[#1a4d7a] border-[#d4e3f2]';
     case 'Waiting for Review':
       return 'bg-amber-100 text-amber-700 border-amber-200';
     case 'Missing Vehicle Plate':
@@ -202,7 +213,7 @@ export function MorningCheckins() {
             type="button"
             onClick={() => setAutoAddEnabled((prev) => !prev)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              autoAddEnabled ? 'bg-blue-600' : 'bg-slate-300'
+              autoAddEnabled ? 'bg-[#1a4d7a]' : 'bg-slate-300'
             }`}
             aria-pressed={autoAddEnabled}
           >
@@ -221,47 +232,47 @@ export function MorningCheckins() {
         <SummaryCard label={t('checkins.waiting')} value={summary.waiting} tone="text-amber-700" />
         <SummaryCard label={t('checkins.missingVehicle')} value={summary.missingVehicle} tone="text-orange-700" />
         <SummaryCard label={t('checkins.missingCompany')} value={summary.missingCompany} tone="text-orange-700" />
-        <SummaryCard label={t('checkins.added')} value={summary.added} tone="text-blue-700" />
+        <SummaryCard label={t('checkins.added')} value={summary.added} tone="text-[#1a4d7a]" />
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         <div className="overflow-x-auto">
-          <table className="min-w-[1280px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1280px]')}>
+            <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colDriver')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colDepartment')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colSubmittedAt')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colVehiclePlate')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colCompany')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colCargo')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colQuantity')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colStartLocation')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colStatus')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colConflict')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('checkins.colActions')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colDriver')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colDepartment')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colSubmittedAt')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colVehiclePlate')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colCompany')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colCargo')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colQuantity')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colStartLocation')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colStatus')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colConflict')}</th>
+                <th className={FLEET_RAW_TH}>{t('checkins.colActions')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {todaysCheckins.map((checkin) => {
                 const driver = drivers.find((item) => item.id === checkin.driverId);
                 return (
-                  <tr key={checkin.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{driver?.name ?? checkin.driverId}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{driver?.department ?? '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.submittedAt}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.vehiclePlate || '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.company || '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.cargoName || '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.cargoQuantity || '-'}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.startLocation || '-'}</td>
-                    <td className="px-3 py-2.5">
+                  <tr key={checkin.id} className={FLEET_RAW_TR}>
+                    <td className={FLEET_RAW_TD_PRIMARY}>{driver?.name ?? checkin.driverId}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{driver?.department ?? '-'}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{checkin.submittedAt}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{checkin.vehiclePlate || '-'}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{checkin.company || '-'}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{checkin.cargoName || '-'}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{checkin.cargoQuantity || '-'}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{checkin.startLocation || '-'}</td>
+                    <td className={FLEET_RAW_TD}>
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusPill(checkin.status)}`}>
                         {t(CHECKIN_STATUS_KEY[checkin.status] ?? checkin.status)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-slate-700">{checkin.conflictReason ?? t('checkins.noConflict')}</td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD_MUTED}>{checkin.conflictReason ?? t('checkins.noConflict')}</td>
+                    <td className={FLEET_RAW_TD}>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -273,7 +284,7 @@ export function MorningCheckins() {
                         <button
                           type="button"
                           onClick={() => handleAdd(checkin.id)}
-                          className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                          className="rounded-md border border-[#163a5c] px-2 py-1 text-xs font-medium text-[#1a4d7a] hover:bg-[#e8f0f8]"
                         >
                           {t('checkins.addToPlan')}
                         </button>
@@ -397,7 +408,7 @@ export function MorningCheckins() {
                 onClick={() => {
                   if (selectedCheckin) void handleAdd(selectedCheckin.id);
                 }}
-                className="rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                className="rounded-md border border-[#163a5c] px-3 py-2 text-sm font-medium text-[#1a4d7a] hover:bg-[#e8f0f8]"
               >
                 {t('checkins.addToPlan')}
               </button>

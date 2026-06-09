@@ -17,6 +17,7 @@ type VehiclePlateDisplayProps = {
   vehicleId?: string;
   onPhotoUploaded?: (photoUrl: string) => void;
   size?: 'sm' | 'md' | 'lg';
+  layout?: 'stacked' | 'inline';
   className?: string;
 };
 
@@ -24,6 +25,12 @@ const sizeClasses = {
   sm: { wrap: 'w-[72px]', image: 'h-12 w-[72px]', text: 'text-sm', icon: 'h-5 w-5' },
   md: { wrap: 'w-[88px]', image: 'h-14 w-[88px]', text: 'text-sm', icon: 'h-6 w-6' },
   lg: { wrap: 'w-[120px]', image: 'h-20 w-[120px]', text: 'text-base', icon: 'h-7 w-7' },
+};
+
+const inlineSizeClasses = {
+  sm: { image: 'h-9 w-12 rounded-md', text: 'text-[13px]', subtitle: 'text-[12px]', icon: 'h-4 w-4' },
+  md: { image: 'h-10 w-14 rounded-md', text: 'text-sm', subtitle: 'text-xs', icon: 'h-5 w-5' },
+  lg: { image: 'h-12 w-16 rounded-md', text: 'text-base', subtitle: 'text-sm', icon: 'h-6 w-6' },
 };
 
 const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/jpg,image/png,image/webp';
@@ -72,10 +79,12 @@ export function VehiclePlateDisplay({
   vehicleId,
   onPhotoUploaded,
   size = 'md',
+  layout = 'stacked',
   className,
 }: VehiclePlateDisplayProps) {
   const { t } = useTranslation();
   const dims = sizeClasses[size];
+  const inlineDims = inlineSizeClasses[size];
   const subtitle = [brand, model].filter(Boolean).join(' ');
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -113,17 +122,25 @@ export function VehiclePlateDisplay({
   }
 
   const imageBlock = (
-    <div className={cn('relative overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-sm', dims.image)}>
+    <div
+      className={cn(
+        'relative shrink-0 overflow-hidden border border-slate-200 bg-slate-100',
+        layout === 'inline' ? cn('shadow-none', inlineDims.image) : cn('rounded-lg shadow-sm', dims.image),
+      )}
+    >
       {displayUrl ? (
         <VehiclePhoto
           src={displayUrl}
           alt={`${plate} ${subtitle}`.trim()}
           className=""
-          iconClassName={dims.icon}
+          iconClassName={layout === 'inline' ? inlineDims.icon : dims.icon}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-          <Truck className={cn('text-slate-400', dims.icon)} strokeWidth={1.5} />
+          <Truck
+            className={cn('text-slate-400', layout === 'inline' ? inlineDims.icon : dims.icon)}
+            strokeWidth={1.5}
+          />
         </div>
       )}
 
@@ -143,7 +160,10 @@ export function VehiclePlateDisplay({
               'absolute inset-0 z-10 flex items-center justify-center transition',
               uploading ? 'cursor-wait bg-black/40' : 'cursor-pointer bg-black/0 hover:bg-black/35',
             )}
-            onClick={() => inputRef.current?.click()}
+            onClick={(event) => {
+              event.stopPropagation();
+              inputRef.current?.click();
+            }}
             disabled={uploading}
             aria-label={t('vehicles.uploadPhoto', 'Upload vehicle photo')}
             title={t('vehicles.uploadPhoto', 'Upload vehicle photo')}
@@ -160,8 +180,36 @@ export function VehiclePlateDisplay({
   );
 
   const plateLabel = (
-    <p className={cn('font-semibold leading-tight text-slate-900', dims.text)}>{plate}</p>
+    <p
+      className={cn(
+        'font-semibold leading-tight text-slate-900',
+        layout === 'inline' ? inlineDims.text : dims.text,
+      )}
+    >
+      {plate}
+    </p>
   );
+
+  if (layout === 'inline') {
+    return (
+      <div className={cn('group flex min-w-0 items-center gap-3', className)}>
+        {imageBlock}
+        <div className="min-w-0 text-left">
+          {href ? (
+            <Link href={href} className="inline-block rounded transition hover:text-blue-700">
+              {plateLabel}
+            </Link>
+          ) : (
+            plateLabel
+          )}
+          {subtitle ? (
+            <p className={cn('mt-0.5 truncate text-slate-500', inlineDims.subtitle)}>{subtitle}</p>
+          ) : null}
+          {uploadError ? <p className="mt-1 text-[11px] text-red-600">{uploadError}</p> : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn('group flex flex-col items-center gap-1.5', dims.wrap, className)}>

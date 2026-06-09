@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Building2, ChevronDown, CircleHelp, LogOut, Menu, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { clearAuth, getUser } from '@/lib/auth';
@@ -19,6 +19,12 @@ import {
 import { useRouter } from 'next/navigation';
 import type { AuthUser, Role } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
+
+const SIDEBAR_BG = 'bg-[#0b2342]';
+const SIDEBAR_BORDER = 'border-[#163a5c]';
+const NAV_ROW = 'flex min-h-[40px] items-center gap-2.5 rounded-md px-3 text-[13px] leading-5 transition-colors';
+const NAV_IDLE = 'text-blue-100/80 hover:bg-white/10 hover:text-white';
+const NAV_ACTIVE = 'bg-[#1a4d7a] text-white shadow-sm';
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -50,19 +56,14 @@ export function Sidebar() {
         href={item.href}
         onClick={() => setMobileOpen(false)}
         className={cn(
-          'flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors',
-          nested ? 'pl-9 pr-3' : 'px-3',
+          NAV_ROW,
+          'font-medium',
+          nested ? 'pl-9 pr-3' : '',
           !nested && tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
-          isActive
-            ? nested
-              ? 'bg-blue-50 text-blue-700'
-              : 'bg-blue-50 text-blue-700'
-            : nested
-              ? 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+          isActive ? NAV_ACTIVE : NAV_IDLE,
         )}
       >
-        {Icon ? <Icon className="h-5 w-5 shrink-0" /> : null}
+        {Icon ? <Icon className="h-4 w-4 shrink-0 opacity-90" /> : null}
         <span className={cn(tabletCollapsed && !nested ? 'hidden lg:inline' : 'inline')}>
           {t(item.labelKey)}
         </span>
@@ -82,20 +83,19 @@ export function Sidebar() {
           type="button"
           onClick={() => toggleSection(section.id, sectionActive)}
           className={cn(
-            'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+            NAV_ROW,
+            'w-full font-medium',
             tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
-            sectionActive
-              ? 'bg-blue-50 text-blue-700'
-              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+            sectionActive ? NAV_ACTIVE : NAV_IDLE,
           )}
         >
-          <SectionIcon className="h-5 w-5 shrink-0" />
+          <SectionIcon className="h-4 w-4 shrink-0 opacity-90" />
           <span className={cn('flex-1 text-left', tabletCollapsed ? 'hidden lg:inline' : 'inline')}>
             {t(section.labelKey)}
           </span>
           <ChevronDown
             className={cn(
-              'h-4 w-4 shrink-0 text-slate-400 transition-transform',
+              'h-3.5 w-3.5 shrink-0 text-blue-200/50 transition-transform',
               tabletCollapsed ? 'hidden lg:block' : 'block',
               showChildren ? 'rotate-0' : '-rotate-90',
             )}
@@ -109,7 +109,7 @@ export function Sidebar() {
               tabletCollapsed ? 'hidden lg:block' : 'block',
             )}
           >
-            <span className="absolute bottom-1 left-[1.35rem] top-1 w-px bg-slate-200" aria-hidden />
+            <span className="absolute bottom-1 left-[1.35rem] top-1 w-px bg-blue-200/20" aria-hidden />
             {section.items.map((item) => {
               const isActive = isNavItemActive(pathname, item.href);
               return (
@@ -118,16 +118,16 @@ export function Sidebar() {
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'relative flex items-center rounded-lg py-2 pl-9 pr-3 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                    'relative flex min-h-[36px] items-center rounded-md py-1.5 pr-3 text-[13px] leading-5 transition-colors',
+                    item.nested ? 'pl-14' : 'pl-9',
+                    isActive ? NAV_ACTIVE : NAV_IDLE,
                   )}
                 >
                   <span
                     className={cn(
-                      'absolute left-[1.22rem] top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white',
-                      isActive ? 'bg-blue-600' : 'bg-slate-300',
+                      'absolute top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full',
+                      item.nested ? 'left-[2.35rem]' : 'left-[1.22rem]',
+                      isActive ? 'bg-white' : 'bg-blue-200/35',
                     )}
                     aria-hidden
                   />
@@ -151,36 +151,61 @@ export function Sidebar() {
     router.push('/login');
   }
 
+  function renderFooterLink(href: string, label: string, icon: ReactNode, active = false) {
+    return (
+      <Link
+        href={href}
+        onClick={() => setMobileOpen(false)}
+        className={cn(
+          NAV_ROW,
+          'font-medium',
+          tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
+          active ? NAV_ACTIVE : NAV_IDLE,
+        )}
+      >
+        {icon}
+        <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>{label}</span>
+      </Link>
+    );
+  }
+
   function renderNavContent() {
     return (
       <div className="flex h-full flex-col">
-        <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-5">
+        <div className={cn('flex min-h-[72px] items-center gap-2 border-b px-3 py-3 lg:px-4 lg:py-4', SIDEBAR_BORDER)}>
           <MyFleetLogo
-            height={tabletCollapsed ? 32 : 36}
+            height={tabletCollapsed ? 44 : 56}
             href={null}
-            className={cn(tabletCollapsed && 'lg:mx-auto')}
+            priority
+            className={cn(
+              'w-full max-w-[210px] brightness-110 contrast-110',
+              tabletCollapsed && 'md:max-w-[52px] lg:max-w-[210px] lg:mx-auto',
+            )}
           />
           {!tabletCollapsed || mobileOpen ? (
-            <span className="hidden text-xs font-medium uppercase tracking-wide text-blue-600 lg:inline">
+            <span className="hidden text-[11px] font-semibold uppercase tracking-wide text-blue-200/70 lg:inline">
               {role === 'office' ? t('nav.roleBadge.office') : user?.role}
             </span>
           ) : null}
           <button
             type="button"
             onClick={() => setTabletCollapsed((current) => !current)}
-            className="ml-auto hidden rounded-md border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-100 md:inline-flex lg:hidden"
+            className={cn(
+              'ml-auto hidden rounded-md border p-1.5 text-blue-100/80 hover:bg-white/10 md:inline-flex lg:hidden',
+              SIDEBAR_BORDER,
+            )}
             aria-label="Toggle sidebar"
           >
             <Menu className="h-4 w-4" />
           </button>
         </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        <nav className="flex-1 space-y-4 overflow-y-auto px-2.5 py-3">
           {navGroups.map((group) => (
             <div key={group.id}>
               <p
                 className={cn(
-                  'mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400',
+                  'mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-200/45',
                   tabletCollapsed ? 'hidden lg:block' : 'block',
                 )}
               >
@@ -193,43 +218,29 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="border-t border-gray-100 px-3 pb-4 pt-3 space-y-0.5">
-          {isFleetOps && (
-            <Link
-              href="/admin/tenants"
-              onClick={() => setMobileOpen(false)}
-              className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900',
-                tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
-                pathname === '/admin/tenants' ? 'bg-blue-50 text-blue-700' : '',
-              )}
-            >
-              <Building2 className="h-5 w-5" />
-              <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>
-                {t('nav.fleetOps')}
-              </span>
-            </Link>
-          )}
-          <Link
-            href="/hilfe"
-            onClick={() => setMobileOpen(false)}
-            className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900',
-              tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
-              pathname === '/hilfe' ? 'bg-blue-50 text-blue-700' : '',
+        <div className={cn('space-y-0.5 border-t px-2.5 pb-4 pt-3', SIDEBAR_BORDER)}>
+          {isFleetOps &&
+            renderFooterLink(
+              '/admin/tenants',
+              t('nav.fleetOps'),
+              <Building2 className="h-4 w-4 shrink-0 opacity-90" />,
+              pathname === '/admin/tenants',
             )}
-          >
-            <CircleHelp className="h-5 w-5" />
-            <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>{t('nav.help')}</span>
-          </Link>
+          {renderFooterLink(
+            '/hilfe',
+            t('nav.help'),
+            <CircleHelp className="h-4 w-4 shrink-0 opacity-90" />,
+            pathname === '/hilfe',
+          )}
           <button
             onClick={handleLogout}
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600',
+              NAV_ROW,
+              'w-full font-medium text-blue-100/80 hover:bg-red-500/15 hover:text-red-100',
               tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
             )}
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-4 w-4 shrink-0 opacity-90" />
             <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>{t('nav.logout')}</span>
           </button>
         </div>
@@ -241,8 +252,11 @@ export function Sidebar() {
     <>
       <aside
         className={cn(
-          'hidden min-h-screen border-r border-gray-200 bg-white md:flex md:flex-col',
-          tabletCollapsed ? 'w-20 lg:w-64' : 'w-64',
+          'hidden min-h-screen md:flex md:flex-col',
+          SIDEBAR_BG,
+          'border-r',
+          SIDEBAR_BORDER,
+          tabletCollapsed ? 'w-[4.5rem] lg:w-64' : 'w-64',
         )}
       >
         {renderNavContent()}
@@ -250,24 +264,29 @@ export function Sidebar() {
 
       <button
         type="button"
-        className="fixed left-4 top-4 z-50 rounded-md border border-gray-200 bg-white p-2 shadow-md lg:hidden"
+        className={cn(
+          'fixed left-4 top-4 z-50 rounded-md border p-2 shadow-md lg:hidden',
+          SIDEBAR_BG,
+          SIDEBAR_BORDER,
+          'text-blue-100',
+        )}
         onClick={() => setMobileOpen(true)}
         aria-label={t('nav.openMenu')}
       >
-        <Menu className="h-5 w-5 text-gray-700" />
+        <Menu className="h-5 w-5" />
       </button>
 
       {mobileOpen ? (
         <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="fixed inset-0 bg-black/30" onClick={() => setMobileOpen(false)} aria-hidden />
-          <aside className="relative z-50 min-h-screen w-64 bg-white shadow-xl">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setMobileOpen(false)} aria-hidden />
+          <aside className={cn('relative z-50 min-h-screen w-64 shadow-xl', SIDEBAR_BG)}>
             <button
               type="button"
-              className="absolute right-4 top-4 rounded-md p-1 hover:bg-gray-100"
+              className="absolute right-4 top-4 rounded-md p-1 text-blue-100/80 hover:bg-white/10"
               onClick={() => setMobileOpen(false)}
               aria-label={t('common.close')}
             >
-              <X className="h-5 w-5 text-gray-500" />
+              <X className="h-5 w-5" />
             </button>
             {renderNavContent()}
           </aside>

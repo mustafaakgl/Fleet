@@ -8,7 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { auditApi, type AuditLogRow } from '@/lib/api';
 import { getUser } from '@/lib/auth';
-import { formatDate } from '@/lib/utils';
+import {
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
+import { cn, formatDate } from '@/lib/utils';
 
 const LEGAL_DOCS = [
   { href: '/legal/AVV-Vorlage-DE.md', labelKey: 'privacy.docs.avv' },
@@ -99,29 +109,29 @@ export default function PrivacyPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-slate-700">
           <p>{t('privacy.retention.intro')}</p>
-          <Table>
+          <Table className={FLEET_TABLE}>
             <TableHeader>
-              <TableRow>
-                <TableHead>{t('privacy.retention.colCategory')}</TableHead>
-                <TableHead>{t('privacy.retention.colPeriod')}</TableHead>
+              <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('privacy.retention.colCategory')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('privacy.retention.colPeriod')}</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell>{t('privacy.retention.location')}</TableCell>
-                <TableCell>90 {t('privacy.retention.days')}</TableCell>
+            <TableBody className={FLEET_TABLE_BODY}>
+              <TableRow className={FLEET_TABLE_ROW}>
+                <TableCell className={FLEET_TABLE_CELL}>{t('privacy.retention.location')}</TableCell>
+                <TableCell className={FLEET_TABLE_CELL_MUTED}>90 {t('privacy.retention.days')}</TableCell>
               </TableRow>
-              <TableRow>
-                <TableCell>{t('privacy.retention.audit')}</TableCell>
-                <TableCell>2 {t('privacy.retention.years')}</TableCell>
+              <TableRow className={FLEET_TABLE_ROW}>
+                <TableCell className={FLEET_TABLE_CELL}>{t('privacy.retention.audit')}</TableCell>
+                <TableCell className={FLEET_TABLE_CELL_MUTED}>2 {t('privacy.retention.years')}</TableCell>
               </TableRow>
-              <TableRow>
-                <TableCell>{t('privacy.retention.documents')}</TableCell>
-                <TableCell>{t('privacy.retention.documentsPeriod')}</TableCell>
+              <TableRow className={FLEET_TABLE_ROW}>
+                <TableCell className={FLEET_TABLE_CELL}>{t('privacy.retention.documents')}</TableCell>
+                <TableCell className={FLEET_TABLE_CELL_MUTED}>{t('privacy.retention.documentsPeriod')}</TableCell>
               </TableRow>
-              <TableRow>
-                <TableCell>{t('privacy.retention.assignments')}</TableCell>
-                <TableCell>10 {t('privacy.retention.years')}</TableCell>
+              <TableRow className={FLEET_TABLE_ROW}>
+                <TableCell className={FLEET_TABLE_CELL}>{t('privacy.retention.assignments')}</TableCell>
+                <TableCell className={FLEET_TABLE_CELL_MUTED}>10 {t('privacy.retention.years')}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -190,26 +200,26 @@ export default function PrivacyPage() {
             <p className="px-6 py-4 text-sm text-slate-500">{t('privacy.auditEmpty')}</p>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className={FLEET_TABLE}>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('privacy.audit.when')}</TableHead>
-                    <TableHead>{t('privacy.audit.actor')}</TableHead>
-                    <TableHead>{t('privacy.audit.action')}</TableHead>
-                    <TableHead>{t('privacy.audit.entity')}</TableHead>
+                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('privacy.audit.when')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('privacy.audit.actor')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('privacy.audit.action')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('privacy.audit.entity')}</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className={FLEET_TABLE_BODY}>
                   {auditLogs.slice(0, 50).map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className="whitespace-nowrap text-xs">
+                    <TableRow key={row.id} className={FLEET_TABLE_ROW}>
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
                         {formatDate(row.createdAt)}
                       </TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {row.actorUser?.fullName ?? '—'}
                       </TableCell>
-                      <TableCell className="text-xs font-mono">{row.action}</TableCell>
-                      <TableCell className="text-xs">
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'font-mono')}>{row.action}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_MUTED}>
                         {row.entityType}
                         {row.entityId ? ` / ${row.entityId.slice(0, 8)}…` : ''}
                       </TableCell>

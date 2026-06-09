@@ -18,7 +18,6 @@ import {
   Rocket,
   ScrollText,
   Clock,
-  CarFront,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -26,6 +25,8 @@ export type NavItem = {
   href: string;
   labelKey: string;
   icon?: LucideIcon;
+  /** Extra indent when rendered inside a collapsible section (e.g. cargo under accidents). */
+  nested?: boolean;
 };
 
 export type NavSection = {
@@ -78,9 +79,7 @@ const ALL_ITEMS: Record<string, NavItem> = {
   drivers: { href: '/drivers', labelKey: 'nav.drivers', icon: Users },
   companies: { href: '/companies', labelKey: 'nav.companies', icon: Building2 },
   documents: { href: '/documents', labelKey: 'nav.documents', icon: FileText },
-  reminders: { href: '/reminders', labelKey: 'nav.reminders', icon: Bell },
-  cargoDamage: { href: '/cargo-damage', labelKey: 'nav.cargoDamage', icon: ClipboardList },
-  accidents: { href: '/accidents', labelKey: 'nav.accidents', icon: CarFront },
+  serviceHistory: { href: '/service-history', labelKey: 'nav.service.history', icon: Wrench },
   workSessions: { href: '/work-sessions', labelKey: 'nav.workSessions', icon: Clock },
 };
 
@@ -91,7 +90,6 @@ const VEHICLES_SECTION: NavSection = {
   items: [
     { href: '/vehicles', labelKey: 'nav.vehicles.list' },
     { href: '/vehicles/assignments', labelKey: 'nav.vehicles.assignments' },
-    { href: '/service-history', labelKey: 'nav.vehicles.expenseHistory' },
   ],
 };
 
@@ -103,6 +101,8 @@ const REMINDERS_SECTION: NavSection = {
     { href: '/reminders/service', labelKey: 'nav.reminders.service' },
     { href: '/reminders/vehicle', labelKey: 'nav.reminders.vehicle' },
     { href: '/reminders/contact', labelKey: 'nav.reminders.contact' },
+    { href: '/accidents', labelKey: 'nav.accidents' },
+    { href: '/cargo-damage', labelKey: 'nav.cargoDamage', nested: true },
   ],
 };
 
@@ -127,9 +127,8 @@ const OFFICE_NAV: NavGroup[] = [
   group('fleet', 'nav.group.fleet', [item('drivers'), VEHICLES_SECTION, item('companies')]),
   group('compliance', 'nav.group.compliance', [
     item('documents'),
+    item('serviceHistory'),
     REMINDERS_SECTION,
-    item('cargoDamage'),
-    item('accidents'),
     item('workSessions'),
   ]),
 ];
@@ -145,8 +144,7 @@ const DEFAULT_NAV: NavGroup[] = [
   ]),
   group('operations', 'nav.group.operations', [
     item('requests'),
-    item('cargoDamage'),
-    item('accidents'),
+    item('serviceHistory'),
     REMINDERS_SECTION,
     item('workSessions'),
     item('messenger'),

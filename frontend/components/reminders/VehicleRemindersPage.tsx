@@ -33,6 +33,14 @@ import {
   type VehicleReminderStatus,
   type VehicleReminderTab,
 } from '@/lib/vehicle-reminders';
+import {
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TH,
+  FLEET_RAW_TH_CHECKBOX,
+  FLEET_RAW_THEAD,
+} from '@/lib/fleet-table';
 import { cn, formatDate } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
@@ -386,20 +394,20 @@ export function VehicleRemindersPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <table className={FLEET_RAW_TABLE}>
+                <thead className={FLEET_RAW_THEAD}>
                   <tr>
-                    <th className="w-10 px-4 py-3">
+                    <th className={FLEET_RAW_TH_CHECKBOX}>
                       <input type="checkbox" aria-label={t('expenseHistory.selectAll')} />
                     </th>
-                    <th className="px-4 py-3">{t('vehicleReminders.colVehicle')}</th>
-                    <th className="px-4 py-3">{t('vehicleReminders.colRenewalType')}</th>
-                    <th className="px-4 py-3">{t('vehicleReminders.colStatus')}</th>
-                    <th className="px-4 py-3">{t('vehicleReminders.colDueDate')}</th>
-                    <th className="px-4 py-3">{t('expenseHistory.colWatchers')}</th>
+                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colVehicle')}</th>
+                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colRenewalType')}</th>
+                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colStatus')}</th>
+                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colDueDate')}</th>
+                    <th className={FLEET_RAW_TH}>{t('expenseHistory.colWatchers')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className={FLEET_RAW_TBODY}>
                   {pageRows.map((row) => {
                     const badge = vehicleAbbreviation(row.vehicleBrand, row.vehicleModel, row.vehiclePlate);
                     const isSelected = selectedRow?.id === row.id;
@@ -413,7 +421,7 @@ export function VehicleRemindersPage() {
                         )}
                         onClick={() => setSelectedRow(row)}
                       >
-                        <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                        <td className={FLEET_RAW_TD} onClick={(event) => event.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={selectedIds.has(row.id)}
@@ -427,7 +435,7 @@ export function VehicleRemindersPage() {
                             }
                           />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className={FLEET_RAW_TD}>
                           <div className="flex items-center gap-2">
                             {row.vehiclePhotoUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -444,10 +452,10 @@ export function VehicleRemindersPage() {
                             <span className="font-semibold text-blue-700">{row.vehiclePlate}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-medium text-slate-800">
+                        <td className={cn(FLEET_RAW_TD, 'font-medium text-slate-800')}>
                           {t(`vehicleReminders.renewalType.${row.renewalKind}`)}
                         </td>
-                        <td className={cn('px-4 py-3 font-medium', statusClass(row.status))}>
+                        <td className={cn(FLEET_RAW_TD, 'font-medium', statusClass(row.status))}>
                           <span className="inline-flex items-center gap-1.5">
                             <span
                               className={cn(
@@ -461,11 +469,11 @@ export function VehicleRemindersPage() {
                             {statusLabel(row.status, t)}
                           </span>
                         </td>
-                        <td className={cn('px-4 py-3', statusClass(row.status))}>
+                        <td className={cn(FLEET_RAW_TD, statusClass(row.status))}>
                           <div>{formatDate(row.dueDate)}</div>
-                          <div className="text-xs">{formatRelativeDueDate(row.dueDate, i18n.language)}</div>
+                          <div className="text-[11px]">{formatRelativeDueDate(row.dueDate, i18n.language)}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-400">—</td>
+                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
                       </tr>
                     );
                   })}

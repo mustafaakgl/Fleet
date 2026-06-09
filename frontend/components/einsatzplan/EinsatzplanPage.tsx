@@ -23,6 +23,9 @@ import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
 import { groupAssignmentsByCompany } from './companyBoard';
 import { RevenueSummary } from './RevenueSummary';
 import { Tagesplanung } from './Tagesplanung';
+import { BRAND_HERO, BRAND_TAB_ACTIVE } from '@/lib/brand-colors';
+import { FLEET_LIST_CARD } from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 import { UrlaubsplanerPanel } from './UrlaubsplanerPanel';
 
 type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue' | 'users';
@@ -102,6 +105,7 @@ function EinsatzplanFullView() {
   const absenceFromQuery = searchParams.get('absence');
 
   const initialTopTab = useMemo<TopTab>(() => {
+    if (panelFromQuery === 'users') return 'users';
     if (panelFromQuery === 'urlaubsplaner') return 'urlaub';
     if (panelFromQuery === 'tagesplanung' || panelFromQuery === 'company_notifications') return 'tagesplanung';
     return 'dashboard';
@@ -139,11 +143,10 @@ function EinsatzplanFullView() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex min-w-fit items-center gap-2 rounded-t-md border px-4 py-2 text-sm font-semibold transition-colors ${
-                  isActive
-                    ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
-                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
+                className={cn(
+                  'flex min-w-fit items-center gap-2 rounded-t-md border px-4 py-2 text-sm font-semibold transition-colors',
+                  isActive ? BRAND_TAB_ACTIVE : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
+                )}
               >
                 <Icon className="h-4 w-4" />
                 {tab.label}
@@ -165,7 +168,7 @@ function EinsatzplanFullView() {
         <div className="p-4 sm:p-5">
           {activeTab === 'dashboard' && (
             <div className="space-y-5">
-              <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-gradient-to-r from-blue-700 to-blue-600 p-5 text-white shadow-sm lg:flex-row lg:items-center lg:justify-between">
+              <div className={cn('flex flex-col gap-3 rounded-lg border border-slate-200 p-5 text-white shadow-sm lg:flex-row lg:items-center lg:justify-between', BRAND_HERO)}>
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-blue-100">Fleet ERP</p>
                   <h1 className="mt-2 text-2xl font-bold">{t('einsatzplan.title')}</h1>
@@ -173,7 +176,7 @@ function EinsatzplanFullView() {
                 </div>
                 <Link
                   href="/assignments/new"
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-white/30 bg-white px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-white/30 bg-white px-4 py-2 text-sm font-semibold text-[#1a4d7a] hover:bg-[#e8f0f8]"
                 >
                   <Plus className="h-4 w-4" />
                   {t('assignmentForm.title')}
@@ -191,8 +194,8 @@ function EinsatzplanFullView() {
                 ))}
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-4 py-3">
+              <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
+                <div className="border-b border-slate-200 px-3 py-2">
                   <h2 className="text-sm font-semibold text-slate-900">{t('einsatzplan.tomorrowTitle')}</h2>
                   <p className="mt-1 text-xs text-slate-500">
                     {t('einsatzplan.tomorrowHint')}

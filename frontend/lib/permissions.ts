@@ -35,3 +35,7 @@ export function canEditServiceRecords(role: Role) {
 export function canEditDriverVacationEntitlement(role: Role) {
   return role === 'admin' || role === 'boss' || role === 'office';
 }
+
+export function canImportCsv(role: Role) {
+  return role === 'admin' || role === 'office';
+}

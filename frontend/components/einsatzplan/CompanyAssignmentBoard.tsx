@@ -7,6 +7,17 @@ import {
   TRAILER_BY_VEHICLE,
   type CompanyAssignmentGroup,
 } from './companyBoard';
+import {
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 interface CompanyAssignmentBoardProps {
   groups: CompanyAssignmentGroup[];
@@ -41,17 +52,17 @@ export function CompanyAssignmentBoard({
             {company.label}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-[11px]">
-              <thead>
-                <tr className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
-                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colDriver')}</th>
-                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colVehicle')}</th>
-                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colTrailer')}</th>
-                  <th className="border-b border-r border-slate-300 px-2 py-1">{t('board.colStart')}</th>
-                  <th className="border-b border-slate-300 px-2 py-1">{t('board.colStatus')}</th>
+            <table className={cn(FLEET_RAW_TABLE, 'w-full min-w-[560px] border-collapse')}>
+              <thead className={FLEET_RAW_THEAD}>
+                <tr>
+                  <th className={cn(FLEET_RAW_TH, 'border-r border-slate-200')}>{t('board.colDriver')}</th>
+                  <th className={cn(FLEET_RAW_TH, 'border-r border-slate-200')}>{t('board.colVehicle')}</th>
+                  <th className={cn(FLEET_RAW_TH, 'border-r border-slate-200')}>{t('board.colTrailer')}</th>
+                  <th className={cn(FLEET_RAW_TH, 'border-r border-slate-200')}>{t('board.colStart')}</th>
+                  <th className={FLEET_RAW_TH}>{t('board.colStatus')}</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={FLEET_RAW_TBODY}>
                 {rows.map((assignment) => {
                   const driverName =
                     drivers.find((driver) => driver.id === assignment.driverId)?.name ?? assignment.driverId;
@@ -60,20 +71,20 @@ export function CompanyAssignmentBoard({
                   return (
                     <tr
                       key={assignment.id}
-                      className={onAssignmentClick ? 'cursor-pointer hover:bg-slate-50' : undefined}
+                      className={cn(FLEET_RAW_TR, onAssignmentClick && 'cursor-pointer')}
                       onClick={onAssignmentClick ? () => onAssignmentClick(assignment) : undefined}
                     >
-                      <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-900">{driverName}</td>
-                      <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-800">
+                      <td className={cn(FLEET_RAW_TD_PRIMARY, 'border-r border-slate-100')}>{driverName}</td>
+                      <td className={cn(FLEET_RAW_TD_MUTED, 'border-r border-slate-100')}>
                         {assignment.vehicle || '-'}
                       </td>
-                      <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-800">{trailer}</td>
-                      <td className="border-b border-r border-slate-200 px-2 py-1 text-slate-800">
+                      <td className={cn(FLEET_RAW_TD_MUTED, 'border-r border-slate-100')}>{trailer}</td>
+                      <td className={cn(FLEET_RAW_TD_MUTED, 'border-r border-slate-100')}>
                         {assignment.startTime || '-'}
                       </td>
-                      <td className="border-b border-slate-200 px-2 py-1">
+                      <td className={FLEET_RAW_TD}>
                         <span
-                          className={`inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${assignmentStatusBadge(assignment.status)}`}
+                          className={`inline-flex rounded border px-1.5 py-0.5 text-[11px] font-semibold ${assignmentStatusBadge(assignment.status)}`}
                         >
                           {assignment.status}
                         </span>

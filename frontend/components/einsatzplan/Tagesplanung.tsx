@@ -12,6 +12,20 @@ import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
 import { TagesuebersichtTab } from './TagesuebersichtTab';
+import {
+  FLEET_FILTER_INPUT,
+  FLEET_LIST_CARD,
+  FLEET_RAW_TABLE,
+  FLEET_RAW_TBODY,
+  FLEET_RAW_TD,
+  FLEET_RAW_TD_MUTED,
+  FLEET_RAW_TD_PRIMARY,
+  FLEET_RAW_TH,
+  FLEET_RAW_THEAD,
+  FLEET_RAW_TR,
+} from '@/lib/fleet-table';
+import { BRAND_BTN_OUTLINE, BRAND_FOCUS, BRAND_KPI, BRAND_TAB_ACTIVE_PLAIN, BRAND_TAB_BADGE } from '@/lib/brand-colors';
+import { cn } from '@/lib/utils';
 
 const COMPANY_REVENUE_MAP: Record<string, number> = {
   DHL: 850,
@@ -150,7 +164,7 @@ export function Tagesplanung({
           onClick={() => setActiveSubTab('daily-overview')}
           className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
             activeSubTab === 'daily-overview'
-              ? 'border-blue-700 bg-blue-700 text-white'
+              ? BRAND_TAB_ACTIVE_PLAIN
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -163,7 +177,7 @@ export function Tagesplanung({
           onClick={() => setActiveSubTab('planning')}
           className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
             activeSubTab === 'planning'
-              ? 'border-blue-700 bg-blue-700 text-white'
+              ? BRAND_TAB_ACTIVE_PLAIN
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -175,7 +189,7 @@ export function Tagesplanung({
           onClick={() => setActiveSubTab('planning')}
           className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
             activeSubTab === 'planning'
-              ? 'border-blue-700 bg-blue-700 text-white'
+              ? BRAND_TAB_ACTIVE_PLAIN
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -187,7 +201,7 @@ export function Tagesplanung({
           onClick={() => setActiveSubTab('morning-checkins')}
           className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
             activeSubTab === 'morning-checkins'
-              ? 'border-blue-700 bg-blue-700 text-white'
+              ? BRAND_TAB_ACTIVE_PLAIN
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -198,7 +212,7 @@ export function Tagesplanung({
           onClick={() => setActiveSubTab('vehicle-handovers')}
           className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
             activeSubTab === 'vehicle-handovers'
-              ? 'border-blue-700 bg-blue-700 text-white'
+              ? BRAND_TAB_ACTIVE_PLAIN
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -209,7 +223,7 @@ export function Tagesplanung({
           onClick={() => setActiveSubTab('company-notifications')}
           className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
             activeSubTab === 'company-notifications'
-              ? 'border-blue-700 bg-blue-700 text-white'
+              ? BRAND_TAB_ACTIVE_PLAIN
               : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
           }`}
         >
@@ -218,7 +232,7 @@ export function Tagesplanung({
             {companyEmailAttentionCount > 0 && (
               <span
                 className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                  activeSubTab === 'company-notifications' ? 'bg-white text-blue-700' : 'bg-amber-100 text-amber-700'
+                  activeSubTab === 'company-notifications' ? BRAND_TAB_BADGE : 'bg-amber-100 text-amber-700'
                 }`}
               >
                 {companyEmailAttentionCount}
@@ -240,16 +254,16 @@ export function Tagesplanung({
         <>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-7">
-        <SummaryCard label={t('planning.kpiAvailable')} value={String(availableCount)} tone="text-emerald-700" />
-        <SummaryCard label={t('planning.kpiVacation')} value={String(vacationCount)} tone="text-blue-700" />
+        <SummaryCard label={t('planning.kpiAvailable')} value={String(availableCount)} tone={BRAND_KPI} />
+        <SummaryCard label={t('planning.kpiVacation')} value={String(vacationCount)} tone={BRAND_KPI} />
         <SummaryCard label={t('planning.kpiSick')} value={String(sickCount)} tone="text-red-700" />
         <SummaryCard label={t('planning.kpiPlannedTrucks')} value={String(plannedTrucks)} tone="text-slate-900" />
         <SummaryCard label={t('planning.kpiOpenAssignments')} value={String(openAssignments)} tone="text-amber-700" />
-        <SummaryCard label={t('planning.kpiExpectedRevenue')} value={currency(expectedDailyRevenue)} tone="text-emerald-700" />
+        <SummaryCard label={t('planning.kpiExpectedRevenue')} value={currency(expectedDailyRevenue)} tone={BRAND_KPI} />
         <SummaryCard label={t('planning.kpiLostRevenue')} value={currency(lostRevenueEstimate)} tone="text-red-700" />
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <p className="text-sm font-semibold text-slate-800 sm:pb-2">
@@ -271,7 +285,7 @@ export function Tagesplanung({
                   value={driverSearch}
                   onChange={(event) => setDriverSearch(event.target.value)}
                   placeholder={t('planning.driverSearchPlaceholder')}
-                  className="h-9 w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-900 outline-none focus:border-blue-500"
+                  className={cn('h-9 w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-900 outline-none', BRAND_FOCUS)}
                 />
                 {driverSearch.trim().length > 0 ? (
                   <button
@@ -330,23 +344,23 @@ export function Tagesplanung({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1400px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1400px]')}>
+            <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDriver')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colAvailability')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colVehicle')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colCompany')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colFrom')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colTo')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStartTime')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colEndTime')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStatus')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colExpectedRevenue')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colActions')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colDriver')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colAvailability')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colVehicle')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colCompany')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colFrom')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colTo')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colStartTime')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colEndTime')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colStatus')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colExpectedRevenue')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colActions')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {filteredPlanningRows.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">
@@ -357,9 +371,9 @@ export function Tagesplanung({
               {filteredPlanningRows.map((row) => {
                 const disabled = row.effectiveAvailability !== 'Available';
                 return (
-                  <tr key={row.assignment.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{row.driverName}</td>
-                    <td className="px-3 py-2.5">
+                  <tr key={row.assignment.id} className={FLEET_RAW_TR}>
+                    <td className={FLEET_RAW_TD_PRIMARY}>{row.driverName}</td>
+                    <td className={FLEET_RAW_TD}>
                       <select
                         value={row.effectiveAvailability}
                         onChange={(event) => {
@@ -369,7 +383,7 @@ export function Tagesplanung({
                             expectedRevenue: nextAvailability === 'Available' ? row.assignment.expectedRevenue || 900 : 0,
                           });
                         }}
-                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
                       >
                         {AVAILABILITY_OPTIONS.map((option) => (
                           <option key={option} value={option}>
@@ -378,15 +392,15 @@ export function Tagesplanung({
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <input
                         value={row.assignment.vehicle}
                         disabled={disabled}
                         onChange={(event) => updateAssignment(row.assignment.id, { vehicle: event.target.value })}
-                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <input
                         value={row.assignment.company}
                         disabled={disabled}
@@ -397,10 +411,10 @@ export function Tagesplanung({
                             expectedRevenue: disabled ? 0 : COMPANY_REVENUE_MAP[nextCompany] ?? row.assignment.expectedRevenue,
                           });
                         }}
-                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <input
                         value={row.assignment.pickupAddress ?? ''}
                         disabled={disabled}
@@ -408,10 +422,10 @@ export function Tagesplanung({
                         onChange={(event) =>
                           updateAssignment(row.assignment.id, { pickupAddress: event.target.value })
                         }
-                        className="h-9 w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        className={cn('w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <input
                         value={row.assignment.deliveryAddress ?? ''}
                         disabled={disabled}
@@ -419,39 +433,39 @@ export function Tagesplanung({
                         onChange={(event) =>
                           updateAssignment(row.assignment.id, { deliveryAddress: event.target.value })
                         }
-                        className="h-9 w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        className={cn('w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <input
                         value={row.assignment.startTime}
                         disabled={disabled}
                         onChange={(event) => updateAssignment(row.assignment.id, { startTime: event.target.value })}
-                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <input
                         value={row.assignment.endTime}
                         disabled={disabled}
                         onChange={(event) => updateAssignment(row.assignment.id, { endTime: event.target.value })}
-                        className="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
                           disabled
                             ? 'bg-slate-200 text-slate-700'
                             : row.assignment.status === 'In Progress'
                             ? 'bg-amber-100 text-amber-700'
-                            : 'bg-blue-100 text-blue-700'
+                            : 'bg-[#e8f0f8] text-[#1a4d7a]'
                         }`}
                       >
                         {disabled ? t('planning.unavailable') : row.assignment.status}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <input
                         type="number"
                         min={0}
@@ -462,11 +476,11 @@ export function Tagesplanung({
                           const nextRevenue = Math.max(0, Number.parseFloat(event.target.value) || 0);
                           updateAssignment(row.assignment.id, { expectedRevenue: nextRevenue });
                         }}
-                        className="h-9 w-full min-w-[100px] rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:bg-slate-100"
+                        className={cn('w-full min-w-[100px] rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                         aria-label={`${t('planning.colExpectedRevenue')} — ${row.driverName}`}
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD}>
                       <button
                         type="button"
                         className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -487,46 +501,46 @@ export function Tagesplanung({
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         <div className="border-b border-slate-200 px-4 py-3">
           <h3 className="text-base font-semibold text-slate-900">{t('planning.transportTitle')}</h3>
           <p className="text-sm text-slate-600">{t('planning.transportSubtitle')}</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[1600px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1600px]')}>
+            <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDriver')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDate')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colVehicle')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colCompany')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colCargo')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colPickup')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colDelivery')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStart')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colEnd')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colStatus')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colConflict')}</th>
-                <th className="border-b border-slate-200 px-3 py-3">{t('planning.colActions')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colDriver')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colDate')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colVehicle')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colCompany')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colCargo')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colPickup')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colDelivery')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colStart')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colEnd')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colStatus')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colConflict')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colActions')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={FLEET_RAW_TBODY}>
               {transportRequests.map((request) => {
                 const driver = drivers.find((item) => item.id === request.driverId);
                 const canDecide = request.status !== 'approved' && request.status !== 'rejected';
 
                 return (
-                  <tr key={request.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{driver?.name ?? request.driverId}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.date}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.vehicleId}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.companyId}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.cargoName}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.pickupAddress}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.deliveryAddress}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.startTime}</td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.endTime ?? '-'}</td>
-                    <td className="px-3 py-2.5">
+                  <tr key={request.id} className={FLEET_RAW_TR}>
+                    <td className={FLEET_RAW_TD_PRIMARY}>{driver?.name ?? request.driverId}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.date}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.vehicleId}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.companyId}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.cargoName}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.pickupAddress}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.deliveryAddress}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.startTime}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{request.endTime ?? '-'}</td>
+                    <td className={FLEET_RAW_TD}>
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
                           request.status === 'approved'
@@ -541,8 +555,8 @@ export function Tagesplanung({
                         {transportStatusLabel(request.status)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-slate-700">{request.conflictReason ?? '-'}</td>
-                    <td className="px-3 py-2.5">
+                    <td className={FLEET_RAW_TD_MUTED}>{request.conflictReason ?? '-'}</td>
+                    <td className={FLEET_RAW_TD}>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -563,7 +577,7 @@ export function Tagesplanung({
                             }
                             setTimeout(() => setInfoMessage(null), 2200);
                           }}
-                          className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          className={cn('rounded-md px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50', BRAND_BTN_OUTLINE)}
                         >
                           {t('planning.approve')}
                         </button>

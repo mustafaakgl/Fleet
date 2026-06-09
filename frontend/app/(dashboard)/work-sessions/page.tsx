@@ -16,6 +16,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  FLEET_LIST_CARD,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_CELL_PRIMARY,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
+} from '@/lib/fleet-table';
+import { cn } from '@/lib/utils';
 
 function formatDateTime(value?: string | null) {
   if (!value) return '—';
@@ -230,7 +242,7 @@ export default function WorkSessionsPage() {
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-      <Card>
+      <Card className={FLEET_LIST_CARD}>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-slate-500">
@@ -238,21 +250,21 @@ export default function WorkSessionsPage() {
               {t('common.loading')}
             </div>
           ) : (
-            <Table>
+            <Table className={FLEET_TABLE}>
               <TableHeader>
-                <TableRow>
-                  <TableHead>{t('workSessions.col.driver')}</TableHead>
-                  <TableHead>{t('workSessions.col.started')}</TableHead>
-                  <TableHead>{t('workSessions.col.ended')}</TableHead>
-                  <TableHead>{t('workSessions.col.duration')}</TableHead>
-                  <TableHead>{t('workSessions.col.endReason')}</TableHead>
-                  <TableHead>{t('workSessions.col.status')}</TableHead>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('workSessions.col.driver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('workSessions.col.started')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('workSessions.col.ended')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('workSessions.col.duration')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('workSessions.col.endReason')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('workSessions.col.status')}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-slate-500">
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={6} className={cn(FLEET_TABLE_CELL_MUTED, 'py-10 text-center')}>
                       {t('workSessions.empty')}
                     </TableCell>
                   </TableRow>
@@ -263,15 +275,17 @@ export default function WorkSessionsPage() {
                       ? `${row.driver.firstName} ${row.driver.lastName}`.trim()
                       : row.driverId;
                     return (
-                      <TableRow key={row.id}>
-                        <TableCell className="font-medium">{driverName}</TableCell>
-                        <TableCell>{formatDateTime(row.startedAt)}</TableCell>
-                        <TableCell>{formatDateTime(row.endedAt)}</TableCell>
-                        <TableCell>
+                      <TableRow key={row.id} className={FLEET_TABLE_ROW}>
+                        <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{driverName}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDateTime(row.startedAt)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDateTime(row.endedAt)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
                           {row.status === 'active' ? t('workSessions.status.active') : formatDuration(minutes)}
                         </TableCell>
-                        <TableCell>{row.endReason ? t(`workSessions.endReason.${row.endReason}`) : '—'}</TableCell>
-                        <TableCell>{t(`workSessions.status.${row.status}`)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>
+                          {row.endReason ? t(`workSessions.endReason.${row.endReason}`) : '—'}
+                        </TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{t(`workSessions.status.${row.status}`)}</TableCell>
                       </TableRow>
                     );
                   })

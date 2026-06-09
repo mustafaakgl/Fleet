@@ -32,6 +32,7 @@ function toDecimalNumber(value: Prisma.Decimal | null | undefined): number {
 function toClientDriver(row: DriverWithCurrent) {
   return {
     id: row.id,
+    employee_number: row.employeeNumber,
     first_name: row.firstName,
     last_name: row.lastName,
     accident_count: row.accidents.length,
