@@ -27,6 +27,17 @@ import { documentsApi, driversApi, serviceRecordsApi, vehiclesApi } from '@/lib/
 import { getUser } from '@/lib/auth';
 import { documentHasFile, openAuthenticatedDocument } from '@/lib/file-access';
 import { canEditServiceRecords, canViewFinancials } from '@/lib/permissions';
+import { getRepairPriorityClass } from '@/lib/service-record-categories';
+import {
+  isServiceHistoryMockRecord,
+  SERVICE_HISTORY_MOCK_RECORDS,
+  getServiceHistoryMockVehicles,
+} from '@/lib/service-history-mock-data';
+import {
+  parseServiceRecordIssues,
+  parseServiceRecordLabels,
+  parseServiceRecordReference,
+} from '@/lib/service-record-notes';
 import type { Document, Driver, ServiceRecord, Vehicle } from '@/lib/types';
 import { vehicleAbbreviation } from '@/lib/timeline-utils';
 import { cn } from '@/lib/utils';
@@ -120,7 +131,9 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const user = getUser();
-  const canEdit = canEditServiceRecords(user?.role ?? 'customer');
+  const canEditRecords = canEditServiceRecords(user?.role ?? 'customer');
+  const isMock = isServiceHistoryMockRecord(entryId);
+  const canEdit = canEditRecords && !isMock;
   const showAmounts = canViewFinancials(user?.role ?? 'customer');
   const { toggleWatch, watchedIds } = useExpenseWatchlist();
   const watched = watchedIds.includes(entryId);
@@ -143,6 +156,23 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     setLoading(true);
     setError(null);
     try {
+      if (isMock) {
+        const entry = SERVICE_HISTORY_MOCK_RECORDS.find((row) => row.id === entryId);
+        if (!entry) {
+          setRecord(null);
+          setError(t('expenseHistory.detail.notFound'));
+          return;
+        }
+        setRecord(entry);
+        setForm(toFormState(entry));
+        setVehicles(getServiceHistoryMockVehicles());
+        setDrivers([]);
+        setPhotos([]);
+        setDocuments([]);
+        setReceipts([]);
+        return;
+      }
+
       const [entry, vehiclePage, driverPage, allDocs] = await Promise.all([
         serviceRecordsApi.getById(entryId),
         vehiclesApi.list({ limit: 200 }),
@@ -162,7 +192,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [entryId, t]);
+  }, [entryId, isMock, t]);
 
   useEffect(() => {
     void load();
@@ -291,6 +321,22 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
   const badge = vehicle
     ? vehicleAbbreviation(vehicle.brand, vehicle.model, vehicle.plate_number)
     : record.vehicle_plate.slice(0, 3).toUpperCase();
+  const reference = parseServiceRecordReference(record.notes);
+  const issues = parseServiceRecordIssues(record.notes);
+  const labels = parseServiceRecordLabels(record.notes);
+  const priority = getRepairPriorityClass(record.service_type, record.notes);
+  const priorityLabel = t(`serviceHistory.priority.${priority}`);
+
+  function formatLabel(label: string): string {
+    const key = `serviceHistory.create.label.${label}`;
+    const translated = t(key);
+    return translated !== key ? translated : label;
+  }
+
+  function formatMeter(value?: number | null): string {
+    if (value === null || value === undefined) return '—';
+    return `${value.toLocaleString(i18n.language)} km`;
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-8rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white lg:flex-row">
@@ -307,6 +353,9 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
             <h1 className="mt-2 text-xl font-bold text-slate-900 sm:text-2xl">
               {t('expenseHistory.detail.title', { id: displayEntryId(record.id) })}
             </h1>
+            {isMock ? (
+              <p className="mt-1 text-[13px] text-amber-700">{t('serviceHistory.sampleBadge')}</p>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -431,6 +480,61 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
                   onChange={(event) => updateForm('service_type', event.target.value)}
                   className="max-w-md"
                 />
+              </DetailFieldRow>
+
+              <DetailFieldRow
+                label={t('serviceHistory.colMeter')}
+                editing={false}
+                view={formatMeter(record.mileage_km)}
+              >
+                <span className="text-slate-600">{formatMeter(record.mileage_km)}</span>
+              </DetailFieldRow>
+
+              <DetailFieldRow
+                label={t('serviceHistory.colPriorityClass')}
+                editing={false}
+                view={priorityLabel}
+              >
+                <span className="text-slate-600">{priorityLabel}</span>
+              </DetailFieldRow>
+
+              <DetailFieldRow
+                label={t('serviceHistory.create.reference')}
+                editing={false}
+                view={displayText(reference)}
+              >
+                <span className="text-slate-600">{displayText(reference)}</span>
+              </DetailFieldRow>
+
+              <DetailFieldRow
+                label={t('serviceHistory.colIssues')}
+                editing={false}
+                view={displayText(issues)}
+              >
+                <span className="text-slate-600">{displayText(issues)}</span>
+              </DetailFieldRow>
+
+              <DetailFieldRow
+                label={t('serviceHistory.colLabels')}
+                editing={false}
+                view={
+                  labels.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {labels.map((label) => (
+                        <span
+                          key={label}
+                          className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"
+                        >
+                          {formatLabel(label)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    '—'
+                  )
+                }
+              >
+                <span className="text-slate-600">—</span>
               </DetailFieldRow>
 
               <DetailFieldRow

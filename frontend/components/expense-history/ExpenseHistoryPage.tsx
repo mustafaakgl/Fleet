@@ -7,14 +7,12 @@ import { useSearchParams } from 'next/navigation';
 import {
   ArrowDown,
   ArrowUp,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Filter,
   Paperclip,
   Plus,
   Search,
-  Settings2,
   Wallet,
   Wrench,
 } from 'lucide-react';
@@ -22,10 +20,12 @@ import { useTranslation } from 'react-i18next';
 import { CreateExpenseEntryDialog } from '@/components/expense-history/CreateExpenseEntryDialog';
 import { ServiceHistoryActionsMenu } from '@/components/expense-history/ServiceHistoryActionsMenu';
 import { ServiceHistoryImportDialog } from '@/components/expense-history/ServiceHistoryImportDialog';
+import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -45,7 +45,6 @@ import {
   type RepairPriorityClass,
 } from '@/lib/service-record-categories';
 import type { ServiceRecord, Vehicle } from '@/lib/types';
-import { vehicleAbbreviation } from '@/lib/timeline-utils';
 import {
   getServiceHistoryMockVehicles,
   isServiceHistoryMockRecord,
@@ -55,31 +54,30 @@ import {
 import {
   formatServiceTasks,
   hasServiceRecordAttachments,
-  parseServiceRecordIssues,
   parseServiceRecordLabels,
-  parseServiceRecordReference,
   parseServiceRecordTasks,
 } from '@/lib/service-record-notes';
 import { downloadServiceRecordsCsv } from '@/lib/service-history-csv';
 import { serviceReminderHref } from '@/lib/service-reminders';
-import { BRAND_BADGE_PLANNED, BRAND_BTN_PRIMARY, BRAND_FOCUS, BRAND_LINK } from '@/lib/brand-colors';
+import { BRAND_BADGE_PLANNED, BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
 import {
   FLEET_FILTER_INPUT,
+  FLEET_FILTER_SELECT,
   FLEET_LIST_CARD,
-  FLEET_LIST_DESKTOP,
   FLEET_LIST_MOBILE,
-  FLEET_PAGE,
+  FLEET_PAGE_HEADER,
+  FLEET_PAGE_HEADER_ACTIONS,
+  FLEET_PAGE_HEADER_TITLE,
   FLEET_TABLE,
   FLEET_TABLE_BODY,
   FLEET_TABLE_CELL,
   FLEET_TABLE_CELL_MUTED,
-  FLEET_TABLE_CELL_PRIMARY,
   FLEET_TABLE_HEAD,
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW_CLICKABLE,
-  FLEET_TABLE_SCROLL,
+  FLEET_TOOLBAR,
 } from '@/lib/fleet-table';
-import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
+import { MobileField } from '@/components/ui/MobileDataCard';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
@@ -163,7 +161,7 @@ function RepairPriorityBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium leading-4',
         priorityBadgeClass(priority),
       )}
     >
@@ -178,31 +176,27 @@ function FilterPill({
   value,
   onChange,
   options,
+  className,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+  className?: string;
 }) {
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-label={label}
-        className={cn(
-          'h-9 appearance-none rounded-full border border-slate-300 bg-white py-1.5 pl-3 pr-8 text-[13px] text-slate-700 hover:bg-slate-50',
-          BRAND_FOCUS,
-        )}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-    </div>
+    <Select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-label={label}
+      className={cn('min-w-[9rem]', FLEET_FILTER_SELECT, className)}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
   );
 }
 
@@ -410,7 +404,6 @@ export function ExpenseHistoryPage() {
   }
 
   function openEntry(id: string) {
-    if (isServiceHistoryMockRecord(id)) return;
     router.push(`/service-history/${id}`);
   }
 
@@ -421,128 +414,100 @@ export function ExpenseHistoryPage() {
   }
 
   return (
-    <div className={FLEET_PAGE}>
-      <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('serviceHistory.title')}</h1>
-          </div>
+    <div className="space-y-4 sm:space-y-6">
+      <div className={FLEET_PAGE_HEADER}>
+        <div className={FLEET_PAGE_HEADER_TITLE}>
+          <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{t('serviceHistory.title')}</h1>
+          {!loading && (
+            <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm text-gray-500">
+              {sortedRecords.length}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className={FLEET_PAGE_HEADER_ACTIONS}>
           <ServiceHistoryActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
             onExport={handleExport}
           />
           {canEdit ? (
-            <Button type="button" className={BRAND_BTN_PRIMARY} onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-1.5 h-4 w-4" />
+            <Button type="button" className={cn(BRAND_BTN_PRIMARY, 'w-full sm:w-auto')} onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
               {t('serviceHistory.addEntry')}
             </Button>
           ) : null}
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 border-b border-slate-200 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t('serviceHistory.searchPlaceholder')}
-              className={cn('pl-9', FLEET_FILTER_INPUT)}
-            />
-          </div>
-
-          <FilterPill
-            label={t('expenseHistory.filterVehicle')}
-            value={vehicleFilter}
-            onChange={setVehicleFilter}
-            options={[
-              { value: '', label: t('expenseHistory.filterVehicle') },
-              ...vehicles.map((vehicle) => ({
-                value: vehicle.id,
-                label: vehicle.plate_number,
-              })),
-            ]}
+      <div className={FLEET_TOOLBAR}>
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t('serviceHistory.searchPlaceholder')}
+            className={cn('pl-9', FLEET_FILTER_INPUT)}
           />
-
-          <FilterPill
-            label={t('expenseHistory.filterDate')}
-            value={dateFilter}
-            onChange={(value) => setDateFilter(value as DateFilter)}
-            options={[
-              { value: 'all', label: t('expenseHistory.filterDate') },
-              { value: 'thisMonth', label: t('expenseHistory.dateThisMonth') },
-              { value: 'last30', label: t('expenseHistory.dateLast30') },
-              { value: 'last90', label: t('expenseHistory.dateLast90') },
-            ]}
-          />
-
-          <FilterPill
-            label={t('serviceHistory.filterServiceTasks')}
-            value={typeFilter}
-            onChange={setTypeFilter}
-            options={[
-              { value: '', label: t('serviceHistory.filterServiceTasks') },
-              ...serviceTypes.map((type) => ({ value: type, label: type })),
-            ]}
-          />
-
-          <FilterPill
-            label={t('serviceHistory.filterRepairCompany')}
-            value={repairCompanyFilter}
-            onChange={setRepairCompanyFilter}
-            options={[
-              { value: '', label: t('serviceHistory.filterRepairCompany') },
-              ...repairCompanies.map((company) => ({ value: company, label: company })),
-            ]}
-          />
-
-          <Button type="button" variant="outline" className="h-9 rounded-full px-3 text-sm">
-            <Filter className="mr-1.5 h-4 w-4" />
-            {t('expenseHistory.filters')}
-          </Button>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <span>
-            {t('expenseHistory.pagination', {
-              from: rangeStart,
-              to: rangeEnd,
-              total: sortedRecords.length,
-            })}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={page === 0}
-            onClick={() => setPage((current) => Math.max(0, current - 1))}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label={t('expenseHistory.tableSettings')}>
-            <Settings2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <FilterPill
+          label={t('expenseHistory.filterVehicle')}
+          value={vehicleFilter}
+          onChange={setVehicleFilter}
+          className="w-full sm:w-40"
+          options={[
+            { value: '', label: t('expenseHistory.filterVehicle') },
+            ...vehicles.map((vehicle) => ({
+              value: vehicle.id,
+              label: vehicle.plate_number,
+            })),
+          ]}
+        />
+
+        <FilterPill
+          label={t('expenseHistory.filterDate')}
+          value={dateFilter}
+          onChange={(value) => setDateFilter(value as DateFilter)}
+          className="w-full sm:w-40"
+          options={[
+            { value: 'all', label: t('expenseHistory.filterDate') },
+            { value: 'thisMonth', label: t('expenseHistory.dateThisMonth') },
+            { value: 'last30', label: t('expenseHistory.dateLast30') },
+            { value: 'last90', label: t('expenseHistory.dateLast90') },
+          ]}
+        />
+
+        <FilterPill
+          label={t('serviceHistory.filterServiceTasks')}
+          value={typeFilter}
+          onChange={setTypeFilter}
+          className="w-full sm:w-44"
+          options={[
+            { value: '', label: t('serviceHistory.filterServiceTasks') },
+            ...serviceTypes.map((type) => ({ value: type, label: type })),
+          ]}
+        />
+
+        <FilterPill
+          label={t('serviceHistory.filterRepairCompany')}
+          value={repairCompanyFilter}
+          onChange={setRepairCompanyFilter}
+          className="w-full sm:w-44"
+          options={[
+            { value: '', label: t('serviceHistory.filterRepairCompany') },
+            ...repairCompanies.map((company) => ({ value: company, label: company })),
+          ]}
+        />
+
+        <Button type="button" variant="outline" className={cn('w-full sm:w-auto', FLEET_FILTER_SELECT)}>
+          <Filter className="mr-2 h-4 w-4" />
+          {t('expenseHistory.filters')}
+        </Button>
       </div>
 
       {usingMockData ? (
-        <div className="border-b border-amber-100 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+        <div className="rounded-md border border-amber-100 bg-amber-50/80 px-3 py-2 text-[13px] text-amber-900">
           {t('serviceHistory.demoDataBanner')}
         </div>
       ) : null}
@@ -554,7 +519,7 @@ export function ExpenseHistoryPage() {
         watchedOnly ||
         repairCompanyFilter ||
         priorityFilter) && (
-        <div className="border-b border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-900">
+        <div className="rounded-md border border-blue-100 bg-blue-50/70 px-3 py-2 text-[13px] text-blue-900">
           {t('serviceHistory.activeFilters')}
           {watchedOnly ? ` ${t('expenseHistory.filterWatched')}` : ''}
           {repairCompanyFilter ? ` ${repairCompanyFilter}` : ''}
@@ -567,14 +532,20 @@ export function ExpenseHistoryPage() {
 
       <Card className={FLEET_LIST_CARD}>
         {loading ? (
-          <div className="space-y-2 p-4">
-            <Skeleton className="h-10" />
-            <Skeleton className="h-12" />
-            <Skeleton className="h-12" />
-            <Skeleton className="h-12" />
+          <div className="space-y-2 p-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={`service-history-skeleton-${index}`} className="grid grid-cols-6 gap-2">
+                <Skeleton className="h-8" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+                <Skeleton className="h-9" />
+              </div>
+            ))}
           </div>
         ) : error ? (
-          <div className="p-6">
+          <div className="p-4">
             <EmptyState
               icon={Wallet}
               title={t('expenseHistory.loadError')}
@@ -584,7 +555,7 @@ export function ExpenseHistoryPage() {
             />
           </div>
         ) : pageRecords.length === 0 ? (
-          <div className="p-6">
+          <div className="p-4">
             <EmptyState
               icon={Wallet}
               title={t('expenseHistory.emptyTitle')}
@@ -597,25 +568,37 @@ export function ExpenseHistoryPage() {
           <>
           <div className={FLEET_LIST_MOBILE}>
             {pageRecords.map((row) => {
+              const vehicle = vehicleById.get(row.vehicle_id);
               const tasks = formatServiceTasks(row.service_type);
               const taskList = parseServiceRecordTasks(row);
               const primaryTask = taskList[0] ?? tasks.primary;
               return (
-                <MobileDataCard
+                <div
                   key={row.id}
-                  title={row.vehicle_plate}
-                  subtitle={formatCompletionDateTime(row.date, i18n.language)}
+                  className="flex cursor-pointer items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50"
                   onClick={() => openEntry(row.id)}
                 >
-                  <MobileFieldGrid>
-                    <MobileField label={t('serviceHistory.create.lineItemTask')} value={primaryTask} />
-                    <MobileField label={t('serviceHistory.create.cost')} value={formatAmount(row.cost_amount, i18n.language)} />
-                  </MobileFieldGrid>
-                </MobileDataCard>
+                  <div className="min-w-0 space-y-2">
+                    <VehiclePlateDisplay
+                      vehicleId={row.vehicle_id}
+                      plate={row.vehicle_plate}
+                      photoUrl={vehicle?.photo_url}
+                      brand={vehicle?.brand}
+                      model={vehicle?.model}
+                      size="sm"
+                      layout="inline"
+                    />
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+                      <MobileField label={t('serviceHistory.create.completionDate')} value={formatCompletionDateTime(row.date, i18n.language)} />
+                      <MobileField label={t('serviceHistory.create.lineItemTask')} value={primaryTask} />
+                      <MobileField label={t('serviceHistory.create.cost')} value={formatAmount(row.cost_amount, i18n.language)} />
+                    </dl>
+                  </div>
+                </div>
               );
             })}
           </div>
-          <div className={cn(FLEET_LIST_DESKTOP, FLEET_TABLE_SCROLL)}>
+          <div className="hidden md:block overflow-x-auto">
             <Table className={FLEET_TABLE}>
               <TableHeader>
                 <TableRow className={FLEET_TABLE_HEADER_ROW}>
@@ -653,7 +636,6 @@ export function ExpenseHistoryPage() {
                     </button>
                   </TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.driver')}</TableHead>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.reference')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.vendor')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.priorityClass')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>
@@ -680,7 +662,6 @@ export function ExpenseHistoryPage() {
                       ) : null}
                     </button>
                   </TableHead>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.sectionIssues')}</TableHead>
                   <TableHead className={cn(FLEET_TABLE_HEAD, 'text-right')}>
                     <button
                       type="button"
@@ -699,17 +680,12 @@ export function ExpenseHistoryPage() {
               <TableBody className={FLEET_TABLE_BODY}>
                 {pageRecords.map((row) => {
                   const vehicle = vehicleById.get(row.vehicle_id);
-                  const badge = vehicle
-                    ? vehicleAbbreviation(vehicle.brand, vehicle.model, vehicle.plate_number)
-                    : row.vehicle_plate.slice(0, 3).toUpperCase();
                   const priority = getRepairPriorityClass(row.service_type, row.notes);
                   const priorityLabel = t(`serviceHistory.priority.${priority}`);
                   const tasks = formatServiceTasks(row.service_type);
                   const taskList = parseServiceRecordTasks(row);
                   const primaryTask = taskList[0] ?? tasks.primary;
                   const labels = parseServiceRecordLabels(row.notes);
-                  const issues = parseServiceRecordIssues(row.notes);
-                  const reference = parseServiceRecordReference(row.notes);
                   const isMock = isServiceHistoryMockRecord(row.id);
                   const hasAttachment =
                     (isMock && SERVICE_HISTORY_MOCK_ATTACHMENT_IDS.has(row.id)) ||
@@ -718,10 +694,7 @@ export function ExpenseHistoryPage() {
                   return (
                     <TableRow
                       key={row.id}
-                      className={cn(
-                        FLEET_TABLE_ROW_CLICKABLE,
-                        isMock && 'cursor-default',
-                      )}
+                      className={FLEET_TABLE_ROW_CLICKABLE}
                       onClick={() => openEntry(row.id)}
                     >
                       <TableCell className={FLEET_TABLE_CELL} onClick={(event) => event.stopPropagation()}>
@@ -736,51 +709,26 @@ export function ExpenseHistoryPage() {
                         {hasAttachment ? <Paperclip className="h-4 w-4" aria-hidden /> : null}
                       </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
-                        <div className="flex items-center gap-2">
-                          {vehicle?.photo_url ? (
-                            <img
-                              src={vehicle.photo_url}
-                              alt=""
-                              className="h-8 w-8 rounded object-cover"
-                            />
-                          ) : (
-                            <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-slate-100 text-[10px] font-bold uppercase text-slate-600">
-                              {badge}
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <VehiclePlateDisplay
+                            vehicleId={row.vehicle_id}
+                            plate={row.vehicle_plate}
+                            photoUrl={vehicle?.photo_url}
+                            brand={vehicle?.brand}
+                            model={vehicle?.model}
+                            layout="inline"
+                            size="sm"
+                          />
+                          {isMock ? (
+                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium uppercase text-slate-500">
+                              {t('serviceHistory.sampleBadge')}
                             </span>
-                          )}
-                          <div className="min-w-0">
-                            {isMock ? (
-                              <span className={cn('block truncate', FLEET_TABLE_CELL_PRIMARY)}>
-                                {row.vehicle_plate}
-                              </span>
-                            ) : (
-                              <Link
-                                href={`/vehicles/${row.vehicle_id}`}
-                                className={cn('block truncate', FLEET_TABLE_CELL_PRIMARY, 'hover:text-[#1a4d7a]')}
-                              >
-                                {row.vehicle_plate}
-                              </Link>
-                            )}
-                            <div className="flex items-center gap-1.5">
-                              {vehicle ? (
-                                <p className="truncate text-xs text-slate-500">
-                                  {vehicle.brand} {vehicle.model}
-                                </p>
-                              ) : null}
-                              {isMock ? (
-                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500">
-                                  {t('serviceHistory.sampleBadge')}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
+                          ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className={cn(FLEET_TABLE_CELL, 'whitespace-nowrap')} onClick={(event) => event.stopPropagation()}>
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
                         <div className="flex items-center gap-2">
-                          <span className={cn(BRAND_LINK, 'underline decoration-[#1a4d7a]/40 underline-offset-2')}>
-                            {formatCompletionDateTime(row.date, i18n.language)}
-                          </span>
+                          <span>{formatCompletionDateTime(row.date, i18n.language)}</span>
                           {!isMock ? (
                             <Link
                               href={serviceReminderHref({
@@ -789,6 +737,7 @@ export function ExpenseHistoryPage() {
                               })}
                               className="text-slate-400 hover:text-[#1a4d7a]"
                               title={t('serviceHistory.openReminder')}
+                              onClick={(event) => event.stopPropagation()}
                             >
                               <Wrench className="h-3.5 w-3.5" />
                             </Link>
@@ -797,9 +746,6 @@ export function ExpenseHistoryPage() {
                       </TableCell>
                       <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[8rem] truncate')}>
                         {row.driver_name || '—'}
-                      </TableCell>
-                      <TableCell className={cn(FLEET_TABLE_CELL, 'max-w-[7rem] truncate font-medium text-[#1a4d7a]')}>
-                        {reference || '—'}
                       </TableCell>
                       <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[9rem] truncate')}>
                         {renderVendor(row.vendor)}
@@ -811,17 +757,14 @@ export function ExpenseHistoryPage() {
                         {formatMeter(row.mileage_km, i18n.language)}
                       </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
-                        <span className={cn(BRAND_LINK, 'underline decoration-[#1a4d7a]/40 underline-offset-2')}>
-                          {tasks.primary}
-                        </span>
+                        <span>{tasks.primary}</span>
                         {tasks.extra > 0 ? (
-                          <span className="ml-1 text-xs text-slate-500">
+                          <span className="ml-1 text-[12px] text-slate-500">
                             {t('serviceHistory.moreTasks', { count: tasks.extra })}
                           </span>
                         ) : null}
                       </TableCell>
-                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[8rem] truncate')}>{issues || '—'}</TableCell>
-                      <TableCell className={cn(FLEET_TABLE_CELL_PRIMARY, 'text-right whitespace-nowrap')}>
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'text-right whitespace-nowrap font-semibold text-slate-900')}>
                         {showAmounts ? formatAmount(row.cost_amount, i18n.language) : '—'}
                       </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
@@ -830,13 +773,13 @@ export function ExpenseHistoryPage() {
                             {labels.slice(0, 2).map((label) => (
                               <span
                                 key={label}
-                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"
                               >
                                 {formatLabel(label)}
                               </span>
                             ))}
                             {labels.length > 2 ? (
-                              <span className="text-[10px] text-slate-500">
+                              <span className="text-[12px] text-slate-500">
                                 {t('serviceHistory.moreTasks', { count: labels.length - 2 })}
                               </span>
                             ) : null}
@@ -854,6 +797,38 @@ export function ExpenseHistoryPage() {
           </>
         )}
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[13px] text-gray-500">
+            {t('expenseHistory.pagination', {
+              from: rangeStart,
+              to: rangeEnd,
+              total: sortedRecords.length,
+            })}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <CreateExpenseEntryDialog
         open={createOpen}

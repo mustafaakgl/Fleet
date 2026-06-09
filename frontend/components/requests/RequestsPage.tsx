@@ -7,19 +7,23 @@ import { useTranslation } from 'react-i18next';
 import { useFleetData } from '@/context/FleetDataContext';
 import { EmptyState } from '@/components/ui/empty-state';
 import {
-  FLEET_LINK_ACTION,
+  FLEET_LIST_CARD,
+  FLEET_PAGE,
   FLEET_RAW_TABLE,
   FLEET_RAW_TBODY,
   FLEET_RAW_TD,
   FLEET_RAW_TD_MUTED,
-  FLEET_RAW_TD_PRIMARY,
   FLEET_RAW_TH,
   FLEET_RAW_THEAD,
   FLEET_RAW_TR,
+  FLEET_TAB_BAR,
+  FLEET_TAB_ITEM,
 } from '@/lib/fleet-table';
 import { cn } from '@/lib/utils';
 
 type RequestTab = 'Pending' | 'Approved' | 'Rejected' | 'Needs Review' | 'Cancelled';
+
+const REQUEST_TABS: RequestTab[] = ['Pending', 'Approved', 'Rejected', 'Needs Review', 'Cancelled'];
 
 const TAB_KEY: Record<RequestTab, string> = {
   Pending: 'pending',
@@ -28,6 +32,23 @@ const TAB_KEY: Record<RequestTab, string> = {
   'Needs Review': 'needsReview',
   Cancelled: 'cancelled',
 };
+
+function requestStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'Pending':
+      return 'bg-[#e8f0f8] text-[#1a4d7a] ring-1 ring-inset ring-[#d4e3f2]';
+    case 'Approved':
+      return 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-100';
+    case 'Rejected':
+      return 'bg-red-50 text-red-800 ring-1 ring-inset ring-red-100';
+    case 'Needs Review':
+      return 'bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-100';
+    case 'Cancelled':
+      return 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200';
+    default:
+      return 'bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200';
+  }
+}
 
 export function RequestsPage() {
   const { t } = useTranslation();
@@ -48,14 +69,25 @@ export function RequestsPage() {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  const filteredRequests = useMemo(
+  const typeScopedRequests = useMemo(
+    () => (typeFilter ? requests.filter((request) => request.type === typeFilter) : requests),
+    [requests, typeFilter],
+  );
+
+  const tabCounts = useMemo(
     () =>
-      requests.filter((request) => {
-        if (request.status !== activeTab) return false;
-        if (!typeFilter) return true;
-        return request.type === typeFilter;
-      }),
-    [activeTab, requests, typeFilter],
+      Object.fromEntries(
+        REQUEST_TABS.map((tab) => [
+          tab,
+          typeScopedRequests.filter((request) => request.status === tab).length,
+        ]),
+      ) as Record<RequestTab, number>,
+    [typeScopedRequests],
+  );
+
+  const filteredRequests = useMemo(
+    () => typeScopedRequests.filter((request) => request.status === activeTab),
+    [activeTab, typeScopedRequests],
   );
 
   const selectedRequest = useMemo(
@@ -97,30 +129,48 @@ export function RequestsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className={FLEET_PAGE}>
       <div>
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{typeFilter ? t('requests.titleAccidents') : t('requests.titleRequests')}</h1>
-        <p className="mt-1 text-sm text-slate-600">{t('requests.subtitle')}</p>
+        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
+          {typeFilter ? t('requests.titleAccidents') : t('requests.titleRequests')}
+        </h1>
+        <p className="mt-1 text-[13px] text-slate-600">{t('requests.subtitle')}</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {(['Pending', 'Approved', 'Rejected', 'Needs Review', 'Cancelled'] as RequestTab[]).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`rounded-md border px-3 py-2 text-sm font-medium ${
-              activeTab === tab
-                ? 'border-blue-700 bg-blue-700 text-white'
-                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            {t(`requests.tab.${TAB_KEY[tab]}`)}
-          </button>
-        ))}
-      </div>
+      <div className={cn(FLEET_LIST_CARD, 'overflow-hidden')}>
+        <div className={cn(FLEET_TAB_BAR, 'gap-0 px-4 sm:gap-1 sm:px-5')}>
+          {REQUEST_TABS.map((tab) => {
+            const isActive = activeTab === tab;
+            const count = tabCounts[tab];
 
-      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  FLEET_TAB_ITEM,
+                  'inline-flex items-center gap-2 px-2 sm:px-3',
+                  isActive
+                    ? 'border-[#1a4d7a] text-[#0b2342]'
+                    : 'border-transparent text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <span>{t(`requests.tab.${TAB_KEY[tab]}`)}</span>
+                <span
+                  className={cn(
+                    'inline-flex min-w-[1.375rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none',
+                    isActive ? 'bg-[#1a4d7a] text-white' : 'bg-slate-100 text-slate-600',
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="border-t border-slate-200">
         {filteredRequests.length === 0 ? (
           <div className="p-4">
             <EmptyState
@@ -136,8 +186,8 @@ export function RequestsPage() {
         <div className="space-y-3 p-3 md:hidden">
           {filteredRequests.map((request) => (
             <div key={`request-card-${request.id}`} className="rounded-lg border border-slate-200 bg-white p-3">
-              <p className="font-semibold text-slate-900">{request.id}</p>
-              <p className="text-xs text-slate-600">{getDriverName(request.driverId, request.driverName)} · {request.type}</p>
+              <p className="font-semibold text-slate-900">{getDriverName(request.driverId, request.driverName)}</p>
+              <p className="text-xs text-slate-600">{request.type}</p>
               <p className="text-xs text-slate-600">{request.dateFrom ?? '-'} - {request.dateTo ?? '-'}</p>
               <button
                 type="button"
@@ -150,10 +200,9 @@ export function RequestsPage() {
           ))}
         </div>
         <div className="hidden md:block overflow-x-auto">
-          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1500px]')}>
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1320px]')}>
             <thead className={FLEET_RAW_THEAD}>
               <tr>
-                <th className={FLEET_RAW_TH}>{t('requests.colRequestId')}</th>
                 <th className={FLEET_RAW_TH}>{t('requests.colDriver')}</th>
                 <th className={FLEET_RAW_TH}>{t('requests.colDepartment')}</th>
                 <th className={FLEET_RAW_TH}>{t('requests.colType')}</th>
@@ -169,7 +218,6 @@ export function RequestsPage() {
             <tbody className={FLEET_RAW_TBODY}>
               {filteredRequests.map((request) => (
                 <tr key={request.id} className={FLEET_RAW_TR}>
-                  <td className={FLEET_RAW_TD_PRIMARY}>{request.id}</td>
                   <td className={FLEET_RAW_TD}>{getDriverName(request.driverId, request.driverName)}</td>
                   <td className={FLEET_RAW_TD_MUTED}>{request.department}</td>
                   <td className={FLEET_RAW_TD_MUTED}>{request.type}</td>
@@ -177,7 +225,12 @@ export function RequestsPage() {
                   <td className={FLEET_RAW_TD_MUTED}>{request.dateTo ?? '-'}</td>
                   <td className={FLEET_RAW_TD_MUTED}>{request.uploadedDocument}</td>
                   <td className={FLEET_RAW_TD}>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                    <span
+                      className={cn(
+                        'inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                        requestStatusBadgeClass(request.status),
+                      )}
+                    >
                       {statusLabel(request.status)}
                     </span>
                   </td>
@@ -230,6 +283,7 @@ export function RequestsPage() {
         </div>
         </>
         )}
+        </div>
       </div>
 
       {selectedRequest && (
@@ -248,7 +302,6 @@ export function RequestsPage() {
             </div>
 
             <div className="space-y-4 px-5 py-5 text-sm">
-              <DetailRow label={t('requests.rowRequest')} value={selectedRequest.id} />
               <DetailRow label={t('requests.colDriver')} value={getDriverName(selectedRequest.driverId, selectedRequest.driverName)} />
               <DetailRow label={t('requests.colDepartment')} value={selectedRequest.department} />
               <DetailRow label={t('requests.colType')} value={selectedRequest.type} />
