@@ -2,7 +2,7 @@ import { isRoutineServiceType } from '@/lib/service-record-categories';
 import { parseServiceRecordTasks } from '@/lib/service-record-notes';
 import type { Reminder, ServiceRecord, Vehicle } from '@/lib/types';
 import { daysUntil } from '@/lib/utils';
-import { getReminderCategory, normalizeReminder } from '@/lib/reminder-utils';
+import { getReminderCategory, normalizeReminder, parseReminderMetadata } from '@/lib/reminder-utils';
 
 export type ServiceReminderTab = 'all' | 'due_soon' | 'overdue' | 'snoozed';
 
@@ -215,7 +215,18 @@ export function buildServiceReminderRows(
 
     const backendStatus = String(raw.status ?? '');
     const status = classifyStatus(reminder.due_date, backendStatus);
-    const interval = intervalForTask(reminder.title);
+    const metadata = parseReminderMetadata(reminder.message);
+    const serviceTask = metadata?.serviceTask ?? reminder.title;
+    const interval =
+      metadata?.timeInterval && metadata.timeIntervalUnit
+        ? {
+            months:
+              metadata.timeIntervalUnit === 'months'
+                ? metadata.timeInterval
+                : Math.max(1, Math.round(metadata.timeInterval / 4)),
+            km: metadata.meterIntervalKm ?? intervalForTask(serviceTask).km,
+          }
+        : intervalForTask(serviceTask);
     const vehicleMileageKm = vehicle ? (mileageByVehicle.get(vehicle.id) ?? null) : null;
 
     rows.push({
@@ -226,7 +237,7 @@ export function buildServiceReminderRows(
       vehicleModel: vehicle?.model ?? '',
       vehicleStatus: vehicle?.status ?? 'active',
       vehicleMileageKm,
-      serviceTask: reminder.title,
+      serviceTask,
       intervalLabel: intervalLabel(interval, locale),
       timeIntervalMonths: interval.months,
       meterIntervalKm: interval.km,

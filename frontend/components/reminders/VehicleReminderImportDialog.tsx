@@ -11,9 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { remindersApi } from '@/lib/api';
 import {
   listVehicleReminderAttachments,
-  saveCustomVehicleRemindersBulk,
   saveVehicleReminderAttachment,
 } from '@/lib/custom-vehicle-reminders';
 import { parseVehicleRemindersCsv } from '@/lib/vehicle-reminders-csv';
@@ -67,8 +67,11 @@ export function VehicleReminderImportDialog({
       if (rows.length === 0) {
         throw new Error(t('vehicleReminders.import.empty'));
       }
-      const created = saveCustomVehicleRemindersBulk(rows);
-      setImportedCount(created);
+      const result = await remindersApi.bulkCreateVehicleReminders(rows);
+      if (result.created === 0) {
+        throw new Error(t('vehicleReminders.import.error'));
+      }
+      setImportedCount(result.created);
       onImported();
     } catch (err) {
       setError(err instanceof Error ? err.message : t('vehicleReminders.import.error'));

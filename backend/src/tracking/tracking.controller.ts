@@ -1,9 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { IngestTelematicsDto } from './dto/ingest-telematics.dto';
 import { LiveTrackingQueryDto } from './dto/live-tracking-query.dto';
 import { LocationHistoryQueryDto } from './dto/location-history-query.dto';
 import { TrackingService } from './tracking.service';
@@ -21,6 +23,12 @@ export class TrackingController {
       includeOffline: query.includeOffline ?? false,
       search: query.search,
     });
+  }
+
+  @Post('telematics/ingest')
+  @RequiresWrite()
+  ingestTelematics(@Body() dto: IngestTelematicsDto) {
+    return this.trackingService.ingestTelematicsLocation(dto);
   }
 
   @Get('drivers/:driverId/latest')

@@ -82,6 +82,7 @@ function normalizeUserRole(user: AuthUser): AuthUser {
     user.role === 'boss' ||
     user.role === 'accounting' ||
     user.role === 'office' ||
+    user.role === 'driver' ||
     user.role === 'customer'
   ) {
     return user;
@@ -96,6 +97,10 @@ function normalizeUserRole(user: AuthUser): AuthUser {
 export function getPostLoginPath(role: AuthUser['role'] | string): string {
   if (role === 'customer') {
     return '/portal/dashboard';
+  }
+
+  if (role === 'driver') {
+    return '/driver';
   }
 
   return '/dashboard';

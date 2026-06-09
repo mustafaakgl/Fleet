@@ -35,6 +35,9 @@ import type {
   MessengerStats,
   MessengerUnreadCount,
   LiveTrackingItem,
+  DriverLocationStatus,
+  DriverPortalAssignment,
+  DriverPortalMe,
   CustomerDashboardStats,
   CustomerAssignment,
   PaginatedCustomerAssignments,
@@ -771,9 +774,49 @@ export interface ReminderListParams {
   due_before?: string;
 }
 
+export interface CreateServiceReminderPayload {
+  vehicleId: string;
+  serviceTask: string;
+  timeInterval: number;
+  timeIntervalUnit: 'months' | 'weeks';
+  timeDueSoonThreshold: number;
+  timeDueSoonThresholdUnit: 'months' | 'weeks';
+  meterIntervalKm: number;
+  meterDueSoonThresholdKm: number;
+  manualOverride: boolean;
+  nextDueDate?: string;
+  notifications: boolean;
+  watchers?: string[];
+}
+
+export interface CreateVehicleReminderPayload {
+  vehicleId: string;
+  renewalKind: 'emission_test' | 'registration' | 'insurance' | 'inspection';
+  dueDate: string;
+  dueSoonThreshold: number;
+  dueSoonThresholdUnit: 'weeks' | 'days';
+  notifications: boolean;
+  watchers?: string[];
+  comment?: string;
+}
+
 export const remindersApi = {
   list: (params?: ReminderListParams) =>
     api.get<Reminder[]>('/reminders', { params }).then((r) => r.data),
+
+  createServiceReminder: (payload: CreateServiceReminderPayload) =>
+    api.post<Reminder>('/reminders/service', payload).then((r) => r.data),
+
+  createVehicleReminder: (payload: CreateVehicleReminderPayload) =>
+    api.post<Reminder>('/reminders/vehicle', payload).then((r) => r.data),
+
+  bulkCreateVehicleReminders: (items: CreateVehicleReminderPayload[]) =>
+    api
+      .post<{ created: number; skipped: Array<{ index: number; reason: string }> }>(
+        '/reminders/vehicle/bulk',
+        { items },
+      )
+      .then((r) => r.data),
 
   resolve: (id: string) => api.post(`/reminders/${id}/resolve`).then((r) => r.data),
 
@@ -1428,6 +1471,48 @@ export interface LiveTrackingQueryParams {
 export const trackingApi = {
   getLive: (params?: LiveTrackingQueryParams) =>
     api.get<LiveTrackingItem[]>('/tracking/live', { params }).then((r) => r.data),
+};
+
+// ─── Driver portal (web) ─────────────────────────────────────────────────────
+
+export const driverPortalApi = {
+  me: () => api.get<DriverPortalMe>('/driver/me').then((r) => r.data),
+
+  todayAssignments: (date?: string) =>
+    api
+      .get<DriverPortalAssignment[]>('/driver/assignments/today', { params: date ? { date } : undefined })
+      .then((r) => r.data),
+
+  assignmentById: (id: string) =>
+    api.get<DriverPortalAssignment>(`/driver/assignments/${id}`).then((r) => r.data),
+
+  getLocationStatus: () =>
+    api.get<DriverLocationStatus>('/driver/me/location-status').then((r) => r.data),
+
+  grantLocationConsent: () =>
+    api.post<DriverLocationStatus>('/driver/me/location-consent').then((r) => r.data),
+
+  startLocationSharing: () =>
+    api.post<DriverLocationStatus>('/driver/me/location-sharing/start').then((r) => r.data),
+
+  endLocationSharing: () =>
+    api.post<DriverLocationStatus>('/driver/me/location-sharing/end').then((r) => r.data),
+
+  submitLocation: (payload: {
+    latitude: number;
+    longitude: number;
+    accuracyM?: number;
+    speedMps?: number;
+    headingDeg?: number;
+    recordedAt: string;
+  }) =>
+    api
+      .post<{
+        accepted: boolean;
+        nextUploadAfterSec: number;
+        vehicleId: string | null;
+      }>('/driver/location', payload)
+      .then((r) => r.data),
 };
 
 export default api;

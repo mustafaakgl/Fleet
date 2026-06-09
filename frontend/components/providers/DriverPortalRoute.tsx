@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPostLoginPath, getUser, isAuthenticated } from '@/lib/auth';
 
-interface ProtectedRouteProps {
+interface DriverPortalRouteProps {
   children: React.ReactNode;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function DriverPortalRoute({ children }: DriverPortalRouteProps) {
   const router = useRouter();
   const [canRender, setCanRender] = useState(false);
 
@@ -20,8 +20,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     const user = getUser();
-    if (user?.role === 'customer' || user?.role === 'driver') {
-      router.replace(getPostLoginPath(user.role));
+    if (user?.role !== 'driver') {
+      router.replace(getPostLoginPath(user?.role ?? 'office'));
       setCanRender(false);
       return;
     }

@@ -1,6 +1,6 @@
 import type { Reminder, ReminderType, Vehicle } from '@/lib/types';
 import { daysUntil } from '@/lib/utils';
-import { getReminderCategory, normalizeReminder } from '@/lib/reminder-utils';
+import { getReminderCategory, normalizeReminder, parseReminderMetadata } from '@/lib/reminder-utils';
 
 export type VehicleReminderTab = 'all' | 'due_soon' | 'overdue';
 
@@ -126,11 +126,12 @@ export function buildVehicleReminderRows(
         ? vehicleById.get(reminder.related_entity_id ?? '')
         : vehicles.find((item) => item.plate_number === reminder.related_entity_name);
 
-    const renewalKind = renewalKindFromReminderType(reminder.type, reminder.title);
+    const metadata = parseReminderMetadata(reminder.message);
+    const renewalKind = metadata?.renewalKind ?? renewalKindFromReminderType(reminder.type, reminder.title);
     const vehicleId = vehicle?.id ?? reminder.related_entity_id ?? reminder.id;
-    const key = `${vehicleId}:${renewalKind}`;
+    const key = metadata?.category === 'vehicle' ? `reminder:${reminder.id}` : `${vehicleId}:${renewalKind}`;
     const backendStatus = String(raw.status ?? '');
-    const existing = rowByKey.get(key);
+    const existing = metadata?.category === 'vehicle' ? undefined : rowByKey.get(key);
 
     if (existing) {
       existing.reminderId = reminder.id;
@@ -138,6 +139,7 @@ export function buildVehicleReminderRows(
       existing.dueDate = reminder.due_date;
       existing.dueSoonThresholdDays = reminder.notify_before_days || existing.dueSoonThresholdDays;
       existing.notificationsActive = backendStatus !== 'ignored';
+      if (metadata?.comment) existing.comment = metadata.comment;
       if (vehicle) {
         existing.vehiclePlate = vehicle.plate_number;
         existing.vehicleBrand = vehicle.brand;
@@ -161,7 +163,8 @@ export function buildVehicleReminderRows(
       status: classifyStatus(reminder.due_date, backendStatus),
       dueDate: reminder.due_date,
       dueSoonThresholdDays: reminder.notify_before_days || DEFAULT_DUE_SOON_DAYS,
-      notificationsActive: backendStatus !== 'ignored',
+      notificationsActive: metadata?.notifications ?? backendStatus !== 'ignored',
+      comment: metadata?.comment,
       reminderId: reminder.id,
       source: 'reminder',
     });

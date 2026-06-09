@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
 import type { LiveTrackingItem } from '@/lib/types';
+import { LocationSourceBadge } from './LocationSourceBadge';
 import {
-  STATUS_MARKER_COLORS,
   formatSpeed,
   formatTrackingTimestamp,
   hasMapCoordinates,
+  markerFillColor,
+  markerStrokeOptions,
   toCoordinate,
 } from './tracking-utils';
 import 'leaflet/dist/leaflet.css';
@@ -96,15 +98,17 @@ function VehicleMarker({
     return null;
   }
 
+  const stroke = markerStrokeOptions(item);
+
   return (
     <CircleMarker
       ref={markerRef}
       center={[lat, lng]}
-      radius={selected ? 11 : 8}
+      radius={selected ? 11 : item.locationSource === 'telematics' ? 9 : 8}
       pathOptions={{
-        color: '#ffffff',
-        weight: selected ? 3 : 2,
-        fillColor: STATUS_MARKER_COLORS[item.status],
+        color: stroke.color,
+        weight: selected ? stroke.weight + 1 : stroke.weight,
+        fillColor: markerFillColor(item),
         fillOpacity: 0.95,
       }}
       eventHandlers={{
@@ -120,6 +124,7 @@ function VehicleMarker({
           <p className="text-slate-600">{formatSpeed(item.speedKmh)}</p>
           <p className="text-slate-500">{formatTrackingTimestamp(item.receivedAt)}</p>
           <p className="capitalize text-slate-500">{item.status}</p>
+          <LocationSourceBadge source={item.locationSource} />
         </div>
       </Popup>
     </CircleMarker>

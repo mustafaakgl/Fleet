@@ -1,6 +1,6 @@
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
-export type Role = 'admin' | 'boss' | 'accounting' | 'office' | 'customer';
+export type Role = 'admin' | 'boss' | 'accounting' | 'office' | 'driver' | 'customer';
 
 export type Department = 'executive' | 'fleet' | 'payroll' | 'accident' | 'hr' | 'driver_ops';
 
@@ -788,6 +788,66 @@ export interface MessengerUnreadCount {
 
 export type LiveTrackingStatus = 'online' | 'stale' | 'offline';
 
+export type LocationSourceType = 'mobile' | 'telematics';
+
+export type DriverLocationTrackingStatus = 'active' | 'paused' | 'denied';
+
+export interface DriverLocationStatus {
+  consentGranted: boolean;
+  consentAt: string | null;
+  trackingStatus: DriverLocationTrackingStatus;
+  sharingActive: boolean;
+  sharingStartedAt: string | null;
+  sharingEndedAt: string | null;
+  hasTrackableAssignmentToday: boolean;
+  trackingAllowed: boolean;
+  lastUpload: {
+    recordedAt: string;
+    receivedAt: string;
+    vehicleId: string | null;
+  } | null;
+}
+
+export interface DriverPortalAssignment {
+  id: string;
+  driver: { id: string; name: string };
+  vehicle: { id: string; plateNumber: string };
+  company: { id: string; name: string };
+  cargoName: string;
+  cargoOwner: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  workDate: string;
+  startTime: string;
+  endTime: string;
+  routeName?: string | null;
+  notes?: string | null;
+  status: string;
+}
+
+export interface DriverPortalMe {
+  user: {
+    id: string;
+    email: string;
+    role: 'driver';
+    language?: string;
+    status: string;
+    fullName: string;
+  };
+  driver: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    employeeNumber?: string;
+    assignedVehicle?: {
+      id: string;
+      plateNumber: string;
+      brand: string;
+      model: string;
+    } | null;
+  };
+}
+
 export interface LiveTrackingItem {
   driverId: string;
   driverName: string;
@@ -801,6 +861,7 @@ export interface LiveTrackingItem {
   recordedAt: string | null;
   receivedAt: string | null;
   status: LiveTrackingStatus;
+  locationSource: LocationSourceType | null;
   assignmentId: string | null;
   companyName: string | null;
   cargoName: string | null;

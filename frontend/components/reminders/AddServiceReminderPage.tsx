@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { BRAND_BTN_PRIMARY, BRAND_FOCUS, BRAND_LINK } from '@/lib/brand-colors';
-import { saveCustomServiceReminder, type TimeUnit } from '@/lib/custom-service-reminders';
+import type { TimeUnit } from '@/lib/custom-service-reminders';
+import { remindersApi, vehiclesApi } from '@/lib/api';
 import { COMMON_SERVICE_TASKS } from '@/lib/service-reminders';
-import { vehiclesApi } from '@/lib/api';
 import type { Vehicle } from '@/lib/types';
 import { FLEET_FILTER_INPUT, FLEET_FILTER_SELECT } from '@/lib/fleet-table';
 import { cn } from '@/lib/utils';
@@ -88,17 +88,23 @@ export function AddServiceReminderPage() {
     };
   }
 
-  function handleSave(redirectToList = true) {
+  async function handleSave(redirectToList = true) {
     if (!validate()) return;
     setSaving(true);
-    saveCustomServiceReminder(buildPayload());
-    setSaving(false);
-    if (redirectToList) {
-      router.push('/reminders/service');
-    } else {
-      setVehicleId('');
-      setServiceTask('');
-      setError(null);
+    setError(null);
+    try {
+      await remindersApi.createServiceReminder(buildPayload());
+      if (redirectToList) {
+        router.push('/reminders/service');
+      } else {
+        setVehicleId('');
+        setServiceTask('');
+        setError(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('serviceReminders.create.saveError'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -276,11 +282,11 @@ export function AddServiceReminderPage() {
               variant="outline"
               className={cn(FLEET_FILTER_SELECT, 'h-9')}
               disabled={saving}
-              onClick={() => handleSave(false)}
+              onClick={() => void handleSave(false)}
             >
               {t('serviceReminders.create.saveAndAddAnother')}
             </Button>
-            <Button type="button" className={BRAND_BTN_PRIMARY} disabled={saving} onClick={() => handleSave(true)}>
+            <Button type="button" className={BRAND_BTN_PRIMARY} disabled={saving} onClick={() => void handleSave(true)}>
               {t('serviceReminders.create.saveReminder')}
             </Button>
           </div>

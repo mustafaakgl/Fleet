@@ -1,7 +1,32 @@
 import type { Reminder, ReminderType } from '@/lib/types';
+import type { VehicleRenewalKind } from '@/lib/vehicle-reminders';
 import { remindersApi } from '@/lib/api';
 
 export type ReminderCategory = 'service' | 'vehicle' | 'contact';
+
+export type ReminderMetadata = {
+  category?: ReminderCategory;
+  serviceTask?: string;
+  renewalKind?: VehicleRenewalKind;
+  timeInterval?: number;
+  timeIntervalUnit?: 'months' | 'weeks';
+  meterIntervalKm?: number;
+  dueSoonThreshold?: number;
+  dueSoonThresholdUnit?: 'weeks' | 'days';
+  comment?: string;
+  notifications?: boolean;
+};
+
+export function parseReminderMetadata(message: string | undefined | null): ReminderMetadata | null {
+  if (!message?.trim().startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(message) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as ReminderMetadata;
+  } catch {
+    return null;
+  }
+}
 
 export function normalizeReminder(raw: Record<string, unknown>): Reminder {
   const dueRaw = raw.dueDate ?? raw.due_date;
@@ -32,6 +57,11 @@ export function normalizeReminder(raw: Record<string, unknown>): Reminder {
 }
 
 export function getReminderCategory(reminder: Reminder): ReminderCategory {
+  const metadata = parseReminderMetadata(reminder.message);
+  if (metadata?.category === 'vehicle') return 'vehicle';
+  if (metadata?.category === 'service') return 'service';
+  if (metadata?.category === 'contact') return 'contact';
+
   if (
     reminder.type === 'tuv_expiry' ||
     reminder.type === 'sp_expiry' ||

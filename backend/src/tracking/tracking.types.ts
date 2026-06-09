@@ -1,5 +1,7 @@
 export type TrackingPresenceStatus = 'online' | 'stale' | 'offline';
 
+export type LocationSourceType = 'mobile' | 'telematics';
+
 export type LiveTrackingItem = {
   driverId: string;
   driverName: string;
@@ -13,6 +15,7 @@ export type LiveTrackingItem = {
   recordedAt: string | null;
   receivedAt: string | null;
   status: TrackingPresenceStatus;
+  locationSource: LocationSourceType | null;
   assignmentId: string | null;
   companyName: string | null;
   cargoName: string | null;
@@ -29,6 +32,7 @@ export type LocationHistoryPoint = {
   accuracyM: number | null;
   recordedAt: string;
   receivedAt: string;
+  locationSource: LocationSourceType;
 };
 
 export type LiveTrackingParams = {

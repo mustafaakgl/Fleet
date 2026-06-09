@@ -921,13 +921,14 @@ model Reminder {
   reminderType     ReminderType
   title            String
   description      String?
+  metadata         Json?
   dueDate          DateTime
   notifyBeforeDays Int
   status           ReminderStatus @default(open)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  @@unique([tenantId, targetType, targetId, reminderType, dueDate, notifyBeforeDays])
+  @@unique([tenantId, targetType, targetId, reminderType, title, dueDate, notifyBeforeDays])
   @@index([tenantId])
   @@index([status, dueDate])
   @@index([targetType, targetId])

@@ -8,10 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import type { LiveTrackingItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { LocationSourceBadge } from './LocationSourceBadge';
 import { LiveTrackingDetail } from './LiveTrackingDetail';
 import {
+  countBySource,
   formatSpeed,
   formatTrackingTimestamp,
+  type SourceFilter,
   type StatusFilter,
   statusBadgeVariant,
 } from './tracking-utils';
@@ -22,6 +25,8 @@ interface LiveTrackingSidebarProps {
   onSearchChange: (value: string) => void;
   statusFilter: StatusFilter;
   onStatusFilterChange: (value: StatusFilter) => void;
+  sourceFilter: SourceFilter;
+  onSourceFilterChange: (value: SourceFilter) => void;
   includeOffline: boolean;
   onIncludeOfflineChange: (value: boolean) => void;
   selectedDriverId: string | null;
@@ -36,12 +41,20 @@ const STATUS_FILTER_KEYS: Array<{ value: StatusFilter; labelKey: string }> = [
   { value: 'offline', labelKey: 'liveTracking.filter.offline' },
 ];
 
+const SOURCE_FILTER_KEYS: Array<{ value: SourceFilter; labelKey: string }> = [
+  { value: 'all', labelKey: 'liveTracking.sourceFilter.all' },
+  { value: 'mobile', labelKey: 'liveTracking.source.mobile' },
+  { value: 'telematics', labelKey: 'liveTracking.source.telematics' },
+];
+
 export function LiveTrackingSidebar({
   items,
   search,
   onSearchChange,
   statusFilter,
   onStatusFilterChange,
+  sourceFilter,
+  onSourceFilterChange,
   includeOffline,
   onIncludeOfflineChange,
   selectedDriverId,
@@ -50,6 +63,7 @@ export function LiveTrackingSidebar({
 }: LiveTrackingSidebarProps) {
   const { t } = useTranslation();
   const selectedItem = items.find((item) => item.driverId === selectedDriverId) ?? null;
+  const sourceCounts = countBySource(items);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -64,22 +78,56 @@ export function LiveTrackingSidebar({
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {STATUS_FILTER_KEYS.map((filter) => (
-            <button
-              key={filter.value}
-              type="button"
-              onClick={() => onStatusFilterChange(filter.value)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                statusFilter === filter.value
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
-              )}
-            >
-              {t(filter.labelKey)}
-            </button>
-          ))}
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            {t('liveTracking.filter.status')}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {STATUS_FILTER_KEYS.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => onStatusFilterChange(filter.value)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  statusFilter === filter.value
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                )}
+              >
+                {t(filter.labelKey)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            {t('liveTracking.filter.source')}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {SOURCE_FILTER_KEYS.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => onSourceFilterChange(filter.value)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  sourceFilter === filter.value
+                    ? filter.value === 'telematics'
+                      ? 'bg-[#1a4d7a] text-white'
+                      : filter.value === 'mobile'
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-700 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                )}
+              >
+                {t(filter.labelKey)}
+                {filter.value === 'mobile' ? ` (${sourceCounts.mobile})` : ''}
+                {filter.value === 'telematics' ? ` (${sourceCounts.telematics})` : ''}
+              </button>
+            ))}
+          </div>
         </div>
 
         <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -128,9 +176,12 @@ export function LiveTrackingSidebar({
                     <p className="mt-1 text-xs text-slate-500">{item.companyName}</p>
                   ) : null}
                 </div>
-                <Badge variant={statusBadgeVariant(item.status)} className="capitalize">
-                  {item.status}
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge variant={statusBadgeVariant(item.status)} className="capitalize">
+                    {item.status}
+                  </Badge>
+                  <LocationSourceBadge source={item.locationSource} />
+                </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
                 <span>{formatSpeed(item.speedKmh)}</span>

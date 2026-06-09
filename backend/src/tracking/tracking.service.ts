@@ -164,6 +164,64 @@ export class TrackingService {
     };
   }
 
+  async ingestTelematicsLocation(dto: {
+    vehicleId: string;
+    latitude: number;
+    longitude: number;
+    recordedAt?: string;
+    accuracyM?: number;
+    speedMps?: number;
+    headingDeg?: number;
+  }) {
+    await this.assertVehicleExists(dto.vehicleId);
+    const driverId = await this.resolveDriverIdForVehicleToday(dto.vehicleId);
+    if (!driverId) {
+      throw new BadRequestException(
+        'No active driver assignment found for this vehicle today',
+      );
+    }
+
+    const recordedAt = dto.recordedAt
+      ? this.parseRecordedAt(dto.recordedAt)
+      : new Date();
+
+    const locationData = {
+      latitude: new Prisma.Decimal(dto.latitude),
+      longitude: new Prisma.Decimal(dto.longitude),
+      accuracyM: dto.accuracyM ?? null,
+      speedMps: dto.speedMps ?? null,
+      headingDeg: dto.headingDeg ?? null,
+      altitudeM: null,
+      recordedAt,
+      source: LocationSource.telematics,
+      vehicleId: dto.vehicleId,
+    };
+
+    await this.prisma.driverLocationLatest.upsert({
+      where: { driverId },
+      create: {
+        driverId,
+        ...locationData,
+      },
+      update: locationData,
+    });
+
+    await this.prisma.driverLocationHistory.create({
+      data: {
+        driverId,
+        ...locationData,
+      },
+    });
+
+    return {
+      accepted: true,
+      driverId,
+      vehicleId: dto.vehicleId,
+      source: LocationSource.telematics,
+      recordedAt: recordedAt.toISOString(),
+    };
+  }
+
   async submitLocation(driver: ResolvedDriver, dto: SubmitLocationDto) {
     const refreshed = await this.expireSharingSessionIfNeeded(driver);
     this.assertTrackingConsent(refreshed);
@@ -225,13 +283,15 @@ export class TrackingService {
     const now = new Date();
     await this.expireAllStaleSharingSessions();
     const sharingDriverIds = await this.listActiveSharingDriverIds();
-    if (sharingDriverIds.length === 0) {
+    const telematicsDriverIds = await this.listRecentTelematicsDriverIds(now);
+    const trackedDriverIds = [...new Set([...sharingDriverIds, ...telematicsDriverIds])];
+    if (trackedDriverIds.length === 0) {
       return [];
     }
 
     const assignmentMap = await this.loadCurrentAssignmentsByDriver();
     const latestRows = await this.prisma.driverLocationLatest.findMany({
-      where: { driverId: { in: sharingDriverIds } },
+      where: { driverId: { in: trackedDriverIds } },
       include: {
         driver: {
           select: {
@@ -259,7 +319,7 @@ export class TrackingService {
       const offlineDrivers = await this.prisma.driver.findMany({
         where: {
           id: {
-            in: sharingDriverIds.filter((id) => !driversWithLatest.has(id)),
+            in: trackedDriverIds.filter((id) => !driversWithLatest.has(id)),
           },
         },
         select: {
@@ -684,6 +744,46 @@ export class TrackingService {
     return byDriver;
   }
 
+  private async listRecentTelematicsDriverIds(now: Date): Promise<string[]> {
+    const cutoff = new Date(now.getTime() - OFFLINE_THRESHOLD_SEC * 1000);
+    const rows = await this.prisma.driverLocationLatest.findMany({
+      where: {
+        source: LocationSource.telematics,
+        receivedAt: { gte: cutoff },
+      },
+      select: { driverId: true },
+    });
+    return rows.map((row) => row.driverId);
+  }
+
+  private async resolveDriverIdForVehicleToday(vehicleId: string): Promise<string | null> {
+    const { start, end } = this.todayRange();
+    const assignments = await this.prisma.assignment.findMany({
+      where: {
+        vehicleId,
+        workDate: { gte: start, lt: end },
+        status: { in: TRACKABLE_ASSIGNMENT_STATUSES },
+      },
+      select: {
+        driverId: true,
+        status: true,
+      },
+    });
+
+    for (const status of ASSIGNMENT_STATUS_PRIORITY) {
+      const match = assignments.find((assignment) => assignment.status === status);
+      if (match?.driverId) {
+        return match.driverId;
+      }
+    }
+
+    return assignments.find((assignment) => assignment.driverId)?.driverId ?? null;
+  }
+
+  private mapLocationSource(source: LocationSource): 'mobile' | 'telematics' {
+    return source === LocationSource.telematics ? 'telematics' : 'mobile';
+  }
+
   private mapLatestRowToLiveItem(
     row: {
       driverId: string;
@@ -694,6 +794,7 @@ export class TrackingService {
       headingDeg: number | null;
       recordedAt: Date;
       receivedAt: Date;
+      source: LocationSource;
       vehicleId: string | null;
       driver: { firstName: string; lastName: string };
       vehicle: { id: string; plateNumber: string } | null;
@@ -724,6 +825,7 @@ export class TrackingService {
       recordedAt: row.recordedAt.toISOString(),
       receivedAt: row.receivedAt.toISOString(),
       status: this.computeTrackingStatus(row.receivedAt, staleAfterSec, now),
+      locationSource: this.mapLocationSource(row.source),
       assignmentId: assignment?.id ?? null,
       companyName: assignment?.company.name ?? null,
       cargoName: assignment?.cargoName ?? null,
@@ -753,6 +855,7 @@ export class TrackingService {
       recordedAt: null,
       receivedAt: null,
       status: 'offline',
+      locationSource: null,
       assignmentId: assignment?.id ?? null,
       companyName: assignment?.company.name ?? null,
       cargoName: assignment?.cargoName ?? null,
@@ -770,6 +873,7 @@ export class TrackingService {
     accuracyM: number | null;
     recordedAt: Date;
     receivedAt: Date;
+    source: LocationSource;
   }): LocationHistoryPoint {
     return {
       id: row.id,
@@ -782,6 +886,7 @@ export class TrackingService {
       accuracyM: row.accuracyM,
       recordedAt: row.recordedAt.toISOString(),
       receivedAt: row.receivedAt.toISOString(),
+      locationSource: this.mapLocationSource(row.source),
     };
   }
 

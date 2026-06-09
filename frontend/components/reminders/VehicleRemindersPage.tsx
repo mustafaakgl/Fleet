@@ -23,10 +23,6 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { remindersApi, vehiclesApi } from '@/lib/api';
 import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
-import {
-  buildCustomVehicleReminderRows,
-  listCustomVehicleReminders,
-} from '@/lib/custom-vehicle-reminders';
 import { fetchActiveReminders, formatRelativeDueDate } from '@/lib/reminder-utils';
 import { downloadVehicleRemindersCsv } from '@/lib/vehicle-reminders-csv';
 import type { Vehicle } from '@/lib/types';
@@ -176,16 +172,11 @@ export function VehicleRemindersPage() {
         fetchActiveReminders(),
       ]);
       setVehicles(vehiclePage.data);
-      const baseRows = buildVehicleReminderRows(
-        vehiclePage.data,
-        rawReminders as unknown as Record<string, unknown>[],
-      );
-      const customRows = buildCustomVehicleReminderRows(
-        listCustomVehicleReminders(),
-        vehiclePage.data,
-      );
       setRows(
-        [...baseRows, ...customRows].sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+        buildVehicleReminderRows(
+          vehiclePage.data,
+          rawReminders as unknown as Record<string, unknown>[],
+        ),
       );
     } catch (e) {
       setVehicles([]);

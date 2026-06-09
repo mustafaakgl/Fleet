@@ -33,10 +33,6 @@ import {
 } from '@/components/ui/table';
 import { remindersApi, serviceRecordsApi, vehiclesApi } from '@/lib/api';
 import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
-import {
-  buildCustomServiceReminderRows,
-  listCustomServiceReminders,
-} from '@/lib/custom-service-reminders';
 import { fetchActiveReminders, formatRelativeDueDate } from '@/lib/reminder-utils';
 import {
   buildServiceReminderRows,
@@ -173,19 +169,13 @@ export function ServiceRemindersPage() {
         fetchActiveReminders(),
       ]);
       setVehicles(vehiclePage.data);
-      const baseRows = buildServiceReminderRows(
-        vehiclePage.data,
-        serviceRecords,
-        rawReminders as unknown as Record<string, unknown>[],
-        i18n.language,
-      );
-      const customRows = buildCustomServiceReminderRows(
-        listCustomServiceReminders(),
-        vehiclePage.data,
-        i18n.language,
-      );
       setRows(
-        [...baseRows, ...customRows].sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate)),
+        buildServiceReminderRows(
+          vehiclePage.data,
+          serviceRecords,
+          rawReminders as unknown as Record<string, unknown>[],
+          i18n.language,
+        ),
       );
     } catch (e) {
       setVehicles([]);

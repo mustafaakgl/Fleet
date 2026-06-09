@@ -10,12 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { getUser } from '@/lib/auth';
 import { BRAND_BTN_PRIMARY, BRAND_FOCUS, BRAND_LINK } from '@/lib/brand-colors';
-import {
-  saveCustomVehicleReminder,
-  type DueSoonUnit,
-} from '@/lib/custom-vehicle-reminders';
+import type { DueSoonUnit } from '@/lib/custom-vehicle-reminders';
+import { remindersApi, vehiclesApi } from '@/lib/api';
 import { COMMON_VEHICLE_RENEWAL_TYPES, type VehicleRenewalKind } from '@/lib/vehicle-reminders';
-import { vehiclesApi } from '@/lib/api';
 import type { Vehicle } from '@/lib/types';
 import { FLEET_FILTER_INPUT, FLEET_FILTER_SELECT } from '@/lib/fleet-table';
 import { cn } from '@/lib/utils';
@@ -99,21 +96,27 @@ export function AddVehicleReminderPage() {
     };
   }
 
-  function handleSave(redirectToList = true) {
+  async function handleSave(redirectToList = true) {
     if (!validate() || !renewalKind) return;
     setSaving(true);
-    saveCustomVehicleReminder({
-      ...buildPayload(),
-      renewalKind,
-    });
-    setSaving(false);
-    if (redirectToList) {
-      router.push('/reminders/vehicle');
-    } else {
-      setVehicleId('');
-      setRenewalKind('');
-      setComment('');
-      setError(null);
+    setError(null);
+    try {
+      await remindersApi.createVehicleReminder({
+        ...buildPayload(),
+        renewalKind,
+      });
+      if (redirectToList) {
+        router.push('/reminders/vehicle');
+      } else {
+        setVehicleId('');
+        setRenewalKind('');
+        setComment('');
+        setError(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('vehicleReminders.create.saveError'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -256,11 +259,11 @@ export function AddVehicleReminderPage() {
             variant="outline"
             className={cn(FLEET_FILTER_SELECT, 'h-9')}
             disabled={saving}
-            onClick={() => handleSave(false)}
+            onClick={() => void handleSave(false)}
           >
             {t('vehicleReminders.create.saveAndAddAnother')}
           </Button>
-          <Button type="button" className={BRAND_BTN_PRIMARY} disabled={saving} onClick={() => handleSave(true)}>
+          <Button type="button" className={BRAND_BTN_PRIMARY} disabled={saving} onClick={() => void handleSave(true)}>
             {t('vehicleReminders.create.saveReminder')}
           </Button>
         </div>

@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { trackingApi } from '@/lib/api';
 import type { LiveTrackingItem } from '@/lib/types';
+import { LocationSourceBadge } from './LocationSourceBadge';
 import { LiveTrackingSidebar } from './LiveTrackingSidebar';
-import { filterByStatus, type StatusFilter } from './tracking-utils';
+import { filterBySource, filterByStatus, type SourceFilter, type StatusFilter } from './tracking-utils';
 
 const LiveTrackingMap = dynamic(
   () => import('./LiveTrackingMap').then((module) => module.LiveTrackingMap),
@@ -38,6 +39,7 @@ export function LiveTrackingPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [includeOffline, setIncludeOffline] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
@@ -119,8 +121,8 @@ export function LiveTrackingPage() {
   }, [fetchLiveTracking]);
 
   const filteredItems = useMemo(
-    () => filterByStatus(items, statusFilter),
-    [items, statusFilter],
+    () => filterBySource(filterByStatus(items, statusFilter), sourceFilter),
+    [items, statusFilter, sourceFilter],
   );
 
   const mappableCount = filteredItems.filter(
@@ -151,6 +153,12 @@ export function LiveTrackingPage() {
                   }).format(lastFetchedAt)}`
                 : 'Waiting for first update...'}
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <LocationSourceBadge source="mobile" />
+              <span className="text-xs text-slate-500">{t('liveTracking.legend.mobile')}</span>
+              <LocationSourceBadge source="telematics" />
+              <span className="text-xs text-slate-500">{t('liveTracking.legend.telematics')}</span>
+            </div>
           </div>
         </div>
 
@@ -198,6 +206,8 @@ export function LiveTrackingPage() {
             onSearchChange={setSearch}
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
+            sourceFilter={sourceFilter}
+            onSourceFilterChange={setSourceFilter}
             includeOffline={includeOffline}
             onIncludeOfflineChange={setIncludeOffline}
             selectedDriverId={selectedDriverId}

@@ -316,6 +316,11 @@ export default function LoginPage() {
                       <p>dhl.customer@fleet.com</p>
                       <p className="text-gray-400">customer123</p>
                     </div>
+                    <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
+                      <p className="font-medium">Driver</p>
+                      <p>driver@fleet.com</p>
+                      <p className="text-gray-400">driver123</p>
+                    </div>
                   </div>
                 </div>
               </>

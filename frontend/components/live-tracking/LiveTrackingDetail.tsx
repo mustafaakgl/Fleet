@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { LiveTrackingItem } from '@/lib/types';
 import { einsatzplanHref, liveTrackingHref } from '@/lib/office-deep-links';
+import { LocationSourceBadge } from './LocationSourceBadge';
 import {
   formatSpeed,
   formatTrackingTimestamp,
@@ -38,9 +39,12 @@ export function LiveTrackingDetail({ item }: LiveTrackingDetailProps) {
           </p>
           <p className="text-sm text-slate-600">{item.driverName}</p>
         </div>
-        <Badge variant={statusBadgeVariant(item.status)} className="capitalize">
-          {item.status}
-        </Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge variant={statusBadgeVariant(item.status)} className="capitalize">
+            {item.status}
+          </Badge>
+          <LocationSourceBadge source={item.locationSource} />
+        </div>
       </div>
 
       {sessionEnded ? (
@@ -61,6 +65,12 @@ export function LiveTrackingDetail({ item }: LiveTrackingDetailProps) {
         <div>
           <dt className="text-slate-500">Speed</dt>
           <dd className="font-medium text-slate-900">{formatSpeed(item.speedKmh)}</dd>
+        </div>
+        <div>
+          <dt className="text-slate-500">{t('liveTracking.filter.source')}</dt>
+          <dd>
+            <LocationSourceBadge source={item.locationSource} />
+          </dd>
         </div>
         <div>
           <dt className="text-slate-500">{t('liveTracking.lastUpdate')}</dt>

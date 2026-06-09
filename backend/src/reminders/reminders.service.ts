@@ -1,8 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { CreateServiceReminderDto } from './dto/create-service-reminder.dto';
+import type { CreateVehicleReminderDto } from './dto/create-vehicle-reminder.dto';
 
 type ReminderType =
   | 'license_expiry'
@@ -109,10 +111,12 @@ export class RemindersService {
 
     const existing = await db.reminder.findUnique({
       where: {
-        targetType_targetId_reminderType_dueDate_notifyBeforeDays: {
+        tenantId_targetType_targetId_reminderType_title_dueDate_notifyBeforeDays: {
+          tenantId: 'default-tenant',
           targetType: data.targetType,
           targetId: data.targetId,
           reminderType: data.reminderType,
+          title: data.title,
           dueDate,
           notifyBeforeDays: data.notifyBeforeDays,
         },
@@ -508,6 +512,211 @@ export class RemindersService {
     });
 
     return updated;
+  }
+
+  private thresholdToDays(value: number, unit: 'weeks' | 'months' | 'days'): number {
+    if (unit === 'months') return value * 30;
+    if (unit === 'weeks') return value * 7;
+    return value;
+  }
+
+  private intervalToMonths(value: number, unit: 'weeks' | 'months'): number {
+    if (unit === 'months') return value;
+    return Math.max(1, Math.round(value / 4));
+  }
+
+  private addMonthsIso(iso: string, months: number): string {
+    const date = new Date(`${iso.slice(0, 10)}T12:00:00`);
+    date.setMonth(date.getMonth() + months);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  private vehicleRenewalLabel(kind: CreateVehicleReminderDto['renewalKind']): string {
+    switch (kind) {
+      case 'emission_test':
+        return 'Emission Test';
+      case 'registration':
+        return 'Registration';
+      case 'insurance':
+        return 'Insurance';
+      case 'inspection':
+      default:
+        return 'Inspection';
+    }
+  }
+
+  private async ensureVehicleExists(vehicleId: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id: vehicleId },
+      select: { id: true, plateNumber: true },
+    });
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+    return vehicle;
+  }
+
+  private async createManualReminderRecord(data: {
+    targetType: string;
+    targetId: string;
+    title: string;
+    dueDate: Date;
+    notifyBeforeDays: number;
+    metadata: Record<string, unknown>;
+    notifications: boolean;
+    actorUserId?: string;
+  }) {
+    const db = this.prisma as any;
+    const dueDate = this.normalizeDate(data.dueDate);
+    const description = JSON.stringify(data.metadata);
+    const notifyBeforeDays = Math.max(1, Math.min(365, data.notifyBeforeDays));
+
+    try {
+      const reminder = await db.reminder.create({
+        data: {
+          targetType: data.targetType,
+          targetId: data.targetId,
+          reminderType: 'custom' as ReminderType,
+          title: data.title,
+          description,
+          metadata: data.metadata,
+          dueDate,
+          notifyBeforeDays,
+          status: 'open' as ReminderStatus,
+        },
+      });
+
+      if (data.notifications) {
+        await this.notificationsService.notifyAdminsAndOffice({
+          title: data.title,
+          message: `Manual reminder due on ${dueDate.toISOString().slice(0, 10)}`,
+          type: 'reminder',
+          priority: this.getPriorityByNotifyWindow(notifyBeforeDays),
+          relatedEntityType: data.targetType,
+          relatedEntityId: data.targetId,
+        });
+      }
+
+      await safeAuditLog(this.auditService, {
+        actorUserId: data.actorUserId,
+        action: 'reminder.created',
+        entityType: 'reminder',
+        entityId: reminder.id,
+        summary: 'Manual reminder created',
+        metadata: {
+          category: String(data.metadata.category ?? ''),
+          targetType: data.targetType,
+          targetId: data.targetId,
+        },
+      });
+
+      return reminder;
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object'
+        && error !== null
+        && 'code' in error
+        && (error as { code?: string }).code === 'P2002'
+      ) {
+        throw new ConflictException('A reminder with the same vehicle, task, and due date already exists');
+      }
+      throw error;
+    }
+  }
+
+  async createServiceReminder(dto: CreateServiceReminderDto, actorUserId?: string) {
+    const vehicle = await this.ensureVehicleExists(dto.vehicleId);
+    const serviceTask = dto.serviceTask.trim();
+    if (!serviceTask) {
+      throw new BadRequestException('Service task is required');
+    }
+
+    const months = this.intervalToMonths(dto.timeInterval, dto.timeIntervalUnit);
+    const dueDateIso =
+      dto.manualOverride && dto.nextDueDate
+        ? dto.nextDueDate.slice(0, 10)
+        : this.addMonthsIso(new Date().toISOString().slice(0, 10), months);
+    const dueDate = this.normalizeDate(new Date(`${dueDateIso}T12:00:00`));
+    const notifyBeforeDays = this.thresholdToDays(
+      dto.timeDueSoonThreshold,
+      dto.timeDueSoonThresholdUnit,
+    );
+
+    const metadata = {
+      category: 'service',
+      serviceTask,
+      timeInterval: dto.timeInterval,
+      timeIntervalUnit: dto.timeIntervalUnit,
+      timeDueSoonThreshold: dto.timeDueSoonThreshold,
+      timeDueSoonThresholdUnit: dto.timeDueSoonThresholdUnit,
+      meterIntervalKm: dto.meterIntervalKm,
+      meterDueSoonThresholdKm: dto.meterDueSoonThresholdKm,
+      manualOverride: dto.manualOverride,
+      nextDueDate: dto.manualOverride ? dueDateIso : undefined,
+      notifications: dto.notifications,
+      watchers: dto.watchers ?? [],
+      vehiclePlate: vehicle.plateNumber,
+    };
+
+    return this.createManualReminderRecord({
+      targetType: 'vehicle',
+      targetId: vehicle.id,
+      title: serviceTask,
+      dueDate,
+      notifyBeforeDays,
+      metadata,
+      notifications: dto.notifications,
+      actorUserId,
+    });
+  }
+
+  async createVehicleReminder(dto: CreateVehicleReminderDto, actorUserId?: string) {
+    const vehicle = await this.ensureVehicleExists(dto.vehicleId);
+    const dueDateIso = dto.dueDate.slice(0, 10);
+    const dueDate = this.normalizeDate(new Date(`${dueDateIso}T12:00:00`));
+    const notifyBeforeDays = this.thresholdToDays(dto.dueSoonThreshold, dto.dueSoonThresholdUnit);
+    const title = this.vehicleRenewalLabel(dto.renewalKind);
+
+    const metadata = {
+      category: 'vehicle',
+      renewalKind: dto.renewalKind,
+      dueSoonThreshold: dto.dueSoonThreshold,
+      dueSoonThresholdUnit: dto.dueSoonThresholdUnit,
+      notifications: dto.notifications,
+      watchers: dto.watchers ?? [],
+      comment: dto.comment?.trim() || undefined,
+      vehiclePlate: vehicle.plateNumber,
+    };
+
+    return this.createManualReminderRecord({
+      targetType: 'vehicle',
+      targetId: vehicle.id,
+      title,
+      dueDate,
+      notifyBeforeDays,
+      metadata,
+      notifications: dto.notifications,
+      actorUserId,
+    });
+  }
+
+  async bulkCreateVehicleReminders(items: CreateVehicleReminderDto[], actorUserId?: string) {
+    const created: unknown[] = [];
+    const skipped: Array<{ index: number; reason: string }> = [];
+
+    for (let index = 0; index < items.length; index += 1) {
+      try {
+        const reminder = await this.createVehicleReminder(items[index], actorUserId);
+        created.push(reminder);
+      } catch (error) {
+        skipped.push({
+          index,
+          reason: error instanceof Error ? error.message : 'Failed to create reminder',
+        });
+      }
+    }
+
+    return { created: created.length, skipped };
   }
 
   async ignoreReminder(id: string, actorUserId?: string) {
