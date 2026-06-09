@@ -825,6 +825,176 @@ export interface DriverPortalAssignment {
   status: string;
 }
 
+export type DriverHandoverPhotoSlot =
+  | 'front'
+  | 'right'
+  | 'left'
+  | 'rear'
+  | 'tail_lift'
+  | 'interior';
+
+export type DriverRequestType =
+  | 'vacation'
+  | 'sick_leave'
+  | 'training'
+  | 'business_trip'
+  | 'doctor_appointment'
+  | 'special_leave'
+  | 'overtime_compensation'
+  | 'free_day'
+  | 'uniform_delivery'
+  | 'other';
+
+export interface DriverMorningCheckin {
+  id: string;
+  date: string;
+  submittedAt: string;
+  vehiclePlate?: string | null;
+  companyName?: string | null;
+  cargoName?: string | null;
+  cargoQuantity?: string | null;
+  status: string;
+  conflictReason?: string | null;
+  assignmentId?: string | null;
+  notes?: string | null;
+}
+
+export interface DriverHandover {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  previousVehicleId?: string | null;
+  assignmentId?: string | null;
+  handoverType: 'pickup' | 'return';
+  handoverDateTime: string;
+  photoRequired: boolean;
+  photoStatus: 'not_required' | 'missing' | 'uploaded' | 'approved' | 'rejected';
+  damageDetected: boolean;
+  damageNotes?: string | null;
+  status: 'pending' | 'completed';
+  notes?: string | null;
+  requiredPhotoSlots?: DriverHandoverPhotoSlot[];
+  photos?: Partial<
+    Record<
+      DriverHandoverPhotoSlot,
+      { id: string; fileName: string; fileUrl?: string | null; download_url?: string | null }
+    >
+  >;
+  missingSlots?: DriverHandoverPhotoSlot[];
+  photosComplete?: boolean;
+  vehicle?: { id: string; plateNumber: string };
+  assignment?: { id: string; workDate: string; startTime: string; endTime: string } | null;
+}
+
+export interface DriverPortalRequest {
+  id: string;
+  driverId: string;
+  type: DriverRequestType;
+  startDate: string;
+  endDate: string;
+  reason?: string | null;
+  status: string;
+  createdAt?: string;
+  attachments?: Array<{
+    id: string;
+    fileName: string;
+    download_url?: string | null;
+  }>;
+}
+
+export interface DriverTransportRequest {
+  id: string;
+  driverId: string;
+  vehicleId: string;
+  companyId: string;
+  vehicle?: { id: string; plateNumber: string };
+  company?: { id: string; name: string };
+  cargoName: string;
+  cargoOwner: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  requestedDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  conflictReason?: string | null;
+  assignmentId?: string | null;
+  createdAt?: string;
+  attachments?: Array<{
+    id: string;
+    fileName: string;
+    download_url?: string | null;
+  }>;
+}
+
+export interface DriverTransportFormOptions {
+  vehicles: Array<{ id: string; plateNumber: string }>;
+  companies: Array<{ id: string; name: string }>;
+  assignments: Array<{
+    id: string;
+    vehicleId: string;
+    companyId: string;
+    vehiclePlate: string;
+    companyName: string;
+    workDate: string;
+    startTime: string;
+    endTime: string;
+  }>;
+}
+
+export interface DriverIncident {
+  id: string;
+  type: 'vehicle_accident' | 'cargo_damage';
+  driverId: string;
+  vehicleId: string;
+  companyId?: string | null;
+  assignmentId?: string | null;
+  incidentDateTime: string;
+  location?: string | null;
+  description: string;
+  cargoName?: string | null;
+  cargoOwner?: string | null;
+  status: string;
+  createdAt?: string;
+}
+
+export interface DriverPortalNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: string;
+  priority: string;
+  status: string;
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DriverDocumentStatus = 'valid' | 'expiring_soon' | 'expired' | 'missing' | 'archived';
+
+export interface DriverDocumentItem {
+  id: string;
+  documentType: string;
+  fileName: string;
+  fileUrl?: string | null;
+  download_url?: string | null;
+  status: DriverDocumentStatus;
+  expiryDate: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DriverDocumentsResponse {
+  uploadTypes: string[];
+  requiredTypes: string[];
+  missingRequired: string[];
+  missingUploadableRequired: string[];
+  items: DriverDocumentItem[];
+}
+
 export interface DriverPortalMe {
   user: {
     id: string;
@@ -838,12 +1008,28 @@ export interface DriverPortalMe {
     id: string;
     firstName: string;
     lastName: string;
+    phone?: string | null;
+    email?: string | null;
+    status: string;
+    riskLevel?: string;
     employeeNumber?: string;
+    licenseNumber?: string | null;
+    licenseExpiryDate?: string | null;
+    passportNumber?: string | null;
+    passportExpiryDate?: string | null;
     assignedVehicle?: {
       id: string;
       plateNumber: string;
       brand: string;
       model: string;
+    } | null;
+    todayAssignment?: {
+      id: string;
+      workDate: string;
+      startTime: string;
+      endTime: string;
+      vehicle: { id: string; plateNumber: string; brand: string; model: string };
+      company: { id: string; name: string };
     } | null;
   };
 }

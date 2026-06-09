@@ -38,6 +38,17 @@ import type {
   DriverLocationStatus,
   DriverPortalAssignment,
   DriverPortalMe,
+  DriverMorningCheckin,
+  DriverHandover,
+  DriverHandoverPhotoSlot,
+  DriverPortalRequest,
+  DriverTransportRequest,
+  DriverTransportFormOptions,
+  DriverIncident,
+  DriverPortalNotification,
+  DriverDocumentsResponse,
+  DriverDocumentItem,
+  MessengerLanguage,
   CustomerDashboardStats,
   CustomerAssignment,
   PaginatedCustomerAssignments,
@@ -1475,8 +1486,15 @@ export const trackingApi = {
 
 // ─── Driver portal (web) ─────────────────────────────────────────────────────
 
+function driverMultipartHeaders() {
+  return { 'Content-Type': 'multipart/form-data' } as const;
+}
+
 export const driverPortalApi = {
   me: () => api.get<DriverPortalMe>('/driver/me').then((r) => r.data),
+
+  updateLanguage: (language: MessengerLanguage) =>
+    api.post<DriverPortalMe>('/driver/me/language', { language }).then((r) => r.data),
 
   todayAssignments: (date?: string) =>
     api
@@ -1513,6 +1531,174 @@ export const driverPortalApi = {
         vehicleId: string | null;
       }>('/driver/location', payload)
       .then((r) => r.data),
+
+  listMorningCheckins: (date?: string) =>
+    api
+      .get<DriverMorningCheckin[]>('/driver/morning-checkins', { params: date ? { date } : undefined })
+      .then((r) => r.data),
+
+  createMorningCheckin: (payload: {
+    date: string;
+    vehiclePlate?: string;
+    companyName?: string;
+    cargoName?: string;
+    cargoQuantity?: string;
+    notes?: string;
+  }) => api.post<DriverMorningCheckin>('/driver/morning-checkins', payload).then((r) => r.data),
+
+  listHandovers: (params?: { status?: string; photoStatus?: string; date?: string }) =>
+    api.get<DriverHandover[]>('/driver/vehicle-handovers', { params }).then((r) => r.data),
+
+  getHandover: (id: string) =>
+    api.get<DriverHandover>(`/driver/vehicle-handovers/${id}`).then((r) => r.data),
+
+  createHandover: (payload: {
+    vehicleId: string;
+    previousVehicleId?: string;
+    assignmentId?: string;
+    handoverType?: 'pickup' | 'return';
+    handoverDateTime?: string;
+    damageDetected?: boolean;
+    damageNotes?: string;
+    notes?: string;
+  }) => api.post<DriverHandover>('/driver/vehicle-handovers', payload).then((r) => r.data),
+
+  uploadHandoverPhoto: (handoverId: string, slot: DriverHandoverPhotoSlot, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api
+      .post<{ handover: DriverHandover }>(
+        `/driver/vehicle-handovers/${handoverId}/photo?slot=${slot}`,
+        formData,
+        { headers: driverMultipartHeaders() },
+      )
+      .then((r) => r.data);
+  },
+
+  submitHandoverEquipment: (
+    handoverId: string,
+    payload: {
+      firstAidKit: boolean;
+      fireExtinguisher: boolean;
+      straps: boolean;
+      safetyVest: boolean;
+      notes?: string;
+    },
+  ) =>
+    api
+      .post<DriverHandover>(`/driver/vehicle-handovers/${handoverId}/equipment-checklist`, payload)
+      .then((r) => r.data),
+
+  listDocuments: () => api.get<DriverDocumentsResponse>('/driver/documents').then((r) => r.data),
+
+  uploadDocument: (payload: { documentType: string; expiryDate?: string; notes?: string; file: File }) => {
+    const formData = new FormData();
+    formData.append('file', payload.file);
+    formData.append('documentType', payload.documentType);
+    if (payload.expiryDate) formData.append('expiryDate', payload.expiryDate);
+    if (payload.notes) formData.append('notes', payload.notes);
+    return api
+      .post<DriverDocumentItem>('/driver/documents', formData, { headers: driverMultipartHeaders() })
+      .then((r) => r.data);
+  },
+
+  listRequests: (params?: { status?: string; type?: string }) =>
+    api.get<DriverPortalRequest[]>('/driver/requests', { params }).then((r) => r.data),
+
+  createRequest: (payload: {
+    type: DriverPortalRequest['type'];
+    startDate: string;
+    endDate: string;
+    reason?: string;
+  }) => api.post<DriverPortalRequest>('/driver/requests', payload).then((r) => r.data),
+
+  uploadRequestAttachment: (requestId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api
+      .post(`/driver/requests/${requestId}/attachments`, formData, { headers: driverMultipartHeaders() })
+      .then((r) => r.data);
+  },
+
+  listTransportRequests: (status?: string) =>
+    api
+      .get<DriverTransportRequest[]>('/driver/transport-requests', {
+        params: status ? { status } : undefined,
+      })
+      .then((r) => r.data),
+
+  getTransportFormOptions: () =>
+    api.get<DriverTransportFormOptions>('/driver/transport-form-options').then((r) => r.data),
+
+  createTransportRequest: (payload: {
+    vehicleId: string;
+    companyId: string;
+    cargoName: string;
+    cargoOwner: string;
+    pickupAddress: string;
+    deliveryAddress: string;
+    requestedDate: string;
+    startTime: string;
+    endTime: string;
+  }) => api.post<DriverTransportRequest>('/driver/transport-requests', payload).then((r) => r.data),
+
+  uploadTransportAttachment: (transportRequestId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api
+      .post(
+        `/driver/transport-requests/${transportRequestId}/attachments`,
+        formData,
+        { headers: driverMultipartHeaders() },
+      )
+      .then((r) => r.data);
+  },
+
+  listAccidents: (params?: { type?: string; status?: string }) =>
+    api.get<DriverIncident[]>('/driver/accidents', { params }).then((r) => r.data),
+
+  createAccident: (payload: {
+    type: 'vehicle_accident' | 'cargo_damage';
+    incidentDateTime: string;
+    description: string;
+    assignmentId?: string;
+    vehicleId?: string;
+    companyId?: string;
+    location?: string;
+    cargoName?: string;
+    cargoOwner?: string;
+  }) => api.post<DriverIncident>('/driver/accidents', payload).then((r) => r.data),
+
+  uploadAccidentAttachment: (accidentId: string, file: File, documentType?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api
+      .post(`/driver/accidents/${accidentId}/attachments`, formData, {
+        headers: driverMultipartHeaders(),
+        params: documentType ? { documentType } : undefined,
+      })
+      .then((r) => r.data);
+  },
+
+  listNotifications: (status?: string) =>
+    api
+      .get<DriverPortalNotification[]>('/driver/notifications', { params: status ? { status } : undefined })
+      .then((r) => r.data),
+
+  unreadNotifications: () =>
+    api.get<{ count: number }>('/driver/notifications/unread-count').then((r) => r.data),
+
+  markNotificationRead: (id: string) =>
+    api.post<DriverPortalNotification>(`/driver/notifications/${id}/read`).then((r) => r.data),
+
+  markAllNotificationsRead: () =>
+    api.post('/driver/notifications/read-all').then((r) => r.data),
+
+  startWorkSession: () =>
+    api.post<{ id: string; startedAt: string; status: string }>('/driver/work-sessions/start').then((r) => r.data),
+
+  endWorkSession: (reason: 'manual' | 'app_background' | 'logout' = 'manual') =>
+    api.post('/driver/work-sessions/end', { reason }).then((r) => r.data),
 };
 
 export default api;
