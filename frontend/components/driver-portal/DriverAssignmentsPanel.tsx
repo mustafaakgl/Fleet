@@ -6,6 +6,7 @@ import { ChevronRight, Loader2, MapPin, Truck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { driverPortalApi } from '@/lib/api';
+import { buildAssignmentRouteName } from '@/lib/address-format';
 import type { DriverPortalAssignment } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -94,7 +95,11 @@ export function DriverAssignmentsPanel() {
                     </p>
                     <p className="mt-1 flex items-start gap-1 text-xs text-slate-500">
                       <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
-                      <span className="line-clamp-1">{assignment.deliveryAddress}</span>
+                      <span className="line-clamp-2">
+                        {assignment.routeName ||
+                          buildAssignmentRouteName(assignment.pickupAddress, assignment.deliveryAddress) ||
+                          assignment.deliveryAddress}
+                      </span>
                     </p>
                   </div>
                   <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />

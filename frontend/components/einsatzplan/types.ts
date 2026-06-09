@@ -23,6 +23,7 @@ export interface DriverPlanRow {
   vehiclePlate: string;
   company: string;
   phone: string;
+  homeAddress?: string;
   licenseExpiry: string;
   accidentCount: number;
   riskLevel: 'low' | 'medium' | 'high';

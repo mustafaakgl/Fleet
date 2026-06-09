@@ -25,6 +25,8 @@ import {
   FLEET_RAW_TR,
 } from '@/lib/fleet-table';
 import { BRAND_BTN_OUTLINE, BRAND_FOCUS, BRAND_KPI, BRAND_TAB_ACTIVE_PLAIN, BRAND_TAB_BADGE } from '@/lib/brand-colors';
+import { StructuredAddressCell } from '@/components/shared/StructuredAddressCell';
+import { buildAssignmentRouteName } from '@/lib/address-format';
 import { cn } from '@/lib/utils';
 
 const COMPANY_REVENUE_MAP: Record<string, number> = {
@@ -415,25 +417,33 @@ export function Tagesplanung({
                       />
                     </td>
                     <td className={FLEET_RAW_TD}>
-                      <input
+                      <StructuredAddressCell
                         value={row.assignment.pickupAddress ?? ''}
                         disabled={disabled}
-                        placeholder={t('planning.pickupPh')}
-                        onChange={(event) =>
-                          updateAssignment(row.assignment.id, { pickupAddress: event.target.value })
+                        onChange={(pickupAddress) =>
+                          updateAssignment(row.assignment.id, {
+                            pickupAddress,
+                            routeName: buildAssignmentRouteName(
+                              pickupAddress,
+                              row.assignment.deliveryAddress ?? '',
+                            ),
+                          })
                         }
-                        className={cn('w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
                     <td className={FLEET_RAW_TD}>
-                      <input
+                      <StructuredAddressCell
                         value={row.assignment.deliveryAddress ?? ''}
                         disabled={disabled}
-                        placeholder={t('planning.deliveryPh')}
-                        onChange={(event) =>
-                          updateAssignment(row.assignment.id, { deliveryAddress: event.target.value })
+                        onChange={(deliveryAddress) =>
+                          updateAssignment(row.assignment.id, {
+                            deliveryAddress,
+                            routeName: buildAssignmentRouteName(
+                              row.assignment.pickupAddress ?? '',
+                              deliveryAddress,
+                            ),
+                          })
                         }
-                        className={cn('w-full min-w-[140px] rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
                       />
                     </td>
                     <td className={FLEET_RAW_TD}>

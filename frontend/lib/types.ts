@@ -114,6 +114,10 @@ export interface Driver {
   passport_number?: string;
   passport_expiry_date?: string;
   date_of_birth?: string | null;
+  home_address_street?: string | null;
+  home_address_zip_code?: string | null;
+  home_address_city?: string | null;
+  home_address_country?: string | null;
   vacation_entitlement_days?: number;
   vacation_carry_over_days?: number;
   status: DriverStatus;
@@ -1017,6 +1021,11 @@ export interface DriverPortalMe {
     licenseExpiryDate?: string | null;
     passportNumber?: string | null;
     passportExpiryDate?: string | null;
+    homeAddressStreet?: string | null;
+    homeAddressZipCode?: string | null;
+    homeAddressCity?: string | null;
+    homeAddressCountry?: string | null;
+    profileComplete?: boolean;
     assignedVehicle?: {
       id: string;
       plateNumber: string;

@@ -1079,7 +1079,7 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     if (vehicle) patch.vehicle_plate = vehicle;
     if (from) patch.pickup_address = from;
     if (to) patch.delivery_address = to;
-    if (from && to) patch.route_name = `${from} → ${to}`;
+    if (from && to) patch.route_name = assignment.routeName?.trim() || `${from} → ${to}`;
     else if (route) patch.route_name = route;
     if (Number.isFinite(assignment.expectedRevenue)) {
       patch.expected_daily_revenue = Math.max(0, Math.round(assignment.expectedRevenue * 100) / 100);
@@ -1109,9 +1109,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
         start_time: assignment.startTime || '07:00',
         end_time: assignment.endTime || '15:00',
         route_name:
-          assignment.pickupAddress?.trim() && assignment.deliveryAddress?.trim()
+          assignment.routeName?.trim() ||
+          (assignment.pickupAddress?.trim() && assignment.deliveryAddress?.trim()
             ? `${assignment.pickupAddress.trim()} → ${assignment.deliveryAddress.trim()}`
-            : assignment.routeJob?.trim() || undefined,
+            : assignment.routeJob?.trim() || undefined),
         expected_daily_revenue: Math.max(0, Math.round((assignment.expectedRevenue || 0) * 100) / 100),
         cargo_name: assignment.cargoName?.trim() || 'Office planning',
         cargo_owner: assignment.cargoOwner?.trim() || company,

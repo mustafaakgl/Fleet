@@ -13,6 +13,7 @@ import { Select } from '@/components/ui/select';
 import { driverPortalApi } from '@/lib/api';
 import { clearAuth } from '@/lib/auth';
 import { DRIVER_MESSENGER_LANGUAGES } from '@/lib/driver-portal-utils';
+import { formatDriverHomeAddress } from '@/lib/driver-profile';
 import type { DriverPortalMe, MessengerLanguage } from '@/lib/types';
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -79,6 +80,17 @@ export default function DriverProfilePage() {
               </CardContent>
             </Card>
 
+            {!profile.driver.profileComplete ? (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-amber-900">{t('driverPortal.profile.completeHint')}</p>
+                  <Button asChild variant="outline" size="sm" className="shrink-0 border-amber-300">
+                    <Link href="/driver/onboarding">{t('driverPortal.profile.completeAction')}</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">{t('driverPortal.profile.account')}</CardTitle>
@@ -90,6 +102,10 @@ export default function DriverProfilePage() {
                   value={profile.driver.employeeNumber ?? '—'}
                 />
                 <InfoRow label={t('driverPortal.profile.riskLevel')} value={profile.driver.riskLevel ?? '—'} />
+                <InfoRow
+                  label={t('driverPortal.profile.homeAddress')}
+                  value={formatDriverHomeAddress(profile.driver)}
+                />
               </CardContent>
             </Card>
 

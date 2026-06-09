@@ -45,6 +45,22 @@ export class UpdateDriverDto {
   date_of_birth?: string;
 
   @IsOptional()
+  @IsString()
+  home_address_street?: string;
+
+  @IsOptional()
+  @IsString()
+  home_address_zip_code?: string;
+
+  @IsOptional()
+  @IsString()
+  home_address_city?: string;
+
+  @IsOptional()
+  @IsString()
+  home_address_country?: string;
+
+  @IsOptional()
   @IsEnum(DriverStatus)
   status?: DriverStatus;
 

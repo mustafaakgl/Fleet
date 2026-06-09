@@ -14,6 +14,7 @@ import { SendMessageDto } from './dto/send-message.dto';
 import {
   allowedDepartmentsForRole,
   canAccessDepartment,
+  normalizeDriverConversationDepartment,
   normalizeMessengerDepartment,
 } from './messenger-departments.util';
 import { buildMessengerConversationsCsv } from './messenger-export.util';
@@ -185,8 +186,8 @@ export class MessengerService {
   }
 
   private assertCanCreateConversation(role: UserRole): void {
-    if (role === 'driver') {
-      throw new ForbiddenException('Driver role cannot create conversations');
+    if (role === 'driver' || role === 'customer') {
+      throw new ForbiddenException('This role cannot create conversations for another user');
     }
   }
 
@@ -647,10 +648,19 @@ export class MessengerService {
 
   async createConversation(currentUserId: string, dto: CreateConversationDto) {
     const currentUser = await this.resolveCurrentUser(currentUserId);
+
+    if (currentUser.role === 'driver') {
+      return this.createConversationAsDriver(currentUser, dto);
+    }
+
     this.assertCanCreateConversation(currentUser.role);
 
+    if (!dto.driverId?.trim()) {
+      throw new BadRequestException('driverId is required');
+    }
+
     const driver = await this.prisma.driver.findUnique({
-      where: { id: dto.driverId },
+      where: { id: dto.driverId.trim() },
       select: {
         id: true,
         userId: true,
@@ -670,25 +680,66 @@ export class MessengerService {
       throw new ForbiddenException('You cannot create conversations in this department');
     }
 
+    return this.createConversationRecord({
+      currentUser,
+      driver,
+      normalizedSubject,
+      department,
+      participantIds: Array.from(new Set([currentUser.id, driver.userId])),
+      participantRoleForUser: (participantId) =>
+        participantId === driver.userId ? 'driver' : currentUser.role,
+    });
+  }
+
+  private async createConversationAsDriver(
+    currentUser: MessengerUser,
+    dto: CreateConversationDto,
+  ) {
+    const normalizedSubject = dto.subject?.trim();
+    if (!normalizedSubject) {
+      throw new BadRequestException('subject is required');
+    }
+
+    const driver = await this.prisma.driver.findFirst({
+      where: { userId: currentUser.id },
+      select: {
+        id: true,
+        userId: true,
+      },
+    });
+
+    if (!driver?.userId) {
+      throw new BadRequestException('Driver has no linked user account');
+    }
+
+    const department = normalizeDriverConversationDepartment(dto.department);
+
+    return this.createConversationRecord({
+      currentUser,
+      driver,
+      normalizedSubject,
+      department,
+      participantIds: [driver.userId],
+      participantRoleForUser: () => 'driver',
+    });
+  }
+
+  private async createConversationRecord(params: {
+    currentUser: MessengerUser;
+    driver: { id: string; userId: string };
+    normalizedSubject: string | null;
+    department: ReturnType<typeof normalizeMessengerDepartment>;
+    participantIds: string[];
+    participantRoleForUser: (participantId: string) => UserRole | 'driver';
+  }) {
+    const { currentUser, driver, normalizedSubject, department, participantIds, participantRoleForUser } =
+      params;
+
     const existing = await this.prisma.conversation.findFirst({
       where: {
         driverId: driver.id,
         subject: normalizedSubject,
         department,
-        participants: {
-          some: {
-            userId: currentUser.id,
-          },
-        },
-        AND: [
-          {
-            participants: {
-              some: {
-                userId: driver.userId,
-              },
-            },
-          },
-        ],
       },
       select: { id: true },
       orderBy: [{ updatedAt: 'desc' }],
@@ -697,8 +748,6 @@ export class MessengerService {
     if (existing) {
       return this.getConversationDetail(currentUser.id, existing.id);
     }
-
-    const participantIds = Array.from(new Set([currentUser.id, driver.userId]));
 
     const createdConversation = await this.prisma.conversation.create({
       data: {
@@ -709,7 +758,7 @@ export class MessengerService {
         participants: {
           create: participantIds.map((participantId) => ({
             userId: participantId,
-            role: participantId === driver.userId ? 'driver' : currentUser.role,
+            role: participantRoleForUser(participantId),
           })),
         },
       },
@@ -725,6 +774,8 @@ export class MessengerService {
       metadata: {
         driverId: driver.id,
         subject: normalizedSubject,
+        department,
+        createdByRole: currentUser.role,
       },
     });
 

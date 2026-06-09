@@ -438,6 +438,10 @@ model Driver {
   riskLevel          RiskLevel    @default(green)
   notes              String?
   dateOfBirth        DateTime?    @db.Date
+  homeAddressStreet  String?
+  homeAddressZipCode String?
+  homeAddressCity    String?
+  homeAddressCountry String?
   vacationEntitlementDays Decimal @default(24) @db.Decimal(5, 2)
   vacationCarryOverDays   Decimal @default(0) @db.Decimal(5, 2)
   lastBirthdayNotifiedYear Int?

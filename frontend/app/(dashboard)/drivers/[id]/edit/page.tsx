@@ -32,6 +32,10 @@ const schema = z.object({
   status: z.enum(['active', 'inactive', 'on_leave', 'sick', 'terminated']),
   vacation_entitlement_days: z.coerce.number().min(0).max(365).optional(),
   vacation_carry_over_days: z.coerce.number().min(-365).max(365).optional(),
+  home_address_street: z.string().optional(),
+  home_address_zip_code: z.string().optional(),
+  home_address_city: z.string().optional(),
+  home_address_country: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -114,6 +118,10 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
           status: driver.status as DriverStatus,
           vacation_entitlement_days: driver.vacation_entitlement_days ?? 24,
           vacation_carry_over_days: driver.vacation_carry_over_days ?? 0,
+          home_address_street: driver.home_address_street ?? '',
+          home_address_zip_code: driver.home_address_zip_code ?? '',
+          home_address_city: driver.home_address_city ?? '',
+          home_address_country: driver.home_address_country ?? '',
         });
       })
       .catch(() => setNotFound(true))
@@ -222,6 +230,28 @@ export default function EditDriverPage({ params }: { params: Promise<{ id: strin
                 <Input type="date" {...register('passport_expiry_date')} />
               </Field>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('form.homeAddress')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label={t('form.homeAddressStreet')} error={t(errors.home_address_street?.message ?? '')}>
+              <Input {...register('home_address_street')} />
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label={t('form.homeAddressZipCode')} error={t(errors.home_address_zip_code?.message ?? '')}>
+                <Input {...register('home_address_zip_code')} />
+              </Field>
+              <Field label={t('form.homeAddressCity')} error={t(errors.home_address_city?.message ?? '')}>
+                <Input {...register('home_address_city')} />
+              </Field>
+            </div>
+            <Field label={t('form.homeAddressCountry')} error={t(errors.home_address_country?.message ?? '')}>
+              <Input {...register('home_address_country')} />
+            </Field>
           </CardContent>
         </Card>
 

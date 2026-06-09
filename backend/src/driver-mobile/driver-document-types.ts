@@ -5,6 +5,7 @@ export const DRIVER_UPLOAD_DOCUMENT_TYPES = [
   'ADR Certificate',
   'Medical Certificate',
   'Work Permit',
+  'Equipment',
   'Other',
 ] as const;
 

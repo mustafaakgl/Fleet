@@ -30,6 +30,7 @@ import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
 import { SubmitHandoverEquipmentChecklistDto } from './dto/submit-handover-equipment.dto';
 import { UpdateDriverLanguageDto } from './dto/update-driver-language.dto';
+import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import { UploadDriverDocumentDto } from './dto/upload-driver-document.dto';
@@ -90,6 +91,12 @@ export class DriverMobileController {
   @HttpCode(HttpStatus.OK)
   updateLanguage(@CurrentUser('id') userId: string, @Body() dto: UpdateDriverLanguageDto) {
     return this.driverMobile.updatePreferredLanguage(userId, dto.language);
+  }
+
+  @Post('me/profile')
+  @HttpCode(HttpStatus.OK)
+  updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateDriverProfileDto) {
+    return this.driverMobile.updateProfile(userId, dto);
   }
 
   @Post('me/push-token')

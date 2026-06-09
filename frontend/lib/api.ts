@@ -856,6 +856,7 @@ export interface MessengerConversationListParams {
   status?: string;
   search?: string;
   department?: string;
+  limit?: number;
 }
 
 export interface MessengerListMessagesParams {
@@ -879,6 +880,11 @@ export const messengerApi = {
   createConversation: (driverId: string, subject?: string, department?: string) =>
     api
       .post<ConversationDetail>('/messenger/conversations', { driverId, subject, department })
+      .then((r) => r.data),
+
+  createDriverConversation: (subject: string, department: string) =>
+    api
+      .post<ConversationDetail>('/messenger/conversations', { subject, department })
       .then((r) => r.data),
 
   getConversation: (id: string) =>
@@ -1495,6 +1501,16 @@ export const driverPortalApi = {
 
   updateLanguage: (language: MessengerLanguage) =>
     api.post<DriverPortalMe>('/driver/me/language', { language }).then((r) => r.data),
+
+  updateProfile: (payload: {
+    phone?: string;
+    license_number?: string;
+    license_expiry_date?: string;
+    home_address_street: string;
+    home_address_zip_code: string;
+    home_address_city: string;
+    home_address_country: string;
+  }) => api.post<DriverPortalMe>('/driver/me/profile', payload).then((r) => r.data),
 
   todayAssignments: (date?: string) =>
     api

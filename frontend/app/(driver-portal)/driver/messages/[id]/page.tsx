@@ -9,7 +9,14 @@ import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { driverPortalApi, messengerApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
-import { formatMessengerDateTime, groupMessagesByDay } from '@/lib/messenger-utils';
+import {
+  departmentBadgeClass,
+  driverMessageAudienceLabelKey,
+  DRIVER_MESSAGE_AUDIENCES,
+  formatMessengerDateTime,
+  groupMessagesByDay,
+  type DriverMessageAudience,
+} from '@/lib/messenger-utils';
 import type { ConversationDetail, MessengerLanguage, MessengerMessage } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -101,9 +108,22 @@ export default function DriverMessageThreadPage() {
       <DriverPageBack href="/driver/messages" label={t('driverPortal.messages.back')} />
       <div className="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-3">
-          <p className="font-semibold text-slate-900">
-            {conversation?.subject ?? t('driverPortal.messages.thread')}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold text-slate-900">
+              {conversation?.subject ?? t('driverPortal.messages.thread')}
+            </p>
+            {conversation?.department &&
+            DRIVER_MESSAGE_AUDIENCES.includes(conversation.department as DriverMessageAudience) ? (
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                  departmentBadgeClass(conversation.department),
+                )}
+              >
+                {t(driverMessageAudienceLabelKey(conversation.department as DriverMessageAudience))}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-3 py-4">

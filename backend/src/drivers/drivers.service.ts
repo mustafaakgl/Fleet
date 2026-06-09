@@ -45,6 +45,10 @@ function toClientDriver(row: DriverWithCurrent) {
     status: row.status,
     risk_level: row.riskLevel,
     date_of_birth: row.dateOfBirth?.toISOString().slice(0, 10) ?? null,
+    home_address_street: row.homeAddressStreet,
+    home_address_zip_code: row.homeAddressZipCode,
+    home_address_city: row.homeAddressCity,
+    home_address_country: row.homeAddressCountry,
     vacation_entitlement_days: toDecimalNumber(row.vacationEntitlementDays),
     vacation_carry_over_days: toDecimalNumber(row.vacationCarryOverDays),
     current_vehicle_plate: row.assignments[0]?.vehicle.plateNumber ?? null,
@@ -200,6 +204,10 @@ export class DriversService {
         passportNumber: dto.passport_number,
         passportExpiryDate: dto.passport_expiry_date ? new Date(dto.passport_expiry_date) : undefined,
         dateOfBirth: dto.date_of_birth ? new Date(dto.date_of_birth) : undefined,
+        homeAddressStreet: dto.home_address_street,
+        homeAddressZipCode: dto.home_address_zip_code,
+        homeAddressCity: dto.home_address_city,
+        homeAddressCountry: dto.home_address_country,
         status: dto.status,
         riskLevel: dto.risk_level,
         notes: dto.notes,
@@ -258,6 +266,10 @@ export class DriversService {
         data.lastBirthdayNotifiedYear = null;
       }
     }
+    if (dto.home_address_street !== undefined) data.homeAddressStreet = dto.home_address_street;
+    if (dto.home_address_zip_code !== undefined) data.homeAddressZipCode = dto.home_address_zip_code;
+    if (dto.home_address_city !== undefined) data.homeAddressCity = dto.home_address_city;
+    if (dto.home_address_country !== undefined) data.homeAddressCountry = dto.home_address_country;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.risk_level !== undefined) data.riskLevel = dto.risk_level;
     if (dto.notes !== undefined) data.notes = dto.notes;

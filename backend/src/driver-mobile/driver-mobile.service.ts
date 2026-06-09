@@ -48,6 +48,7 @@ import {
 } from './request-attachments.util';
 import { DocumentsService } from '../documents/documents.service';
 import { UploadDriverDocumentDto } from './dto/upload-driver-document.dto';
+import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import {
   DRIVER_REQUIRED_DOCUMENT_TYPES,
   DRIVER_SELF_UPLOAD_REQUIRED_TYPES,
@@ -80,6 +81,20 @@ const incidentInclude = {
 } satisfies Prisma.AccidentInclude;
 
 const SUPPORTED_DRIVER_LANGUAGES = new Set(['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru']);
+
+function isHomeAddressComplete(driver: {
+  homeAddressStreet: string | null;
+  homeAddressZipCode: string | null;
+  homeAddressCity: string | null;
+  homeAddressCountry: string | null;
+}): boolean {
+  return Boolean(
+    driver.homeAddressStreet?.trim()
+    && driver.homeAddressZipCode?.trim()
+    && driver.homeAddressCity?.trim()
+    && driver.homeAddressCountry?.trim(),
+  );
+}
 
 @Injectable()
 export class DriverMobileService {
@@ -194,6 +209,10 @@ export class DriverMobileService {
         licenseExpiryDate: true,
         passportNumber: true,
         passportExpiryDate: true,
+        homeAddressStreet: true,
+        homeAddressZipCode: true,
+        homeAddressCity: true,
+        homeAddressCountry: true,
         currentVehicles: {
           where: { status: 'active' },
           select: { id: true, plateNumber: true, brand: true, model: true },
@@ -248,6 +267,11 @@ export class DriverMobileService {
         licenseExpiryDate: driver.licenseExpiryDate?.toISOString().slice(0, 10) ?? null,
         passportNumber: driver.passportNumber,
         passportExpiryDate: driver.passportExpiryDate?.toISOString().slice(0, 10) ?? null,
+        homeAddressStreet: driver.homeAddressStreet,
+        homeAddressZipCode: driver.homeAddressZipCode,
+        homeAddressCity: driver.homeAddressCity,
+        homeAddressCountry: driver.homeAddressCountry,
+        profileComplete: isHomeAddressComplete(driver),
         assignedVehicle,
         todayAssignment: todayAssignment
           ? {
@@ -280,6 +304,33 @@ export class DriverMobileService {
       summary: 'Driver preferred language updated',
       metadata: { language },
     });
+    return this.me(userId);
+  }
+
+  async updateProfile(userId: string, dto: UpdateDriverProfileDto) {
+    const { user, driver: linkedDriver } = await this.resolveDriver(userId);
+
+    await this.prisma.driver.update({
+      where: { id: linkedDriver.id },
+      data: {
+        phone: dto.phone?.trim() || undefined,
+        licenseNumber: dto.license_number?.trim() || undefined,
+        licenseExpiryDate: dto.license_expiry_date ? new Date(dto.license_expiry_date) : undefined,
+        homeAddressStreet: dto.home_address_street.trim(),
+        homeAddressZipCode: dto.home_address_zip_code.trim(),
+        homeAddressCity: dto.home_address_city.trim(),
+        homeAddressCountry: dto.home_address_country.trim(),
+      },
+    });
+
+    await this.safeAuditLog({
+      actorUserId: user.id,
+      action: 'driver_mobile.profile_updated',
+      entityType: 'driver',
+      entityId: linkedDriver.id,
+      summary: 'Driver profile updated from portal',
+    });
+
     return this.me(userId);
   }
 

@@ -9,9 +9,10 @@ import { getUser } from '@/lib/auth';
 interface DriverPortalShellProps {
   children: React.ReactNode;
   hideHeader?: boolean;
+  hideNav?: boolean;
 }
 
-export function DriverPortalShell({ children, hideHeader }: DriverPortalShellProps) {
+export function DriverPortalShell({ children, hideHeader, hideNav }: DriverPortalShellProps) {
   const { t } = useTranslation();
   const user = getUser();
 
@@ -34,7 +35,7 @@ export function DriverPortalShell({ children, hideHeader }: DriverPortalShellPro
         </header>
       ) : null}
       <main className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-6">{children}</main>
-      <DriverPortalNav />
+      {!hideNav ? <DriverPortalNav /> : null}
     </div>
   );
 }

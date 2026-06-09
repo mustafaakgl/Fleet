@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   allowedDepartmentsForRole,
   canAccessDepartment,
+  normalizeDriverConversationDepartment,
   normalizeMessengerDepartment,
 } from './messenger-departments.util';
 import { buildMessengerConversationsCsv } from './messenger-export.util';
@@ -12,6 +13,14 @@ describe('messenger-departments.util', () => {
     assert.equal(normalizeMessengerDepartment('DISPATCH'), 'dispatch');
     assert.equal(normalizeMessengerDepartment(''), 'general');
     assert.equal(normalizeMessengerDepartment(undefined), 'general');
+  });
+
+  it('normalizes driver conversation audience aliases', () => {
+    assert.equal(normalizeDriverConversationDepartment('office'), 'dispatch');
+    assert.equal(normalizeDriverConversationDepartment('ofis'), 'dispatch');
+    assert.equal(normalizeDriverConversationDepartment('accounting'), 'accounting');
+    assert.equal(normalizeDriverConversationDepartment('all'), 'general');
+    assert.equal(normalizeDriverConversationDepartment('hepsi'), 'general');
   });
 
   it('scopes office users to allowed departments', () => {

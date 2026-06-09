@@ -35,3 +35,29 @@ export function allowedDepartmentsForRole(role: UserRole): MessengerDepartmentVa
 export function canAccessDepartment(role: UserRole, department: MessengerDepartmentValue): boolean {
   return allowedDepartmentsForRole(role).includes(department);
 }
+
+export const DRIVER_CONVERSATION_DEPARTMENTS = [
+  'dispatch',
+  'accounting',
+  'general',
+] as const satisfies readonly MessengerDepartmentValue[];
+
+export type DriverConversationDepartment = (typeof DRIVER_CONVERSATION_DEPARTMENTS)[number];
+
+export function normalizeDriverConversationDepartment(value?: string): DriverConversationDepartment {
+  const trimmed = value?.trim().toLowerCase();
+  if (trimmed === 'office' || trimmed === 'ofis') {
+    return 'dispatch';
+  }
+  if (trimmed === 'all' || trimmed === 'hepsi' || trimmed === 'everyone') {
+    return 'general';
+  }
+  if (trimmed === 'accounting' || trimmed === 'muhasebe') {
+    return 'accounting';
+  }
+  const normalized = normalizeMessengerDepartment(value);
+  if ((DRIVER_CONVERSATION_DEPARTMENTS as readonly string[]).includes(normalized)) {
+    return normalized as DriverConversationDepartment;
+  }
+  return 'general';
+}

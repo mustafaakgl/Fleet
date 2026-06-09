@@ -48,6 +48,22 @@ export function personInitials(name: string): string {
   return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
 }
 
+export const DRIVER_MESSAGE_AUDIENCES = ['dispatch', 'accounting', 'general'] as const satisfies readonly MessengerDepartment[];
+
+export type DriverMessageAudience = (typeof DRIVER_MESSAGE_AUDIENCES)[number];
+
+export function driverMessageAudienceLabelKey(department: DriverMessageAudience): string {
+  switch (department) {
+    case 'dispatch':
+      return 'driverPortal.messages.audience.office';
+    case 'accounting':
+      return 'driverPortal.messages.audience.accounting';
+    case 'general':
+    default:
+      return 'driverPortal.messages.audience.all';
+  }
+}
+
 export function departmentBadgeClass(department?: MessengerDepartment): string {
   switch (department) {
     case 'dispatch':

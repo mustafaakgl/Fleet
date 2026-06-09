@@ -41,6 +41,10 @@ export function AssignmentDrawer({ open, row, assignment, onClose }: AssignmentD
                 <dt className="text-gray-500">Phone</dt>
                 <dd className="font-medium text-gray-900">{row.phone}</dd>
               </div>
+              <div className="col-span-2">
+                <dt className="text-gray-500">Home address</dt>
+                <dd className="font-medium text-gray-900">{row.homeAddress || '—'}</dd>
+              </div>
               <div>
                 <dt className="text-gray-500">Department</dt>
                 <dd className="font-medium text-gray-900 capitalize">{row.department}</dd>

@@ -45,6 +45,10 @@ const schema = z.object({
   passport_number: z.string().optional(),
   passport_expiry_date: z.string().optional(),
   date_of_birth: z.string().optional(),
+  home_address_street: z.string().optional(),
+  home_address_zip_code: z.string().optional(),
+  home_address_city: z.string().optional(),
+  home_address_country: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -161,6 +165,28 @@ export default function NewDriverPage() {
                 <Input type="date" {...register('passport_expiry_date')} />
               </Field>
             </FieldGroup>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t('form.homeAddress')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Field label={t('form.homeAddressStreet')} error={t(errors.home_address_street?.message ?? '')}>
+              <Input {...register('home_address_street')} placeholder="Musterstraße 12" />
+            </Field>
+            <FieldGroup>
+              <Field label={t('form.homeAddressZipCode')} error={t(errors.home_address_zip_code?.message ?? '')}>
+                <Input {...register('home_address_zip_code')} placeholder="12345" />
+              </Field>
+              <Field label={t('form.homeAddressCity')} error={t(errors.home_address_city?.message ?? '')}>
+                <Input {...register('home_address_city')} placeholder="Berlin" />
+              </Field>
+            </FieldGroup>
+            <Field label={t('form.homeAddressCountry')} error={t(errors.home_address_country?.message ?? '')}>
+              <Input {...register('home_address_country')} placeholder="Deutschland" />
+            </Field>
           </CardContent>
         </Card>
 

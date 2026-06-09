@@ -1,8 +1,9 @@
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateConversationDto {
+  @IsOptional()
   @IsString()
-  driverId!: string;
+  driverId?: string;
 
   @IsOptional()
   @IsString()

@@ -9,7 +9,9 @@ import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DriverAssignmentRouteMap } from '@/components/driver-portal/DriverAssignmentRouteMap';
 import { driverPortalApi } from '@/lib/api';
+import { buildAssignmentRouteName } from '@/lib/address-format';
 import { openMapsAddress } from '@/lib/driver-maps';
 import { driverAssignmentStatusClass } from '@/lib/driver-portal-utils';
 import type { DriverPortalAssignment } from '@/lib/types';
@@ -85,8 +87,24 @@ export default function DriverAssignmentDetailPage() {
                   {t('driverPortal.assignments.cargoOwner')}: {assignment.cargoOwner}
                 </p>
               ) : null}
+              <p className="text-sm font-medium text-[#1a4d7a]">
+                {assignment.routeName ||
+                  buildAssignmentRouteName(assignment.pickupAddress, assignment.deliveryAddress)}
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  {t('driverPortal.assignments.routeMap')}
+                </p>
+                <div className="mt-2">
+                  <DriverAssignmentRouteMap
+                    pickupAddress={assignment.pickupAddress}
+                    deliveryAddress={assignment.deliveryAddress}
+                  />
+                </div>
+              </div>
+
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                   {t('driverPortal.assignments.pickup')}

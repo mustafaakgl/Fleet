@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm, type Resolver } from 'react-hook-form';
@@ -8,12 +8,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ChevronLeft, Loader2, CalendarDays } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { StructuredAddressFields } from '@/components/shared/StructuredAddressFields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { assignmentsApi, driversApi, vehiclesApi, companiesApi } from '@/lib/api';
+import { buildAssignmentRouteName, formatStructuredAddress } from '@/lib/address-format';
 import type { Driver, Vehicle, Company } from '@/lib/types';
+
+const addressPart = z.string().min(1, 'assignmentForm.required');
 
 const schema = z.object({
   driver_id: z.string().min(1, 'assignmentForm.driverRequired'),
@@ -21,12 +25,17 @@ const schema = z.object({
   company_id: z.string().min(1, 'assignmentForm.companyRequired'),
   cargo_name: z.string().min(1, 'assignmentForm.required'),
   cargo_owner: z.string().min(1, 'assignmentForm.required'),
-  pickup_address: z.string().min(1, 'assignmentForm.required'),
-  delivery_address: z.string().min(1, 'assignmentForm.required'),
+  pickup_street: addressPart,
+  pickup_zip_code: addressPart,
+  pickup_city: addressPart,
+  pickup_country: z.string().min(1, 'assignmentForm.required'),
+  delivery_street: addressPart,
+  delivery_zip_code: addressPart,
+  delivery_city: addressPart,
+  delivery_country: z.string().min(1, 'assignmentForm.required'),
   work_date: z.string().min(1, 'assignmentForm.required'),
   start_time: z.string().min(1, 'assignmentForm.required'),
   end_time: z.string().min(1, 'assignmentForm.required'),
-  route_name: z.string().optional(),
   expected_daily_revenue: z.preprocess(
     (value) => (value === '' || value === null || value === undefined ? undefined : Number(value)),
     z.number().min(0, 'assignmentForm.revenueMin').optional(),
@@ -60,13 +69,26 @@ export default function NewAssignmentPage() {
   const [refsLoading, setRefsLoading] = useState(true);
   const [refsError, setRefsError] = useState<string | null>(null);
 
+  const [pickupAddress, setPickupAddress] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema) as unknown as Resolver<FormData>,
+    defaultValues: {
+      pickup_country: 'Deutschland',
+      delivery_country: 'Deutschland',
+    },
   });
+
+  const routePreview = useMemo(
+    () => buildAssignmentRouteName(pickupAddress, deliveryAddress),
+    [deliveryAddress, pickupAddress],
+  );
 
   useEffect(() => {
     let active = true;
@@ -90,11 +112,40 @@ export default function NewAssignmentPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
+
+  function syncPickupAddress(parts: { street: string; zipCode: string; city: string; country: string }) {
+    setValue('pickup_street', parts.street, { shouldValidate: true });
+    setValue('pickup_zip_code', parts.zipCode, { shouldValidate: true });
+    setValue('pickup_city', parts.city, { shouldValidate: true });
+    setValue('pickup_country', parts.country, { shouldValidate: true });
+    setPickupAddress(formatStructuredAddress(parts));
+  }
+
+  function syncDeliveryAddress(parts: { street: string; zipCode: string; city: string; country: string }) {
+    setValue('delivery_street', parts.street, { shouldValidate: true });
+    setValue('delivery_zip_code', parts.zipCode, { shouldValidate: true });
+    setValue('delivery_city', parts.city, { shouldValidate: true });
+    setValue('delivery_country', parts.country, { shouldValidate: true });
+    setDeliveryAddress(formatStructuredAddress(parts));
+  }
 
   async function onSubmit(data: FormData) {
     setServerError(null);
     const company = companies.find((item) => item.id === data.company_id);
+    const pickup = formatStructuredAddress({
+      street: data.pickup_street,
+      zipCode: data.pickup_zip_code,
+      city: data.pickup_city,
+      country: data.pickup_country,
+    });
+    const delivery = formatStructuredAddress({
+      street: data.delivery_street,
+      zipCode: data.delivery_zip_code,
+      city: data.delivery_city,
+      country: data.delivery_country,
+    });
+
     try {
       await assignmentsApi.create({
         driver_id: data.driver_id,
@@ -103,12 +154,12 @@ export default function NewAssignmentPage() {
         company_name: company?.name,
         cargo_name: data.cargo_name,
         cargo_owner: data.cargo_owner,
-        pickup_address: data.pickup_address,
-        delivery_address: data.delivery_address,
+        pickup_address: pickup,
+        delivery_address: delivery,
         work_date: data.work_date,
         start_time: data.start_time,
         end_time: data.end_time,
-        route_name: data.route_name || undefined,
+        route_name: buildAssignmentRouteName(pickup, delivery) || undefined,
         expected_daily_revenue: data.expected_daily_revenue,
         notes: data.notes || undefined,
       });
@@ -124,6 +175,17 @@ export default function NewAssignmentPage() {
       );
     }
   }
+
+  const pickupError =
+    errors.pickup_street?.message ||
+    errors.pickup_zip_code?.message ||
+    errors.pickup_city?.message ||
+    errors.pickup_country?.message;
+  const deliveryError =
+    errors.delivery_street?.message ||
+    errors.delivery_zip_code?.message ||
+    errors.delivery_city?.message ||
+    errors.delivery_country?.message;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -146,6 +208,15 @@ export default function NewAssignmentPage() {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
+        <input type="hidden" {...register('pickup_street')} />
+        <input type="hidden" {...register('pickup_zip_code')} />
+        <input type="hidden" {...register('pickup_city')} />
+        <input type="hidden" {...register('pickup_country')} />
+        <input type="hidden" {...register('delivery_street')} />
+        <input type="hidden" {...register('delivery_zip_code')} />
+        <input type="hidden" {...register('delivery_city')} />
+        <input type="hidden" {...register('delivery_country')} />
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('assignmentForm.details')}</CardTitle>
@@ -194,14 +265,37 @@ export default function NewAssignmentPage() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label={`${t('assignmentForm.pickup')} *`} error={t(errors.pickup_address?.message ?? '')}>
-                <Input {...register('pickup_address')} placeholder={t('assignmentForm.addressPlaceholder')} />
-              </Field>
-              <Field label={`${t('assignmentForm.delivery')} *`} error={t(errors.delivery_address?.message ?? '')}>
-                <Input {...register('delivery_address')} placeholder={t('assignmentForm.addressPlaceholder')} />
-              </Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <StructuredAddressFields
+                  label={`${t('assignmentForm.pickup')} *`}
+                  value={pickupAddress}
+                  disabled={refsLoading}
+                  onChange={setPickupAddress}
+                  onPartsChange={syncPickupAddress}
+                />
+                {pickupError ? <p className="mt-1 text-xs text-red-600">{t(pickupError)}</p> : null}
+              </div>
+              <div>
+                <StructuredAddressFields
+                  label={`${t('assignmentForm.delivery')} *`}
+                  value={deliveryAddress}
+                  disabled={refsLoading}
+                  onChange={setDeliveryAddress}
+                  onPartsChange={syncDeliveryAddress}
+                />
+                {deliveryError ? <p className="mt-1 text-xs text-red-600">{t(deliveryError)}</p> : null}
+              </div>
             </div>
+
+            {routePreview ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  {t('assignmentForm.routePreview')}
+                </p>
+                <p className="mt-1 text-sm text-slate-900">{routePreview}</p>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label={`${t('assignmentForm.date')} *`} error={t(errors.work_date?.message ?? '')}>
@@ -215,14 +309,9 @@ export default function NewAssignmentPage() {
               </Field>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label={t('assignmentForm.route')} error={t(errors.route_name?.message ?? '')}>
-                <Input {...register('route_name')} placeholder={t('assignmentForm.optional')} />
-              </Field>
-              <Field label={t('assignmentForm.expectedRevenue')} error={t(errors.expected_daily_revenue?.message ?? '')}>
-                <Input type="number" step="0.01" min="0" {...register('expected_daily_revenue')} placeholder={t('assignmentForm.optional')} />
-              </Field>
-            </div>
+            <Field label={t('assignmentForm.expectedRevenue')} error={t(errors.expected_daily_revenue?.message ?? '')}>
+              <Input type="number" step="0.01" min="0" {...register('expected_daily_revenue')} placeholder={t('assignmentForm.optional')} />
+            </Field>
 
             <Field label={t('assignmentForm.notes')} error={t(errors.notes?.message ?? '')}>
               <Input {...register('notes')} placeholder={t('assignmentForm.notesPlaceholder')} />

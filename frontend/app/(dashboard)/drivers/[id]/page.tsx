@@ -394,6 +394,10 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
             <InfoItem label={t('driverDetail.licenseExpiry')} value={formatDate(driver.license_expiry_date)} />
             <InfoItem label={t('driverDetail.passportNumber')} value={driver.passport_number ?? '-'} />
             <InfoItem label={t('driverDetail.passportExpiry')} value={formatDate(driver.passport_expiry_date)} />
+            <InfoItem label={t('driverDetail.homeAddressStreet')} value={driver.home_address_street ?? '-'} />
+            <InfoItem label={t('driverDetail.homeAddressZipCode')} value={driver.home_address_zip_code ?? '-'} />
+            <InfoItem label={t('driverDetail.homeAddressCity')} value={driver.home_address_city ?? '-'} />
+            <InfoItem label={t('driverDetail.homeAddressCountry')} value={driver.home_address_country ?? '-'} />
           </dl>
         </CardContent>
       </Card>
