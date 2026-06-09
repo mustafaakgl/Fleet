@@ -16,6 +16,7 @@ import {
   canAccessDepartment,
   normalizeMessengerDepartment,
 } from './messenger-departments.util';
+import { buildMessengerConversationsCsv } from './messenger-export.util';
 
 type MessengerUser = {
   id: string;
@@ -28,6 +29,7 @@ type ConversationListQuery = {
   status?: string;
   search?: string;
   department?: string;
+  limit?: string;
 };
 
 type ConversationMessagesQuery = {
@@ -43,6 +45,12 @@ const conversationListInclude = {
       firstName: true,
       lastName: true,
       userId: true,
+      employeeNumber: true,
+      user: {
+        select: {
+          language: true,
+        },
+      },
     },
   },
   participants: {
@@ -53,6 +61,7 @@ const conversationListInclude = {
           fullName: true,
           email: true,
           role: true,
+          language: true,
         },
       },
     },
@@ -81,6 +90,12 @@ const conversationDetailInclude = {
       firstName: true,
       lastName: true,
       userId: true,
+      employeeNumber: true,
+      user: {
+        select: {
+          language: true,
+        },
+      },
     },
   },
   participants: {
@@ -91,6 +106,7 @@ const conversationDetailInclude = {
           fullName: true,
           email: true,
           role: true,
+          language: true,
         },
       },
     },
@@ -174,15 +190,46 @@ export class MessengerService {
     }
   }
 
-  private parseLimit(rawLimit?: string): number {
+  private parseLimit(rawLimit?: string, fallback = 50): number {
     if (!rawLimit) {
-      return 50;
+      return fallback;
     }
     const limit = Number.parseInt(rawLimit, 10);
     if (!Number.isInteger(limit) || limit <= 0 || limit > 200) {
       throw new BadRequestException('limit must be an integer between 1 and 200');
     }
     return limit;
+  }
+
+  private parseListLimit(rawLimit?: string): number {
+    return this.parseLimit(rawLimit, 100);
+  }
+
+  private normalizeSupportedLanguage(value?: string | null): string | null {
+    if (!value) return null;
+    const normalized = value.trim().toLowerCase();
+    return SUPPORTED_LANGUAGES.has(normalized) ? normalized : null;
+  }
+
+  private mapDriver(
+    driver: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      userId: string | null;
+      employeeNumber?: string;
+      user?: { language: string } | null;
+    },
+  ) {
+    const preferredLanguage = this.normalizeSupportedLanguage(driver.user?.language);
+    return {
+      id: driver.id,
+      firstName: driver.firstName,
+      lastName: driver.lastName,
+      userId: driver.userId,
+      employeeNumber: driver.employeeNumber ?? null,
+      preferredLanguage,
+    };
   }
 
   private parseSince(since?: string): Date | undefined {
@@ -214,7 +261,6 @@ export class MessengerService {
 
   private async resolveAutomaticTargetLanguage(params: {
     conversationId: string;
-    senderUserId: string;
     senderRole: UserRole;
   }): Promise<string | null> {
     const conversation = await this.prisma.conversation.findUnique({
@@ -224,6 +270,11 @@ export class MessengerService {
         driver: {
           select: {
             userId: true,
+            user: {
+              select: {
+                language: true,
+              },
+            },
           },
         },
         participants: {
@@ -249,17 +300,16 @@ export class MessengerService {
     }
 
     const driverUserId = conversation.driver.userId;
-    if (!driverUserId) {
-      return null;
-    }
     const driverParticipant = conversation.participants.find(
-      (participant) => participant.userId === driverUserId,
+      (participant) =>
+        participant.role === 'driver' ||
+        (driverUserId ? participant.userId === driverUserId : false),
     );
-    const target = driverParticipant?.user.language ?? null;
-    if (target && SUPPORTED_LANGUAGES.has(target)) {
-      return target;
-    }
-    return null;
+
+    const fromParticipant = this.normalizeSupportedLanguage(driverParticipant?.user.language);
+    const fromDriverUser = this.normalizeSupportedLanguage(conversation.driver.user?.language);
+
+    return fromParticipant ?? fromDriverUser ?? null;
   }
 
   private mapParticipant(
@@ -271,6 +321,7 @@ export class MessengerService {
             fullName: true;
             email: true;
             role: true;
+            language: true;
           };
         };
       };
@@ -286,7 +337,107 @@ export class MessengerService {
         fullName: participant.user.fullName,
         email: participant.user.email,
         role: participant.user.role,
+        language: participant.user.language,
       },
+    };
+  }
+
+  private async buildConversationWhere(
+    currentUser: MessengerUser,
+    query: ConversationListQuery,
+  ): Promise<Prisma.ConversationWhereInput> {
+    if (currentUser.role === 'driver' && query.driverId) {
+      const currentDriver = await this.prisma.driver.findFirst({
+        where: { userId: currentUser.id },
+        select: { id: true },
+      });
+      if (!currentDriver || currentDriver.id !== query.driverId) {
+        throw new ForbiddenException('Driver can only query own driver conversations');
+      }
+    }
+
+    const where: Prisma.ConversationWhereInput = {};
+
+    if (query.driverId) {
+      where.driverId = query.driverId;
+    }
+
+    if (currentUser.role === 'driver') {
+      const linkedDriverId = await this.resolveLinkedDriverId(currentUser.id);
+      where.participants = {
+        some: {
+          userId: currentUser.id,
+        },
+      };
+      if (linkedDriverId) {
+        where.driverId = linkedDriverId;
+      }
+    }
+
+    if (query.search?.trim()) {
+      const value = query.search.trim();
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            { subject: { contains: value, mode: 'insensitive' } },
+            { driver: { firstName: { contains: value, mode: 'insensitive' } } },
+            { driver: { lastName: { contains: value, mode: 'insensitive' } } },
+            { driver: { employeeNumber: { contains: value, mode: 'insensitive' } } },
+            {
+              messages: {
+                some: {
+                  OR: [
+                    { originalText: { contains: value, mode: 'insensitive' } },
+                    { translatedText: { contains: value, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ];
+    }
+
+    if (query.department?.trim()) {
+      const department = normalizeMessengerDepartment(query.department);
+      if (!canAccessDepartment(currentUser.role, department)) {
+        throw new ForbiddenException('You cannot access this messenger department');
+      }
+      where.department = department;
+    } else if (currentUser.role !== 'driver') {
+      where.department = { in: allowedDepartmentsForRole(currentUser.role) };
+    }
+
+    return where;
+  }
+
+  private mapConversationListItem(
+    conversation: Prisma.ConversationGetPayload<{ include: typeof conversationListInclude }>,
+    unreadMap: Map<string, number>,
+  ) {
+    const lastMessage = conversation.messages[0] ?? null;
+    return {
+      id: conversation.id,
+      subject: conversation.subject,
+      department: conversation.department,
+      driver: this.mapDriver(conversation.driver),
+      participants: conversation.participants.map((participant) => this.mapParticipant(participant)),
+      lastMessage: lastMessage
+        ? {
+            id: lastMessage.id,
+            senderUserId: lastMessage.senderUserId,
+            senderName: lastMessage.sender.fullName,
+            originalText: lastMessage.originalText,
+            translatedText: lastMessage.translatedText,
+            originalLanguage: lastMessage.originalLanguage,
+            targetLanguage: lastMessage.targetLanguage,
+            translationStatus: lastMessage.translationStatus,
+            createdAt: lastMessage.createdAt.toISOString(),
+          }
+        : null,
+      lastMessageAt: conversation.lastMessageAt?.toISOString() ?? null,
+      unreadCount: unreadMap.get(conversation.id) ?? 0,
     };
   }
 
@@ -402,63 +553,14 @@ export class MessengerService {
 
   async listConversations(currentUserId: string, query: ConversationListQuery) {
     const currentUser = await this.resolveCurrentUser(currentUserId);
-
-    if (currentUser.role === 'driver' && query.driverId) {
-      const currentDriver = await this.prisma.driver.findFirst({
-        where: { userId: currentUser.id },
-        select: { id: true },
-      });
-      if (!currentDriver || currentDriver.id !== query.driverId) {
-        throw new ForbiddenException('Driver can only query own driver conversations');
-      }
-    }
-
-    const where: Prisma.ConversationWhereInput = {};
-
-    if (query.driverId) {
-      where.driverId = query.driverId;
-    }
-
-    if (currentUser.role === 'driver') {
-      const linkedDriverId = await this.resolveLinkedDriverId(currentUser.id);
-      where.participants = {
-        some: {
-          userId: currentUser.id,
-        },
-      };
-      if (linkedDriverId) {
-        where.driverId = linkedDriverId;
-      }
-    }
-
-    if (query.search?.trim()) {
-      const value = query.search.trim();
-      where.AND = [
-        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-        {
-          OR: [
-            { subject: { contains: value, mode: 'insensitive' } },
-            { driver: { firstName: { contains: value, mode: 'insensitive' } } },
-            { driver: { lastName: { contains: value, mode: 'insensitive' } } },
-          ],
-        },
-      ];
-    }
-
-    if (query.department?.trim()) {
-      const department = normalizeMessengerDepartment(query.department);
-      if (!canAccessDepartment(currentUser.role, department)) {
-        throw new ForbiddenException('You cannot access this messenger department');
-      }
-      where.department = department;
-    } else if (currentUser.role !== 'driver') {
-      where.department = { in: allowedDepartmentsForRole(currentUser.role) };
-    }
+    const where = await this.buildConversationWhere(currentUser, query);
+    const limit = this.parseListLimit(query.limit);
 
     const conversations = await this.prisma.conversation.findMany({
       where,
       include: conversationListInclude,
       orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
+      take: limit,
     });
 
     const unreadMap = await this.unreadMapForUser(
@@ -466,36 +568,81 @@ export class MessengerService {
       conversations.map((conversation) => conversation.id),
     );
 
-    return conversations.map((conversation) => {
-      const lastMessage = conversation.messages[0] ?? null;
-      return {
-        id: conversation.id,
-        subject: conversation.subject,
-        department: conversation.department,
-        driver: {
-          id: conversation.driver.id,
-          firstName: conversation.driver.firstName,
-          lastName: conversation.driver.lastName,
-          userId: conversation.driver.userId,
+    return conversations.map((conversation) =>
+      this.mapConversationListItem(conversation, unreadMap),
+    );
+  }
+
+  async getStats(currentUserId: string, query: Pick<ConversationListQuery, 'department' | 'search'>) {
+    const currentUser = await this.resolveCurrentUser(currentUserId);
+    const where = await this.buildConversationWhere(currentUser, query);
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [totalConversations, messagesLast24Hours, unreadRows] = await Promise.all([
+      this.prisma.conversation.count({ where }),
+      this.prisma.message.count({
+        where: {
+          conversation: where,
+          createdAt: { gte: since24h },
         },
-        participants: conversation.participants.map((participant) => this.mapParticipant(participant)),
-        lastMessage: lastMessage
-          ? {
-              id: lastMessage.id,
-              senderUserId: lastMessage.senderUserId,
-              senderName: lastMessage.sender.fullName,
-              originalText: lastMessage.originalText,
-              translatedText: lastMessage.translatedText,
-              originalLanguage: lastMessage.originalLanguage,
-              targetLanguage: lastMessage.targetLanguage,
-              translationStatus: lastMessage.translationStatus,
-              createdAt: lastMessage.createdAt.toISOString(),
-            }
-          : null,
-        lastMessageAt: conversation.lastMessageAt?.toISOString() ?? null,
-        unreadCount: unreadMap.get(conversation.id) ?? 0,
-      };
+      }),
+      this.prisma.message.findMany({
+        where: {
+          conversation: where,
+          senderUserId: { not: currentUser.id },
+          reads: { none: { userId: currentUser.id } },
+        },
+        select: { conversationId: true },
+      }),
+    ]);
+
+    const unreadByConversation = new Map<string, number>();
+    for (const row of unreadRows) {
+      unreadByConversation.set(row.conversationId, (unreadByConversation.get(row.conversationId) ?? 0) + 1);
+    }
+
+    return {
+      totalConversations,
+      unreadTotal: unreadRows.length,
+      conversationsWithUnread: unreadByConversation.size,
+      messagesLast24Hours,
+    };
+  }
+
+  async exportConversationsCsv(currentUserId: string, query: ConversationListQuery): Promise<string> {
+    const currentUser = await this.resolveCurrentUser(currentUserId);
+    const where = await this.buildConversationWhere(currentUser, query);
+
+    const conversations = await this.prisma.conversation.findMany({
+      where,
+      include: conversationListInclude,
+      orderBy: [{ lastMessageAt: 'desc' }, { updatedAt: 'desc' }],
+      take: 500,
     });
+
+    const unreadMap = await this.unreadMapForUser(
+      currentUser.id,
+      conversations.map((conversation) => conversation.id),
+    );
+
+    return buildMessengerConversationsCsv(
+      conversations.map((conversation) => {
+        const mapped = this.mapConversationListItem(conversation, unreadMap);
+        const preview =
+          mapped.lastMessage?.translatedText?.trim() ||
+          mapped.lastMessage?.originalText?.trim() ||
+          '';
+        return {
+          driverName: `${mapped.driver.firstName} ${mapped.driver.lastName}`.trim(),
+          employeeNumber: mapped.driver.employeeNumber ?? '',
+          department: mapped.department,
+          subject: mapped.subject ?? '',
+          lastMessageAt: mapped.lastMessageAt ?? '',
+          unreadCount: mapped.unreadCount,
+          lastMessagePreview: preview.slice(0, 200),
+        };
+      }),
+    );
   }
 
   async createConversation(currentUserId: string, dto: CreateConversationDto) {
@@ -603,12 +750,7 @@ export class MessengerService {
       id: conversation.id,
       subject: conversation.subject,
       department: conversation.department,
-      driver: {
-        id: conversation.driver.id,
-        firstName: conversation.driver.firstName,
-        lastName: conversation.driver.lastName,
-        userId: conversation.driver.userId,
-      },
+      driver: this.mapDriver(conversation.driver),
       participants: conversation.participants.map((participant) => this.mapParticipant(participant)),
       lastMessageAt: conversation.lastMessageAt?.toISOString() ?? null,
       unreadCount: unreadMap.get(conversation.id) ?? 0,
@@ -688,13 +830,15 @@ export class MessengerService {
       this.assertSupportedLanguage(dto.targetLanguage, 'targetLanguage');
     }
 
+    const autoTargetLanguage = await this.resolveAutomaticTargetLanguage({
+      conversationId,
+      senderRole: currentUser.role,
+    });
+
     const effectiveTargetLanguage =
-      dto.targetLanguage ??
-      (await this.resolveAutomaticTargetLanguage({
-        conversationId,
-        senderUserId: currentUser.id,
-        senderRole: currentUser.role,
-      }));
+      currentUser.role === 'driver'
+        ? (dto.targetLanguage ?? autoTargetLanguage)
+        : autoTargetLanguage;
 
     let translationStatus: MessageTranslationStatus = MessageTranslationStatus.not_requested;
     let translatedText: string | null = null;
@@ -869,22 +1013,14 @@ export class MessengerService {
 
   async unreadCount(currentUserId: string) {
     const currentUser = await this.resolveCurrentUser(currentUserId);
-    const linkedDriverId =
-      currentUser.role === 'driver' ? await this.resolveLinkedDriverId(currentUser.id) : null;
+    const conversationWhere =
+      currentUser.role === 'driver'
+        ? await this.buildConversationWhere(currentUser, {})
+        : { department: { in: allowedDepartmentsForRole(currentUser.role) } };
 
     const rows = await this.prisma.message.findMany({
       where: {
-        conversation:
-          currentUser.role === 'driver'
-            ? {
-                participants: {
-                  some: {
-                    userId: currentUser.id,
-                  },
-                },
-                ...(linkedDriverId ? { driverId: linkedDriverId } : {}),
-              }
-            : undefined,
+        conversation: conversationWhere,
         senderUserId: {
           not: currentUser.id,
         },

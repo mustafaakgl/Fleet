@@ -702,6 +702,7 @@ export interface ConversationParticipant {
     fullName: string;
     email: string;
     role: UserRole;
+    language?: string;
   };
 }
 
@@ -710,6 +711,15 @@ export interface MessengerDriverSummary {
   firstName: string;
   lastName: string;
   userId: string | null;
+  employeeNumber?: string | null;
+  preferredLanguage?: MessengerLanguage | null;
+}
+
+export interface MessengerStats {
+  totalConversations: number;
+  unreadTotal: number;
+  conversationsWithUnread: number;
+  messagesLast24Hours: number;
 }
 
 export interface MessengerMessage {

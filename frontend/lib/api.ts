@@ -32,6 +32,7 @@ import type {
   ConversationDetail,
   MessengerMessage,
   SendMessagePayload,
+  MessengerStats,
   MessengerUnreadCount,
   LiveTrackingItem,
   CustomerDashboardStats,
@@ -810,6 +811,14 @@ export interface MessengerListMessagesParams {
 }
 
 export const messengerApi = {
+  getStats: (params?: Pick<MessengerConversationListParams, 'search' | 'department'>) =>
+    api.get<MessengerStats>('/messenger/stats', { params }).then((r) => r.data),
+
+  exportConversations: (params?: MessengerConversationListParams) =>
+    api
+      .get<string>('/messenger/conversations/export', { params, responseType: 'text' })
+      .then((r) => r.data),
+
   listConversations: (params?: MessengerConversationListParams) =>
     api.get<ConversationListItem[]>('/messenger/conversations', { params }).then((r) => r.data),
 

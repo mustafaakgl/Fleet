@@ -30,6 +30,7 @@ import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
 import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
+import { RecentMessagesWidget } from '@/components/dashboard/RecentMessagesWidget';
 import { WatchedExpensesWidget } from '@/components/dashboard/WatchedExpensesWidget';
 import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 import { OnboardingTasksWidget } from '@/components/dashboard/OnboardingTasksWidget';
@@ -188,6 +189,8 @@ export function StandardDashboard() {
       <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />
 
       <WatchedExpensesWidget />
+
+      <RecentMessagesWidget />
 
       {summary?.priorityTrends ? (
         <section className="space-y-3">

@@ -5,6 +5,7 @@ import { Bell, BellOff, Ellipsis, MessageSquare, Pencil, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BRAND_BTN_PRIMARY, BRAND_LINK } from '@/lib/brand-colors';
 import { formatRelativeDueDate } from '@/lib/reminder-utils';
 import {
   formatDueSoonThreshold,
@@ -16,7 +17,7 @@ import { FLEET_SIDE_DRAWER } from '@/lib/fleet-table';
 import { cn, formatDate } from '@/lib/utils';
 
 function vehicleStatusDot(status: VehicleReminderRow['vehicleStatus']) {
-  if (status === 'active') return 'bg-blue-500';
+  if (status === 'active') return 'bg-[#1a4d7a]';
   if (status === 'maintenance') return 'bg-orange-500';
   if (status === 'broken') return 'bg-red-500';
   return 'bg-slate-400';
@@ -79,7 +80,7 @@ export function VehicleReminderDetailDrawer({
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <Link
           href={`/vehicles/${row.vehicleId}`}
-          className="text-sm font-medium text-blue-700 hover:underline"
+          className={cn('text-sm font-medium', BRAND_LINK)}
         >
           {t('vehicleReminders.detail.title', { id: displayNumber(row) })} →
         </Link>
@@ -110,7 +111,7 @@ export function VehicleReminderDetailDrawer({
 
         <div className="mt-4 flex flex-wrap gap-2">
           {row.reminderId ? (
-            <Button type="button" className="bg-blue-600 hover:bg-blue-700" onClick={onResolve}>
+            <Button type="button" className={BRAND_BTN_PRIMARY} onClick={onResolve}>
               {t('reminders.resolve')}
             </Button>
           ) : null}
@@ -141,7 +142,7 @@ export function VehicleReminderDetailDrawer({
                 </span>
               )}
               <span className={cn('inline-block h-2 w-2 rounded-full', vehicleStatusDot(row.vehicleStatus))} />
-              <Link href={`/vehicles/${row.vehicleId}`} className="font-semibold text-blue-700 hover:underline">
+              <Link href={`/vehicles/${row.vehicleId}`} className={cn('font-semibold', BRAND_LINK)}>
                 {row.vehiclePlate}
               </Link>
             </div>
@@ -182,7 +183,7 @@ export function VehicleReminderDetailDrawer({
               <span
                 className={cn(
                   'h-2 w-2 rounded-full',
-                  row.notificationsActive ? 'bg-blue-500' : 'bg-slate-400',
+                  row.notificationsActive ? 'bg-[#1a4d7a]' : 'bg-slate-400',
                 )}
               />
               {row.notificationsActive
@@ -194,19 +195,25 @@ export function VehicleReminderDetailDrawer({
 
         <div className="mt-6">
           <h3 className="text-sm font-semibold text-slate-900">{t('vehicleReminders.detail.comments')}</h3>
-          <div className="mt-3 flex items-center gap-2">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
-              ?
-            </span>
-            <div className="relative flex-1">
-              <MessageSquare className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                disabled
-                placeholder={t('vehicleReminders.detail.addComment')}
-                className="h-9 pl-9 text-sm"
-              />
+          {row.comment ? (
+            <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {row.comment}
+            </p>
+          ) : (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+                ?
+              </span>
+              <div className="relative flex-1">
+                <MessageSquare className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  disabled
+                  placeholder={t('vehicleReminders.detail.addComment')}
+                  className="h-9 pl-9 text-sm"
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </aside>

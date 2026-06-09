@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Ellipsis,
@@ -17,11 +16,27 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ServiceReminderDetailDrawer } from '@/components/reminders/ServiceReminderDetailDrawer';
+import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { remindersApi, serviceRecordsApi, vehiclesApi } from '@/lib/api';
+import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
+import {
+  buildCustomServiceReminderRows,
+  listCustomServiceReminders,
+} from '@/lib/custom-service-reminders';
 import { fetchActiveReminders, formatRelativeDueDate } from '@/lib/reminder-utils';
 import {
   buildServiceReminderRows,
@@ -33,21 +48,28 @@ import {
   type ServiceReminderTab,
 } from '@/lib/service-reminders';
 import type { Vehicle } from '@/lib/types';
-import { vehicleAbbreviation } from '@/lib/timeline-utils';
 import {
+  FLEET_FILTER_INPUT,
+  FLEET_FILTER_SELECT,
   FLEET_LINK_ACTION,
-  FLEET_RAW_TABLE,
-  FLEET_RAW_TBODY,
-  FLEET_RAW_TD,
-  FLEET_RAW_TH,
-  FLEET_RAW_TH_CHECKBOX,
-  FLEET_RAW_THEAD,
+  FLEET_LIST_CARD,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
+  FLEET_PAGE_HEADER,
+  FLEET_PAGE_HEADER_ACTIONS,
+  FLEET_PAGE_HEADER_TITLE,
   FLEET_SIDE_DRAWER_OVERLAY,
   FLEET_SPLIT_PANEL,
   FLEET_TAB_BAR,
   FLEET_TAB_ITEM,
-  FLEET_LIST_DESKTOP,
-  FLEET_LIST_MOBILE,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW_CLICKABLE,
+  FLEET_TOOLBAR,
 } from '@/lib/fleet-table';
 import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn, formatDate } from '@/lib/utils';
@@ -79,36 +101,28 @@ function FilterPill({
   value,
   onChange,
   options,
+  className,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ value: string; label: string }>;
+  className?: string;
 }) {
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-label={label}
-        className="h-9 appearance-none rounded-full border border-slate-300 bg-white py-1.5 pl-3 pr-8 text-sm text-slate-700 hover:bg-slate-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-      >
-        {options.map((option) => (
-          <option key={option.value || '__all__'} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-    </div>
+    <Select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-label={label}
+      className={cn('min-w-[9rem]', FLEET_FILTER_SELECT, className)}
+    >
+      {options.map((option) => (
+        <option key={option.value || '__all__'} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
   );
-}
-
-function vehicleStatusDot(status: ServiceReminderRow['vehicleStatus']) {
-  if (status === 'active') return 'bg-blue-500';
-  if (status === 'maintenance') return 'bg-orange-500';
-  if (status === 'broken') return 'bg-red-500';
-  return 'bg-slate-400';
 }
 
 function statusLabel(status: ServiceReminderRow['status'], t: (key: string) => string) {
@@ -130,7 +144,7 @@ export function ServiceRemindersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const initialTab = (searchParams.get('tab') as ServiceReminderTab | null) ?? 'due_soon';
+  const initialTab = (searchParams.get('tab') as ServiceReminderTab | null) ?? 'all';
   const [tab, setTab] = useState<ServiceReminderTab>(
     ['all', 'due_soon', 'overdue', 'snoozed'].includes(initialTab) ? initialTab : 'due_soon',
   );
@@ -142,7 +156,6 @@ export function ServiceRemindersPage() {
   const [vehicleFilter, setVehicleFilter] = useState(searchParams.get('vehicle_id') ?? '');
   const [taskFilter, setTaskFilter] = useState(searchParams.get('task') ?? '');
   const [page, setPage] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedRow, setSelectedRow] = useState<ServiceReminderRow | null>(null);
   const [watchlist, setWatchlist] = useState<Set<string>>(() => new Set());
 
@@ -160,13 +173,19 @@ export function ServiceRemindersPage() {
         fetchActiveReminders(),
       ]);
       setVehicles(vehiclePage.data);
+      const baseRows = buildServiceReminderRows(
+        vehiclePage.data,
+        serviceRecords,
+        rawReminders as unknown as Record<string, unknown>[],
+        i18n.language,
+      );
+      const customRows = buildCustomServiceReminderRows(
+        listCustomServiceReminders(),
+        vehiclePage.data,
+        i18n.language,
+      );
       setRows(
-        buildServiceReminderRows(
-          vehiclePage.data,
-          serviceRecords,
-          rawReminders as unknown as Record<string, unknown>[],
-          i18n.language,
-        ),
+        [...baseRows, ...customRows].sort((a, b) => a.nextDueDate.localeCompare(b.nextDueDate)),
       );
     } catch (e) {
       setVehicles([]);
@@ -179,6 +198,12 @@ export function ServiceRemindersPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const reload = () => void load();
+    window.addEventListener('focus', reload);
+    return () => window.removeEventListener('focus', reload);
   }, [load]);
 
   useEffect(() => {
@@ -248,145 +273,161 @@ export function ServiceRemindersPage() {
   ];
 
   return (
-    <div className="space-y-0">
-      <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('serviceReminders.title')}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline">
+    <div className="space-y-4 sm:space-y-6">
+      <div className={FLEET_PAGE_HEADER}>
+        <div className={FLEET_PAGE_HEADER_TITLE}>
+          <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{t('serviceReminders.title')}</h1>
+          {!loading && (
+            <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm text-gray-500">{counts.all}</span>
+          )}
+        </div>
+        <div className={FLEET_PAGE_HEADER_ACTIONS}>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1a4d7a] hover:underline"
+          >
             <Sparkles className="h-4 w-4" />
             {t('serviceReminders.enableForecasting')}
           </button>
           <Button type="button" variant="outline" size="icon" aria-label={t('expenseHistory.moreActions')}>
             <Ellipsis className="h-4 w-4" />
           </Button>
-          <Button type="button" className="bg-blue-600 hover:bg-blue-700" onClick={() => router.push('/service-history')}>
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button type="button" className={cn(BRAND_BTN_PRIMARY, 'w-full sm:w-auto')} onClick={() => router.push('/reminders/service/new')}>
+            <Plus className="mr-2 h-4 w-4" />
             {t('serviceReminders.addReminder')}
           </Button>
         </div>
       </div>
 
-      <div className={FLEET_TAB_BAR}>
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={cn(
-              FLEET_TAB_ITEM,
-              tab === item.id
-                ? 'border-blue-600 text-blue-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700',
-            )}
-          >
-            {t(`serviceReminders.tab.${item.id}`)}
-            <span
+      <Card className={cn(FLEET_LIST_CARD, 'overflow-hidden')}>
+        <div className={cn(FLEET_TAB_BAR, 'gap-0 px-4 sm:gap-1 sm:px-5')}>
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
               className={cn(
-                'ml-1',
-                item.tone === 'orange' && 'text-orange-600',
-                item.tone === 'red' && 'text-red-600',
-                item.tone === 'slate' && 'text-slate-500',
+                FLEET_TAB_ITEM,
+                'inline-flex items-center gap-2 px-2 sm:px-3',
+                tab === item.id
+                  ? 'border-[#1a4d7a] text-[#0b2342]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700',
               )}
             >
-              ({item.count})
-            </span>
-          </button>
-        ))}
-      </div>
+              <span>{t(`serviceReminders.tab.${item.id}`)}</span>
+              <span
+                className={cn(
+                  'inline-flex min-w-[1.375rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none',
+                  tab === item.id
+                    ? 'bg-[#1a4d7a] text-white'
+                    : 'bg-slate-100 text-slate-600',
+                  item.tone === 'orange' && tab !== item.id && 'text-orange-600',
+                  item.tone === 'red' && tab !== item.id && 'text-red-600',
+                )}
+              >
+                {item.count}
+              </span>
+            </button>
+          ))}
+        </div>
 
-      <div className="flex flex-col gap-3 border-b border-slate-200 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t('serviceReminders.searchPlaceholder')}
-              className="h-9 pl-9"
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className={cn(FLEET_TOOLBAR, 'flex-1')}>
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t('serviceReminders.searchPlaceholder')}
+                className={cn('pl-9', FLEET_FILTER_INPUT)}
+              />
+            </div>
+            <FilterPill
+              label={t('serviceReminders.filterVehicle')}
+              value={vehicleFilter}
+              onChange={setVehicleFilter}
+              className="w-full sm:w-40"
+              options={[
+                { value: '', label: t('serviceReminders.filterVehicle') },
+                ...vehicleOptions.map((vehicle) => ({ value: vehicle.id, label: vehicle.plate })),
+              ]}
             />
+            <FilterPill
+              label={t('serviceReminders.filterTask')}
+              value={taskFilter}
+              onChange={setTaskFilter}
+              className="w-full sm:w-44"
+              options={[
+                { value: '', label: t('serviceReminders.filterTask') },
+                ...COMMON_SERVICE_TASKS.map((task) => ({ value: task, label: task })),
+              ]}
+            />
+            <Button type="button" variant="outline" className={cn('w-full sm:w-auto', FLEET_FILTER_SELECT)}>
+              <Filter className="mr-2 h-4 w-4" />
+              {t('expenseHistory.filters')}
+            </Button>
           </div>
-          <FilterPill
-            label={t('serviceReminders.filterVehicle')}
-            value={vehicleFilter}
-            onChange={setVehicleFilter}
-            options={[
-              { value: '', label: t('serviceReminders.filterVehicle') },
-              ...vehicleOptions.map((vehicle) => ({ value: vehicle.id, label: vehicle.plate })),
-            ]}
-          />
-          <FilterPill
-            label={t('serviceReminders.filterTask')}
-            value={taskFilter}
-            onChange={setTaskFilter}
-            options={[
-              { value: '', label: t('serviceReminders.filterTask') },
-              ...COMMON_SERVICE_TASKS.map((task) => ({ value: task, label: task })),
-            ]}
-          />
-          <div className="relative">
-            <select
-              value=""
-              disabled
-              aria-label={t('expenseHistory.filterWatcher')}
-              className="h-9 cursor-not-allowed appearance-none rounded-full border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-8 text-sm text-slate-400"
+          <div className="flex items-center gap-2 text-[13px] text-slate-600">
+            <span>
+              {t('expenseHistory.pagination', {
+                from: rangeStart,
+                to: rangeEnd,
+                total: filteredRows.length,
+              })}
+            </span>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             >
-              <option value="">{t('expenseHistory.filterWatcher')}</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <FilterPill
+              label={t('serviceReminders.groupNone')}
+              value=""
+              onChange={() => {}}
+              className="hidden min-w-[8rem] lg:block"
+              options={[{ value: '', label: t('serviceReminders.groupNone') }]}
+            />
+            <Button variant="outline" size="icon" className="h-8 w-8" aria-label={t('expenseHistory.tableSettings')}>
+              <Settings2 className="h-4 w-4" />
+            </Button>
           </div>
-          <Button type="button" variant="outline" className="h-9 rounded-full px-3 text-sm">
-            <Filter className="mr-1.5 h-4 w-4" />
-            {t('expenseHistory.filters')}
-          </Button>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600">
-          <span>
-            {t('expenseHistory.pagination', {
-              from: rangeStart,
-              to: rangeEnd,
-              total: filteredRows.length,
-            })}
-          </span>
-          <Button variant="outline" size="icon" className="h-8 w-8" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <span className="hidden text-slate-500 sm:inline">{t('serviceReminders.groupNone')}</span>
-          <Button variant="outline" size="icon" className="h-8 w-8" aria-label={t('expenseHistory.tableSettings')}>
-            <Settings2 className="h-4 w-4" />
-          </Button>
+
+        <div className="grid gap-3 border-t border-slate-200 px-4 py-3 sm:grid-cols-2 sm:px-5 xl:grid-cols-4">
+          <StatCard label={t('serviceReminders.statOverdueVehicles')} value={String(counts.overdueVehicles)} tone="red" />
+          <StatCard label={t('serviceReminders.statDueSoonVehicles')} value={String(counts.dueSoonVehicles)} tone="orange" />
+          <StatCard label={t('serviceReminders.statSnoozedVehicles')} value={String(counts.snoozedVehicles)} />
+          <StatCard
+            label={t('serviceReminders.statCompliance')}
+            value={t('serviceReminders.complianceValue', { value: counts.averageCompliance })}
+            tone="brand"
+          />
         </div>
-      </div>
 
-      <div className="grid gap-3 border-b border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label={t('serviceReminders.statOverdueVehicles')} value={String(counts.overdueVehicles)} />
-        <StatCard label={t('serviceReminders.statDueSoonVehicles')} value={String(counts.dueSoonVehicles)} tone="orange" />
-        <StatCard label={t('serviceReminders.statSnoozedVehicles')} value={String(counts.snoozedVehicles)} />
-        <StatCard
-          label={t('serviceReminders.statCompliance')}
-          value={t('serviceReminders.complianceValue', { value: counts.averageCompliance })}
-          tone="blue"
-        />
-      </div>
-
-      <div className={FLEET_SPLIT_PANEL}>
+      <div className={cn(FLEET_SPLIT_PANEL, 'rounded-none border-0 border-t border-slate-200')}>
         <div className="min-w-0 flex-1">
           {loading ? (
-            <div className="space-y-2 p-4">
-              <Skeleton className="h-10" />
-              <Skeleton className="h-12" />
-              <Skeleton className="h-12" />
+            <div className="space-y-2 p-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={`sr-skeleton-${index}`} className="grid grid-cols-6 gap-2">
+                  <Skeleton className="h-8" />
+                  <Skeleton className="h-9" />
+                  <Skeleton className="h-9" />
+                  <Skeleton className="h-9" />
+                  <Skeleton className="h-9" />
+                  <Skeleton className="h-9" />
+                </div>
+              ))}
             </div>
           ) : error ? (
-            <div className="p-6">
+            <div className="p-4">
               <EmptyState
                 icon={Wrench}
                 title={t('serviceReminders.loadError')}
@@ -396,7 +437,7 @@ export function ServiceRemindersPage() {
               />
             </div>
           ) : pageRows.length === 0 ? (
-            <div className="p-6">
+            <div className="p-4">
               <EmptyState
                 icon={Wrench}
                 title={t('serviceReminders.emptyTitle')}
@@ -416,71 +457,55 @@ export function ServiceRemindersPage() {
                 >
                   <MobileFieldGrid>
                     <MobileField label={t('serviceReminders.colNextDue')} value={formatRelativeDueDate(row.nextDueDate, i18n.language)} />
-                    <MobileField label={t('serviceReminders.colCompliance')} value={`${row.compliancePercent}%`} />
+                    <MobileField
+                      label={t('serviceReminders.colLastCompleted')}
+                      value={row.lastCompletedDate ? formatDate(row.lastCompletedDate) : '—'}
+                    />
                   </MobileFieldGrid>
                 </MobileDataCard>
               ))}
             </div>
             <div className={cn(FLEET_LIST_DESKTOP, 'overflow-x-auto')}>
-              <table className={FLEET_RAW_TABLE}>
-                <thead className={FLEET_RAW_THEAD}>
-                  <tr>
-                    <th className={FLEET_RAW_TH_CHECKBOX}>
-                      <input type="checkbox" aria-label={t('expenseHistory.selectAll')} />
-                    </th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colVehicle')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colServiceTask')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colStatus')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colNextDue')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colWorkOrder')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colLastCompleted')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colCompliance')}</th>
-                    <th className={FLEET_RAW_TH}>{t('expenseHistory.colWatchers')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colAssignee')}</th>
-                    <th className={FLEET_RAW_TH}>{t('serviceReminders.colAssignedAt')}</th>
-                  </tr>
-                </thead>
-                <tbody className={FLEET_RAW_TBODY}>
+              <Table className={FLEET_TABLE}>
+                <TableHeader>
+                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('serviceReminders.colVehicle')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('serviceReminders.colServiceTask')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('serviceReminders.colStatus')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('serviceReminders.colNextDue')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('serviceReminders.colLastCompleted')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={FLEET_TABLE_BODY}>
                   {pageRows.map((row) => {
-                    const badge = vehicleAbbreviation(row.vehicleBrand, row.vehicleModel, row.vehiclePlate);
+                    const vehicle = vehicles.find((item) => item.id === row.vehicleId);
                     const isSelected = selectedRow?.id === row.id;
                     return (
-                      <tr
+                      <TableRow
                         key={row.id}
                         className={cn(
-                          'cursor-pointer hover:bg-slate-50/80',
-                          isSelected && 'bg-blue-50/60',
+                          FLEET_TABLE_ROW_CLICKABLE,
+                          row.status === 'overdue' && 'border-l-4 border-l-red-500',
+                          isSelected && 'bg-[#e8f0f8]/60',
                         )}
                         onClick={() => setSelectedRow(row)}
                       >
-                        <td className={FLEET_RAW_TD} onClick={(event) => event.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(row.id)}
-                            onChange={() =>
-                              setSelectedIds((current) => {
-                                const next = new Set(current);
-                                if (next.has(row.id)) next.delete(row.id);
-                                else next.add(row.id);
-                                return next;
-                              })
-                            }
+                        <TableCell className={FLEET_TABLE_CELL}>
+                          <VehiclePlateDisplay
+                            vehicleId={row.vehicleId}
+                            plate={row.vehiclePlate}
+                            photoUrl={vehicle?.photo_url}
+                            brand={row.vehicleBrand}
+                            model={row.vehicleModel}
+                            layout="inline"
+                            size="sm"
                           />
-                        </td>
-                        <td className={FLEET_RAW_TD}>
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded bg-slate-100 px-1.5 text-[10px] font-bold uppercase text-slate-600">
-                              {badge}
-                            </span>
-                            <span className={cn('inline-block h-2 w-2 rounded-full', vehicleStatusDot(row.vehicleStatus))} />
-                            <span className="font-semibold text-blue-700">{row.vehiclePlate}</span>
-                          </div>
-                        </td>
-                        <td className={FLEET_RAW_TD}>
-                          <span className="font-medium text-blue-700">{row.serviceTask}</span>
-                          <p className="mt-0.5 text-[11px] text-slate-500">{row.intervalLabel}</p>
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, 'font-medium', statusClass(row.status))}>
+                        </TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
+                          <span className="font-semibold text-slate-900">{row.serviceTask}</span>
+                          <p className="mt-0.5 text-[12px] text-slate-500">{row.intervalLabel}</p>
+                        </TableCell>
+                        <TableCell className={cn(FLEET_TABLE_CELL, 'font-medium', statusClass(row.status))}>
                           <span className="inline-flex items-center gap-1.5">
                             <span
                               className={cn(
@@ -488,31 +513,36 @@ export function ServiceRemindersPage() {
                                 row.status === 'overdue' && 'bg-red-500',
                                 row.status === 'due_soon' && 'bg-orange-500',
                                 row.status === 'snoozed' && 'bg-slate-400',
-                                row.status === 'scheduled' && 'bg-blue-500',
+                                row.status === 'scheduled' && 'bg-[#1a4d7a]',
                               )}
                             />
                             {statusLabel(row.status, t)}
                           </span>
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, statusClass(row.status))}>
+                        </TableCell>
+                        <TableCell className={cn(FLEET_TABLE_CELL, statusClass(row.status))}>
                           <div>{formatRelativeDueDate(row.nextDueDate, i18n.language)}</div>
                           {row.remainingKm != null ? (
-                            <div className="text-xs">
+                            <div className="text-[12px] text-red-600">
                               {t('serviceReminders.detail.remainingKm', {
                                 value: row.remainingKm.toLocaleString(i18n.language),
                               })}
                             </div>
                           ) : (
-                            <div className="text-xs">{formatDate(row.nextDueDate)}</div>
+                            <div className="text-[12px] text-slate-500">{formatDate(row.nextDueDate)}</div>
                           )}
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
-                        <td className={FLEET_RAW_TD}>
+                        </TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
                           {row.lastCompletedDate ? (
                             <>
-                              <div>{formatDate(row.lastCompletedDate)}</div>
+                              {row.serviceRecordId ? (
+                                <Link href={`/service-history/${row.serviceRecordId}`} className={FLEET_LINK_ACTION} onClick={(e) => e.stopPropagation()}>
+                                  {formatDate(row.lastCompletedDate)}
+                                </Link>
+                              ) : (
+                                <div>{formatDate(row.lastCompletedDate)}</div>
+                              )}
                               {row.lastCompletedMileage != null ? (
-                                <div className="text-xs text-slate-500">
+                                <div className="text-[12px] text-slate-500">
                                   {row.lastCompletedMileage.toLocaleString(i18n.language)} km
                                 </div>
                               ) : null}
@@ -520,29 +550,12 @@ export function ServiceRemindersPage() {
                           ) : (
                             '—'
                           )}
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, 'font-medium')}>{row.compliancePercent}%</td>
-                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
-                        <td className={FLEET_RAW_TD} onClick={(event) => event.stopPropagation()}>
-                          {row.reminderId ? (
-                            <Button type="button" variant="outline" size="sm" onClick={() => void handleResolve(row)}>
-                              {t('reminders.resolve')}
-                            </Button>
-                          ) : (
-                            <Link
-                              href={`/service-history?vehicle_id=${row.vehicleId}`}
-                              className={FLEET_LINK_ACTION}
-                            >
-                              {t('serviceReminders.logService')}
-                            </Link>
-                          )}
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             </>
           )}
@@ -561,6 +574,7 @@ export function ServiceRemindersPage() {
           </>
         ) : null}
       </div>
+      </Card>
     </div>
   );
 }
@@ -572,16 +586,17 @@ function StatCard({
 }: {
   label: string;
   value: string;
-  tone?: 'orange' | 'blue';
+  tone?: 'orange' | 'brand' | 'red';
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="rounded-lg border border-slate-200 bg-slate-50/50 px-4 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p
         className={cn(
           'mt-1 text-2xl font-semibold text-slate-900',
           tone === 'orange' && 'text-orange-600',
-          tone === 'blue' && 'text-blue-600',
+          tone === 'brand' && 'text-[#1a4d7a]',
+          tone === 'red' && 'text-red-600',
         )}
       >
         {value}

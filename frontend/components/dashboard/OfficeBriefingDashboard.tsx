@@ -28,6 +28,7 @@ import type { DashboardCriticalAlert, DashboardSummary } from '@/lib/types';
 import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
 import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
+import { RecentMessagesWidget } from '@/components/dashboard/RecentMessagesWidget';
 import { WatchedExpensesWidget } from '@/components/dashboard/WatchedExpensesWidget';
 import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 
@@ -288,6 +289,8 @@ export function OfficeBriefingDashboard() {
           <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />
 
           <WatchedExpensesWidget />
+
+          <RecentMessagesWidget />
 
           {summary?.priorityTrends ? (
             <RepairPriorityTrendsChart trends={summary.priorityTrends} />

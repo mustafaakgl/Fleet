@@ -28,7 +28,16 @@ export interface ServiceReminderRow {
   compliancePercent: number;
   reminderId?: string;
   serviceRecordId?: string;
-  source: 'service_record' | 'reminder';
+  source: 'service_record' | 'reminder' | 'custom';
+}
+
+export function serviceHistoryLogHref(row: ServiceReminderRow): string {
+  if (row.serviceRecordId) return `/service-history/${row.serviceRecordId}`;
+  const query = new URLSearchParams();
+  query.set('vehicle_id', row.vehicleId);
+  if (row.serviceTask) query.set('service_type', row.serviceTask);
+  const qs = query.toString();
+  return qs ? `/service-history?${qs}` : '/service-history';
 }
 
 export const COMMON_SERVICE_TASKS = [
@@ -88,7 +97,7 @@ function complianceFromStatus(status: ServiceReminderStatus): number {
   return 100;
 }
 
-function intervalLabel(interval: ServiceInterval, locale: string): string {
+export function intervalLabel(interval: ServiceInterval, locale: string): string {
   const monthWord = interval.months === 1 ? 'month' : 'months';
   if (locale.startsWith('de')) {
     return `Alle ${interval.months} Monat(e) oder ${interval.km.toLocaleString('de-DE')} km`;

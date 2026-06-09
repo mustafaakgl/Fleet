@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -13,6 +24,27 @@ import { MessengerService } from './messenger.service';
 export class MessengerController {
   constructor(private readonly messengerService: MessengerService) {}
 
+  @Get('stats')
+  getStats(
+    @CurrentUser('id') userId: string,
+    @Query('search') search?: string,
+    @Query('department') department?: string,
+  ) {
+    return this.messengerService.getStats(userId, { search, department });
+  }
+
+  @Get('conversations/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="messenger-conversations.csv"')
+  exportConversations(
+    @CurrentUser('id') userId: string,
+    @Query('driverId') driverId?: string,
+    @Query('search') search?: string,
+    @Query('department') department?: string,
+  ) {
+    return this.messengerService.exportConversationsCsv(userId, { driverId, search, department });
+  }
+
   @Get('conversations')
   listConversations(
     @CurrentUser('id') userId: string,
@@ -20,8 +52,15 @@ export class MessengerController {
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('department') department?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.messengerService.listConversations(userId, { driverId, status, search, department });
+    return this.messengerService.listConversations(userId, {
+      driverId,
+      status,
+      search,
+      department,
+      limit,
+    });
   }
 
   @Post('conversations')

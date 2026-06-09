@@ -1,28 +1,35 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CarFront,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Ellipsis,
   Filter,
   Plus,
   Search,
   Settings2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { VehicleReminderActionsMenu } from '@/components/reminders/VehicleReminderActionsMenu';
 import { VehicleReminderDetailDrawer } from '@/components/reminders/VehicleReminderDetailDrawer';
+import { VehicleReminderImportDialog } from '@/components/reminders/VehicleReminderImportDialog';
+import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { remindersApi, vehiclesApi } from '@/lib/api';
+import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
+import {
+  buildCustomVehicleReminderRows,
+  listCustomVehicleReminders,
+} from '@/lib/custom-vehicle-reminders';
 import { fetchActiveReminders, formatRelativeDueDate } from '@/lib/reminder-utils';
+import { downloadVehicleRemindersCsv } from '@/lib/vehicle-reminders-csv';
 import type { Vehicle } from '@/lib/types';
-import { vehicleAbbreviation } from '@/lib/timeline-utils';
 import {
   buildVehicleReminderRows,
   COMMON_VEHICLE_RENEWAL_TYPES,
@@ -34,19 +41,27 @@ import {
   type VehicleReminderTab,
 } from '@/lib/vehicle-reminders';
 import {
-  FLEET_RAW_TABLE,
-  FLEET_RAW_TBODY,
-  FLEET_RAW_TD,
-  FLEET_RAW_TH,
-  FLEET_RAW_TH_CHECKBOX,
-  FLEET_RAW_THEAD,
   FLEET_SIDE_DRAWER_OVERLAY,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW_CLICKABLE,
   FLEET_SPLIT_PANEL,
   FLEET_TAB_BAR,
   FLEET_TAB_ITEM,
   FLEET_LIST_DESKTOP,
   FLEET_LIST_MOBILE,
 } from '@/lib/fleet-table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn, formatDate } from '@/lib/utils';
 
@@ -123,6 +138,7 @@ function rowAccentClass(status: VehicleReminderStatus) {
 
 export function VehicleRemindersPage() {
   const { t, i18n } = useTranslation();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const urgencyParam = searchParams.get('urgency');
@@ -143,9 +159,9 @@ export function VehicleRemindersPage() {
   const [vehicleFilter, setVehicleFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(0);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedRow, setSelectedRow] = useState<VehicleReminderRow | null>(null);
   const [watchlist, setWatchlist] = useState<Set<string>>(() => new Set());
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     setWatchlist(readWatchlist());
@@ -160,11 +176,16 @@ export function VehicleRemindersPage() {
         fetchActiveReminders(),
       ]);
       setVehicles(vehiclePage.data);
+      const baseRows = buildVehicleReminderRows(
+        vehiclePage.data,
+        rawReminders as unknown as Record<string, unknown>[],
+      );
+      const customRows = buildCustomVehicleReminderRows(
+        listCustomVehicleReminders(),
+        vehiclePage.data,
+      );
       setRows(
-        buildVehicleReminderRows(
-          vehiclePage.data,
-          rawReminders as unknown as Record<string, unknown>[],
-        ),
+        [...baseRows, ...customRows].sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
       );
     } catch (e) {
       setVehicles([]);
@@ -177,6 +198,12 @@ export function VehicleRemindersPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const reload = () => void load();
+    window.addEventListener('focus', reload);
+    return () => window.removeEventListener('focus', reload);
   }, [load]);
 
   useEffect(() => {
@@ -249,10 +276,15 @@ export function VehicleRemindersPage() {
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{t('vehicleReminders.title')}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="icon" aria-label={t('expenseHistory.moreActions')}>
-            <Ellipsis className="h-4 w-4" />
-          </Button>
-          <Button type="button" className="bg-blue-600 hover:bg-blue-700">
+          <VehicleReminderActionsMenu
+            onImport={() => setImportOpen(true)}
+            onExport={() => downloadVehicleRemindersCsv(filteredRows)}
+          />
+          <Button
+            type="button"
+            className={cn(BRAND_BTN_PRIMARY, 'w-full sm:w-auto')}
+            onClick={() => router.push('/reminders/vehicle/new')}
+          >
             <Plus className="mr-1.5 h-4 w-4" />
             {t('vehicleReminders.addReminder')}
           </Button>
@@ -417,68 +449,45 @@ export function VehicleRemindersPage() {
               ))}
             </div>
             <div className={cn(FLEET_LIST_DESKTOP, 'overflow-x-auto')}>
-              <table className={FLEET_RAW_TABLE}>
-                <thead className={FLEET_RAW_THEAD}>
-                  <tr>
-                    <th className={FLEET_RAW_TH_CHECKBOX}>
-                      <input type="checkbox" aria-label={t('expenseHistory.selectAll')} />
-                    </th>
-                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colVehicle')}</th>
-                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colRenewalType')}</th>
-                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colStatus')}</th>
-                    <th className={FLEET_RAW_TH}>{t('vehicleReminders.colDueDate')}</th>
-                    <th className={FLEET_RAW_TH}>{t('expenseHistory.colWatchers')}</th>
-                  </tr>
-                </thead>
-                <tbody className={FLEET_RAW_TBODY}>
+              <Table className={FLEET_TABLE}>
+                <TableHeader>
+                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleReminders.colVehicle')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleReminders.colRenewalType')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleReminders.colStatus')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleReminders.colDueDate')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={FLEET_TABLE_BODY}>
                   {pageRows.map((row) => {
-                    const badge = vehicleAbbreviation(row.vehicleBrand, row.vehicleModel, row.vehiclePlate);
+                    const vehicle = vehicles.find((item) => item.id === row.vehicleId);
                     const isSelected = selectedRow?.id === row.id;
                     return (
-                      <tr
+                      <TableRow
                         key={row.id}
                         className={cn(
-                          'cursor-pointer border-l-4 hover:bg-slate-50/80',
+                          FLEET_TABLE_ROW_CLICKABLE,
+                          'border-l-4',
                           rowAccentClass(row.status),
-                          isSelected && 'bg-blue-50/60',
+                          isSelected && 'bg-[#e8f0f8]/60',
                         )}
                         onClick={() => setSelectedRow(row)}
                       >
-                        <td className={FLEET_RAW_TD} onClick={(event) => event.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(row.id)}
-                            onChange={() =>
-                              setSelectedIds((current) => {
-                                const next = new Set(current);
-                                if (next.has(row.id)) next.delete(row.id);
-                                else next.add(row.id);
-                                return next;
-                              })
-                            }
+                        <TableCell className={FLEET_TABLE_CELL}>
+                          <VehiclePlateDisplay
+                            vehicleId={row.vehicleId}
+                            plate={row.vehiclePlate}
+                            photoUrl={vehicle?.photo_url ?? row.vehiclePhotoUrl}
+                            brand={row.vehicleBrand}
+                            model={row.vehicleModel}
+                            layout="inline"
+                            size="sm"
                           />
-                        </td>
-                        <td className={FLEET_RAW_TD}>
-                          <div className="flex items-center gap-2">
-                            {row.vehiclePhotoUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={row.vehiclePhotoUrl}
-                                alt=""
-                                className="h-8 w-8 rounded object-cover"
-                              />
-                            ) : (
-                              <span className="inline-flex h-8 w-8 items-center justify-center rounded bg-slate-100 text-[10px] font-bold uppercase text-slate-600">
-                                {badge}
-                              </span>
-                            )}
-                            <span className="font-semibold text-blue-700">{row.vehiclePlate}</span>
-                          </div>
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, 'font-medium text-slate-800')}>
+                        </TableCell>
+                        <TableCell className={cn(FLEET_TABLE_CELL, 'font-medium text-slate-800')}>
                           {t(`vehicleReminders.renewalType.${row.renewalKind}`)}
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, 'font-medium', statusClass(row.status))}>
+                        </TableCell>
+                        <TableCell className={cn(FLEET_TABLE_CELL, 'font-medium', statusClass(row.status))}>
                           <span className="inline-flex items-center gap-1.5">
                             <span
                               className={cn(
@@ -486,22 +495,21 @@ export function VehicleRemindersPage() {
                                 row.status === 'overdue' && 'bg-red-500',
                                 row.status === 'due_soon' && 'bg-orange-500',
                                 row.status === 'snoozed' && 'bg-slate-400',
-                                row.status === 'upcoming' && 'bg-slate-400',
+                                row.status === 'upcoming' && 'bg-[#1a4d7a]',
                               )}
                             />
                             {statusLabel(row.status, t)}
                           </span>
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, statusClass(row.status))}>
+                        </TableCell>
+                        <TableCell className={cn(FLEET_TABLE_CELL, statusClass(row.status))}>
                           <div>{formatDate(row.dueDate)}</div>
-                          <div className="text-[11px]">{formatRelativeDueDate(row.dueDate, i18n.language)}</div>
-                        </td>
-                        <td className={cn(FLEET_RAW_TD, 'text-slate-400')}>—</td>
-                      </tr>
+                          <div className="text-[12px]">{formatRelativeDueDate(row.dueDate, i18n.language)}</div>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             </>
           )}
@@ -520,6 +528,13 @@ export function VehicleRemindersPage() {
           </>
         ) : null}
       </div>
+
+      <VehicleReminderImportDialog
+        open={importOpen}
+        vehicles={vehicles}
+        onClose={() => setImportOpen(false)}
+        onImported={() => void load()}
+      />
     </div>
   );
 }

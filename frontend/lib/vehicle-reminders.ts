@@ -23,7 +23,8 @@ export interface VehicleReminderRow {
   dueSoonThresholdDays: number;
   notificationsActive: boolean;
   reminderId?: string;
-  source: 'vehicle' | 'reminder';
+  comment?: string;
+  source: 'vehicle' | 'reminder' | 'custom';
 }
 
 export const COMMON_VEHICLE_RENEWAL_TYPES: Array<{ kind: VehicleRenewalKind; label: string }> = [

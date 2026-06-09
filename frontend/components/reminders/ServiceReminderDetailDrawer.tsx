@@ -13,14 +13,15 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BRAND_BTN_PRIMARY, BRAND_LINK } from '@/lib/brand-colors';
 import { formatRelativeDueDate } from '@/lib/reminder-utils';
-import type { ServiceReminderRow } from '@/lib/service-reminders';
+import { serviceHistoryLogHref, type ServiceReminderRow } from '@/lib/service-reminders';
 import { vehicleAbbreviation } from '@/lib/timeline-utils';
 import { FLEET_SIDE_DRAWER } from '@/lib/fleet-table';
 import { cn, formatDate } from '@/lib/utils';
 
 function vehicleStatusDot(status: ServiceReminderRow['vehicleStatus']) {
-  if (status === 'active') return 'bg-blue-500';
+  if (status === 'active') return 'bg-[#1a4d7a]';
   if (status === 'maintenance') return 'bg-orange-500';
   if (status === 'broken') return 'bg-red-500';
   return 'bg-slate-400';
@@ -119,31 +120,19 @@ export function ServiceReminderDetailDrawer({
 
         <div className="mt-4 flex flex-wrap gap-2">
           {row.reminderId ? (
-            <Button type="button" className="bg-blue-600 hover:bg-blue-700" onClick={onResolve}>
+            <Button type="button" className={BRAND_BTN_PRIMARY} onClick={onResolve}>
               {t('reminders.resolve')}
               <ChevronDown className="ml-1 h-4 w-4" />
             </Button>
           ) : (
-            <Button type="button" className="bg-blue-600 hover:bg-blue-700" asChild>
-              <Link
-                href={
-                  row.serviceRecordId
-                    ? `/service-history/${row.serviceRecordId}`
-                    : `/service-history?vehicle_id=${row.vehicleId}`
-                }
-              >
+            <Button type="button" className={BRAND_BTN_PRIMARY} asChild>
+              <Link href={serviceHistoryLogHref(row)}>
                 {t('serviceReminders.logService')}
               </Link>
             </Button>
           )}
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link
-              href={
-                row.serviceRecordId
-                  ? `/service-history/${row.serviceRecordId}`
-                  : `/service-history?vehicle_id=${row.vehicleId}`
-              }
-            >
+            <Link href={serviceHistoryLogHref(row)}>
               <Pencil className="mr-1.5 h-3.5 w-3.5" />
               {t('serviceReminders.detail.edit')}
             </Link>
@@ -160,7 +149,7 @@ export function ServiceReminderDetailDrawer({
                 {badge}
               </span>
               <span className={cn('inline-block h-2 w-2 rounded-full', vehicleStatusDot(row.vehicleStatus))} />
-              <Link href={`/vehicles/${row.vehicleId}`} className="font-semibold text-blue-700 hover:underline">
+              <Link href={`/vehicles/${row.vehicleId}`} className={cn('font-semibold', BRAND_LINK)}>
                 {row.vehiclePlate}
               </Link>
               {row.vehicleMileageKm != null ? (
@@ -172,7 +161,7 @@ export function ServiceReminderDetailDrawer({
           </DetailField>
 
           <DetailField label={t('serviceReminders.colServiceTask')}>
-            <span className="font-medium text-blue-700">{row.serviceTask}</span>
+            <span className="font-medium text-[#1a4d7a]">{row.serviceTask}</span>
           </DetailField>
 
           <DetailField label={t('serviceReminders.colStatus')}>
