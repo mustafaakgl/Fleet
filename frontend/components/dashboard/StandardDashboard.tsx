@@ -122,11 +122,11 @@ export function StandardDashboard() {
     : [];
 
   return (
-    <div className="space-y-6 bg-white pb-6">
-      <div className="sticky top-0 z-20 -mx-1 flex items-center justify-between border-b border-slate-200 bg-white px-1 py-3">
-        <div className="flex items-center gap-3">
-          <TrendingUp className="w-6 h-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+    <div className="space-y-4 bg-white pb-4 sm:space-y-6 sm:pb-6">
+      <div className="sticky top-0 z-20 -mx-1 flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-1 py-2 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <TrendingUp className="h-5 w-5 shrink-0 text-blue-600 sm:h-6 sm:w-6" />
+          <h1 className="truncate text-lg font-bold text-gray-900 sm:text-2xl">{t('dashboard.title')}</h1>
         </div>
         <button
           type="button"
@@ -155,7 +155,7 @@ export function StandardDashboard() {
       <OnboardingTasksWidget />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.criticalAlerts')}</h2>
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.criticalAlerts')}</h2>
         {loading ? (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -172,12 +172,12 @@ export function StandardDashboard() {
                 href={alertHref(alert)}
                 className={`rounded-lg border px-4 py-3 text-sm shadow-sm transition hover:shadow ${alertClass(alert.priority)}`}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-2 font-medium">
-                    <AlertTriangle className="h-4 w-4" />
-                    {alert.message}
+                <div className="flex items-start justify-between gap-2 sm:items-center sm:gap-3">
+                  <span className="flex min-w-0 flex-1 items-start gap-2 font-medium sm:items-center">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
+                    <span className="break-words">{alert.message}</span>
                   </span>
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
                 </div>
               </Link>
             ))}
@@ -202,7 +202,7 @@ export function StandardDashboard() {
       <DailyEinsatzplanTable rows={summary?.todayOperations} loading={loading} />
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.kpiCards')}</h2>
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.kpiCards')}</h2>
         {loading ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 8 }).map((_, index) => (
@@ -228,12 +228,12 @@ export function StandardDashboard() {
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.tomorrowPlanning')}</h2>
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.tomorrowPlanning')}</h2>
         {loading ? (
           <Skeleton className="h-20" />
         ) : summary ? (
           <>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
               <StatCard label={t('dashboard.plannedDrivers')} value={String(summary.tomorrowPlanning.plannedDrivers)} />
               <StatCard label={t('dashboard.availableDrivers')} value={String(summary.tomorrowPlanning.availableDrivers)} />
               <StatCard label={t('dashboard.missingAssignments')} value={String(summary.tomorrowPlanning.missingAssignments)} />
@@ -261,7 +261,7 @@ export function StandardDashboard() {
                 </CardContent>
               </Card>
             )}
-            <Button asChild>
+            <Button asChild className="w-full sm:w-auto">
               <Link href="/assignments?panel=tagesplanung&view=daily-overview">
                 {t('dashboard.openEinsatzplan')}
               </Link>
@@ -271,7 +271,7 @@ export function StandardDashboard() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.vehicleHealth')}</h2>
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.vehicleHealth')}</h2>
         {loading ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <Skeleton className="h-20" />
@@ -300,7 +300,7 @@ export function StandardDashboard() {
 
       {showFinancials && summary?.revenueAnalytics && (
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.revenueAnalytics')}</h2>
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.revenueAnalytics')}</h2>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <RevenueCard title={t('dashboard.revToday')} value={currency(summary.revenueAnalytics.todayRevenue)} />
             <RevenueCard title={t('dashboard.revWeek')} value={currency(summary.revenueAnalytics.weeklyRevenue)} />
@@ -312,6 +312,7 @@ export function StandardDashboard() {
                 <CardTitle className="text-[13px]">{t('dashboard.revenueByCompany')}</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
+                <div className="overflow-x-auto">
                 <Table className={FLEET_TABLE}>
                   <TableHeader>
                     <TableRow className={FLEET_TABLE_HEADER_ROW}>
@@ -336,6 +337,7 @@ export function StandardDashboard() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -343,7 +345,7 @@ export function StandardDashboard() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.driverRiskOverview')}</h2>
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.driverRiskOverview')}</h2>
         <Card>
           <CardContent className="space-y-2 p-4">
             {loading ? (
@@ -359,13 +361,13 @@ export function StandardDashboard() {
                 <Link
                   key={r.driverId}
                   href={`/drivers/${r.driverId}`}
-                  className="flex cursor-pointer items-center justify-between rounded border border-slate-200 px-3 py-2 text-sm transition hover:bg-slate-50"
+                  className="flex cursor-pointer flex-col gap-2 rounded border border-slate-200 px-3 py-2.5 text-sm transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span className="font-medium text-slate-900">{r.driverName}</span>
-                  <span className="inline-flex items-center gap-2 font-semibold capitalize">
+                  <span className="min-w-0 font-medium text-slate-900">{r.driverName}</span>
+                  <span className="inline-flex flex-wrap items-center gap-2 font-semibold capitalize">
                     <span className={`h-2.5 w-2.5 rounded-full ${riskTone(r.riskLevel)}`} />
                     {r.riskLevel}
-                    <span className="text-xs text-gray-500 ml-2">({t('dashboard.accidents', { count: r.accidentCount })})</span>
+                    <span className="text-xs text-gray-500">({t('dashboard.accidents', { count: r.accidentCount })})</span>
                   </span>
                 </Link>
               ))
@@ -380,7 +382,7 @@ export function StandardDashboard() {
 function KpiCard({ item, onClick }: { item: KpiTile; onClick: () => void }) {
   const { t } = useTranslation();
   return (
-    <button type="button" className="text-left" onClick={onClick}>
+    <button type="button" className="w-full text-left" onClick={onClick}>
       <Card className="cursor-pointer rounded-lg shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
         <CardContent className="p-3">
           <p className="text-[11px] uppercase tracking-wide text-slate-500">{item.label}</p>

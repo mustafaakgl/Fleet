@@ -183,11 +183,11 @@ export function OfficeBriefingDashboard() {
     : [];
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-4 pb-6 sm:space-y-6 sm:pb-8">
       <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-blue-600">{t('office.briefing.eyebrow')}</p>
-          <h1 className="text-2xl font-bold text-slate-900">{t('office.briefing.title')}</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('office.briefing.title')}</h1>
           <p className="mt-1 text-sm text-slate-600">{todayLabel}</p>
           {openTaskCount !== null && openTaskCount > 0 ? (
             <Link
@@ -199,7 +199,7 @@ export function OfficeBriefingDashboard() {
             </Link>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {lastUpdated ? (
             <span className="text-xs text-slate-500">
               {t('office.briefing.updated', {
@@ -253,12 +253,12 @@ export function OfficeBriefingDashboard() {
                     href={alertHref(alert)}
                     className={`rounded-lg border px-4 py-3 text-sm shadow-sm transition hover:shadow ${alertClass(alert.priority)}`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="flex items-center gap-2 font-medium">
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                        {alert.message}
+                    <div className="flex items-start justify-between gap-2 sm:items-center sm:gap-3">
+                      <span className="flex min-w-0 flex-1 items-start gap-2 font-medium sm:items-center">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
+                        <span className="break-words">{alert.message}</span>
                       </span>
-                      <ChevronRight className="h-4 w-4 shrink-0" />
+                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
                     </div>
                   </Link>
                 ))}
@@ -276,10 +276,10 @@ export function OfficeBriefingDashboard() {
                 <Link
                   key={href}
                   href={href}
-                  className={`flex flex-col items-center gap-2 rounded-xl border p-3 text-center text-xs font-medium transition hover:shadow-sm ${color}`}
+                  className={`flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center text-[11px] font-medium leading-tight transition hover:shadow-sm sm:min-h-0 sm:gap-2 sm:p-3 sm:text-xs ${color}`}
                 >
-                  <Icon className="h-5 w-5" />
-                  {t(labelKey)}
+                  <Icon className="h-5 w-5 shrink-0" />
+                  <span className="line-clamp-2">{t(labelKey)}</span>
                 </Link>
               ))}
             </div>
@@ -302,7 +302,7 @@ export function OfficeBriefingDashboard() {
           />
 
           {!loading && summary ? (
-            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <section className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
               {officeKpis.map((kpi) => (
                 <button
                   key={kpi.id}
@@ -322,7 +322,7 @@ export function OfficeBriefingDashboard() {
           ) : null}
 
           <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-            <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.tomorrowPlanning')}</h2>
+            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.tomorrowPlanning')}</h2>
             {loading ? (
               <Skeleton className="h-16" />
             ) : summary ? (
@@ -340,7 +340,7 @@ export function OfficeBriefingDashboard() {
                     {t('dashboard.missingAssignments')}
                   </span>
                 </div>
-                <Button asChild>
+                <Button asChild className="w-full sm:w-auto">
                   <Link href={einsatzplanHref({ office: true, tab: 'morgen' })}>
                     {t('dashboard.openEinsatzplan')}
                   </Link>

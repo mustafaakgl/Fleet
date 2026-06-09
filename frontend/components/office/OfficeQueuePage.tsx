@@ -99,7 +99,7 @@ export function OfficeQueuePage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-medium text-blue-600">{t('office.queue.eyebrow')}</p>
-          <h1 className="text-2xl font-bold text-slate-900">{t('office.queue.title')}</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('office.queue.title')}</h1>
           <p className="mt-1 text-sm text-slate-600">{t('office.queue.subtitle')}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>

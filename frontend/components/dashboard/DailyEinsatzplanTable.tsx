@@ -30,6 +30,60 @@ function cell(value?: string | null) {
   return text ? text : '—';
 }
 
+function OperationMobileCard({
+  row,
+  onClick,
+}: {
+  row: DashboardTodayOperation;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation(['common', 'einsatzplan']);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full p-4 text-left transition-colors hover:bg-slate-50 active:bg-slate-100"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-slate-900">{row.driverName}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">
+            {row.vehiclePlate} · {row.companyName}
+          </p>
+        </div>
+        <Badge className={cn('shrink-0', statusColor(row.status))}>{row.status}</Badge>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+        <div>
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {t('planning.colStartTime', { ns: 'einsatzplan' })}
+          </dt>
+          <dd className="font-medium text-slate-700">{row.startTime}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {t('planning.colCargo', { ns: 'einsatzplan' })}
+          </dt>
+          <dd className="truncate font-medium text-slate-700">{cell(row.cargoName)}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {t('planning.colPickup', { ns: 'einsatzplan' })}
+          </dt>
+          <dd className="line-clamp-2 text-slate-600">{cell(row.pickupAddress)}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            {t('planning.colDelivery', { ns: 'einsatzplan' })}
+          </dt>
+          <dd className="line-clamp-2 text-slate-600">{cell(row.deliveryAddress)}</dd>
+        </div>
+      </dl>
+    </button>
+  );
+}
+
 export function DailyEinsatzplanTable({
   rows,
   loading,
@@ -48,11 +102,11 @@ export function DailyEinsatzplanTable({
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.dailyEinsatzplan')}</h2>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.dailyEinsatzplan')}</h2>
           <p className="text-sm text-slate-500">{t('dashboard.dailyEinsatzplanSub')}</p>
         </div>
-        <Button variant="outline" size="sm" asChild>
+        <Button variant="outline" size="sm" asChild className="w-full shrink-0 sm:w-auto">
           <Link href={einsatzplanLink}>{t('dashboard.openEinsatzplan')}</Link>
         </Button>
       </div>
@@ -76,7 +130,17 @@ export function DailyEinsatzplanTable({
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y divide-slate-100 md:hidden">
+            {rows.map((row) => (
+              <OperationMobileCard
+                key={row.id}
+                row={row}
+                onClick={() => router.push(einsatzplanLink)}
+              />
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <Table className={FLEET_TABLE}>
               <TableHeader>
                 <TableRow className={FLEET_TABLE_HEADER_ROW}>
@@ -145,6 +209,7 @@ export function DailyEinsatzplanTable({
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </Card>
     </section>

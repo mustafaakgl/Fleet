@@ -167,7 +167,7 @@ function EinsatzplanFullView() {
 
         <div className="p-4 sm:p-5">
           {activeTab === 'dashboard' && (
-            <div className="space-y-5">
+            <div className="space-y-4 sm:space-y-5">
               <div className={cn('flex flex-col gap-3 rounded-lg border border-slate-200 p-5 text-white shadow-sm lg:flex-row lg:items-center lg:justify-between', BRAND_HERO)}>
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-blue-100">Fleet ERP</p>

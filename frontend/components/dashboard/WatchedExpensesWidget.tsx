@@ -61,8 +61,8 @@ export function WatchedExpensesWidget() {
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.watchedExpenses.title')}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.watchedExpenses.title')}</h2>
         {watchedIds.length > 0 ? (
           <Link
             href="/service-history?watched=1"

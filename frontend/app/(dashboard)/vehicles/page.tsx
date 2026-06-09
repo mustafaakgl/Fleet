@@ -120,24 +120,24 @@ export default function VehiclesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Truck className="w-6 h-6 text-purple-600" />
-          <h1 className="text-2xl font-bold text-gray-900">{t('vehicles.title')}</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <Truck className="h-5 w-5 shrink-0 text-purple-600 sm:h-6 sm:w-6" />
+          <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{t('vehicles.title')}</h1>
           {!loading && (
-            <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">{total}</span>
+            <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm text-gray-500">{total}</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <VehicleActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
             onExport={() => void handleExport()}
           />
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link href="/vehicles/new">
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="mr-2 h-4 w-4" />
               {t('vehicles.addVehicle')}
             </Link>
           </Button>

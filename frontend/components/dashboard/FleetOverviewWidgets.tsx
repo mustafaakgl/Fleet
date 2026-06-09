@@ -77,7 +77,7 @@ function SplitMetricBlock({ left, right }: { left: SplitMetric; right: SplitMetr
         >
           <span
             className={cn(
-              'text-3xl font-semibold leading-none transition group-hover:underline',
+              'text-2xl font-semibold leading-none transition group-hover:underline sm:text-3xl',
               METRIC_TONE_CLASS[metric.tone],
             )}
           >
@@ -276,7 +276,7 @@ export function FleetOverviewWidgets({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.fleetOverview')}</h2>
+      <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.fleetOverview')}</h2>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {loading
           ? Array.from({ length: skeletonCount }).map((_, index) => (

@@ -62,7 +62,11 @@ import {
   FLEET_RAW_TH,
   FLEET_RAW_TH_CHECKBOX,
   FLEET_RAW_THEAD,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
+  FLEET_TABLE_SCROLL,
 } from '@/lib/fleet-table';
+import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
@@ -405,7 +409,7 @@ export function ExpenseHistoryPage() {
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900">{t('serviceHistory.title')}</h1>
+            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('serviceHistory.title')}</h1>
           </div>
         </div>
 
@@ -578,7 +582,28 @@ export function ExpenseHistoryPage() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className={FLEET_LIST_MOBILE}>
+            {pageRecords.map((row) => {
+              const tasks = formatServiceTasks(row.service_type);
+              const taskList = parseServiceRecordTasks(row);
+              const primaryTask = taskList[0] ?? tasks.primary;
+              return (
+                <MobileDataCard
+                  key={row.id}
+                  title={row.vehicle_plate}
+                  subtitle={formatCompletionDateTime(row.date, i18n.language)}
+                  onClick={() => openEntry(row.id)}
+                >
+                  <MobileFieldGrid>
+                    <MobileField label={t('serviceHistory.create.lineItemTask')} value={primaryTask} />
+                    <MobileField label={t('serviceHistory.create.cost')} value={formatAmount(row.cost_amount, i18n.language)} />
+                  </MobileFieldGrid>
+                </MobileDataCard>
+              );
+            })}
+          </div>
+          <div className={cn(FLEET_LIST_DESKTOP, FLEET_TABLE_SCROLL)}>
             <table className={FLEET_RAW_TABLE}>
               <thead className={FLEET_RAW_THEAD}>
                 <tr>
@@ -814,6 +839,7 @@ export function ExpenseHistoryPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

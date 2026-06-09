@@ -136,7 +136,7 @@ export default function NewAssignmentPage() {
 
       <div className="flex items-center gap-3">
         <CalendarDays className="w-6 h-6 text-green-600" />
-        <h1 className="text-2xl font-bold text-gray-900">{t('assignmentForm.title')}</h1>
+        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('assignmentForm.title')}</h1>
       </div>
 
       {refsError && (
@@ -145,7 +145,7 @@ export default function NewAssignmentPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('assignmentForm.details')}</CardTitle>

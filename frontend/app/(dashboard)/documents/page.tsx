@@ -30,6 +30,8 @@ import { documentHasFile, openAuthenticatedDocument } from '@/lib/file-access';
 import {
   FLEET_LINK_ACTION,
   FLEET_LIST_CARD,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
   FLEET_TABLE,
   FLEET_TABLE_BODY,
   FLEET_TABLE_CELL,
@@ -38,6 +40,7 @@ import {
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
+import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn, formatDate } from '@/lib/utils';
 
 const OWNER_TYPES: Array<Document['ownerType']> = [
@@ -356,10 +359,10 @@ export default function DocumentsPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <FileText className="h-6 w-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">{t('documents.title')}</h1>
+          <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('documents.title')}</h1>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <DocumentActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
@@ -453,7 +456,42 @@ export default function DocumentsPage() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className={FLEET_LIST_MOBILE}>
+            {filtered.map((entry) => {
+              if (entry.kind === 'missing') {
+                return (
+                  <MobileDataCard
+                    key={`missing-${entry.row.owner_type}-${entry.row.owner_id}-${entry.row.document_type}`}
+                    title={entry.row.document_type}
+                    subtitle={`${entry.row.owner_type} · ${entry.row.owner_name}`}
+                    badge={<Badge className={badgeClass('missing')}>missing</Badge>}
+                    actions={
+                      <button type="button" className={FLEET_LINK_ACTION} onClick={() => openForm('add', undefined, entry.row)}>
+                        Upload
+                      </button>
+                    }
+                  />
+                );
+              }
+              const doc = entry.doc;
+              return (
+                <MobileDataCard
+                  key={doc.id}
+                  title={doc.documentType}
+                  subtitle={`${doc.ownerType} · ${ownerName(doc.ownerType, doc.ownerId)}`}
+                  badge={<Badge className={badgeClass(doc.status)}>{doc.status}</Badge>}
+                  onClick={() => void openDocument(doc)}
+                >
+                  <MobileFieldGrid>
+                    <MobileField label={t('documents.fileName')} value={doc.fileName} />
+                    <MobileField label={t('documents.expiryDate')} value={formatDate(doc.expiryDate)} />
+                  </MobileFieldGrid>
+                </MobileDataCard>
+              );
+            })}
+          </div>
+          <div className={cn(FLEET_LIST_DESKTOP, FLEET_TABLE_SCROLL)}>
             <Table className={FLEET_TABLE}>
               <TableHeader>
                 <TableRow className={FLEET_TABLE_HEADER_ROW}>
@@ -549,6 +587,7 @@ export default function DocumentsPage() {
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </Card>
 

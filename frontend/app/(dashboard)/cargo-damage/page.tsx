@@ -12,6 +12,8 @@ import { accidentsApi, documentsApi } from '@/lib/api';
 import type { Document } from '@/lib/types';
 import {
   FLEET_LIST_CARD,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
   FLEET_TABLE,
   FLEET_TABLE_BODY,
   FLEET_TABLE_CELL,
@@ -21,7 +23,8 @@ import {
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW,
 } from '@/lib/fleet-table';
-import { formatDate } from '@/lib/utils';
+import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
+import { cn, formatDate } from '@/lib/utils';
 
 type IncidentStatus = 'reported' | 'under_review' | 'resolved' | 'rejected';
 
@@ -128,10 +131,10 @@ export default function CargoDamagePage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex items-center gap-3">
         <PackageX className="h-6 w-6 text-rose-600" />
-        <h1 className="text-2xl font-bold text-gray-900">{t('cargoDamage.title')}</h1>
+        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('cargoDamage.title')}</h1>
         {!loading && !error && (
           <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">
             {visibleReports.length}
@@ -161,7 +164,28 @@ export default function CargoDamagePage() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className={FLEET_LIST_MOBILE}>
+            {visibleReports.map((r) => (
+              <MobileDataCard
+                key={r.id}
+                title={r.cargoName ?? t('cargoDamage.colCargoName')}
+                subtitle={`${r.driver ? `${r.driver.firstName} ${r.driver.lastName}` : '—'} · ${formatDate(r.incidentDateTime)}`}
+                badge={
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(r.status)}`}>
+                    {t(`cargoDamage.status.${r.status}`)}
+                  </span>
+                }
+                onClick={() => setSelectedId(r.id)}
+              >
+                <MobileFieldGrid>
+                  <MobileField label={t('cargoDamage.colCompany')} value={r.company?.name ?? '—'} />
+                  <MobileField label={t('cargoDamage.colDamageValue')} value={currency(r.damageValue)} />
+                </MobileFieldGrid>
+              </MobileDataCard>
+            ))}
+          </div>
+          <div className={cn(FLEET_LIST_DESKTOP, 'overflow-x-auto')}>
             <Table className={FLEET_TABLE}>
               <TableHeader>
                 <TableRow className={FLEET_TABLE_HEADER_ROW}>
@@ -235,6 +259,7 @@ export default function CargoDamagePage() {
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </Card>
 

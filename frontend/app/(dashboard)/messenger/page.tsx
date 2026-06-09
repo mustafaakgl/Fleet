@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare, Plus, Search, Send, UserRound } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Plus, Search, Send, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { authApi, driversApi, messengerApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
+import { cn } from '@/lib/utils';
 import type {
   ConversationDetail,
   ConversationListItem,
@@ -374,16 +375,16 @@ export default function MessengerPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <MessageSquare className="h-6 w-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">{t('messenger.title')}</h1>
-          <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <MessageSquare className="h-5 w-5 shrink-0 text-blue-600 sm:h-6 sm:w-6" />
+          <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{t('messenger.title')}</h1>
+          <span className="shrink-0 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
             {t('messenger.unread', { count: unreadCount.total })}
           </span>
         </div>
         {canCreateConversation && (
-          <Button onClick={() => setNewConversationOpen(true)}>
+          <Button className="w-full sm:w-auto" onClick={() => setNewConversationOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             {t('messenger.newConversation')}
           </Button>
@@ -397,7 +398,7 @@ export default function MessengerPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_1fr]">
-        <Card className="min-h-[620px]">
+        <Card className={cn('min-h-[420px] sm:min-h-[520px] xl:min-h-[620px]', selectedConversationId && 'hidden xl:flex xl:flex-col')}>
           <CardHeader className="space-y-3">
             <CardTitle className="text-base">{t('messenger.conversations')}</CardTitle>
             <div className="relative">
@@ -467,7 +468,7 @@ export default function MessengerPage() {
           </CardContent>
         </Card>
 
-        <Card className="min-h-[620px]">
+        <Card className={cn('min-h-[420px] sm:min-h-[520px] xl:min-h-[620px]', !selectedConversationId && 'hidden xl:flex xl:flex-col')}>
           {!selectedConversationId ? (
             <CardContent className="p-6">
               <EmptyState
@@ -485,7 +486,18 @@ export default function MessengerPage() {
           ) : selectedConversation ? (
             <>
               <CardHeader className="border-b border-gray-100">
-                <CardTitle className="text-base">{conversationTitle(selectedConversation)}</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 xl:hidden"
+                    onClick={() => setSelectedConversationId(null)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <CardTitle className="min-w-0 truncate text-base">{conversationTitle(selectedConversation)}</CardTitle>
+                </div>
                 <p className="text-xs text-gray-500">
                   {t('messenger.participants')}{' '}
                   {selectedConversation.participants
@@ -494,7 +506,7 @@ export default function MessengerPage() {
                 </p>
               </CardHeader>
 
-              <CardContent className="flex h-[520px] flex-col gap-3 p-4">
+              <CardContent className="flex h-[min(520px,calc(100dvh-16rem))] flex-col gap-3 p-4 sm:h-[520px]">
                 <div className="flex-1 space-y-2 overflow-y-auto rounded-md border border-gray-100 bg-gray-50 p-3">
                   {messages.length === 0 ? (
                     <p className="text-sm text-gray-500">{t('messenger.noMessages')}</p>

@@ -52,3 +52,43 @@ export const FLEET_RAW_TD_MUTED =
 
 export const FLEET_LINK_ACTION =
   'text-[13px] font-medium text-blue-600 hover:underline';
+
+/** Responsive layout tokens */
+
+export const FLEET_PAGE = 'space-y-4 sm:space-y-6';
+
+export const FLEET_PAGE_TITLE = 'text-xl font-bold text-gray-900 sm:text-2xl';
+
+export const FLEET_PAGE_HEADER =
+  'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between';
+
+export const FLEET_PAGE_HEADER_TITLE =
+  'flex min-w-0 items-center gap-2 sm:gap-3';
+
+export const FLEET_PAGE_HEADER_ACTIONS =
+  'flex flex-wrap items-center gap-2';
+
+export const FLEET_TOOLBAR = 'flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center';
+
+export const FLEET_TAB_BAR =
+  'flex gap-4 overflow-x-auto border-b border-slate-200 scrollbar-thin';
+
+export const FLEET_TAB_ITEM =
+  'shrink-0 -mb-px border-b-2 px-1 py-3 text-sm font-semibold transition-colors';
+
+export const FLEET_TABLE_SCROLL = 'overflow-x-auto';
+
+export const FLEET_LIST_MOBILE = 'space-y-3 p-3 md:hidden';
+
+export const FLEET_LIST_DESKTOP = 'hidden md:block';
+
+export const FLEET_MOBILE_CARD =
+  'cursor-pointer rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:bg-slate-50 active:bg-slate-100';
+
+export const FLEET_SIDE_DRAWER =
+  'fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl lg:static lg:z-auto lg:sticky lg:top-4 lg:h-[calc(100vh-6rem)] lg:max-w-md lg:shrink-0';
+
+export const FLEET_SIDE_DRAWER_OVERLAY = 'fixed inset-0 z-40 bg-black/30 lg:hidden';
+
+export const FLEET_SPLIT_PANEL =
+  'relative flex min-h-[420px] flex-col overflow-hidden rounded-b-xl bg-white lg:flex-row';

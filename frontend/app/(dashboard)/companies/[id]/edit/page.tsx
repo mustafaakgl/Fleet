@@ -143,10 +143,10 @@ export default function EditCompanyPage({ params }: { params: Promise<{ id: stri
 
       <div className="flex items-center gap-3">
         <Pencil className="w-6 h-6 text-blue-600" />
-        <h1 className="text-2xl font-bold text-gray-900">{t('form.editCompany')}</h1>
+        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('form.editCompany')}</h1>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('form.companyInfo')}</CardTitle>

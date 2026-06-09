@@ -99,7 +99,7 @@ export function RequestsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{typeFilter ? t('requests.titleAccidents') : t('requests.titleRequests')}</h1>
+        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{typeFilter ? t('requests.titleAccidents') : t('requests.titleRequests')}</h1>
         <p className="mt-1 text-sm text-slate-600">{t('requests.subtitle')}</p>
       </div>
 

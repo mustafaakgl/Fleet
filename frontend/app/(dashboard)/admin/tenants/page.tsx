@@ -113,14 +113,14 @@ export default function AdminTenantsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div className="mx-auto max-w-5xl space-y-4 sm:space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-blue-100 p-3">
             <Building2 className="h-6 w-6 text-blue-700" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{t('fleetOps.title')}</h1>
+            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('fleetOps.title')}</h1>
             <p className="mt-1 text-sm text-slate-600">{t('fleetOps.subtitle')}</p>
           </div>
         </div>

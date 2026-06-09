@@ -42,7 +42,14 @@ import {
   FLEET_RAW_TH,
   FLEET_RAW_TH_CHECKBOX,
   FLEET_RAW_THEAD,
+  FLEET_SIDE_DRAWER_OVERLAY,
+  FLEET_SPLIT_PANEL,
+  FLEET_TAB_BAR,
+  FLEET_TAB_ITEM,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
 } from '@/lib/fleet-table';
+import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn, formatDate } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
@@ -249,14 +256,14 @@ export function ContactRemindersPage() {
         </div>
       </div>
 
-      <div className="flex gap-6 border-b border-slate-200">
+      <div className={FLEET_TAB_BAR}>
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
             className={cn(
-              '-mb-px border-b-2 px-1 py-3 text-sm font-semibold transition-colors',
+              FLEET_TAB_ITEM,
               tab === item.id
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-700',
@@ -363,7 +370,7 @@ export function ContactRemindersPage() {
         </div>
       </div>
 
-      <div className="flex min-h-[420px] overflow-hidden rounded-b-xl bg-white">
+      <div className={FLEET_SPLIT_PANEL}>
         <div className="min-w-0 flex-1">
           {loading ? (
             <div className="space-y-2 p-4">
@@ -390,7 +397,23 @@ export function ContactRemindersPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className={cn(FLEET_LIST_MOBILE, 'p-3')}>
+              {pageRows.map((row) => (
+                <MobileDataCard
+                  key={row.id}
+                  title={row.contactName}
+                  subtitle={t(`contactReminders.renewalType.${row.renewalKind}`)}
+                  badge={<span className={cn('text-xs font-medium', statusClass(row.status))}>{statusLabel(row.status, t)}</span>}
+                  onClick={() => setSelectedRow(row)}
+                >
+                  <MobileFieldGrid>
+                    <MobileField label={t('contactReminders.colDueDate')} value={formatRelativeDueDate(row.dueDate, i18n.language)} />
+                  </MobileFieldGrid>
+                </MobileDataCard>
+              ))}
+            </div>
+            <div className={cn(FLEET_LIST_DESKTOP, 'overflow-x-auto')}>
               <table className={FLEET_RAW_TABLE}>
                 <thead className={FLEET_RAW_THEAD}>
                   <tr>
@@ -478,10 +501,13 @@ export function ContactRemindersPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
 
         {selectedRow ? (
+          <>
+          <div className={FLEET_SIDE_DRAWER_OVERLAY} onClick={() => setSelectedRow(null)} aria-hidden />
           <ContactReminderDetailDrawer
             row={selectedRow}
             watched={watchlist.has(selectedRow.id)}
@@ -489,6 +515,7 @@ export function ContactRemindersPage() {
             onToggleWatch={() => toggleWatch(selectedRow.id)}
             onResolve={() => void handleResolve(selectedRow)}
           />
+          </>
         ) : null}
       </div>
     </div>

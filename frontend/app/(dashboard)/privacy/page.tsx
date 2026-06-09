@@ -49,13 +49,13 @@ export default function PrivacyPage() {
   }, [t]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 pb-10">
+    <div className="mx-auto max-w-5xl space-y-4 pb-8 sm:space-y-6 sm:pb-10">
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-blue-100 p-3">
           <Shield className="h-6 w-6 text-blue-700" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('privacy.title')}</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('privacy.title')}</h1>
           <p className="mt-1 text-sm text-slate-600">{t('privacy.subtitle')}</p>
         </div>
       </div>

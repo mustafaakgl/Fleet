@@ -130,10 +130,10 @@ export function RepairPriorityTrendsChartClient({
       </CardHeader>
       <CardContent className="px-2 pb-4 pt-0">
         {!hasData ? (
-          <p className="flex h-72 items-center justify-center text-sm text-slate-500">—</p>
+          <p className="flex h-64 items-center justify-center text-sm text-slate-500 sm:h-72">—</p>
         ) : (
           <>
-            <div className="h-72">
+            <div className="h-64 sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={trends}
@@ -176,8 +176,10 @@ export function RepairPriorityTrendsChartClient({
                       strokeWidth={2}
                       dot={(props) => {
                         const dotProps = props as ClickableDotProps;
+                        const dotKey = `${series.key}-${dotProps.index ?? dotProps.payload?.label ?? 'dot'}`;
                         return (
                           <ClickableDot
+                            key={dotKey}
                             cx={dotProps.cx}
                             cy={dotProps.cy}
                             index={dotProps.index}

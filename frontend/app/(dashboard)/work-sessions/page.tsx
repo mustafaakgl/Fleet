@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/table';
 import {
   FLEET_LIST_CARD,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
   FLEET_TABLE,
   FLEET_TABLE_BODY,
   FLEET_TABLE_CELL,
@@ -27,6 +29,7 @@ import {
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW,
 } from '@/lib/fleet-table';
+import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn } from '@/lib/utils';
 
 function formatDateTime(value?: string | null) {
@@ -156,10 +159,10 @@ export default function WorkSessionsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('workSessions.title')}</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('workSessions.title')}</h1>
           <p className="mt-1 text-sm text-slate-600">{t('workSessions.subtitle')}</p>
         </div>
         <Button onClick={() => void handleExport()} disabled={exporting || rows.length === 0}>
@@ -250,6 +253,33 @@ export default function WorkSessionsPage() {
               {t('common.loading')}
             </div>
           ) : (
+            <>
+            <div className={FLEET_LIST_MOBILE}>
+              {rows.map((row) => {
+                const minutes = durationMinutes(row.startedAt, row.endedAt);
+                const driverName = row.driver
+                  ? `${row.driver.firstName} ${row.driver.lastName}`.trim()
+                  : row.driverId;
+                return (
+                  <MobileDataCard
+                    key={row.id}
+                    title={driverName}
+                    subtitle={formatDateTime(row.startedAt)}
+                    badge={
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                        {t(`workSessions.status.${row.status}`)}
+                      </span>
+                    }
+                  >
+                    <MobileFieldGrid>
+                      <MobileField label={t('workSessions.col.duration')} value={row.status === 'active' ? t('workSessions.status.active') : formatDuration(minutes)} />
+                      <MobileField label={t('workSessions.col.ended')} value={formatDateTime(row.endedAt)} />
+                    </MobileFieldGrid>
+                  </MobileDataCard>
+                );
+              })}
+            </div>
+            <div className={FLEET_LIST_DESKTOP}>
             <Table className={FLEET_TABLE}>
               <TableHeader>
                 <TableRow className={FLEET_TABLE_HEADER_ROW}>
@@ -292,6 +322,8 @@ export default function WorkSessionsPage() {
                 )}
               </TableBody>
             </Table>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>

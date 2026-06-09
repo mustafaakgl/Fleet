@@ -115,9 +115,9 @@ export default function BillingPage() {
   const sub = status?.subscription;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div className="mx-auto max-w-5xl space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t('billing.title')}</h1>
+        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('billing.title')}</h1>
         <p className="text-sm text-slate-600">{t('billing.subtitle')}</p>
       </div>
 

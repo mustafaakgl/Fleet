@@ -52,7 +52,7 @@ export default function HilfePage() {
           <CircleHelp className="h-6 w-6 text-blue-700" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('help.title')}</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('help.title')}</h1>
           <p className="mt-1 text-sm text-slate-600">{t('help.subtitle')}</p>
         </div>
       </div>

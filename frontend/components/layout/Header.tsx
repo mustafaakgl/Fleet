@@ -19,7 +19,7 @@ export function Header({ title }: HeaderProps) {
   const { t } = useTranslation();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-6 bg-white border-b border-gray-200 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 sm:h-16 sm:px-6 lg:px-8">
       {/* Left: title or search */}
       <div className="flex items-center gap-4">
         {title && (

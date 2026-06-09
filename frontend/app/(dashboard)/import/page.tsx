@@ -124,9 +124,9 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <div className="mx-auto max-w-4xl space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t('import.title')}</h1>
+        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('import.title')}</h1>
         <p className="text-sm text-slate-600">{t('import.subtitle')}</p>
       </div>
 

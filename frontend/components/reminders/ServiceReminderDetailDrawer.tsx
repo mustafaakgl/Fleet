@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { formatRelativeDueDate } from '@/lib/reminder-utils';
 import type { ServiceReminderRow } from '@/lib/service-reminders';
 import { vehicleAbbreviation } from '@/lib/timeline-utils';
+import { FLEET_SIDE_DRAWER } from '@/lib/fleet-table';
 import { cn, formatDate } from '@/lib/utils';
 
 function vehicleStatusDot(status: ServiceReminderRow['vehicleStatus']) {
@@ -85,7 +86,7 @@ export function ServiceReminderDetailDrawer({
   const badge = vehicleAbbreviation(row.vehicleBrand, row.vehicleModel, row.vehiclePlate);
 
   return (
-    <aside className="flex h-[calc(100vh-8rem)] w-full max-w-md shrink-0 flex-col border-l border-slate-200 bg-white shadow-xl lg:sticky lg:top-4 lg:h-[calc(100vh-6rem)]">
+    <aside className={cn(FLEET_SIDE_DRAWER, 'h-[calc(100vh-4rem)] lg:h-[calc(100vh-6rem)]')}>
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <p className="text-sm font-medium text-slate-600">
           {t('serviceReminders.detail.title', { id: displayNumber(row) })}

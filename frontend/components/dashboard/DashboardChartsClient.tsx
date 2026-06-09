@@ -106,7 +106,7 @@ function FilterableChartCard({
         <CardTitle className="text-sm font-semibold text-slate-900">{title}</CardTitle>
         <PeriodToggle period={period} onChange={onPeriodChange} />
       </CardHeader>
-      <CardContent className="h-72 pt-0">
+      <CardContent className="h-64 pt-0 sm:h-72">
         {chartData.every((row) => row.value === 0) ? (
           <p className="flex h-full items-center justify-center text-sm text-slate-500">—</p>
         ) : (
@@ -151,7 +151,7 @@ export function DashboardChartsClient({ analytics }: { analytics: DashboardChart
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.chartsTitle')}</h2>
+      <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.chartsTitle')}</h2>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <FilterableChartCard
           title={t('dashboard.chartRevenue')}

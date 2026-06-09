@@ -274,7 +274,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                 <User className="h-7 w-7 text-blue-600" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+                <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
                   {fullName(driver.first_name, driver.last_name)}
                 </h1>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">

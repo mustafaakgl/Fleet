@@ -24,6 +24,11 @@ import {
   FLEET_FILTER_SELECT,
   FLEET_LINK_ACTION,
   FLEET_LIST_CARD,
+  FLEET_PAGE,
+  FLEET_PAGE_HEADER,
+  FLEET_PAGE_HEADER_ACTIONS,
+  FLEET_PAGE_HEADER_TITLE,
+  FLEET_PAGE_TITLE,
   FLEET_TABLE,
   FLEET_TABLE_BODY,
   FLEET_TABLE_CELL,
@@ -112,24 +117,24 @@ export default function DriversPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Users className="w-6 h-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">{t('drivers.title')}</h1>
+    <div className={FLEET_PAGE}>
+      <div className={FLEET_PAGE_HEADER}>
+        <div className={FLEET_PAGE_HEADER_TITLE}>
+          <Users className="h-5 w-5 shrink-0 text-blue-600 sm:h-6 sm:w-6" />
+          <h1 className={FLEET_PAGE_TITLE}>{t('drivers.title')}</h1>
           {!loading && (
-            <span className="text-sm text-gray-500 bg-gray-100 rounded-full px-2.5 py-0.5">{total}</span>
+            <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm text-gray-500">{total}</span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className={FLEET_PAGE_HEADER_ACTIONS}>
           <DriverActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
             onExport={() => void handleExport()}
           />
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link href="/drivers/new">
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="mr-2 h-4 w-4" />
               {t('drivers.addDriver')}
             </Link>
           </Button>

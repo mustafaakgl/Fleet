@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/table';
 import {
   FLEET_LIST_CARD,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
   FLEET_TABLE,
   FLEET_TABLE_BODY,
   FLEET_TABLE_CELL,
@@ -26,6 +28,7 @@ import {
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW,
 } from '@/lib/fleet-table';
+import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn, formatDate } from '@/lib/utils';
 
 export default function AuditPage() {
@@ -86,7 +89,7 @@ export default function AuditPage() {
   const totalPages = result?.pages ?? 1;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">{t('audit.title')}</h1>
@@ -140,7 +143,23 @@ export default function AuditPage() {
           ) : !result || result.data.length === 0 ? (
             <p className="px-6 py-8 text-sm text-gray-500">{t('audit.empty')}</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className={FLEET_LIST_MOBILE}>
+              {result.data.map((row) => (
+                <MobileDataCard
+                  key={row.id}
+                  title={row.action}
+                  subtitle={formatDate(row.createdAt)}
+                  badge={<span className="text-xs text-slate-500">{row.entityType}</span>}
+                >
+                  <MobileFieldGrid>
+                    <MobileField label={t('audit.colActor')} value={row.actorUser?.fullName ?? '—'} />
+                    <MobileField label={t('audit.colSummary')} value={row.summary ?? '—'} />
+                  </MobileFieldGrid>
+                </MobileDataCard>
+              ))}
+            </div>
+            <div className={cn(FLEET_LIST_DESKTOP, 'overflow-x-auto')}>
               <Table className={FLEET_TABLE}>
                 <TableHeader>
                   <TableRow className={FLEET_TABLE_HEADER_ROW}>
@@ -174,6 +193,7 @@ export default function AuditPage() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

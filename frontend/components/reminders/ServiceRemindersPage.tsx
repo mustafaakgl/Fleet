@@ -42,7 +42,14 @@ import {
   FLEET_RAW_TH,
   FLEET_RAW_TH_CHECKBOX,
   FLEET_RAW_THEAD,
+  FLEET_SIDE_DRAWER_OVERLAY,
+  FLEET_SPLIT_PANEL,
+  FLEET_TAB_BAR,
+  FLEET_TAB_ITEM,
+  FLEET_LIST_DESKTOP,
+  FLEET_LIST_MOBILE,
 } from '@/lib/fleet-table';
+import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn, formatDate } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
@@ -243,7 +250,7 @@ export function ServiceRemindersPage() {
   return (
     <div className="space-y-0">
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">{t('serviceReminders.title')}</h1>
+        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('serviceReminders.title')}</h1>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline">
             <Sparkles className="h-4 w-4" />
@@ -259,14 +266,14 @@ export function ServiceRemindersPage() {
         </div>
       </div>
 
-      <div className="flex gap-6 border-b border-slate-200">
+      <div className={FLEET_TAB_BAR}>
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
             className={cn(
-              '-mb-px border-b-2 px-1 py-3 text-sm font-semibold transition-colors',
+              FLEET_TAB_ITEM,
               tab === item.id
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-500 hover:text-slate-700',
@@ -370,7 +377,7 @@ export function ServiceRemindersPage() {
         />
       </div>
 
-      <div className="flex min-h-[420px] overflow-hidden rounded-b-xl bg-white">
+      <div className={FLEET_SPLIT_PANEL}>
         <div className="min-w-0 flex-1">
           {loading ? (
             <div className="space-y-2 p-4">
@@ -397,7 +404,24 @@ export function ServiceRemindersPage() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className={cn(FLEET_LIST_MOBILE, 'p-3')}>
+              {pageRows.map((row) => (
+                <MobileDataCard
+                  key={row.id}
+                  title={row.vehiclePlate}
+                  subtitle={row.serviceTask}
+                  badge={<span className={cn('text-xs font-medium', statusClass(row.status))}>{statusLabel(row.status, t)}</span>}
+                  onClick={() => setSelectedRow(row)}
+                >
+                  <MobileFieldGrid>
+                    <MobileField label={t('serviceReminders.colNextDue')} value={formatRelativeDueDate(row.nextDueDate, i18n.language)} />
+                    <MobileField label={t('serviceReminders.colCompliance')} value={`${row.compliancePercent}%`} />
+                  </MobileFieldGrid>
+                </MobileDataCard>
+              ))}
+            </div>
+            <div className={cn(FLEET_LIST_DESKTOP, 'overflow-x-auto')}>
               <table className={FLEET_RAW_TABLE}>
                 <thead className={FLEET_RAW_THEAD}>
                   <tr>
@@ -520,10 +544,13 @@ export function ServiceRemindersPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
 
         {selectedRow ? (
+          <>
+          <div className={FLEET_SIDE_DRAWER_OVERLAY} onClick={() => setSelectedRow(null)} aria-hidden />
           <ServiceReminderDetailDrawer
             row={selectedRow}
             watched={watchlist.has(selectedRow.id)}
@@ -531,6 +558,7 @@ export function ServiceRemindersPage() {
             onToggleWatch={() => toggleWatch(selectedRow.id)}
             onResolve={() => void handleResolve(selectedRow)}
           />
+          </>
         ) : null}
       </div>
     </div>

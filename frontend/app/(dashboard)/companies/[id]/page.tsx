@@ -227,7 +227,7 @@ export default function CompanyProfilePage({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-blue-600" />
-                <h1 className="text-2xl font-bold text-gray-900">{company.name}</h1>
+                <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{company.name}</h1>
               </div>
               <p className="text-sm text-gray-600">
                 {company.contact_person || '-'} | {company.email ?? '-'} | {company.phone ?? '-'}

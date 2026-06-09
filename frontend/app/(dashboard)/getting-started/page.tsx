@@ -244,13 +244,13 @@ export default function GettingStartedPage() {
   const masterDataComplete = STEP_CONFIG.every((config) => stepStatusById.get(config.id));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
       <div className="flex items-start gap-3">
         <div className="rounded-lg bg-blue-100 p-3">
           <Rocket className="h-6 w-6 text-blue-700" />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">{t('gettingStarted.title')}</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('gettingStarted.title')}</h1>
           <p className="mt-1 text-sm text-slate-600">{t('gettingStarted.subtitle')}</p>
           <p className="mt-2 text-sm text-slate-500">{t('gettingStarted.intro')}</p>
           <div className="mt-4">

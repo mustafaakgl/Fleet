@@ -141,7 +141,7 @@ export function LiveTrackingPage() {
         <div className="flex items-center gap-3">
           <MapPinned className="h-6 w-6 text-emerald-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{t('nav.liveTracking')}</h1>
+            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('nav.liveTracking')}</h1>
             <p className="text-sm text-slate-500">
               {lastFetchedAt
                 ? `Updated ${new Intl.DateTimeFormat(undefined, {

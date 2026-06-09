@@ -79,10 +79,10 @@ export default function NewVehiclePage() {
 
       <div className="flex items-center gap-3">
         <Truck className="w-6 h-6 text-purple-600" />
-        <h1 className="text-2xl font-bold text-gray-900">{t('form.addVehicle')}</h1>
+        <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">{t('form.addVehicle')}</h1>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('form.vehicleInfo')}</CardTitle>

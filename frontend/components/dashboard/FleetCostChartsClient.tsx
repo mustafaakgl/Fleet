@@ -84,7 +84,7 @@ function CostBarChartCard({
           <CardTitle className="text-sm font-semibold text-slate-900">{title}</CardTitle>
           <MoreHorizontal className="h-4 w-4 text-slate-400" aria-hidden />
         </CardHeader>
-        <CardContent className="h-72 px-2 pb-4 pt-0">
+        <CardContent className="h-64 px-2 pb-4 pt-0 sm:h-72">
           {!hasData ? (
             <p className="flex h-full items-center justify-center text-sm text-slate-500">—</p>
           ) : (
@@ -154,9 +154,9 @@ function TopRepairReasonsCard({
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0">
         {!hasData ? (
-          <p className="flex h-72 items-center justify-center text-sm text-slate-500">—</p>
+          <p className="flex h-64 items-center justify-center text-sm text-slate-500 sm:h-72">—</p>
         ) : (
-          <div className="grid h-72 grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="grid h-auto min-h-[16rem] grid-cols-1 gap-4 sm:h-72 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <div className="min-h-[180px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -237,7 +237,7 @@ export function FleetCostChartsClient({ analytics }: { analytics: DashboardCostA
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold text-slate-900">{t('dashboard.costCharts.title')}</h2>
+      <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.costCharts.title')}</h2>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <CostBarChartCard
           title={t('dashboard.costCharts.otherCosts')}

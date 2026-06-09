@@ -304,7 +304,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
               <ArrowLeft className="h-4 w-4" />
               {t('expenseHistory.title')}
             </Link>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900">
+            <h1 className="mt-2 text-xl font-bold text-slate-900 sm:text-2xl">
               {t('expenseHistory.detail.title', { id: displayEntryId(record.id) })}
             </h1>
           </div>
