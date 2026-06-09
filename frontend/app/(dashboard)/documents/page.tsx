@@ -39,6 +39,7 @@ import {
   FLEET_TABLE_HEAD,
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW_CLICKABLE,
+  FLEET_TABLE_SCROLL,
 } from '@/lib/fleet-table';
 import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
 import { cn, formatDate } from '@/lib/utils';

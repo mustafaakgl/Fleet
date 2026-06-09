@@ -456,7 +456,7 @@ export function CreateExpenseEntryDialog({
               <div className="sm:col-span-2">
                 <button
                   type="button"
-                  className="text-sm font-medium text-emerald-700 hover:underline"
+                  className="text-sm font-medium text-[#1a4d7a] hover:underline"
                   onClick={() => setShowStartDate((current) => !current)}
                 >
                   {t('serviceHistory.create.setStartDate')}
@@ -542,7 +542,7 @@ export function CreateExpenseEntryDialog({
                         className={cn(
                           'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                           active
-                            ? 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                            ? 'border-[#1a4d7a] bg-[#e8f0f8] text-[#1a4d7a]'
                             : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50',
                         )}
                       >
@@ -683,7 +683,7 @@ export function CreateExpenseEntryDialog({
               value={comments}
               onChange={(event) => setComments(event.target.value)}
               rows={4}
-              className="flex min-h-[96px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="flex min-h-[96px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#1a4d7a]"
               placeholder={t('serviceHistory.create.commentsPlaceholder')}
             />
           </section>
@@ -709,7 +709,7 @@ export function CreateExpenseEntryDialog({
               type="submit"
               form={formId}
               disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-[#1a4d7a] text-white hover:bg-[#0b2342]"
             >
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {t('serviceHistory.create.saveEntry')}

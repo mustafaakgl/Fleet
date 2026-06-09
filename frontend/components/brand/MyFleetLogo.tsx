@@ -2,8 +2,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
-const LOGO_WIDTH = 680;
-const LOGO_HEIGHT = 548;
+const LOGO_WIDTH = 1156;
+const LOGO_HEIGHT = 654;
 
 type MyFleetLogoProps = {
   className?: string;
@@ -11,6 +11,8 @@ type MyFleetLogoProps = {
   href?: string | null;
   onDark?: boolean;
   priority?: boolean;
+  /** Stretch to fill parent box (sidebar header). Parent must set height. */
+  fillWidth?: boolean;
 };
 
 export function MyFleetLogo({
@@ -18,8 +20,35 @@ export function MyFleetLogo({
   height = 52,
   href = '/',
   priority = false,
+  fillWidth = false,
 }: MyFleetLogoProps) {
   const width = Math.round((LOGO_WIDTH / LOGO_HEIGHT) * height);
+
+  if (fillWidth) {
+    const image = (
+      <div className={cn('h-full w-full', className)}>
+        <Image
+          src="/transiq-logo.png"
+          alt="TRANSIQ"
+          width={LOGO_WIDTH}
+          height={LOGO_HEIGHT}
+          priority={priority}
+          sizes="(max-width: 1024px) 72px, 256px"
+          className="h-full w-full object-contain object-center"
+        />
+      </div>
+    );
+
+    if (href) {
+      return (
+        <Link href={href} className="block h-full w-full">
+          {image}
+        </Link>
+      );
+    }
+
+    return image;
+  }
 
   const image = (
     <Image

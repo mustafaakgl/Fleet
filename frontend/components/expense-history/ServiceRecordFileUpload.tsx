@@ -51,8 +51,8 @@ export function PendingFileUpload({
     disabled
       ? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-70'
       : dragOver
-        ? 'cursor-pointer border-emerald-400 bg-emerald-50'
-        : 'cursor-pointer border-slate-300 bg-white hover:border-emerald-400 hover:bg-emerald-50/40',
+        ? 'cursor-pointer border-[#1a4d7a] bg-[#e8f0f8]'
+        : 'cursor-pointer border-slate-300 bg-white hover:border-[#1a4d7a] hover:bg-[#e8f0f8]/60',
   );
 
   return (

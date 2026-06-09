@@ -172,32 +172,26 @@ export function Sidebar() {
   function renderNavContent() {
     return (
       <div className="flex h-full flex-col">
-        <div className={cn('flex min-h-[72px] items-center gap-2 border-b px-3 py-3 lg:px-4 lg:py-4', SIDEBAR_BORDER)}>
-          <MyFleetLogo
-            height={tabletCollapsed ? 44 : 56}
-            href={null}
-            priority
-            className={cn(
-              'w-full max-w-[210px] brightness-110 contrast-110',
-              tabletCollapsed && 'md:max-w-[52px] lg:max-w-[210px] lg:mx-auto',
-            )}
-          />
-          {!tabletCollapsed || mobileOpen ? (
-            <span className="hidden text-[11px] font-semibold uppercase tracking-wide text-blue-200/70 lg:inline">
-              {role === 'office' ? t('nav.roleBadge.office') : user?.role}
-            </span>
-          ) : null}
+        <div className={cn('relative overflow-hidden border-b px-2 py-2', SIDEBAR_BG, SIDEBAR_BORDER)}>
           <button
             type="button"
             onClick={() => setTabletCollapsed((current) => !current)}
             className={cn(
-              'ml-auto hidden rounded-md border p-1.5 text-blue-100/80 hover:bg-white/10 md:inline-flex lg:hidden',
+              'absolute right-1 z-10 hidden rounded-md border p-1.5 text-blue-100/80 hover:bg-white/10 md:inline-flex lg:hidden',
               SIDEBAR_BORDER,
             )}
             aria-label="Toggle sidebar"
           >
             <Menu className="h-4 w-4" />
           </button>
+          <div
+            className={cn(
+              'w-full',
+              tabletCollapsed ? 'h-9 md:h-9 lg:h-[5.25rem]' : 'h-[5.25rem] lg:h-[6.25rem]',
+            )}
+          >
+            <MyFleetLogo href={null} priority fillWidth />
+          </div>
         </div>
 
         <nav className="flex-1 space-y-4 overflow-y-auto px-2.5 py-3">

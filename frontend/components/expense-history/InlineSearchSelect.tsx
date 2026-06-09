@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
+import { BRAND_FOCUS } from '@/lib/brand-colors';
 import { cn } from '@/lib/utils';
 
 export type InlineSearchSelectOption = {
@@ -62,7 +63,7 @@ export function InlineSearchSelect({
         }}
         className={cn(
           'flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm',
-          'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent',
+          BRAND_FOCUS,
           disabled && 'cursor-not-allowed opacity-50',
         )}
       >
@@ -101,7 +102,7 @@ export function InlineSearchSelect({
                     }}
                     className={cn(
                       'flex w-full px-3 py-2 text-left text-sm hover:bg-slate-50',
-                      option.value === value && 'bg-emerald-50 font-medium text-emerald-800',
+                      option.value === value && 'bg-[#e8f0f8] font-medium text-[#1a4d7a]',
                     )}
                   >
                     {option.label}

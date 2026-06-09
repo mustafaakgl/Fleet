@@ -23,9 +23,18 @@ import { CreateExpenseEntryDialog } from '@/components/expense-history/CreateExp
 import { ServiceHistoryActionsMenu } from '@/components/expense-history/ServiceHistoryActionsMenu';
 import { ServiceHistoryImportDialog } from '@/components/expense-history/ServiceHistoryImportDialog';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useExpenseWatchlist } from '@/hooks/useExpenseWatchlist';
 import { serviceRecordsApi, vehiclesApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
@@ -53,17 +62,21 @@ import {
 } from '@/lib/service-record-notes';
 import { downloadServiceRecordsCsv } from '@/lib/service-history-csv';
 import { serviceReminderHref } from '@/lib/service-reminders';
+import { BRAND_BADGE_PLANNED, BRAND_BTN_PRIMARY, BRAND_FOCUS, BRAND_LINK } from '@/lib/brand-colors';
 import {
-  FLEET_RAW_TABLE,
-  FLEET_RAW_TBODY,
-  FLEET_RAW_TD,
-  FLEET_RAW_TD_MUTED,
-  FLEET_RAW_TD_PRIMARY,
-  FLEET_RAW_TH,
-  FLEET_RAW_TH_CHECKBOX,
-  FLEET_RAW_THEAD,
+  FLEET_FILTER_INPUT,
+  FLEET_LIST_CARD,
   FLEET_LIST_DESKTOP,
   FLEET_LIST_MOBILE,
+  FLEET_PAGE,
+  FLEET_TABLE,
+  FLEET_TABLE_BODY,
+  FLEET_TABLE_CELL,
+  FLEET_TABLE_CELL_MUTED,
+  FLEET_TABLE_CELL_PRIMARY,
+  FLEET_TABLE_HEAD,
+  FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW_CLICKABLE,
   FLEET_TABLE_SCROLL,
 } from '@/lib/fleet-table';
 import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
@@ -122,14 +135,14 @@ function dateRangeForFilter(filter: DateFilter): { from?: string; to?: string } 
 }
 
 function priorityBadgeClass(priority: RepairPriorityClass): string {
-  if (priority === 'scheduled') return 'bg-emerald-50 text-emerald-700';
+  if (priority === 'scheduled') return BRAND_BADGE_PLANNED;
   if (priority === 'non_scheduled') return 'bg-amber-50 text-amber-700';
   if (priority === 'emergency') return 'bg-red-50 text-red-700';
   return 'bg-slate-100 text-slate-600';
 }
 
 function priorityDotClass(priority: RepairPriorityClass): string {
-  if (priority === 'scheduled') return 'bg-emerald-500';
+  if (priority === 'scheduled') return 'bg-[#1a4d7a]';
   if (priority === 'non_scheduled') return 'bg-amber-500';
   if (priority === 'emergency') return 'bg-red-500';
   return 'bg-slate-400';
@@ -177,7 +190,10 @@ function FilterPill({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={label}
-        className="h-9 appearance-none rounded-full border border-slate-300 bg-white py-1.5 pl-3 pr-8 text-sm text-slate-700 hover:bg-slate-50 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        className={cn(
+          'h-9 appearance-none rounded-full border border-slate-300 bg-white py-1.5 pl-3 pr-8 text-[13px] text-slate-700 hover:bg-slate-50',
+          BRAND_FOCUS,
+        )}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -405,7 +421,7 @@ export function ExpenseHistoryPage() {
   }
 
   return (
-    <div className="space-y-0">
+    <div className={FLEET_PAGE}>
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -420,11 +436,7 @@ export function ExpenseHistoryPage() {
             onExport={handleExport}
           />
           {canEdit ? (
-            <Button
-              type="button"
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => setCreateOpen(true)}
-            >
+            <Button type="button" className={BRAND_BTN_PRIMARY} onClick={() => setCreateOpen(true)}>
               <Plus className="mr-1.5 h-4 w-4" />
               {t('serviceHistory.addEntry')}
             </Button>
@@ -440,7 +452,7 @@ export function ExpenseHistoryPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t('serviceHistory.searchPlaceholder')}
-              className="h-9 pl-9"
+              className={cn('pl-9', FLEET_FILTER_INPUT)}
             />
           </div>
 
@@ -553,7 +565,7 @@ export function ExpenseHistoryPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-b-xl bg-white">
+      <Card className={FLEET_LIST_CARD}>
         {loading ? (
           <div className="space-y-2 p-4">
             <Skeleton className="h-10" />
@@ -604,19 +616,19 @@ export function ExpenseHistoryPage() {
             })}
           </div>
           <div className={cn(FLEET_LIST_DESKTOP, FLEET_TABLE_SCROLL)}>
-            <table className={FLEET_RAW_TABLE}>
-              <thead className={FLEET_RAW_THEAD}>
-                <tr>
-                  <th className={FLEET_RAW_TH_CHECKBOX}>
+            <Table className={FLEET_TABLE}>
+              <TableHeader>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={cn(FLEET_TABLE_HEAD, 'w-10')}>
                     <input
                       type="checkbox"
                       checked={allPageSelected}
                       onChange={toggleSelectAll}
                       aria-label={t('expenseHistory.selectAll')}
                     />
-                  </th>
-                  <th className={cn(FLEET_RAW_TH_CHECKBOX, 'px-2')} aria-label={t('serviceHistory.create.sectionDocuments')} />
-                  <th className={FLEET_RAW_TH}>
+                  </TableHead>
+                  <TableHead className={cn(FLEET_TABLE_HEAD, 'w-10 px-2')} aria-label={t('serviceHistory.create.sectionDocuments')} />
+                  <TableHead className={FLEET_TABLE_HEAD}>
                     <button
                       type="button"
                       onClick={() => toggleSort('vehicle')}
@@ -627,8 +639,8 @@ export function ExpenseHistoryPage() {
                         sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
                       ) : null}
                     </button>
-                  </th>
-                  <th className={FLEET_RAW_TH}>
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
                     <button
                       type="button"
                       onClick={() => toggleSort('date')}
@@ -639,12 +651,12 @@ export function ExpenseHistoryPage() {
                         sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
                       ) : null}
                     </button>
-                  </th>
-                  <th className={FLEET_RAW_TH}>{t('serviceHistory.create.driver')}</th>
-                  <th className={FLEET_RAW_TH}>{t('serviceHistory.create.reference')}</th>
-                  <th className={FLEET_RAW_TH}>{t('serviceHistory.create.vendor')}</th>
-                  <th className={FLEET_RAW_TH}>{t('serviceHistory.create.priorityClass')}</th>
-                  <th className={FLEET_RAW_TH}>
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.driver')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.reference')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.vendor')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.priorityClass')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
                     <button
                       type="button"
                       onClick={() => toggleSort('meter')}
@@ -655,8 +667,8 @@ export function ExpenseHistoryPage() {
                         sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
                       ) : null}
                     </button>
-                  </th>
-                  <th className={FLEET_RAW_TH}>
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
                     <button
                       type="button"
                       onClick={() => toggleSort('type')}
@@ -667,9 +679,9 @@ export function ExpenseHistoryPage() {
                         sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
                       ) : null}
                     </button>
-                  </th>
-                  <th className={FLEET_RAW_TH}>{t('serviceHistory.create.sectionIssues')}</th>
-                  <th className={cn(FLEET_RAW_TH, 'text-right')}>
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.sectionIssues')}</TableHead>
+                  <TableHead className={cn(FLEET_TABLE_HEAD, 'text-right')}>
                     <button
                       type="button"
                       onClick={() => toggleSort('amount')}
@@ -680,11 +692,11 @@ export function ExpenseHistoryPage() {
                         sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
                       ) : null}
                     </button>
-                  </th>
-                  <th className={FLEET_RAW_TH}>{t('serviceHistory.create.labels')}</th>
-                </tr>
-              </thead>
-              <tbody className={FLEET_RAW_TBODY}>
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('serviceHistory.create.labels')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className={FLEET_TABLE_BODY}>
                 {pageRecords.map((row) => {
                   const vehicle = vehicleById.get(row.vehicle_id);
                   const badge = vehicle
@@ -704,26 +716,26 @@ export function ExpenseHistoryPage() {
                     hasServiceRecordAttachments(row.notes);
 
                   return (
-                    <tr
+                    <TableRow
                       key={row.id}
                       className={cn(
-                        'hover:bg-slate-50/80',
-                        isMock ? 'cursor-default' : 'cursor-pointer',
+                        FLEET_TABLE_ROW_CLICKABLE,
+                        isMock && 'cursor-default',
                       )}
                       onClick={() => openEntry(row.id)}
                     >
-                      <td className={FLEET_RAW_TD} onClick={(event) => event.stopPropagation()}>
+                      <TableCell className={FLEET_TABLE_CELL} onClick={(event) => event.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedIds.has(row.id)}
                           onChange={() => toggleRow(row.id)}
                           aria-label={t('expenseHistory.selectRow')}
                         />
-                      </td>
-                      <td className={cn(FLEET_RAW_TD, 'px-2 text-slate-400')}>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'px-2 text-slate-400')}>
                         {hasAttachment ? <Paperclip className="h-4 w-4" aria-hidden /> : null}
-                      </td>
-                      <td className={FLEET_RAW_TD}>
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <div className="flex items-center gap-2">
                           {vehicle?.photo_url ? (
                             <img
@@ -738,13 +750,13 @@ export function ExpenseHistoryPage() {
                           )}
                           <div className="min-w-0">
                             {isMock ? (
-                              <span className="block truncate font-semibold text-emerald-700">
+                              <span className={cn('block truncate', FLEET_TABLE_CELL_PRIMARY)}>
                                 {row.vehicle_plate}
                               </span>
                             ) : (
                               <Link
                                 href={`/vehicles/${row.vehicle_id}`}
-                                className="block truncate font-semibold text-emerald-700 underline-offset-2 hover:underline"
+                                className={cn('block truncate', FLEET_TABLE_CELL_PRIMARY, 'hover:text-[#1a4d7a]')}
                               >
                                 {row.vehicle_plate}
                               </Link>
@@ -763,10 +775,10 @@ export function ExpenseHistoryPage() {
                             </div>
                           </div>
                         </div>
-                      </td>
-                      <td className={cn(FLEET_RAW_TD, 'whitespace-nowrap')} onClick={(event) => event.stopPropagation()}>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'whitespace-nowrap')} onClick={(event) => event.stopPropagation()}>
                         <div className="flex items-center gap-2">
-                          <span className="text-emerald-700 underline decoration-emerald-700/40 underline-offset-2">
+                          <span className={cn(BRAND_LINK, 'underline decoration-[#1a4d7a]/40 underline-offset-2')}>
                             {formatCompletionDateTime(row.date, i18n.language)}
                           </span>
                           {!isMock ? (
@@ -775,31 +787,31 @@ export function ExpenseHistoryPage() {
                                 vehicleId: row.vehicle_id,
                                 task: primaryTask,
                               })}
-                              className="text-slate-400 hover:text-emerald-700"
+                              className="text-slate-400 hover:text-[#1a4d7a]"
                               title={t('serviceHistory.openReminder')}
                             >
                               <Wrench className="h-3.5 w-3.5" />
                             </Link>
                           ) : null}
                         </div>
-                      </td>
-                      <td className={cn(FLEET_RAW_TD_MUTED, 'max-w-[8rem] truncate')}>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[8rem] truncate')}>
                         {row.driver_name || '—'}
-                      </td>
-                      <td className={cn(FLEET_RAW_TD, 'max-w-[7rem] truncate font-medium text-emerald-700')}>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'max-w-[7rem] truncate font-medium text-[#1a4d7a]')}>
                         {reference || '—'}
-                      </td>
-                      <td className={cn(FLEET_RAW_TD_MUTED, 'max-w-[9rem] truncate')}>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[9rem] truncate')}>
                         {renderVendor(row.vendor)}
-                      </td>
-                      <td className={FLEET_RAW_TD}>
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         <RepairPriorityBadge priority={priority} label={priorityLabel} />
-                      </td>
-                      <td className={cn(FLEET_RAW_TD, 'whitespace-nowrap')}>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL, 'whitespace-nowrap')}>
                         {formatMeter(row.mileage_km, i18n.language)}
-                      </td>
-                      <td className={FLEET_RAW_TD}>
-                        <span className="text-emerald-700 underline decoration-emerald-700/40 underline-offset-2">
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        <span className={cn(BRAND_LINK, 'underline decoration-[#1a4d7a]/40 underline-offset-2')}>
                           {tasks.primary}
                         </span>
                         {tasks.extra > 0 ? (
@@ -807,12 +819,12 @@ export function ExpenseHistoryPage() {
                             {t('serviceHistory.moreTasks', { count: tasks.extra })}
                           </span>
                         ) : null}
-                      </td>
-                      <td className={cn(FLEET_RAW_TD_MUTED, 'max-w-[8rem] truncate')}>{issues || '—'}</td>
-                      <td className={cn(FLEET_RAW_TD_PRIMARY, 'text-right whitespace-nowrap')}>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[8rem] truncate')}>{issues || '—'}</TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL_PRIMARY, 'text-right whitespace-nowrap')}>
                         {showAmounts ? formatAmount(row.cost_amount, i18n.language) : '—'}
-                      </td>
-                      <td className={FLEET_RAW_TD}>
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
                         {labels.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {labels.slice(0, 2).map((label) => (
@@ -832,16 +844,16 @@ export function ExpenseHistoryPage() {
                         ) : (
                           '—'
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           </>
         )}
-      </div>
+      </Card>
 
       <CreateExpenseEntryDialog
         open={createOpen}
