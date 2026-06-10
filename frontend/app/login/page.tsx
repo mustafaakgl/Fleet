@@ -1,20 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
+import { IBM_Plex_Mono, Inter } from 'next/font/google';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { TRIAL_CTA_LABEL, TRIAL_CTA_LINK, whatsAppHref } from '@/components/landing/marketing/marketing-config';
 import { authApi, onboardingApi } from '@/lib/api';
 import { isAuthenticated, saveAuth, MOCK_CURRENT_USER, getPostLoginPath, getUser } from '@/lib/auth';
+import './login-page.css';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-login-inter' });
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['500', '600'],
+  variable: '--font-login-mono',
+});
 
 const schema = z.object({
   email: z.string().email('auth.errors.invalidEmail'),
@@ -24,51 +31,106 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 const isDev = process.env.NODE_ENV !== 'production';
+const autoLoginEnabled =
+  process.env.NEXT_PUBLIC_AUTO_LOGIN === 'true' ||
+  (process.env.NEXT_PUBLIC_AUTO_LOGIN !== 'false' && isDev);
+const AUTO_LOGIN_EMAIL = process.env.NEXT_PUBLIC_AUTO_LOGIN_EMAIL?.trim() || 'admin@fleet.com';
+const AUTO_LOGIN_PASSWORD = process.env.NEXT_PUBLIC_AUTO_LOGIN_PASSWORD?.trim() || 'admin123';
 
 export default function LoginPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [autoLoggingIn, setAutoLoggingIn] = useState(autoLoginEnabled);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [ssoEnabled, setSsoEnabled] = useState(false);
   const [ssoLabel, setSsoLabel] = useState('Sign in with SSO');
 
-  useEffect(() => {
-    if (isAuthenticated()) {
-      const user = getUser();
-      router.replace(getPostLoginPath(user?.role ?? 'office'));
-      return;
-    }
+  function loginWithDemo() {
+    saveAuth('dev-demo-token', { ...MOCK_CURRENT_USER, role: 'admin', name: 'Demo Admin' });
+    router.replace('/dashboard');
+  }
 
-    if (typeof window !== 'undefined') {
-      const pendingMfaToken = new URLSearchParams(window.location.search).get('mfa_token');
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootstrap() {
+      if (isAuthenticated()) {
+        const user = getUser();
+        router.replace(getPostLoginPath(user?.role ?? 'office'));
+        return;
+      }
+
+      const pendingMfaToken =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('mfa_token')
+          : null;
       if (pendingMfaToken) {
         setMfaToken(pendingMfaToken);
+        setAutoLoggingIn(false);
+        return;
       }
-    }
 
-    onboardingApi
-      .status()
-      .then((status) => {
+      try {
+        const status = await onboardingApi.status();
+        if (cancelled) return;
         if (status.needs_setup) {
           router.replace('/onboarding');
+          return;
         }
-      })
-      .catch(() => {
-        // Backend unavailable — stay on login.
-      });
+      } catch {
+        // Backend unavailable — continue.
+      }
 
-    authApi
-      .oidcConfig()
-      .then((config) => {
-        setSsoEnabled(config.enabled);
-        setSsoLabel(config.label);
-      })
-      .catch(() => {
-        setSsoEnabled(false);
-      });
+      if (autoLoginEnabled) {
+        setAutoLoggingIn(true);
+        try {
+          const res = await authApi.signIn(AUTO_LOGIN_EMAIL, AUTO_LOGIN_PASSWORD);
+          if (cancelled) return;
+          if (res.mfa_required && res.mfa_token) {
+            setMfaToken(res.mfa_token);
+            setAutoLoggingIn(false);
+            return;
+          }
+          const token = res.accessToken ?? res.access_token;
+          if (token && res.user) {
+            saveAuth(token, {
+              ...res.user,
+              name: res.user.name ?? res.user.email,
+            });
+            router.replace(getPostLoginPath(res.user.role));
+            return;
+          }
+        } catch {
+          if (cancelled) return;
+          loginWithDemo();
+          return;
+        }
+      }
+
+      if (cancelled) return;
+      setAutoLoggingIn(false);
+
+      authApi
+        .oidcConfig()
+        .then((config) => {
+          if (cancelled) return;
+          setSsoEnabled(config.enabled);
+          setSsoLabel(config.label);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setSsoEnabled(false);
+        });
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const {
@@ -105,7 +167,7 @@ export default function LoginPage() {
           return;
         }
         if (err.response.status === 401) {
-          setError(t('auth.errors.invalidCredentials'));
+          setError('E-Mail oder Passwort ist nicht korrekt. Bitte prüfen Sie Ihre Eingabe.');
           return;
         }
         if (err.response.status === 429) {
@@ -144,196 +206,236 @@ export default function LoginPage() {
     }
   }
 
-  function handleDemoLogin() {
-    saveAuth('dev-demo-token', { ...MOCK_CURRENT_USER, role: 'admin', name: 'Demo Admin' });
-    router.push('/dashboard');
+  const credentialError = error?.includes('nicht korrekt');
+
+  if (autoLoggingIn) {
+    return (
+      <div className={`login-page ${inter.variable} ${ibmPlexMono.variable}`}>
+        <main className="login-panel" style={{ gridColumn: '1 / -1' }}>
+          <div className="login-form-box" style={{ textAlign: 'center' }}>
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#15498A]" />
+            <p className="login-unter" style={{ marginTop: 16 }}>
+              Wird angemeldet…
+            </p>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <MyFleetLogo height={72} href={null} priority />
-          <p className="text-gray-500 text-sm mt-4">{t('auth.adminPanel')}</p>
+    <div className={`login-page ${inter.variable} ${ibmPlexMono.variable}`}>
+      <aside className="login-marke" aria-hidden="true">
+        <Link href="/" className="login-marke-logo">
+          <MyFleetLogo height={36} href={null} priority />
+        </Link>
+
+        <div className="login-marke-mitte">
+          <h1>Ihre Flotte wartet schon.</h1>
+          <p>
+            Fristen, Dokumente und Fahrer-Nachrichten — alles, was heute passiert ist, sehen Sie gleich auf
+            einen Blick.
+          </p>
+
+          <div className="login-status-karte">
+            <div className="login-status-zeile">
+              <span>Fahrzeuge einsatzbereit</span>
+              <b>68 / 70</b>
+            </div>
+            <div className="login-status-zeile">
+              <span>HU · M-KL 482</span>
+              <span className="login-pill login-pill-warn">in 21 Tagen</span>
+            </div>
+            <div className="login-status-zeile">
+              <span>Neue Dokumente heute</span>
+              <b>14</b>
+            </div>
+            <div className="login-status-zeile">
+              <span>Alle Systeme</span>
+              <span className="login-pill login-pill-ok">● Betriebsbereit</span>
+            </div>
+          </div>
         </div>
 
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle>{mfaToken ? t('auth.mfa.title') : t('auth.signIn')}</CardTitle>
-            <CardDescription>
-              {mfaToken ? t('auth.mfa.description') : t('auth.signInDescription')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {mfaToken ? (
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="mfa-code">{t('auth.mfa.codeLabel')}</Label>
-                  <Input
-                    id="mfa-code"
-                    inputMode="numeric"
-                    maxLength={6}
-                    autoComplete="one-time-code"
-                    value={mfaCode}
-                    onChange={(event) =>
-                      setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))
-                    }
-                    placeholder="123456"
-                  />
-                </div>
-                {error ? (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                ) : null}
-                <Button
-                  type="button"
-                  className="w-full"
-                  disabled={mfaSubmitting || mfaCode.length !== 6}
-                  onClick={() => void onSubmitMfa()}
-                >
-                  {mfaSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {t('auth.mfa.verifying')}
-                    </>
-                  ) : (
-                    t('auth.mfa.verify')
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => {
-                    setMfaToken(null);
-                    setMfaCode('');
-                    setError(null);
-                  }}
-                >
-                  {t('auth.mfa.back')}
-                </Button>
-              </div>
-            ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="email">{t('auth.email')}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@fleet.com"
-                  autoComplete="email"
-                  {...register('email')}
+        <div className="login-marke-fuss">
+          Entwickelt mit einem Spediteur — <b>70 Fahrzeuge, 20 Jahre Erfahrung</b>
+        </div>
+      </aside>
+
+      <main className="login-panel">
+        <div className="login-form-box">
+          <div className="login-mobil-logo">
+            <MyFleetLogo height={40} href="/" priority />
+          </div>
+
+          {mfaToken ? (
+            <>
+              <h2>{t('auth.mfa.title')}</h2>
+              <p className="login-unter">{t('auth.mfa.description')}</p>
+
+              <div className="login-feld">
+                <label htmlFor="mfa-code">{t('auth.mfa.codeLabel')}</label>
+                <input
+                  id="mfa-code"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  value={mfaCode}
+                  onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="123456"
                 />
-                {errors.email && (
-                  <p className="text-xs text-red-600">{t(errors.email.message ?? '')}</p>
-                )}
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">{t('auth.password')}</Label>
-                  <a href="/forgot-password" className="text-xs text-blue-700 hover:underline">
-                    {t('auth.forgotPassword.link')}
-                  </a>
+              {error ? (
+                <div className="login-fehler" role="alert">
+                  {error}
                 </div>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  {...register('password')}
-                />
-                {errors.password && (
-                  <p className="text-xs text-red-600">{t(errors.password.message ?? '')}</p>
-                )}
-              </div>
+              ) : null}
 
-              {error && (
-                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              )}
-
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
+              <button
+                type="button"
+                className="login-btn"
+                disabled={mfaSubmitting || mfaCode.length !== 6}
+                onClick={() => void onSubmitMfa()}
+              >
+                {mfaSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {t('auth.signingIn')}
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t('auth.mfa.verifying')}
                   </>
                 ) : (
-                  t('auth.signIn')
+                  t('auth.mfa.verify')
                 )}
-              </Button>
+              </button>
 
-              {ssoEnabled ? (
-                <>
-                  <div className="relative py-2">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-gray-200" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-gray-500">{t('auth.sso.or')}</span>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      window.location.href = authApi.oidcLoginUrl();
-                    }}
-                  >
-                    {ssoLabel}
-                  </Button>
-                </>
-              ) : null}
-            </form>
-            )}
+              <button
+                type="button"
+                className="login-sso-btn"
+                style={{ marginTop: 12 }}
+                onClick={() => {
+                  setMfaToken(null);
+                  setMfaCode('');
+                  setError(null);
+                }}
+              >
+                {t('auth.mfa.back')}
+              </button>
+            </>
+          ) : (
+            <>
+              <h2>Willkommen zurück</h2>
+              <p className="login-unter">Melden Sie sich an, um Ihre Flotte zu verwalten.</p>
 
-            {!mfaToken && isDev && (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full mt-3"
-                  onClick={handleDemoLogin}
-                >
-                  Demo login (no backend)
-                </Button>
-
-                <div className="mt-6 pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 text-center mb-2">Test credentials (dev only)</p>
-                  <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
-                    <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                      <p className="font-medium">Admin</p>
-                      <p>admin@fleet.com</p>
-                      <p className="text-gray-400">admin123</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                      <p className="font-medium">Customer (DHL)</p>
-                      <p>dhl.customer@fleet.com</p>
-                      <p className="text-gray-400">customer123</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-md px-2 py-1.5 text-center">
-                      <p className="font-medium">Driver</p>
-                      <p>driver@fleet.com</p>
-                      <p className="text-gray-400">driver123</p>
-                    </div>
-                  </div>
+              {error ? (
+                <div className="login-fehler" role="alert">
+                  {error}
                 </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              ) : null}
 
-        <p className="mt-4 text-center text-xs text-gray-500">
-          <a href="/datenschutz" className="text-blue-700 hover:underline">
-            {t('nav.privacy')}
-          </a>
-        </p>
-      </div>
+              <form onSubmit={handleSubmit(onSubmit)} noValidate>
+                <div className="login-feld">
+                  <label htmlFor="email">Geschäftliche E-Mail</label>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="username"
+                    placeholder="max@mustermann-transporte.de"
+                    className={errors.email || credentialError ? 'login-fehler-rand' : undefined}
+                    {...register('email')}
+                  />
+                  {errors.email ? (
+                    <p className="login-feld-fehler">{t(errors.email.message ?? '')}</p>
+                  ) : null}
+                </div>
+
+                <div className="login-feld">
+                  <label htmlFor="password">Passwort</label>
+                  <div className="login-pw-wrap">
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="••••••••••"
+                      className={errors.password || credentialError ? 'login-fehler-rand' : undefined}
+                      {...register('password')}
+                    />
+                    <button
+                      type="button"
+                      className="login-pw-auge"
+                      aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                      onClick={() => setShowPassword((open) => !open)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.password ? (
+                    <p className="login-feld-fehler">{t(errors.password.message ?? '')}</p>
+                  ) : null}
+                </div>
+
+                <div className="login-zeile">
+                  <label className="login-merken">
+                    <input type="checkbox" />
+                    Angemeldet bleiben
+                  </label>
+                  <Link href="/forgot-password" className="login-vergessen">
+                    Passwort vergessen?
+                  </Link>
+                </div>
+
+                <button type="submit" className="login-btn" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Wird angemeldet…
+                    </>
+                  ) : (
+                    'Anmelden'
+                  )}
+                </button>
+
+                {ssoEnabled ? (
+                  <>
+                    <div className="login-trenner">{t('auth.sso.or')}</div>
+                    <button
+                      type="button"
+                      className="login-sso-btn"
+                      onClick={() => {
+                        window.location.href = authApi.oidcLoginUrl();
+                      }}
+                    >
+                      {ssoLabel}
+                    </button>
+                  </>
+                ) : null}
+              </form>
+
+              <div className="login-trenner">Noch kein Konto?</div>
+              <p className="login-registrieren">
+                <Link href={TRIAL_CTA_LINK}>{TRIAL_CTA_LABEL} →</Link>
+              </p>
+            </>
+          )}
+
+          <div className="login-panel-fuss">
+            <Link href="/impressum">Impressum</Link>
+            <Link href="/datenschutz">Datenschutz</Link>
+            <a href={whatsAppHref()} target="_blank" rel="noopener noreferrer">
+              Hilfe per WhatsApp
+            </a>
+          </div>
+
+          {!mfaToken && isDev ? (
+            <div className="login-dev-block">
+              <p>Dev only</p>
+              <button type="button" className="login-dev-btn" onClick={loginWithDemo}>
+                Demo login (no backend)
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </main>
     </div>
   );
 }

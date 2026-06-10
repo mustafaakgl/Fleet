@@ -1,0 +1,630 @@
+.fleet-calculator {
+  --blau: #15498a;
+  --gelb: #f7c600;
+  --rot: #c8281e;
+  --gruen: #1e7b43;
+  --papier: #fbfaf7;
+  --tinte: #14181d;
+  --grau: #5b6470;
+  --linie: #d9d6ce;
+  font-family: var(--font-bussgeld-inter), system-ui, sans-serif;
+  background: var(--blau);
+  color: var(--tinte);
+}
+
+.fleet-calculator .fahrbahn {
+  height: 10px;
+  background: repeating-linear-gradient(90deg, var(--gelb) 0 60px, var(--blau) 60px 100px);
+}
+
+.fleet-calculator .wrap {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 40px 20px 64px;
+}
+
+.fleet-calculator header {
+  color: #fff;
+  margin-bottom: 36px;
+}
+
+.fleet-calculator .eyebrow {
+  display: inline-block;
+  font: 600 13px/1 var(--font-bussgeld-saira), sans-serif;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: var(--gelb);
+  color: var(--tinte);
+  padding: 6px 12px;
+  margin-bottom: 14px;
+}
+
+.fleet-calculator h1.calc-title,
+.fleet-calculator h2.calc-title {
+  font: 700 clamp(30px, 5.5vw, 52px) / 1.05 var(--font-bussgeld-saira), sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  max-width: 680px;
+}
+
+.fleet-calculator header p {
+  margin-top: 12px;
+  max-width: 560px;
+  color: #cdd9ec;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.fleet-calculator .grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+@media (max-width: 840px) {
+  .fleet-calculator .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fleet-calculator .karte,
+.fleet-calculator .bescheid {
+  background: var(--papier);
+  border: 1px solid var(--linie);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.fleet-calculator .karte-stack {
+  margin-bottom: 28px;
+}
+
+.fleet-calculator .bescheid {
+  position: relative;
+  overflow: hidden;
+}
+
+.fleet-calculator .karte-kopf {
+  font: 700 15px/1 var(--font-bussgeld-saira), sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 16px 22px;
+  border-bottom: 2px solid var(--tinte);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fleet-calculator .karte-kopf span {
+  color: var(--grau);
+  font-family: var(--font-bussgeld-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.fleet-calculator .feld {
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--linie);
+}
+
+.fleet-calculator .feld:last-of-type {
+  border-bottom: none;
+}
+
+.fleet-calculator .feld > label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.fleet-calculator .hint {
+  font-size: 12px;
+  color: var(--grau);
+  margin-bottom: 12px;
+}
+
+.fleet-calculator .slider-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.fleet-calculator input[type='range'] {
+  flex: 1;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--blau) var(--fill, 30%), #e4e1d8 var(--fill, 30%));
+  outline-offset: 4px;
+}
+
+.fleet-calculator input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--gelb);
+  border: 3px solid var(--tinte);
+  cursor: pointer;
+}
+
+.fleet-calculator input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--gelb);
+  border: 3px solid var(--tinte);
+  cursor: pointer;
+}
+
+.fleet-calculator .wert {
+  font: 600 22px/1 var(--font-bussgeld-mono), monospace;
+  min-width: 64px;
+  text-align: right;
+}
+
+.fleet-calculator .wert-wide {
+  min-width: 96px;
+  white-space: nowrap;
+  font-size: 20px;
+}
+
+.fleet-calculator .optionen {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fleet-calculator .optionen input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fleet-calculator .optionen label {
+  margin: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px solid var(--tinte);
+  padding: 9px 14px;
+  background: #fff;
+  transition: background 0.15s;
+}
+
+.fleet-calculator .optionen input:checked + label {
+  background: var(--gelb);
+}
+
+.fleet-calculator .optionen input:focus-visible + label {
+  outline: 3px solid var(--blau);
+  outline-offset: 2px;
+}
+
+.fleet-calculator .bescheid-kopf {
+  padding: 18px 24px 14px;
+  border-bottom: 2px solid var(--tinte);
+}
+
+.fleet-calculator .bescheid-kopf .amt {
+  font: 600 11px/1.4 var(--font-bussgeld-mono), monospace;
+  color: var(--grau);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.fleet-calculator .bescheid-kopf h2 {
+  font: 700 24px/1.1 var(--font-bussgeld-saira), sans-serif;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+.fleet-calculator .summe {
+  padding: 26px 24px 10px;
+  text-align: left;
+}
+
+.fleet-calculator .summe-compact {
+  padding: 6px 24px 18px;
+}
+
+.fleet-calculator .summe .label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--grau);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.fleet-calculator .summe .euro {
+  font: 600 clamp(40px, 7vw, 58px) / 1 var(--font-bussgeld-mono), monospace;
+  color: var(--rot);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fleet-calculator .summe .euro-gruen {
+  color: var(--gruen);
+  font-size: clamp(38px, 6.5vw, 54px);
+}
+
+.fleet-calculator .summe .pro {
+  font-size: 13px;
+  color: var(--grau);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.fleet-calculator .posten {
+  padding: 18px 24px;
+  display: grid;
+  gap: 10px;
+}
+
+.fleet-calculator .posten-zeile {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13.5px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--linie);
+}
+
+.fleet-calculator .posten-zeile b {
+  font-family: var(--font-bussgeld-mono), monospace;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fleet-calculator .posten-zeile .p-name {
+  line-height: 1.45;
+}
+
+.fleet-calculator .posten-zeile .p-detail {
+  display: block;
+  color: var(--grau);
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+.fleet-calculator .worstcase {
+  margin: 6px 24px 20px;
+  padding: 12px 14px;
+  border: 2px solid var(--rot);
+  font-size: 13px;
+  line-height: 1.5;
+  background: #fdf1f0;
+}
+
+.fleet-calculator .worstcase b {
+  font-family: var(--font-bussgeld-mono), monospace;
+}
+
+.fleet-calculator .stempel {
+  position: absolute;
+  top: 18px;
+  right: -34px;
+  transform: rotate(12deg);
+  font: 700 15px/1 var(--font-bussgeld-saira), sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--rot);
+  border: 3px solid var(--rot);
+  padding: 8px 44px;
+  opacity: 0.85;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+.fleet-calculator .stempel-gruen {
+  color: var(--gruen);
+  border-color: var(--gruen);
+  right: -30px;
+  padding: 8px 40px;
+  letter-spacing: 0.2em;
+}
+
+.fleet-calculator .vergleich {
+  padding: 24px;
+}
+
+.fleet-calculator .balken {
+  margin-bottom: 18px;
+}
+
+.fleet-calculator .balken .b-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.fleet-calculator .balken .b-label b {
+  font-family: var(--font-bussgeld-mono), monospace;
+}
+
+.fleet-calculator .b-track {
+  height: 34px;
+  background: #eeebe2;
+  position: relative;
+}
+
+.fleet-calculator .b-fill {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+  color: #fff;
+  font: 600 12px var(--font-bussgeld-mono), monospace;
+  min-width: fit-content;
+  transition: width 0.35s ease;
+}
+
+.fleet-calculator .b-fill-regel {
+  background: var(--rot);
+}
+
+.fleet-calculator .b-fill-fb {
+  background: var(--blau);
+}
+
+.fleet-calculator .eingabe {
+  display: grid;
+  grid-template-columns: 1.1fr 1.3fr 1fr 1fr auto;
+  gap: 10px;
+  padding: 18px 22px;
+  align-items: end;
+}
+
+@media (max-width: 840px) {
+  .fleet-calculator .eingabe {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fleet-calculator .eingabe .btn-add {
+    grid-column: 1 / -1;
+  }
+}
+
+.fleet-calculator .eingabe label {
+  display: block;
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fleet-calculator .eingabe input,
+.fleet-calculator .eingabe select {
+  width: 100%;
+  padding: 11px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 2px solid var(--tinte);
+  background: #fff;
+}
+
+.fleet-calculator .kz-input {
+  font-family: var(--font-bussgeld-mono), monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-left: 14px solid var(--blau);
+}
+
+.fleet-calculator .btn-add {
+  font: 700 14px/1 var(--font-bussgeld-saira), sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--gelb);
+  color: var(--tinte);
+  border: 2px solid var(--tinte);
+  padding: 13px 20px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fleet-calculator .btn-add:hover {
+  transform: translateY(-1px);
+}
+
+.fleet-calculator .liste {
+  padding: 6px 22px 22px;
+}
+
+.fleet-calculator .leer {
+  padding: 28px 0;
+  text-align: center;
+  color: var(--grau);
+  font-size: 14px;
+}
+
+.fleet-calculator .fzg-zeile {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--linie);
+  background: #fff;
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+
+@media (max-width: 680px) {
+  .fleet-calculator .fzg-zeile {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.fleet-calculator .kz-schild {
+  font: 600 16px/1 var(--font-bussgeld-mono), monospace;
+  border: 2px solid var(--tinte);
+  border-left: 12px solid var(--blau);
+  padding: 8px 12px;
+  background: #fff;
+  white-space: nowrap;
+}
+
+.fleet-calculator .fristen {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.fleet-calculator .frist .f-name {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--grau);
+}
+
+.fleet-calculator .frist .f-datum {
+  font-family: var(--font-bussgeld-mono), monospace;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.fleet-calculator .badge {
+  display: inline-block;
+  font: 700 10px/1 var(--font-bussgeld-saira), sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.fleet-calculator .b-ok {
+  background: #e2f2e8;
+  color: var(--gruen);
+  border: 1px solid var(--gruen);
+}
+
+.fleet-calculator .b-bald {
+  background: #fff6d6;
+  color: #8a6d00;
+  border: 1px solid var(--gelb);
+}
+
+.fleet-calculator .b-faellig {
+  background: #fde7e5;
+  color: var(--rot);
+  border: 1px solid var(--rot);
+}
+
+.fleet-calculator .btn-del {
+  background: none;
+  border: none;
+  color: var(--grau);
+  cursor: pointer;
+  font-size: 18px;
+  justify-self: end;
+}
+
+.fleet-calculator .btn-del:hover {
+  color: var(--rot);
+}
+
+.fleet-calculator .lead {
+  background: var(--tinte);
+  color: #fff;
+  padding: 22px 24px;
+}
+
+.fleet-calculator .lead-hidden {
+  display: none;
+}
+
+.fleet-calculator .lead-visible {
+  display: block;
+}
+
+.fleet-calculator .lead p {
+  font-size: 13.5px;
+  margin-bottom: 12px;
+  color: #c9cfd6;
+}
+
+.fleet-calculator .lead strong {
+  color: var(--gelb);
+}
+
+.fleet-calculator .lead form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fleet-calculator .lead input[type='email'] {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 14px;
+  font-size: 14px;
+  border: 2px solid #fff;
+  background: #fff;
+  font-family: inherit;
+}
+
+.fleet-calculator .lead button {
+  font: 700 14px/1 var(--font-bussgeld-saira), sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--gelb);
+  color: var(--tinte);
+  border: 2px solid var(--gelb);
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.fleet-calculator .lead button:hover {
+  transform: translateY(-1px);
+}
+
+.fleet-calculator .lead .ok {
+  font-weight: 600;
+  color: var(--gelb);
+  font-size: 14px;
+}
+
+.fleet-calculator details {
+  margin-top: 26px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #dde6f2;
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.fleet-calculator details.no-margin-top {
+  margin-top: 0;
+}
+
+.fleet-calculator summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.fleet-calculator details ul {
+  margin: 10px 0 4px 18px;
+}
+
+.fleet-calculator .disclaimer {
+  margin-top: 14px;
+  font-size: 11.5px;
+  color: #9fb2cc;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fleet-calculator * {
+    transition: none !important;
+  }
+}

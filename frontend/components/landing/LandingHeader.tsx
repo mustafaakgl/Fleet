@@ -96,6 +96,9 @@ const megaMenus: MegaMenu[] = [
       {
         titleKey: 'nav.resources',
         links: [
+          { labelKey: 'mega.fineCalculator', href: '#bussgeld-rechner' },
+          { labelKey: 'mega.taxCalculator', href: '#fahrtenbuch-rechner' },
+          { labelKey: 'mega.deadlineChecker', href: '#tuev-uvv-checker' },
           { labelKey: 'mega.blog', href: '#contact' },
           { labelKey: 'mega.caseStudies', href: '#testimonials' },
           { labelKey: 'mega.webinars', href: '#contact' },
