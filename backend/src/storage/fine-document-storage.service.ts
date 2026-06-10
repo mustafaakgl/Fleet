@@ -4,11 +4,11 @@ import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DefectPhotoCryptoService } from './defect-photo-crypto.service';
+import { FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR } from './local-storage.service';
 import { ObjectStorageService } from './object-storage.service';
 import { resolveAbsolutePathFromStoredUrl } from './file-path.util';
 
-export const FINE_DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'fine-documents');
-export const FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), FINE_DOCUMENT_UPLOAD_RELATIVE_DIR);
+export { FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR, FINE_DOCUMENT_UPLOAD_RELATIVE_DIR } from './local-storage.service';
 
 @Injectable()
 export class FineDocumentStorageService {

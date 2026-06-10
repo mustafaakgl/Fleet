@@ -1,8 +1,6 @@
 import { join } from 'node:path';
 import {
-  DOCUMENT_UPLOAD_ABSOLUTE_DIR,
-  LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR,
-  VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR,
+  uploadAbsoluteDirForBucket,
 } from './local-storage.service';
 import type { StorageBucket } from './storage.service';
 
@@ -14,6 +12,9 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   '.webp': 'image/webp',
 };
 
+const STORED_FILE_URL_PATTERN =
+  /^\/uploads\/(documents|vehicles|license-photos|defect-photos|fine-documents)\/([^/]+)$/;
+
 export function mimeTypeFromFileName(fileName: string): string {
   const dotIdx = fileName.lastIndexOf('.');
   const extension = dotIdx >= 0 ? fileName.slice(dotIdx).toLowerCase() : '';
@@ -23,7 +24,7 @@ export function mimeTypeFromFileName(fileName: string): string {
 export function parseStoredFileUrl(
   fileUrl: string,
 ): { bucket: StorageBucket; storedFileName: string } | null {
-  const match = fileUrl.match(/^\/uploads\/(documents|vehicles|license-photos)\/([^/]+)$/);
+  const match = fileUrl.match(STORED_FILE_URL_PATTERN);
   if (!match) {
     return null;
   }
@@ -40,11 +41,5 @@ export function resolveAbsolutePathFromStoredUrl(fileUrl: string): string | null
     return null;
   }
 
-  const baseDir =
-    parsed.bucket === 'documents'
-      ? DOCUMENT_UPLOAD_ABSOLUTE_DIR
-      : parsed.bucket === 'vehicles'
-        ? VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR
-        : LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR;
-  return join(baseDir, parsed.storedFileName);
+  return join(uploadAbsoluteDirForBucket(parsed.bucket), parsed.storedFileName);
 }

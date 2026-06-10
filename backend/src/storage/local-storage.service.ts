@@ -10,27 +10,34 @@ export const VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR = join('uploads', 'vehicles');
 export const VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR);
 export const LICENSE_PHOTO_UPLOAD_RELATIVE_DIR = join('uploads', 'license-photos');
 export const LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), LICENSE_PHOTO_UPLOAD_RELATIVE_DIR);
+export const DEFECT_PHOTO_UPLOAD_RELATIVE_DIR = join('uploads', 'defect-photos');
+export const DEFECT_PHOTO_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), DEFECT_PHOTO_UPLOAD_RELATIVE_DIR);
+export const FINE_DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'fine-documents');
+export const FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), FINE_DOCUMENT_UPLOAD_RELATIVE_DIR);
+
+const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
+  documents: DOCUMENT_UPLOAD_ABSOLUTE_DIR,
+  vehicles: VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR,
+  'license-photos': LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR,
+  'defect-photos': DEFECT_PHOTO_UPLOAD_ABSOLUTE_DIR,
+  'fine-documents': FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR,
+};
+
+export function uploadAbsoluteDirForBucket(bucket: StorageBucket): string {
+  return UPLOAD_ABSOLUTE_DIRS[bucket];
+}
 
 @Injectable()
 export class LocalStorageService extends StorageService {
   constructor() {
     super();
-    mkdirSync(DOCUMENT_UPLOAD_ABSOLUTE_DIR, { recursive: true });
-    mkdirSync(VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR, { recursive: true });
-    mkdirSync(LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR, { recursive: true });
+    for (const dir of Object.values(UPLOAD_ABSOLUTE_DIRS)) {
+      mkdirSync(dir, { recursive: true });
+    }
   }
 
   buildStoredPath(bucket: StorageBucket, storedFileName: string): string {
-    if (bucket === 'documents') {
-      return `/uploads/documents/${storedFileName}`;
-    }
-    if (bucket === 'vehicles') {
-      return `/uploads/vehicles/${storedFileName}`;
-    }
-    if (bucket === 'license-photos') {
-      return `/uploads/license-photos/${storedFileName}`;
-    }
-    throw new Error(`Unsupported storage bucket: ${bucket}`);
+    return `/uploads/${bucket}/${storedFileName}`;
   }
 
   buildDocumentDownloadPath(documentId: string): string {

@@ -4,11 +4,11 @@ import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DefectPhotoCryptoService } from './defect-photo-crypto.service';
+import { DEFECT_PHOTO_UPLOAD_ABSOLUTE_DIR } from './local-storage.service';
 import { ObjectStorageService } from './object-storage.service';
 import { resolveAbsolutePathFromStoredUrl } from './file-path.util';
 
-export const DEFECT_PHOTO_UPLOAD_RELATIVE_DIR = join('uploads', 'defect-photos');
-export const DEFECT_PHOTO_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), DEFECT_PHOTO_UPLOAD_RELATIVE_DIR);
+export { DEFECT_PHOTO_UPLOAD_ABSOLUTE_DIR, DEFECT_PHOTO_UPLOAD_RELATIVE_DIR } from './local-storage.service';
 
 @Injectable()
 export class DefectPhotoStorageService {
