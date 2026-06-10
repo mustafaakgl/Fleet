@@ -60,9 +60,28 @@ export default function HomeTodayScreen() {
     queryKey: ['driver-requests'],
     queryFn: () => driverApi.listRequests(),
   });
+  const { data: licenseStatus } = useQuery({
+    queryKey: ['license-check-status'],
+    queryFn: () => driverApi.licenseCheckStatus(),
+  });
+  const { data: fines } = useQuery({
+    queryKey: ['driver-fines'],
+    queryFn: () => driverApi.listFines(),
+  });
+  const { data: departureStatus } = useQuery({
+    queryKey: ['departure-check-status'],
+    queryFn: () => driverApi.departureCheckStatus(),
+  });
+  const { data: defects } = useQuery({
+    queryKey: ['driver-defects'],
+    queryFn: () => driverApi.listDefects(),
+  });
 
   const todayAssignments = assignments ?? [];
   const pendingRequests = (requests ?? []).filter((item) => item.status === 'pending').length;
+  const pendingFines = (fines ?? []).filter((fine) => fine.pending_ack).length;
+  const pendingDefects = (defects ?? []).filter((defect) => defect.pending_confirmation).length;
+  const departureDue = Boolean(departureStatus?.can_submit);
   const greetingName = me?.driver.firstName ?? 'Driver';
   const today = formatAppDate(locale);
 
@@ -93,6 +112,42 @@ export default function HomeTodayScreen() {
       </View>
 
       <DayStatusBanner />
+
+      {licenseStatus?.can_submit ? (
+        <View style={styles.licenseTaskCard}>
+          <Text style={styles.licenseTaskTitle}>{t('licenseCheck.taskTitle')}</Text>
+          <Text style={styles.licenseTaskText}>{t('licenseCheck.taskBody')}</Text>
+          <ActionButton
+            label={t('licenseCheck.start')}
+            onPress={() => router.push('/(app)/today/license-check')}
+            variant="primary"
+          />
+        </View>
+      ) : null}
+
+      {departureDue ? (
+        <View style={styles.departureTaskCard}>
+          <Text style={styles.departureTaskTitle}>{t('departureCheck.taskTitle')}</Text>
+          <Text style={styles.departureTaskText}>{t('departureCheck.taskBody')}</Text>
+          <ActionButton
+            label={t('departureCheck.start')}
+            onPress={() => router.push('/(app)/today/departure-check')}
+            variant="primary"
+          />
+        </View>
+      ) : null}
+
+      {pendingFines > 0 ? (
+        <View style={styles.fineTaskCard}>
+          <Text style={styles.fineTaskTitle}>{t('fines.taskTitle')}</Text>
+          <Text style={styles.fineTaskText}>{t('fines.taskBody', { count: pendingFines })}</Text>
+          <ActionButton
+            label={t('fines.openList')}
+            onPress={() => router.push('/(app)/today/fines')}
+            variant="primary"
+          />
+        </View>
+      ) : null}
 
       <SectionHeader title={t('home.locationSection')} />
       <LocationTrackingCard />
@@ -198,6 +253,22 @@ export default function HomeTodayScreen() {
         onPress={() => router.push('/(app)/requests')}
         showChevron
       />
+      <ListRow
+        icon="alert-circle"
+        title={t('fines.title')}
+        subtitle={t('fines.listSubtitle', { count: fines?.length ?? 0 })}
+        badge={pendingFines > 0 ? pendingFines : undefined}
+        onPress={() => router.push('/(app)/today/fines')}
+        showChevron
+      />
+      <ListRow
+        icon="tool"
+        title={t('defects.title')}
+        subtitle={t('defects.listSubtitle', { count: defects?.length ?? 0 })}
+        badge={pendingDefects > 0 ? pendingDefects : undefined}
+        onPress={() => router.push('/(app)/today/defects')}
+        showChevron
+      />
     </ScreenLayout>
   );
 }
@@ -259,6 +330,63 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  licenseTaskCard: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  licenseTaskTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  licenseTaskText: {
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+  },
+  fineTaskCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  fineTaskTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  fineTaskText: {
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+  },
+  departureTaskCard: {
+    backgroundColor: '#DBEAFE',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  departureTaskTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  departureTaskText: {
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
   },
   statusPill: {
     alignSelf: 'flex-start',

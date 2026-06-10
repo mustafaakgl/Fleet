@@ -19,6 +19,13 @@ export default function TodayStackLayout() {
       <Stack.Screen name="accident-report" />
       <Stack.Screen name="cargo-damage-report" />
       <Stack.Screen name="leave-request" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="license-check" />
+      <Stack.Screen name="departure-check" />
+      <Stack.Screen name="defects/index" />
+      <Stack.Screen name="defect/[id]" />
+      <Stack.Screen name="defect-report" />
+      <Stack.Screen name="fines/index" options={{ title: 'Fines' }} />
+      <Stack.Screen name="fine/[id]" />
     </Stack>
   );
 }

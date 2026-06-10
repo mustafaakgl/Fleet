@@ -122,11 +122,34 @@ export interface Driver {
   vacation_carry_over_days?: number;
   status: DriverStatus;
   risk_level: RiskLevel;
+  license_compliance_badge?: LicenseComplianceBadge | null;
   created_at?: string;
   updated_at?: string;
 }
 
+export type LicenseComplianceBadge = 'green' | 'yellow' | 'red';
+
+export interface DriverLicenseCompliance {
+  driver_id: string;
+  badge: LicenseComplianceBadge;
+  license_id?: string | null;
+  license_number?: string | null;
+  classes?: string[];
+  expires_at?: string | null;
+  next_check_due_at?: string | null;
+  latest_check?: {
+    id: string;
+    status: string;
+    check_type: string;
+    check_date: string;
+    verified_at?: string | null;
+  } | null;
+  has_pending_check: boolean;
+  blocks_assignment: boolean;
+}
+
 export interface DriverDetail extends Driver {
+  license_compliance?: DriverLicenseCompliance;
   recent_assignments: Assignment[];
   documents: Document[];
 }
@@ -242,7 +265,239 @@ export type AssignmentWritePayload = {
   route_name?: string;
   expected_daily_revenue?: number;
   notes?: string;
+  acknowledge_license_compliance_warning?: boolean;
 };
+
+export interface LicenseCheck {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  employee_number?: string;
+  driver_license_id?: string | null;
+  check_date: string;
+  check_type: 'initial' | 'periodic';
+  status: 'pending' | 'approved' | 'rejected';
+  verified_by?: { id: string; name: string; email: string } | null;
+  verified_at?: string | null;
+  rejection_reason?: string | null;
+  notes?: string | null;
+  due_at?: string | null;
+  photo_metadata?: Record<string, unknown> | null;
+  reference_license?: {
+    id: string;
+    license_number: string;
+    classes: string[];
+    expires_at: string;
+    front_photo_url?: string | null;
+    back_photo_url?: string | null;
+  } | null;
+  photos?: {
+    front_url?: string | null;
+    back_url?: string | null;
+    selfie_url?: string | null;
+  };
+  created_at: string;
+}
+
+// ─── Fine management ─────────────────────────────────────────────────────────
+
+export type FineViolationCategory = 'speed' | 'parking' | 'red_light' | 'distance' | 'other';
+export type FineMatchType = 'auto' | 'manual' | 'unmatched';
+export type FineStatus =
+  | 'neu'
+  | 'fahrer_zugeordnet'
+  | 'fahrer_benachrichtigt'
+  | 'bezahlt'
+  | 'widerspruch'
+  | 'abgeschlossen';
+
+export interface FineMatchCandidate {
+  driver_id: string;
+  driver_name: string;
+  employee_number: string;
+  work_session_id: string;
+  assignment_id: string | null;
+  company_name: string | null;
+  session_started_at: string;
+  session_ended_at: string | null;
+  assignment_start_time: string | null;
+  assignment_end_time: string | null;
+  match_score: number;
+}
+
+export interface FineMatchPreview {
+  vehicle_id: string;
+  violation_at: string;
+  tolerance_minutes: number;
+  candidates: FineMatchCandidate[];
+  suggested: FineMatchCandidate | null;
+  match_type: FineMatchType;
+}
+
+export interface FineStatusLog {
+  id: string;
+  from_status: FineStatus | null;
+  to_status: FineStatus;
+  changed_by_user_id?: string | null;
+  changed_by_driver_id?: string | null;
+  note?: string | null;
+  created_at: string;
+}
+
+export interface Fine {
+  id: string;
+  vehicle_id: string;
+  vehicle: { id: string; plate_number: string; internal_code?: string | null };
+  driver_id?: string | null;
+  driver?: { id: string; name: string; employee_number: string } | null;
+  match_type: FineMatchType;
+  matched_work_session_id?: string | null;
+  matched_work_session?: {
+    id: string;
+    started_at: string;
+    ended_at?: string | null;
+    status: string;
+  } | null;
+  matched_assignment_id?: string | null;
+  matched_assignment?: {
+    id: string;
+    work_date: string;
+    start_time: string;
+    end_time: string;
+    company_name: string;
+  } | null;
+  violation_at: string;
+  violation_location: string;
+  violation_type: string;
+  violation_category: FineViolationCategory;
+  amount?: number | null;
+  payment_due_date?: string | null;
+  notice_date?: string | null;
+  status: FineStatus;
+  notes?: string | null;
+  match_candidates?: FineMatchCandidate[] | null;
+  match_tolerance_minutes?: number | null;
+  driver_notified_at?: string | null;
+  driver_acknowledged_at?: string | null;
+  pending_ack?: boolean;
+  days_until_due?: number | null;
+  is_urgent?: boolean;
+  document_url?: string | null;
+  created_by?: { id: string; name: string; email: string } | null;
+  status_logs: FineStatusLog[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FineStats {
+  by_status: Partial<Record<FineStatus, number>>;
+  by_category: Partial<Record<FineViolationCategory, number>>;
+  top_vehicles: Array<{ vehicle_id: string; plate_number: string; count: number }>;
+  top_drivers: Array<{
+    driver_id: string | null;
+    driver_name: string | null;
+    employee_number: string | null;
+    count: number;
+  }>;
+}
+
+// ─── Departure check & defects ───────────────────────────────────────────────
+
+export type DepartureCheckItemStatus = 'ok' | 'defekt' | 'na';
+export type DepartureCheckOverallStatus = 'ok' | 'maengel_gemeldet';
+export type DefectSeverity = 'kritisch' | 'mittel' | 'gering';
+export type DefectStatus = 'offen' | 'in_reparatur' | 'behoben' | 'bestaetigt';
+export type DefectSource = 'departure_check' | 'manual_report';
+
+export interface DepartureCheckItemResult {
+  id: string;
+  item_key: string;
+  item_label: string;
+  sort_order: number;
+  result: DepartureCheckItemStatus;
+  defect_description?: string | null;
+  photo_count: number;
+}
+
+export interface DepartureCheck {
+  id: string;
+  driver_id: string;
+  driver: { id: string; name: string; employee_number: string };
+  vehicle_id: string;
+  vehicle: {
+    id: string;
+    plate_number: string;
+    internal_code?: string | null;
+    category?: string | null;
+  };
+  assignment_id?: string | null;
+  assignment?: {
+    id: string;
+    work_date: string;
+    start_time: string;
+    company_name: string;
+  } | null;
+  template_id?: string | null;
+  template_name?: string | null;
+  work_date: string;
+  performed_at: string;
+  overall_status: DepartureCheckOverallStatus;
+  item_results: DepartureCheckItemResult[];
+  defects?: Array<{ id: string; severity: string; status: string; title: string }>;
+  created_at: string;
+}
+
+export interface MissingDepartureCheck {
+  driver_id: string;
+  driver_name: string;
+  employee_number: string;
+  vehicle_id: string;
+  vehicle_plate: string;
+  assignment_id: string;
+  start_time: string;
+  work_date: string;
+}
+
+export interface DefectStatusLog {
+  id: string;
+  from_status: DefectStatus | null;
+  to_status: DefectStatus;
+  changed_by_user_id?: string | null;
+  changed_by_driver_id?: string | null;
+  note?: string | null;
+  repair_company?: string | null;
+  estimated_repair_date?: string | null;
+  created_at: string;
+}
+
+export interface Defect {
+  id: string;
+  vehicle_id: string;
+  vehicle: {
+    id: string;
+    plate_number: string;
+    internal_code?: string | null;
+    status?: string | null;
+  };
+  reported_by_driver_id: string;
+  reported_by: { id: string; name: string; employee_number: string };
+  source: DefectSource;
+  departure_check_id?: string | null;
+  title: string;
+  description: string;
+  severity: DefectSeverity;
+  status: DefectStatus;
+  repair_company?: string | null;
+  estimated_repair_date?: string | null;
+  confirmation_driver_id?: string | null;
+  confirmation_driver?: { id: string; name: string; employee_number: string } | null;
+  confirmed_at?: string | null;
+  photo_count: number;
+  photo_urls?: string[];
+  status_logs: DefectStatusLog[];
+  created_at: string;
+  updated_at: string;
+}
 
 // ─── Vehicle Handover ──────────────────────────────────────────────────────
 

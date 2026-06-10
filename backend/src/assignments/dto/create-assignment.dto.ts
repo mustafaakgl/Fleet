@@ -1,4 +1,4 @@
-import { IsDateString, IsNumber, IsOptional, IsString, Matches, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString, Matches, Min, MinLength } from 'class-validator';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -66,4 +66,12 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  acknowledge_license_compliance_warning?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  acknowledge_vehicle_defect_warning?: boolean;
 }

@@ -8,6 +8,8 @@ export const DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'documents');
 export const DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), DOCUMENT_UPLOAD_RELATIVE_DIR);
 export const VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR = join('uploads', 'vehicles');
 export const VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR);
+export const LICENSE_PHOTO_UPLOAD_RELATIVE_DIR = join('uploads', 'license-photos');
+export const LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), LICENSE_PHOTO_UPLOAD_RELATIVE_DIR);
 
 @Injectable()
 export class LocalStorageService extends StorageService {
@@ -15,6 +17,7 @@ export class LocalStorageService extends StorageService {
     super();
     mkdirSync(DOCUMENT_UPLOAD_ABSOLUTE_DIR, { recursive: true });
     mkdirSync(VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR, { recursive: true });
+    mkdirSync(LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR, { recursive: true });
   }
 
   buildStoredPath(bucket: StorageBucket, storedFileName: string): string {
@@ -23,6 +26,9 @@ export class LocalStorageService extends StorageService {
     }
     if (bucket === 'vehicles') {
       return `/uploads/vehicles/${storedFileName}`;
+    }
+    if (bucket === 'license-photos') {
+      return `/uploads/license-photos/${storedFileName}`;
     }
     throw new Error(`Unsupported storage bucket: ${bucket}`);
   }

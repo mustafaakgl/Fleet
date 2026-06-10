@@ -13,6 +13,7 @@ export default function ProfileStackLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="license-history" />
     </Stack>
   );
 }

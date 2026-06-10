@@ -13,7 +13,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { assignmentsApi, driversApi, vehiclesApi, companiesApi } from '@/lib/api';
+import { LicenseComplianceWarningDialog } from '@/components/license-checks/LicenseComplianceWarningDialog';
+import { driversApi, vehiclesApi, companiesApi } from '@/lib/api';
+import {
+  createAssignmentWithLicenseAck,
+  parseLicenseComplianceError,
+  shouldWarnLicenseCompliance,
+} from '@/lib/license-compliance-assignment';
 import { buildAssignmentRouteName, formatStructuredAddress } from '@/lib/address-format';
 import type { Driver, Vehicle, Company } from '@/lib/types';
 
@@ -62,6 +68,8 @@ export default function NewAssignmentPage() {
   const router = useRouter();
   const { t } = useTranslation();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [licenseWarningOpen, setLicenseWarningOpen] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState<FormData | null>(null);
 
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -130,7 +138,7 @@ export default function NewAssignmentPage() {
     setDeliveryAddress(formatStructuredAddress(parts));
   }
 
-  async function onSubmit(data: FormData) {
+  async function createAssignment(data: FormData, acknowledgeLicenseWarning = false) {
     setServerError(null);
     const company = companies.find((item) => item.id === data.company_id);
     const pickup = formatStructuredAddress({
@@ -147,24 +155,32 @@ export default function NewAssignmentPage() {
     });
 
     try {
-      await assignmentsApi.create({
-        driver_id: data.driver_id,
-        vehicle_id: data.vehicle_id || undefined,
-        company_id: data.company_id,
-        company_name: company?.name,
-        cargo_name: data.cargo_name,
-        cargo_owner: data.cargo_owner,
-        pickup_address: pickup,
-        delivery_address: delivery,
-        work_date: data.work_date,
-        start_time: data.start_time,
-        end_time: data.end_time,
-        route_name: buildAssignmentRouteName(pickup, delivery) || undefined,
-        expected_daily_revenue: data.expected_daily_revenue,
-        notes: data.notes || undefined,
-      });
+      await createAssignmentWithLicenseAck(
+        {
+          driver_id: data.driver_id,
+          vehicle_id: data.vehicle_id || undefined,
+          company_id: data.company_id,
+          company_name: company?.name,
+          cargo_name: data.cargo_name,
+          cargo_owner: data.cargo_owner,
+          pickup_address: pickup,
+          delivery_address: delivery,
+          work_date: data.work_date,
+          start_time: data.start_time,
+          end_time: data.end_time,
+          route_name: buildAssignmentRouteName(pickup, delivery) || undefined,
+          expected_daily_revenue: data.expected_daily_revenue,
+          notes: data.notes || undefined,
+        },
+        acknowledgeLicenseWarning,
+      );
       router.push('/assignments');
     } catch (err: unknown) {
+      if (parseLicenseComplianceError(err)) {
+        setPendingSubmit(data);
+        setLicenseWarningOpen(true);
+        return;
+      }
       const message =
         (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       const text = Array.isArray(message) ? message.join(' ') : message;
@@ -174,6 +190,15 @@ export default function NewAssignmentPage() {
           : text || t('assignmentForm.createError'),
       );
     }
+  }
+
+  async function onSubmit(data: FormData) {
+    if (await shouldWarnLicenseCompliance(data.driver_id)) {
+      setPendingSubmit(data);
+      setLicenseWarningOpen(true);
+      return;
+    }
+    await createAssignment(data, false);
   }
 
   const pickupError =
@@ -341,6 +366,19 @@ export default function NewAssignmentPage() {
           </Button>
         </div>
       </form>
+
+      <LicenseComplianceWarningDialog
+        open={licenseWarningOpen}
+        onOpenChange={setLicenseWarningOpen}
+        onConfirm={() => {
+          if (pendingSubmit) {
+            void createAssignment(pendingSubmit, true);
+          }
+          setLicenseWarningOpen(false);
+          setPendingSubmit(null);
+        }}
+        onCancel={() => setPendingSubmit(null)}
+      />
     </div>
   );
 }

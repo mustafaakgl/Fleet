@@ -24,6 +24,15 @@ export const TENANT_SCOPED_MODELS = new Set([
   'UserInvitation',
   'WorkSession',
   'VehicleEquipment',
+  'DriverLicense',
+  'LicenseCheck',
+  'ChecklistTemplate',
+  'DepartureCheck',
+  'Defect',
+  'DefectStatusLog',
+  'DepartureCheckReminderState',
+  'Fine',
+  'FineStatusLog',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

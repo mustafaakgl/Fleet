@@ -7,6 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverDto } from './dto/update-driver.dto';
+import { DriverLicensesService } from '../license-compliance/driver-licenses.service';
+import { LicenseComplianceService } from '../license-compliance/license-compliance.service';
 
 const ALLOWED_STATUSES: ReadonlySet<DriverStatus> = new Set([
   'active',
@@ -29,7 +31,7 @@ function toDecimalNumber(value: Prisma.Decimal | null | undefined): number {
   return Number(value);
 }
 
-function toClientDriver(row: DriverWithCurrent) {
+function toClientDriver(row: DriverWithCurrent, licenseComplianceBadge?: string) {
   return {
     id: row.id,
     employee_number: row.employeeNumber,
@@ -44,6 +46,7 @@ function toClientDriver(row: DriverWithCurrent) {
     passport_expiry_date: row.passportExpiryDate?.toISOString(),
     status: row.status,
     risk_level: row.riskLevel,
+    license_compliance_badge: licenseComplianceBadge ?? null,
     date_of_birth: row.dateOfBirth?.toISOString().slice(0, 10) ?? null,
     home_address_street: row.homeAddressStreet,
     home_address_zip_code: row.homeAddressZipCode,
@@ -80,6 +83,8 @@ export class DriversService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly invitations: InvitationsService,
+    private readonly licenseCompliance: LicenseComplianceService,
+    private readonly driverLicenses: DriverLicensesService,
   ) {}
 
   async listDrivers(query: { status?: string; search?: string; page?: number; limit?: number }) {
@@ -113,11 +118,18 @@ export class DriversService {
       }),
     ]);
 
+    const complianceEntries = await Promise.all(
+      rows.map((row) => this.licenseCompliance.getDriverCompliance(row.id)),
+    );
+    const badgeByDriverId = new Map(
+      complianceEntries.map((entry) => [entry.driver_id, entry.badge]),
+    );
+
     return {
       total,
       page,
       limit,
-      data: rows.map(toClientDriver),
+      data: rows.map((row) => toClientDriver(row, badgeByDriverId.get(row.id))),
     };
   }
 
@@ -142,6 +154,8 @@ export class DriversService {
       throw new NotFoundException('Driver not found');
     }
 
+    const licenseCompliance = await this.licenseCompliance.getDriverCompliance(id);
+
     const documents = await this.prisma.document.findMany({
       where: { ownerType: 'driver', ownerId: id },
       orderBy: { createdAt: 'desc' },
@@ -163,6 +177,8 @@ export class DriversService {
 
     return {
       ...baseClient,
+      license_compliance_badge: licenseCompliance.badge,
+      license_compliance: licenseCompliance,
       recent_assignments: driver.assignments.map((a) => ({
         id: a.id,
         driver: { id: driver.id, name: `${driver.firstName} ${driver.lastName}` },
@@ -286,6 +302,10 @@ export class DriversService {
       include: currentAssignmentInclude,
     });
 
+    if (dto.status === 'terminated' || dto.status === 'inactive') {
+      await this.driverLicenses.softDeleteForTerminatedDriver(id, actorUserId);
+    }
+
     const changed = changedFieldNames(dto as Record<string, unknown>);
     if (changed.length > 0) {
       await safeAuditLog(this.auditService, {
@@ -318,6 +338,8 @@ export class DriversService {
       data: { status: 'inactive' },
       include: currentAssignmentInclude,
     });
+    await this.driverLicenses.softDeleteForTerminatedDriver(id, actorUserId);
+
     await safeAuditLog(this.auditService, {
       actorUserId,
       action: 'driver.deactivated',
@@ -361,7 +383,7 @@ export class DriversService {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const [vehicleAccidents, cargoDamages, openAccidents] = await Promise.all([
+    const [vehicleAccidents, cargoDamages, openAccidents, fines6m] = await Promise.all([
       this.prisma.accident.count({
         where: {
           driverId: id,
@@ -381,12 +403,19 @@ export class DriversService {
       this.prisma.accident.count({
         where: { driverId: id, status: { in: ['reported', 'under_review'] } },
       }),
+      this.prisma.fine.count({
+        where: {
+          driverId: id,
+          violationAt: { gte: sixMonthsAgo },
+        },
+      }),
     ]);
 
     const points =
       vehicleAccidents * 3 +
       cargoDamages * 2 +
-      openAccidents * 1;
+      openAccidents * 1 +
+      fines6m * 1;
 
     const level: 'green' | 'yellow' | 'red' =
       points >= 6 ? 'red' : points >= 3 ? 'yellow' : 'green';
@@ -401,6 +430,7 @@ export class DriversService {
         vehicle_accidents_6m: vehicleAccidents,
         cargo_damages_6m: cargoDamages,
         open_incidents: openAccidents,
+        fines_6m: fines6m,
       },
     };
   }

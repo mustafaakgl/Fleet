@@ -23,6 +23,13 @@ import type {
   SubmitLocationResponse,
   DriverDocumentsResponse,
   DriverDocumentItem,
+  LicenseCheckHistoryItem,
+  LicenseCheckPhotoMeta,
+  LicenseCheckStatusResponse,
+  LicenseCheckStep,
+  DriverFine,
+  DepartureCheckStatusResponse,
+  DriverDefect,
 } from './types';
 
 type LoginResponse = {
@@ -337,6 +344,120 @@ export const driverApi = {
   },
   async markAllNotificationsRead() {
     const { data } = await apiClient.post('/driver/notifications/read-all');
+    return data;
+  },
+  async licenseCheckStatus() {
+    const { data } = await apiClient.get<LicenseCheckStatusResponse>('/driver/license-check/status');
+    return data;
+  },
+  async licenseCheckHistory() {
+    const { data } = await apiClient.get<LicenseCheckHistoryItem[]>('/driver/license-check/history');
+    return data;
+  },
+  async departureCheckStatus() {
+    const { data } = await apiClient.get<DepartureCheckStatusResponse>('/driver/departure-check/status');
+    return data;
+  },
+  async submitDepartureCheck(payload: {
+    vehicle_id: string;
+    assignment_id?: string;
+    client_submission_id: string;
+    items: Array<{
+      item_key: string;
+      result: 'ok' | 'defekt' | 'na';
+      defect_description?: string;
+      defect_severity?: 'gering' | 'mittel' | 'kritisch';
+    }>;
+    latitude?: number;
+    longitude?: number;
+    accuracy_m?: number;
+    signature_confirmed_at: string;
+    photosByItemKey: Record<string, Array<{ uri: string; name: string; type: string }>>;
+  }) {
+    const formData = new FormData();
+    formData.append(
+      'payload',
+      JSON.stringify({
+        vehicle_id: payload.vehicle_id,
+        assignment_id: payload.assignment_id,
+        client_submission_id: payload.client_submission_id,
+        items: payload.items,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        accuracy_m: payload.accuracy_m,
+        signature_confirmed_at: payload.signature_confirmed_at,
+      }),
+    );
+    for (const [itemKey, photos] of Object.entries(payload.photosByItemKey)) {
+      for (const photo of photos) {
+        formData.append(`photo_${itemKey}`, photo as unknown as Blob);
+      }
+    }
+    const { data } = await apiClient.post('/driver/departure-check/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+  async listDefects() {
+    const { data } = await apiClient.get<DriverDefect[]>('/driver/defects');
+    return data;
+  },
+  async reportDefect(payload: {
+    vehicle_id: string;
+    description: string;
+    severity: 'kritisch' | 'mittel' | 'gering';
+    title?: string;
+    photos: Array<{ uri: string; name: string; type: string }>;
+  }) {
+    const formData = new FormData();
+    formData.append('vehicle_id', payload.vehicle_id);
+    formData.append('description', payload.description);
+    formData.append('severity', payload.severity);
+    if (payload.title) formData.append('title', payload.title);
+    for (const photo of payload.photos) {
+      formData.append('photos', photo as unknown as Blob);
+    }
+    const { data } = await apiClient.post<DriverDefect>('/driver/defects/report', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+  async confirmDefect(id: string, note?: string) {
+    const { data } = await apiClient.post<DriverDefect>(`/driver/defects/${id}/confirm`, { note });
+    return data;
+  },
+  async listFines() {
+    const { data } = await apiClient.get<DriverFine[]>('/driver/fines');
+    return data;
+  },
+  async getFine(id: string) {
+    const { data } = await apiClient.get<DriverFine>(`/driver/fines/${id}`);
+    return data;
+  },
+  async acknowledgeFine(id: string, ackMetadata?: Record<string, unknown>) {
+    const { data } = await apiClient.post<DriverFine>(`/driver/fines/${id}/acknowledge`, {
+      ack_metadata: ackMetadata ? JSON.stringify(ackMetadata) : undefined,
+    });
+    return data;
+  },
+  async submitLicenseCheck(payload: {
+    front: { uri: string; name: string; type: string };
+    back: { uri: string; name: string; type: string };
+    selfie: { uri: string; name: string; type: string };
+    photoMetadata: Record<LicenseCheckStep, LicenseCheckPhotoMeta>;
+    notes?: string;
+  }) {
+    const formData = new FormData();
+    formData.append('front', payload.front as unknown as Blob);
+    formData.append('back', payload.back as unknown as Blob);
+    formData.append('selfie', payload.selfie as unknown as Blob);
+    formData.append('photo_metadata', JSON.stringify(payload.photoMetadata));
+    if (payload.notes) {
+      formData.append('notes', payload.notes);
+    }
+    const { data } = await apiClient.post('/driver/license-check/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return data;
   },
 };

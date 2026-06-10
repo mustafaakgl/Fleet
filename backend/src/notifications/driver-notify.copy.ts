@@ -5,7 +5,15 @@ export type DriverNotifyKey =
   | 'checkin_added_to_einsatzplan'
   | 'messenger_message'
   | 'transport_approved'
-  | 'transport_rejected';
+  | 'transport_rejected'
+  | 'license_check_due'
+  | 'license_check_reminder'
+  | 'license_check_approved'
+  | 'license_check_rejected'
+  | 'license_expiry_soon'
+  | 'departure_check_reminder'
+  | 'defect_confirm_due'
+  | 'fine_assigned';
 
 type CopyTemplate = {
   title: string;
@@ -48,6 +56,39 @@ const COPY: Record<string, Record<DriverNotifyKey, CopyTemplate>> = {
           ? `Taşıma talebin reddedildi: ${p.reason}`
           : 'Taşıma talebin reddedildi.',
     },
+    license_check_due: {
+      title: 'Ehliyet kontrolü zamanı',
+      message: () => 'Dijital ehliyet kontrolünü uygulamadan tamamla: ön yüz, arka yüz ve selfie.',
+    },
+    license_check_reminder: {
+      title: 'Ehliyet kontrolü hatırlatması',
+      message: () => 'Ehliyet kontrolün hâlâ bekliyor. Lütfen bugün tamamla.',
+    },
+    license_check_approved: {
+      title: 'Ehliyet kontrolü onaylandı',
+      message: () => 'Dijital ehliyet kontrolün onaylandı.',
+    },
+    license_check_rejected: {
+      title: 'Ehliyet kontrolü reddedildi',
+      message: (p) => p.reason || 'Ehliyet kontrolün reddedildi. Lütfen yeniden gönder.',
+    },
+    license_expiry_soon: {
+      title: 'Ehliyet süresi doluyor',
+      message: (p) => `Ehliyetin ${p.date ?? ''} tarihinde sona eriyor (${p.days ?? ''} gün kaldı).`,
+    },
+    departure_check_reminder: {
+      title: 'Abfahrtskontrolle fehlt',
+      message: () => 'Sabah araç kontrolünü tamamla — işe başlamadan önce zorunlu.',
+    },
+    defect_confirm_due: {
+      title: 'Arıza onayı bekliyor',
+      message: () => 'Giderilen bir arıza onayını bekliyor. Uygulamadan onayla.',
+    },
+    fine_assigned: {
+      title: 'Yeni trafik cezası',
+      message: (p) =>
+        `${p.plate ?? 'Araç'} için ${p.date ?? ''} tarihli ceza bildirimi — uygulamadan onayla.`,
+    },
   },
   de: {
     request_approved: {
@@ -84,6 +125,39 @@ const COPY: Record<string, Record<DriverNotifyKey, CopyTemplate>> = {
           ? `Deine Transportanfrage wurde abgelehnt: ${p.reason}`
           : 'Deine Transportanfrage wurde abgelehnt.',
     },
+    license_check_due: {
+      title: 'Führerscheinkontrolle fällig',
+      message: () => 'Bitte digitale Führerscheinkontrolle in der App durchführen (Vorderseite, Rückseite, Selfie).',
+    },
+    license_check_reminder: {
+      title: 'Erinnerung: Führerscheinkontrolle',
+      message: () => 'Deine Führerscheinkontrolle ist noch offen. Bitte heute abschließen.',
+    },
+    license_check_approved: {
+      title: 'Führerscheinkontrolle bestätigt',
+      message: () => 'Deine digitale Führerscheinkontrolle wurde bestätigt.',
+    },
+    license_check_rejected: {
+      title: 'Führerscheinkontrolle abgelehnt',
+      message: (p) => p.reason || 'Deine Führerscheinkontrolle wurde abgelehnt. Bitte erneut einreichen.',
+    },
+    license_expiry_soon: {
+      title: 'Führerschein läuft ab',
+      message: (p) => `Dein Führerschein läuft am ${p.date ?? ''} ab (${p.days ?? ''} Tage Hinweis).`,
+    },
+    departure_check_reminder: {
+      title: 'Abfahrtskontrolle fehlt',
+      message: () => 'Bitte die morgendliche Abfahrtskontrolle abschließen — vor Arbeitsbeginn Pflicht.',
+    },
+    defect_confirm_due: {
+      title: 'Mangel bestätigen',
+      message: () => 'Ein behobener Mangel wartet auf deine Bestätigung in der App.',
+    },
+    fine_assigned: {
+      title: 'Neuer Bußgeldbescheid',
+      message: (p) =>
+        `Bußgeld für ${p.plate ?? 'Fahrzeug'} vom ${p.date ?? ''} — bitte in der App bestätigen.`,
+    },
   },
   en: {
     request_approved: {
@@ -119,6 +193,39 @@ const COPY: Record<string, Record<DriverNotifyKey, CopyTemplate>> = {
         p.reason
           ? `Your transport request was rejected: ${p.reason}`
           : 'Your transport request was rejected.',
+    },
+    license_check_due: {
+      title: 'License check due',
+      message: () => 'Complete your digital license check in the app: front, back, and selfie.',
+    },
+    license_check_reminder: {
+      title: 'License check reminder',
+      message: () => 'Your license check is still pending. Please complete it today.',
+    },
+    license_check_approved: {
+      title: 'License check approved',
+      message: () => 'Your digital license check was approved.',
+    },
+    license_check_rejected: {
+      title: 'License check rejected',
+      message: (p) => p.reason || 'Your license check was rejected. Please resubmit.',
+    },
+    license_expiry_soon: {
+      title: 'License expiring soon',
+      message: (p) => `Your license expires on ${p.date ?? ''} (${p.days ?? ''}-day notice).`,
+    },
+    departure_check_reminder: {
+      title: 'Departure check missing',
+      message: () => 'Complete your morning vehicle check before starting work.',
+    },
+    defect_confirm_due: {
+      title: 'Confirm repaired defect',
+      message: () => 'A repaired defect is waiting for your confirmation in the app.',
+    },
+    fine_assigned: {
+      title: 'New traffic fine',
+      message: (p) =>
+        `Fine for ${p.plate ?? 'vehicle'} on ${p.date ?? ''} — please acknowledge in the app.`,
     },
   },
 };

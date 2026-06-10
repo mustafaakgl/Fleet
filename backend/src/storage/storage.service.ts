@@ -1,4 +1,4 @@
-export type StorageBucket = 'documents' | 'vehicles';
+export type StorageBucket = 'documents' | 'vehicles' | 'license-photos';
 
 export abstract class StorageService {
   /** Internal storage path persisted in the database (not publicly served). */

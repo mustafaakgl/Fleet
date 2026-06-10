@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import {
   DOCUMENT_UPLOAD_ABSOLUTE_DIR,
+  LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR,
   VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR,
 } from './local-storage.service';
 import type { StorageBucket } from './storage.service';
@@ -22,7 +23,7 @@ export function mimeTypeFromFileName(fileName: string): string {
 export function parseStoredFileUrl(
   fileUrl: string,
 ): { bucket: StorageBucket; storedFileName: string } | null {
-  const match = fileUrl.match(/^\/uploads\/(documents|vehicles)\/([^/]+)$/);
+  const match = fileUrl.match(/^\/uploads\/(documents|vehicles|license-photos)\/([^/]+)$/);
   if (!match) {
     return null;
   }
@@ -40,6 +41,10 @@ export function resolveAbsolutePathFromStoredUrl(fileUrl: string): string | null
   }
 
   const baseDir =
-    parsed.bucket === 'documents' ? DOCUMENT_UPLOAD_ABSOLUTE_DIR : VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR;
+    parsed.bucket === 'documents'
+      ? DOCUMENT_UPLOAD_ABSOLUTE_DIR
+      : parsed.bucket === 'vehicles'
+        ? VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR
+        : LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR;
   return join(baseDir, parsed.storedFileName);
 }

@@ -264,6 +264,82 @@ enum ReminderType {
   custom
 }
 
+enum LicenseCheckType {
+  initial
+  periodic
+}
+
+enum LicenseCheckStatus {
+  pending
+  approved
+  rejected
+}
+
+enum LicenseComplianceBadge {
+  green
+  yellow
+  red
+}
+
+enum VehicleCategory {
+  truck
+  transporter
+  car
+  special
+}
+
+enum DepartureCheckOverallStatus {
+  ok
+  maengel_gemeldet
+}
+
+enum DepartureCheckItemStatus {
+  ok
+  defekt
+  na
+}
+
+enum DefectSource {
+  departure_check
+  manual_report
+}
+
+enum DefectSeverity {
+  kritisch
+  mittel
+  gering
+}
+
+enum DefectStatus {
+  offen
+  in_reparatur
+  behoben
+  bestaetigt
+}
+
+enum FineViolationCategory {
+  speed
+  parking
+  red_light
+  distance
+  other
+}
+
+enum FineMatchType {
+  auto
+  manual
+  unmatched
+}
+
+enum FineStatus {
+  neu
+  fahrer_zugeordnet
+  fahrer_benachrichtigt
+  bezahlt
+  widerspruch
+  abgeschlossen
+}
+
 enum MessageTranslationStatus {
   not_requested
   pending
@@ -319,6 +395,15 @@ model Tenant {
   customerAssignmentMessages CustomerAssignmentMessage[]
   workSessions          WorkSession[]
   vehicleEquipment      VehicleEquipment[]
+  driverLicenses        DriverLicense[]
+  licenseChecks         LicenseCheck[]
+  checklistTemplates    ChecklistTemplate[]
+  departureChecks       DepartureCheck[]
+  defects               Defect[]
+  defectStatusLogs      DefectStatusLog[]
+  departureCheckReminders DepartureCheckReminderState[]
+  fines                 Fine[]
+  fineStatusLogs        FineStatusLog[]
 }
 
 model TenantSubscription {
@@ -379,6 +464,10 @@ model User {
   createdPasswordResets PasswordResetToken[] @relation("PasswordResetCreatedBy")
   sentInvitations   UserInvitation[] @relation("InvitationSentBy")
   customerAssignmentMessages CustomerAssignmentMessage[]
+  verifiedLicenseChecks      LicenseCheck[] @relation("LicenseCheckVerifiedBy")
+  defectStatusChanges        DefectStatusLog[] @relation("DefectStatusChangedByUser")
+  createdFines               Fine[] @relation("FineCreatedBy")
+  fineStatusChanges          FineStatusLog[] @relation("FineStatusChangedByUser")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -468,9 +557,79 @@ model Driver {
   locationHistory   DriverLocationHistory[]
   workSessions      WorkSession[]
   serviceRecords    ServiceRecord[]
+  driverLicenses    DriverLicense[]
+  licenseChecks     LicenseCheck[]
+  departureChecks   DepartureCheck[]
+  reportedDefects   Defect[] @relation("DefectReportedBy")
+  defectsToConfirm  Defect[] @relation("DefectConfirmationDriver")
+  defectStatusChanges DefectStatusLog[] @relation("DefectStatusChangedByDriver")
+  departureCheckReminders DepartureCheckReminderState[]
+  fines                 Fine[]
+  fineStatusChanges     FineStatusLog[] @relation("FineStatusChangedByDriver")
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
+}
+
+model DriverLicense {
+  id                 String    @id @default(cuid())
+  tenantId           String    @default("default-tenant")
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId           String
+  licenseNumber      String
+  classes            String[]
+  issuedAt           DateTime  @db.Date
+  expiresAt          DateTime  @db.Date
+  issuingAuthority   String
+  frontPhotoStoredPath String?
+  backPhotoStoredPath  String?
+  nextCheckDueAt     DateTime? @db.Date
+  checkRequestedAt   DateTime?
+  lastReminderSentAt DateTime?
+  lastEscalationSentAt DateTime?
+  lastApprovedCheckAt DateTime?
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  driver Driver         @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  checks LicenseCheck[]
+
+  @@index([tenantId])
+  @@index([driverId])
+  @@index([expiresAt])
+  @@index([nextCheckDueAt])
+  @@index([deletedAt])
+}
+
+model LicenseCheck {
+  id                    String             @id @default(cuid())
+  tenantId              String             @default("default-tenant")
+  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId              String
+  driverLicenseId       String?
+  checkDate             DateTime           @default(now()) @db.Date
+  checkType             LicenseCheckType
+  status                LicenseCheckStatus @default(pending)
+  verifiedById          String?
+  verifiedAt            DateTime?
+  rejectionReason       String?
+  notes                 String?
+  frontPhotoStoredPath  String?
+  backPhotoStoredPath   String?
+  selfiePhotoStoredPath String?
+  photoMetadata         Json?
+  dueAt                 DateTime?          @db.Date
+  createdAt             DateTime           @default(now())
+
+  driver        Driver         @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driverLicense DriverLicense? @relation(fields: [driverLicenseId], references: [id], onDelete: SetNull)
+  verifiedBy    User?          @relation("LicenseCheckVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([driverId, checkDate])
+  @@index([status])
+  @@index([driverLicenseId])
 }
 
 model Vehicle {
@@ -484,6 +643,7 @@ model Vehicle {
   year                   Int?
   vin                    String?
   status                 VehicleStatus @default(active)
+  category               VehicleCategory @default(truck)
   currentDriverId        String?
   tuvExpiryDate          DateTime?
   spExpiryDate           DateTime?
@@ -504,6 +664,9 @@ model Vehicle {
   locationLatestSnapshots DriverLocationLatest[]
   locationHistory   DriverLocationHistory[]
   equipment         VehicleEquipment[]
+  departureChecks   DepartureCheck[]
+  defects           Defect[]
+  fines             Fine[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -597,6 +760,8 @@ model Assignment {
   accidents        Accident[]
   morningCheckins  MorningCheckin[]
   customerMessages CustomerAssignmentMessage[]
+  departureChecks  DepartureCheck[]
+  matchedFines     Fine[]
 
   @@index([tenantId])
   @@index([driverId, workDate])
@@ -818,6 +983,8 @@ model WorkSession {
   createdAt DateTime              @default(now())
   updatedAt DateTime              @updatedAt
 
+  matchedFines Fine[]
+
   @@index([tenantId])
   @@index([driverId, status])
   @@index([driverId, startedAt])
@@ -992,6 +1159,7 @@ model ServiceRecord {
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   driver  Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  linkedDefects Defect[]
 
   @@index([tenantId])
   @@index([vehicleId, date])
@@ -1096,4 +1264,258 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([action, createdAt])
   @@index([createdAt])
+}
+
+/// Admin-editable checklist template per vehicle category (Abfahrtskontrolle).
+model ChecklistTemplate {
+  id              String          @id @default(cuid())
+  tenantId        String          @default("default-tenant")
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name            String
+  vehicleCategory VehicleCategory
+  description     String?
+  isDefault       Boolean         @default(false)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  items           ChecklistTemplateItem[]
+  departureChecks DepartureCheck[]
+
+  @@index([tenantId])
+  @@index([tenantId, vehicleCategory, isActive])
+  @@index([tenantId, vehicleCategory, isDefault])
+}
+
+model ChecklistTemplateItem {
+  id                   String            @id @default(cuid())
+  templateId           String
+  template             ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sortOrder            Int
+  itemKey              String
+  label                String
+  description          String?
+  requiresPhotoOnDefect Boolean          @default(true)
+  isActive             Boolean           @default(true)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  departureCheckItemResults DepartureCheckItemResult[]
+
+  @@unique([templateId, itemKey])
+  @@index([templateId, sortOrder])
+}
+
+/// Immutable pre-departure vehicle check (Abfahrtskontrolle).
+model DepartureCheck {
+  id                   String                      @id @default(cuid())
+  tenantId             String                      @default("default-tenant")
+  tenant               Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId             String
+  vehicleId            String
+  assignmentId         String?
+  templateId           String
+  workDate             DateTime                    @db.Date
+  performedAt          DateTime
+  latitude             Decimal?                    @db.Decimal(10, 7)
+  longitude            Decimal?                    @db.Decimal(10, 7)
+  accuracyM            Float?
+  overallStatus        DepartureCheckOverallStatus
+  templateNameSnapshot String
+  signatureConfirmedAt DateTime?
+  signatureMetadata    Json?
+  clientSubmissionId   String?                     @unique
+  offlineCapturedAt    DateTime?
+  createdAt            DateTime                    @default(now())
+
+  driver     Driver          @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  assignment Assignment?     @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  itemResults DepartureCheckItemResult[]
+  defects    Defect[]
+
+  @@unique([driverId, vehicleId, workDate])
+  @@index([tenantId])
+  @@index([driverId, workDate])
+  @@index([vehicleId, workDate])
+  @@index([assignmentId])
+  @@index([performedAt])
+}
+
+model DepartureCheckItemResult {
+  id                 String                   @id @default(cuid())
+  departureCheckId   String
+  templateItemId     String?
+  itemKey            String
+  itemLabel          String
+  sortOrder          Int
+  result             DepartureCheckItemStatus
+  defectDescription  String?
+  photoStoredPaths   String[]
+  photoMetadata      Json?
+  createdAt          DateTime                 @default(now())
+
+  departureCheck DepartureCheck         @relation(fields: [departureCheckId], references: [id], onDelete: Cascade)
+  templateItem   ChecklistTemplateItem? @relation(fields: [templateItemId], references: [id], onDelete: SetNull)
+  defects        Defect[]
+
+  @@index([departureCheckId, sortOrder])
+  @@index([templateItemId])
+}
+
+/// Vehicle defect (Mängel) with status chain and audit trail.
+model Defect {
+  id                         String         @id @default(cuid())
+  tenantId                   String         @default("default-tenant")
+  tenant                     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId                  String
+  reportedByDriverId         String
+  source                     DefectSource
+  departureCheckId           String?
+  departureCheckItemResultId String?
+  title                      String?
+  description                String
+  severity                   DefectSeverity
+  status                     DefectStatus   @default(offen)
+  photoStoredPaths           String[]
+  photoMetadata              Json?
+  repairCompany              String?
+  estimatedRepairDate        DateTime?      @db.Date
+  serviceRecordId            String?
+  confirmationDriverId       String?
+  confirmedAt                DateTime?
+  anonymizedAt               DateTime?
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
+
+  vehicle                  Vehicle                   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  reportedBy               Driver                    @relation("DefectReportedBy", fields: [reportedByDriverId], references: [id], onDelete: Restrict)
+  departureCheck           DepartureCheck?           @relation(fields: [departureCheckId], references: [id], onDelete: SetNull)
+  departureCheckItemResult DepartureCheckItemResult? @relation(fields: [departureCheckItemResultId], references: [id], onDelete: SetNull)
+  serviceRecord            ServiceRecord?            @relation(fields: [serviceRecordId], references: [id], onDelete: SetNull)
+  confirmationDriver       Driver?                   @relation("DefectConfirmationDriver", fields: [confirmationDriverId], references: [id], onDelete: SetNull)
+  statusLogs               DefectStatusLog[]
+
+  @@index([tenantId])
+  @@index([vehicleId, status])
+  @@index([vehicleId, severity, status])
+  @@index([reportedByDriverId, createdAt])
+  @@index([confirmationDriverId, status])
+  @@index([departureCheckId])
+  @@index([anonymizedAt])
+}
+
+/// Immutable audit log for every defect status transition.
+model DefectStatusLog {
+  id                  String        @id @default(cuid())
+  tenantId            String        @default("default-tenant")
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  defectId            String
+  fromStatus          DefectStatus?
+  toStatus            DefectStatus
+  changedByUserId     String?
+  changedByDriverId   String?
+  note                String?
+  repairCompany       String?
+  estimatedRepairDate DateTime?     @db.Date
+  createdAt           DateTime      @default(now())
+
+  defect          Defect  @relation(fields: [defectId], references: [id], onDelete: Cascade)
+  changedByUser   User?   @relation("DefectStatusChangedByUser", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  changedByDriver Driver? @relation("DefectStatusChangedByDriver", fields: [changedByDriverId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([defectId, createdAt])
+}
+
+/// Daily reminder / escalation state when morning departure check is missing.
+model DepartureCheckReminderState {
+  id                   String    @id @default(cuid())
+  tenantId             String    @default("default-tenant")
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId             String
+  workDate             DateTime  @db.Date
+  lastReminderSentAt   DateTime?
+  lastEscalationSentAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, workDate])
+  @@index([tenantId])
+  @@index([workDate])
+}
+
+/// Traffic fine (Bußgeld) with driver matching and status workflow.
+model Fine {
+  id                      String                @id @default(cuid())
+  tenantId                String                @default("default-tenant")
+  tenant                  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId               String
+  driverId                String?
+  matchType               FineMatchType         @default(unmatched)
+  matchedWorkSessionId    String?
+  matchedAssignmentId     String?
+  violationAt             DateTime
+  violationLocation       String
+  violationType           String
+  violationCategory       FineViolationCategory
+  amount                  Decimal?              @db.Decimal(10, 2)
+  paymentDueDate          DateTime?             @db.Date
+  noticeDate              DateTime?             @db.Date
+  documentStoredPath      String?
+  documentMimeType        String?
+  status                  FineStatus            @default(neu)
+  notes                   String?
+  matchCandidates         Json?
+  matchToleranceMinutes   Int                   @default(30)
+  driverNotifiedAt        DateTime?
+  driverAcknowledgedAt    DateTime?
+  driverAckMetadata       Json?
+  lastDriverReminderSentAt DateTime?
+  lastDriverEscalationSentAt DateTime?
+  lastPaymentReminderDays Int?
+  lastPaymentReminderSentAt DateTime?
+  createdByUserId         String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  vehicle              Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver               Driver?      @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  matchedWorkSession   WorkSession? @relation(fields: [matchedWorkSessionId], references: [id], onDelete: SetNull)
+  matchedAssignment    Assignment?  @relation(fields: [matchedAssignmentId], references: [id], onDelete: SetNull)
+  createdBy            User?        @relation("FineCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  statusLogs             FineStatusLog[]
+
+  @@index([tenantId])
+  @@index([vehicleId, violationAt])
+  @@index([driverId, violationAt])
+  @@index([status])
+  @@index([paymentDueDate])
+  @@index([noticeDate])
+  @@index([matchType])
+  @@index([violationCategory])
+}
+
+/// Immutable audit log for every fine status transition.
+model FineStatusLog {
+  id                String      @id @default(cuid())
+  tenantId          String      @default("default-tenant")
+  tenant            Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  fineId            String
+  fromStatus        FineStatus?
+  toStatus          FineStatus
+  changedByUserId   String?
+  changedByDriverId String?
+  note              String?
+  createdAt         DateTime    @default(now())
+
+  fine            Fine    @relation(fields: [fineId], references: [id], onDelete: Cascade)
+  changedByUser   User?   @relation("FineStatusChangedByUser", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  changedByDriver Driver? @relation("FineStatusChangedByDriver", fields: [changedByDriverId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([fineId, createdAt])
 }

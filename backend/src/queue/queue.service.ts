@@ -8,6 +8,9 @@ const KNOWN_JOBS = [
   'privacy.retention',
   'drivers.birthdays',
   'company_emails.tomorrow',
+  'license_checks.daily',
+  'departure_checks.daily',
+  'fines.daily',
 ] as const;
 
 export type KnownJobName = (typeof KNOWN_JOBS)[number];

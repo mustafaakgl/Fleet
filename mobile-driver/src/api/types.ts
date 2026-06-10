@@ -346,10 +346,129 @@ export type DriverDocumentItem = {
   updatedAt: string;
 };
 
+export type LicenseCheckStep = 'front' | 'back' | 'selfie';
+
+export type LicenseCheckPhotoMeta = {
+  captured_at: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy_m?: number;
+};
+
+export type LicenseCheckStatusResponse = {
+  driver_id: string;
+  badge: 'green' | 'yellow' | 'red';
+  can_submit: boolean;
+  task_due?: string | null;
+  check_requested_at?: string | null;
+  has_pending_check: boolean;
+};
+
+export type LicenseCheckHistoryItem = {
+  id: string;
+  check_date: string;
+  check_type: 'initial' | 'periodic';
+  status: 'pending' | 'approved' | 'rejected';
+  rejection_reason?: string | null;
+  verified_at?: string | null;
+  created_at: string;
+};
+
 export type DriverDocumentsResponse = {
   uploadTypes: string[];
   requiredTypes: string[];
   missingRequired: string[];
   missingUploadableRequired: string[];
   items: DriverDocumentItem[];
+};
+
+export type DriverFineStatus =
+  | 'neu'
+  | 'fahrer_zugeordnet'
+  | 'fahrer_benachrichtigt'
+  | 'bezahlt'
+  | 'widerspruch'
+  | 'abgeschlossen';
+
+export type DriverFineViolationCategory = 'speed' | 'parking' | 'red_light' | 'distance' | 'other';
+
+export type DriverFine = {
+  id: string;
+  vehicle_id: string;
+  vehicle: { id: string; plate_number: string; internal_code?: string | null };
+  driver_id?: string | null;
+  driver?: { id: string; name: string; employee_number: string } | null;
+  violation_at: string;
+  violation_location: string;
+  violation_type: string;
+  violation_category: DriverFineViolationCategory;
+  amount?: number | null;
+  payment_due_date?: string | null;
+  notice_date?: string | null;
+  status: DriverFineStatus;
+  notes?: string | null;
+  driver_notified_at?: string | null;
+  driver_acknowledged_at?: string | null;
+  pending_ack?: boolean;
+  days_until_due?: number | null;
+  document_url?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DepartureCheckItemStatus = 'ok' | 'defekt' | 'na';
+
+export type DepartureCheckStatusResponse = {
+  required: boolean;
+  completed_today: boolean;
+  can_submit: boolean;
+  assignment: {
+    id: string;
+    work_date: string;
+    start_time: string;
+    company_name: string;
+    vehicle_id: string;
+    vehicle_plate: string;
+  } | null;
+  existing_check?: {
+    id: string;
+    overall_status: string;
+    performed_at: string;
+  } | null;
+  template: {
+    id: string;
+    name: string;
+    items: Array<{
+      id: string;
+      item_key: string;
+      label: string;
+      description?: string | null;
+      sort_order: number;
+      requires_photo_on_defect: boolean;
+    }>;
+  } | null;
+  vehicle_compliance?: {
+    has_blocking_defect: boolean;
+    blocks_departure_check: boolean;
+  } | null;
+};
+
+export type DriverDefectSeverity = 'kritisch' | 'mittel' | 'gering';
+export type DriverDefectStatus = 'offen' | 'in_reparatur' | 'behoben' | 'bestaetigt';
+
+export type DriverDefect = {
+  id: string;
+  vehicle_id: string;
+  vehicle: { id: string; plate_number: string; internal_code?: string | null; status?: string | null };
+  title: string;
+  description: string;
+  severity: DriverDefectSeverity;
+  status: DriverDefectStatus;
+  source: string;
+  pending_confirmation?: boolean;
+  photo_count: number;
+  photo_urls?: string[];
+  confirmed_at?: string | null;
+  created_at: string;
+  updated_at: string;
 };

@@ -11,6 +11,7 @@ import type { Readable } from 'node:stream';
 import { parseStoredFileUrl } from './file-path.util';
 import {
   DOCUMENT_UPLOAD_ABSOLUTE_DIR,
+  LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR,
   VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR,
 } from './local-storage.service';
 import type { StorageBucket } from './storage.service';
@@ -79,7 +80,11 @@ export class ObjectStorageService implements OnModuleInit {
 
   private localAbsolutePath(bucket: StorageBucket, storedFileName: string): string {
     const base =
-      bucket === 'documents' ? DOCUMENT_UPLOAD_ABSOLUTE_DIR : VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR;
+      bucket === 'documents'
+        ? DOCUMENT_UPLOAD_ABSOLUTE_DIR
+        : bucket === 'vehicles'
+          ? VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR
+          : LICENSE_PHOTO_UPLOAD_ABSOLUTE_DIR;
     return `${base}/${storedFileName}`;
   }
 

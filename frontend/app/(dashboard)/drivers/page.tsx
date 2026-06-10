@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DriverActionsMenu } from '@/components/drivers/DriverActionsMenu';
 import { DriverImportDialog } from '@/components/drivers/DriverImportDialog';
+import { LicenseComplianceBadgePill } from '@/components/license-checks/LicenseComplianceBadge';
 import { driversApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { downloadDriversCsv } from '@/lib/drivers-csv';
@@ -248,6 +249,7 @@ export default function DriversPage() {
                 <TableHead className={FLEET_TABLE_HEAD}>{t('drivers.currentCompany')}</TableHead>
                 <TableHead className={FLEET_TABLE_HEAD}>{t('drivers.accidentCount')}</TableHead>
                 <TableHead className={FLEET_TABLE_HEAD}>{t('drivers.riskScore')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>FS</TableHead>
                 <TableHead className={cn(FLEET_TABLE_HEAD, 'w-24')} />
               </TableRow>
             </TableHeader>
@@ -270,6 +272,9 @@ export default function DriversPage() {
                       {riskDot(d.risk_level)}
                       {d.risk_level}
                     </span>
+                  </TableCell>
+                  <TableCell className={FLEET_TABLE_CELL}>
+                    <LicenseComplianceBadgePill badge={d.license_compliance_badge} />
                   </TableCell>
                   <TableCell
                     className={cn(FLEET_TABLE_CELL, 'text-right')}

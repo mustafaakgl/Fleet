@@ -23,6 +23,7 @@ import { OperationalNotifyService } from '../notifications/operational-notify.se
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { WorkSessionsService } from '../work-sessions/work-sessions.service';
+import { DepartureCheckService } from '../departure-check/departure-check.service';
 import type { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import {
   allRequiredHandoverPhotosUploaded,
@@ -107,6 +108,7 @@ export class DriverMobileService {
     private readonly tracking: TrackingService,
     private readonly documentsService: DocumentsService,
     private readonly workSessions: WorkSessionsService,
+    private readonly departureCheck: DepartureCheckService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -747,6 +749,15 @@ export class DriverMobileService {
 
   async startWorkSession(userId: string) {
     const { driver } = await this.resolveDriver(userId);
+    const gate = await this.departureCheck.assertWorkSessionAllowed(driver.id);
+    if (!gate.allowed) {
+      throw new BadRequestException({
+        code: gate.code,
+        message: gate.message,
+        vehicle_id: gate.vehicle_id,
+        assignment_id: gate.assignment_id,
+      });
+    }
     const session = await this.workSessions.startSession(driver.id);
     return {
       id: session.id,

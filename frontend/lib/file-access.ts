@@ -52,6 +52,14 @@ export function documentDownloadApiPath(documentId: string): string {
   return `/documents/${documentId}/download`;
 }
 
+export function fineDocumentApiPath(fineId: string): string {
+  return `/fines/${fineId}/document`;
+}
+
+export function defectPhotoApiPath(defectId: string, photoIndex: number): string {
+  return `/defects/${defectId}/photo/${photoIndex}`;
+}
+
 export function customerProofDownloadApiPath(assignmentId: string, documentId: string): string {
   return `/customer/assignments/${assignmentId}/proofs/${documentId}/download`;
 }

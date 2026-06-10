@@ -48,6 +48,14 @@ import type {
   DriverPortalNotification,
   DriverDocumentsResponse,
   DriverDocumentItem,
+  LicenseCheck,
+  LicenseComplianceBadge,
+  Fine,
+  FineMatchPreview,
+  FineStats,
+  DepartureCheck,
+  MissingDepartureCheck,
+  Defect,
   MessengerLanguage,
   CustomerDashboardStats,
   CustomerAssignment,
@@ -116,6 +124,25 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        return 'Zeitüberschreitung — Backend antwortet nicht.';
+      }
+      return `Verbindung zum Backend fehlgeschlagen (${BASE_URL}). Server läuft? Start: npm run dev`;
+    }
+    const data = error.response.data as { message?: string | string[] } | undefined;
+    const message = data?.message;
+    if (Array.isArray(message)) return message.join('. ');
+    if (typeof message === 'string' && message.trim()) return message;
+    if (error.response.status === 403) return 'Keine Berechtigung für diese Aktion.';
+    if (error.response.status === 401) return 'Nicht angemeldet — bitte erneut einloggen.';
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
+}
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
@@ -393,8 +420,130 @@ export interface DriverRiskSummary {
     vehicle_accidents_6m: number;
     cargo_damages_6m: number;
     open_incidents: number;
+    fines_6m: number;
   };
 }
+
+export const departureChecksApi = {
+  list: (params?: { driver_id?: string; vehicle_id?: string; work_date?: string }) =>
+    api.get<DepartureCheck[]>('/departure-checks', { params }).then((r) => r.data),
+
+  missingToday: () =>
+    api.get<MissingDepartureCheck[]>('/departure-checks/missing-today').then((r) => r.data),
+
+  getById: (id: string) => api.get<DepartureCheck>(`/departure-checks/${id}`).then((r) => r.data),
+};
+
+export const defectsApi = {
+  list: (params?: {
+    vehicle_id?: string;
+    driver_id?: string;
+    status?: string;
+    severity?: string;
+  }) => api.get<Defect[]>('/defects', { params }).then((r) => r.data),
+
+  getById: (id: string) => api.get<Defect>(`/defects/${id}`).then((r) => r.data),
+
+  repairCompanies: () => api.get<string[]>('/defects/repair-companies').then((r) => r.data),
+
+  updateStatus: (
+    id: string,
+    payload: {
+      status: string;
+      note?: string;
+      repair_company?: string;
+      estimated_repair_date?: string;
+      confirmation_driver_id?: string;
+      service_record_id?: string;
+    },
+  ) => api.patch<Defect>(`/defects/${id}/status`, payload).then((r) => r.data),
+};
+
+export const finesApi = {
+  list: (params?: {
+    status?: string;
+    vehicle_id?: string;
+    driver_id?: string;
+    from?: string;
+    to?: string;
+  }) => api.get<Fine[]>('/fines', { params }).then((r) => r.data),
+
+  dueSoon: (days = 7) =>
+    api.get<Fine[]>('/fines/due-soon', { params: { days } }).then((r) => r.data),
+
+  stats: () => api.get<FineStats>('/fines/stats').then((r) => r.data),
+
+  matchPreview: (payload: {
+    vehicle_id: string;
+    violation_at: string;
+    tolerance_minutes?: number;
+  }) => api.post<FineMatchPreview>('/fines/match-preview', payload).then((r) => r.data),
+
+  getById: (id: string) => api.get<Fine>(`/fines/${id}`).then((r) => r.data),
+
+  create: (formData: FormData) =>
+    api.post<Fine>('/fines', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
+
+  assignDriver: (
+    id: string,
+    payload: {
+      driver_id: string;
+      matched_work_session_id?: string;
+      matched_assignment_id?: string;
+      note?: string;
+    },
+  ) => api.post<Fine>(`/fines/${id}/assign-driver`, payload).then((r) => r.data),
+
+  notifyDriver: (id: string) =>
+    api.post<Fine>(`/fines/${id}/notify-driver`).then((r) => r.data),
+
+  updateStatus: (id: string, payload: { status: string; note?: string }) =>
+    api.patch<Fine>(`/fines/${id}/status`, payload).then((r) => r.data),
+};
+
+export const licenseChecksApi = {
+  listPending: () => api.get<LicenseCheck[]>('/license-checks/pending').then((r) => r.data),
+
+  getById: (id: string) => api.get<LicenseCheck>(`/license-checks/${id}`).then((r) => r.data),
+
+  approve: (id: string) => api.post<LicenseCheck>(`/license-checks/${id}/approve`).then((r) => r.data),
+
+  reject: (id: string, rejection_reason: string) =>
+    api.post<LicenseCheck>(`/license-checks/${id}/reject`, { rejection_reason }).then((r) => r.data),
+
+  driverCompliance: (driverId: string) =>
+    api
+      .get<{
+        driver_id: string;
+        badge: LicenseComplianceBadge;
+        blocks_assignment: boolean;
+      }>(`/license-checks/drivers/${driverId}/compliance`)
+      .then((r) => r.data),
+
+  complianceSummary: () =>
+    api
+      .get<
+        Array<{
+          driver_id: string;
+          driver_name: string;
+          employee_number: string;
+          badge: LicenseComplianceBadge;
+        }>
+      >('/license-checks/compliance-summary')
+      .then((r) => r.data),
+};
+
+export const driverLicensesApi = {
+  list: (driverId?: string) =>
+    api.get('/driver-licenses', { params: driverId ? { driver_id: driverId } : undefined }).then((r) => r.data),
+
+  create: (formData: FormData) =>
+    api.post('/driver-licenses', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
+};
 
 export const driversApi = {
   list: (params?: DriverListParams) =>

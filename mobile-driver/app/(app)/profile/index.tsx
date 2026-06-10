@@ -140,6 +140,22 @@ export default function ProfileSettingsScreen() {
               showChevron
             />
 
+            <ListRow
+              icon="alert-circle"
+              title={t('fines.title')}
+              subtitle={t('fines.subtitle')}
+              onPress={() => router.push('/(app)/today/fines')}
+              showChevron
+            />
+
+            <ListRow
+              icon="tool"
+              title={t('defects.title')}
+              subtitle={t('defects.subtitle')}
+              onPress={() => router.push('/(app)/today/defects')}
+              showChevron
+            />
+
             <SectionHeader title={t('profile.language')} />
             <Text style={styles.hint}>{t('profile.languageHint')}</Text>
             <View style={styles.languageRow}>

@@ -76,6 +76,27 @@ export const PERMISSION_MATRIX: ModulePermission[] = [
     read: ['driver'],
     write: ['driver'],
   },
+  {
+    module: 'license_compliance',
+    read: OPERATIONAL_ROLES,
+    write: OPERATIONAL_WRITE_ROLES,
+    admin: ADMIN_ONLY_ROLES,
+    notes: 'Photo download + approve/reject: admin only',
+  },
+  {
+    module: 'departure_check',
+    read: OPERATIONAL_ROLES,
+    write: OPERATIONAL_WRITE_ROLES,
+    admin: ADMIN_ONLY_ROLES,
+    notes: 'Defect photos + status changes: admin/office write',
+  },
+  {
+    module: 'fine_management',
+    read: OPERATIONAL_ROLES,
+    write: OPERATIONAL_WRITE_ROLES,
+    admin: ADMIN_ONLY_ROLES,
+    notes: 'Fine document download: admin only',
+  },
 ];
 
 export function canPerformAction(role: UserRole | undefined, action: PermissionAction): boolean {

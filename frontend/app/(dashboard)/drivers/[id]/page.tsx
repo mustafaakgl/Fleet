@@ -8,7 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { driversApi, documentsApi, leaveRequestsApi, privacyApi, type DriverRiskSummary } from '@/lib/api';
+import { DriverLicenseForm } from '@/components/license-checks/DriverLicenseForm';
+import { LicenseComplianceBadgePill } from '@/components/license-checks/LicenseComplianceBadge';
+import {
+  driversApi,
+  documentsApi,
+  driverLicensesApi,
+  finesApi,
+  leaveRequestsApi,
+  privacyApi,
+  type DriverRiskSummary,
+} from '@/lib/api';
+import { FineStatusBadge } from '@/components/fines/FineStatusBadge';
+import type { Fine } from '@/lib/types';
 import { downloadBlob } from '@/lib/download-blob';
 import type { DriverDetail, Document, LeaveRequest } from '@/lib/types';
 import { getUser } from '@/lib/auth';
@@ -94,6 +106,10 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveRequestsError, setLeaveRequestsError] = useState<string | null>(null);
+  const [hasDriverLicense, setHasDriverLicense] = useState<boolean | null>(null);
+
+  const [fines, setFines] = useState<Fine[]>([]);
+  const [finesError, setFinesError] = useState<string | null>(null);
 
   useEffect(() => {
     const user = getUser();
@@ -112,6 +128,10 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (!id) return;
     driversApi.getRisk(id).then(setRisk).catch((e) => setRiskError(e?.message ?? 'Failed'));
+    driverLicensesApi
+      .list(id)
+      .then((rows: Array<{ id: string }>) => setHasDriverLicense(rows.length > 0))
+      .catch(() => setHasDriverLicense(null));
     documentsApi
       .list('driver', id)
       .then(setDocuments)
@@ -128,6 +148,10 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       .list({ driver_id: id })
       .then(setLeaveRequests)
       .catch((e) => setLeaveRequestsError(e?.message ?? 'Failed'));
+    finesApi
+      .list({ driver_id: id })
+      .then(setFines)
+      .catch((e) => setFinesError(e?.message ?? 'Failed'));
   }, [id]);
 
   async function handleGdprExport() {
@@ -373,9 +397,62 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                   label={t('driverDetail.openIncidents')}
                   value={String(risk.breakdown.open_incidents)}
                 />
+                <HeaderItem
+                  label={t('driverDetail.fines6m')}
+                  value={String(risk.breakdown.fines_6m ?? 0)}
+                />
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>{t('driverLicense.sectionTitle')}</CardTitle>
+          <LicenseComplianceBadgePill badge={driver.license_compliance_badge} />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {driver.license_compliance ? (
+            <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <InfoItem
+                label={t('driverLicense.nextCheck')}
+                value={driver.license_compliance.next_check_due_at ?? '—'}
+              />
+              <InfoItem
+                label={t('driverLicense.expiresAt')}
+                value={driver.license_compliance.expires_at ?? '—'}
+              />
+              <InfoItem
+                label={t('driverLicense.latestStatus')}
+                value={driver.license_compliance.latest_check?.status ?? '—'}
+              />
+              <InfoItem
+                label={t('driverLicense.pending')}
+                value={driver.license_compliance.has_pending_check ? t('common.yes') : t('common.no')}
+              />
+            </dl>
+          ) : null}
+          {isAdmin && hasDriverLicense === false ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="mb-3 text-sm text-amber-900">{t('driverLicense.registerHint')}</p>
+              <DriverLicenseForm
+                driverId={id}
+                onCreated={() => {
+                  setHasDriverLicense(true);
+                  driversApi.getById(id).then(setDriver).catch(() => undefined);
+                }}
+              />
+            </div>
+          ) : null}
+          {hasDriverLicense ? (
+            <p className="text-sm text-gray-600">
+              {t('driverLicense.manageHint')}{' '}
+              <Link href="/license-checks" className="font-medium text-blue-600 hover:underline">
+                {t('nav.licenseChecks')}
+              </Link>
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -709,6 +786,62 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                         ) : (
                           item.status
                         )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>{t('driverDetail.fineHistory')}</CardTitle>
+          <Link href="/fines" className="text-sm font-medium text-blue-600 hover:underline">
+            {t('nav.fines')}
+          </Link>
+        </CardHeader>
+        <CardContent className="p-0">
+          {finesError ? (
+            <p className="p-4 text-sm text-gray-500">{t('driverDetail.finesLoadError')}</p>
+          ) : (
+            <Table className={FLEET_TABLE}>
+              <TableHeader>
+                <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.date')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.vehicle')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colType')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colAmount')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.status')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className={FLEET_TABLE_BODY}>
+                {fines.length === 0 ? (
+                  <TableRow className={FLEET_TABLE_ROW}>
+                    <TableCell colSpan={5} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
+                      {t('common.noRecords')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  fines.map((fine) => (
+                    <TableRow className={FLEET_TABLE_ROW} key={fine.id}>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        <Link href={`/fines/${fine.id}`} className="text-blue-600 hover:underline">
+                          {formatDate(fine.violation_at)}
+                        </Link>
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{fine.vehicle.plate_number}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{fine.violation_type}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        {fine.amount != null ? currency(fine.amount) : '—'}
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        <FineStatusBadge
+                          status={fine.status}
+                          label={t(`fines.status.${fine.status}`)}
+                        />
                       </TableCell>
                     </TableRow>
                   ))

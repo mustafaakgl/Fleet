@@ -27,6 +27,14 @@
           "cameraPermission": "Allow Fleet Driver to take handover and document photos with the camera."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Fleet Driver uses the camera for vehicle handover photos and digital license checks (Führerscheinkontrolle).",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-asset",
       "expo-notifications",
       [

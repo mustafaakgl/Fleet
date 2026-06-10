@@ -14,7 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { assignmentsApi } from '@/lib/api';
+import { LicenseComplianceWarningDialog } from '@/components/license-checks/LicenseComplianceWarningDialog';
+import {
+  createAssignmentWithLicenseAck,
+  parseLicenseComplianceError,
+  shouldWarnLicenseCompliance,
+} from '@/lib/license-compliance-assignment';
+import type { AssignmentWritePayload } from '@/lib/types';
 import { buildVehicleTimelineNotes } from '@/lib/vehicle-assignment-source';
 import { formatDateUs, formatTime12h, minutesFromTime } from '@/lib/timeline-utils';
 import type { Company, Driver, Vehicle } from '@/lib/types';
@@ -63,6 +69,8 @@ export function CreateTimelineAssignmentDialog({
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [licenseWarningOpen, setLicenseWarningOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<AssignmentWritePayload | null>(null);
 
   useEffect(() => {
     if (!open || !draft) return;
@@ -118,29 +126,41 @@ export function CreateTimelineAssignmentDialog({
       return;
     }
 
+    const payload: AssignmentWritePayload = {
+      driver_id: driverId,
+      vehicle_id: selectedVehicle.id,
+      company_id: company.id,
+      company_name: company.name,
+      work_date: workDate,
+      start_time: startTime,
+      end_time: endTime,
+      cargo_name: t('vehicleAssignments.create.defaultCargo'),
+      cargo_owner: company.name,
+      pickup_address: t('vehicleAssignments.create.defaultPickup'),
+      delivery_address: t('vehicleAssignments.create.defaultDelivery'),
+      notes: buildVehicleTimelineNotes(
+        comment.trim(),
+        t('vehicleAssignments.create.defaultNotes'),
+      ),
+    };
+
     setSaving(true);
     setError(null);
     try {
-      await assignmentsApi.create({
-        driver_id: driverId,
-        vehicle_id: selectedVehicle.id,
-        company_id: company.id,
-        company_name: company.name,
-        work_date: workDate,
-        start_time: startTime,
-        end_time: endTime,
-        cargo_name: t('vehicleAssignments.create.defaultCargo'),
-        cargo_owner: company.name,
-        pickup_address: t('vehicleAssignments.create.defaultPickup'),
-        delivery_address: t('vehicleAssignments.create.defaultDelivery'),
-        notes: buildVehicleTimelineNotes(
-          comment.trim(),
-          t('vehicleAssignments.create.defaultNotes'),
-        ),
-      });
+      if (await shouldWarnLicenseCompliance(driverId)) {
+        setPendingPayload(payload);
+        setLicenseWarningOpen(true);
+        return;
+      }
+      await createAssignmentWithLicenseAck(payload, false);
       onCreated();
       onClose();
     } catch (err: unknown) {
+      if (parseLicenseComplianceError(err)) {
+        setPendingPayload(payload);
+        setLicenseWarningOpen(true);
+        return;
+      }
       const message =
         (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
       const text = Array.isArray(message) ? message.join(' ') : message;
@@ -149,6 +169,26 @@ export function CreateTimelineAssignmentDialog({
           ? t('assignmentForm.conflict')
           : text || t('vehicleAssignments.create.error'),
       );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmWithLicenseWarning() {
+    if (!pendingPayload) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createAssignmentWithLicenseAck(pendingPayload, true);
+      setLicenseWarningOpen(false);
+      setPendingPayload(null);
+      onCreated();
+      onClose();
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      const text = Array.isArray(message) ? message.join(' ') : message;
+      setError(text || t('vehicleAssignments.create.error'));
     } finally {
       setSaving(false);
     }
@@ -309,6 +349,16 @@ export function CreateTimelineAssignmentDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <LicenseComplianceWarningDialog
+        open={licenseWarningOpen}
+        onOpenChange={setLicenseWarningOpen}
+        loading={saving}
+        onConfirm={() => {
+          void confirmWithLicenseWarning();
+        }}
+        onCancel={() => setPendingPayload(null)}
+      />
     </Dialog>
   );
 }

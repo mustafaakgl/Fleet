@@ -16,6 +16,8 @@ import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { AssignmentTransitionTarget } from './dto/transition-assignment.dto';
 import { dedupeDriverDayAssignments } from './assignment-dedupe';
+import { LicenseComplianceService } from '../license-compliance/license-compliance.service';
+import { DepartureCheckService } from '../departure-check/departure-check.service';
 
 type DayRange = { start: Date; end: Date };
 
@@ -93,6 +95,8 @@ export class AssignmentsService {
     private readonly companyEmailsService: CompanyEmailsService,
     private readonly auditService: AuditService,
     private readonly driverNotify: DriverNotifyService,
+    private readonly licenseCompliance: LicenseComplianceService,
+    private readonly departureCheck: DepartureCheckService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -348,8 +352,32 @@ export class AssignmentsService {
       throw new BadRequestException('Invalid work_date');
     }
 
+    const licenseGate = await this.licenseCompliance.assertAssignmentAllowed(
+      dto.driver_id,
+      dto.acknowledge_license_compliance_warning,
+    );
+    if (!licenseGate.allowed) {
+      throw new BadRequestException({
+        code: licenseGate.code,
+        badge: licenseGate.badge,
+        message: licenseGate.message,
+      });
+    }
+
     const companyId = await this.resolveCompanyId(dto.company_id, dto.company_name);
     const vehicleId = await this.resolveVehicleId(dto.vehicle_id, dto.vehicle_plate);
+
+    const vehicleDefectGate = await this.departureCheck.assertAssignmentAllowed(
+      vehicleId,
+      dto.acknowledge_vehicle_defect_warning,
+    );
+    if (!vehicleDefectGate.allowed) {
+      throw new BadRequestException({
+        code: vehicleDefectGate.code,
+        message: vehicleDefectGate.message,
+        open_critical_count: vehicleDefectGate.open_critical_count,
+      });
+    }
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
       select: { defaultDailyRevenue: true },

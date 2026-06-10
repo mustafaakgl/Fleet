@@ -28,6 +28,35 @@ function navigateFromPushData(data: Record<string, unknown> | undefined) {
     router.push('/(app)/requests');
     return;
   }
+  if (relatedType === 'Fine' && relatedId) {
+    router.push(`/(app)/today/fine/${relatedId}`);
+    return;
+  }
+
+  if (relatedType === 'Defect' && relatedId) {
+    router.push(`/(app)/today/defect/${relatedId}`);
+    return;
+  }
+  if (relatedType === 'DepartureCheck' && relatedId) {
+    router.push('/(app)/today/departure-check');
+    return;
+  }
+
+  const pushType = typeof data.type === 'string' ? data.type : null;
+  const fineId = typeof data.fineId === 'string' ? data.fineId : null;
+  const defectId = typeof data.defectId === 'string' ? data.defectId : null;
+  if (pushType === 'fine_assigned' && fineId) {
+    router.push(`/(app)/today/fine/${fineId}`);
+    return;
+  }
+  if (pushType === 'defect_confirm_due' && defectId) {
+    router.push(`/(app)/today/defect/${defectId}`);
+    return;
+  }
+  if (pushType === 'departure_check_reminder') {
+    router.push('/(app)/today/departure-check');
+    return;
+  }
 
   router.push('/(app)/notifications');
 }

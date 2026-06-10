@@ -105,6 +105,18 @@ export default function NotificationsScreen() {
                     router.push(`/(app)/today/assignment/${item.relatedEntityId}`);
                     return;
                   }
+                  if (item.relatedEntityType === 'Fine' && item.relatedEntityId) {
+                    router.push(`/(app)/today/fine/${item.relatedEntityId}`);
+                    return;
+                  }
+                  if (item.relatedEntityType === 'Defect' && item.relatedEntityId) {
+                    router.push(`/(app)/today/defect/${item.relatedEntityId}`);
+                    return;
+                  }
+                  if (item.relatedEntityType === 'DepartureCheck') {
+                    router.push('/(app)/today/departure-check');
+                    return;
+                  }
                   if (
                     item.relatedEntityType === 'request' ||
                     item.relatedEntityType === 'transport_request'

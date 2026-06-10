@@ -15,6 +15,11 @@ import {
   morningCheckinsApi,
   transportRequestsApi,
 } from '@/lib/api';
+import { LicenseComplianceWarningDialog } from '@/components/license-checks/LicenseComplianceWarningDialog';
+import {
+  createAssignmentWithLicenseAck,
+  shouldWarnLicenseCompliance,
+} from '@/lib/license-compliance-assignment';
 import { getDriverRiskScore, type DriverRiskScore } from '@/lib/utils';
 
 export type CalendarStatusCode = 'UT' | 'KT' | 'FT' | 'AT' | 'HO' | 'GR' | 'SCH';
@@ -658,6 +663,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
   const [driverAssignmentHistory, setDriverAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [vehicleAssignmentHistory, setVehicleAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [companyAssignmentHistory, setCompanyAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
+  const [licenseWarningPayload, setLicenseWarningPayload] = useState<AssignmentWritePayload | null>(
+    null,
+  );
+  const [licenseWarningSaving, setLicenseWarningSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1101,7 +1110,7 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
       const parsed = parsePlanningDraftId(assignment.id);
       if (!parsed) return;
 
-      await assignmentsApi.create({
+      const payload: AssignmentWritePayload = {
         driver_id: parsed.driverId,
         company_name: company,
         vehicle_plate: vehicle,
@@ -1119,7 +1128,14 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
         pickup_address: assignment.pickupAddress?.trim() || 'TBD',
         delivery_address: assignment.deliveryAddress?.trim() || 'TBD',
         notes: assignment.notes?.trim() || 'Created from office planning',
-      });
+      };
+
+      if (await shouldWarnLicenseCompliance(parsed.driverId)) {
+        setLicenseWarningPayload(payload);
+        return;
+      }
+
+      await createAssignmentWithLicenseAck(payload, false);
       refetchHydrate();
       return;
     }
@@ -1441,7 +1457,32 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  return <FleetDataContext.Provider value={value}>{children}</FleetDataContext.Provider>;
+  return (
+    <FleetDataContext.Provider value={value}>
+      {children}
+      <LicenseComplianceWarningDialog
+        open={licenseWarningPayload !== null}
+        onOpenChange={(open) => {
+          if (!open) setLicenseWarningPayload(null);
+        }}
+        loading={licenseWarningSaving}
+        onConfirm={() => {
+          if (!licenseWarningPayload) return;
+          setLicenseWarningSaving(true);
+          void createAssignmentWithLicenseAck(licenseWarningPayload, true)
+            .then(() => {
+              setLicenseWarningPayload(null);
+              refetchHydrate();
+            })
+            .catch((error) => {
+              console.error('Failed to persist assignment with license ack', error);
+            })
+            .finally(() => setLicenseWarningSaving(false));
+        }}
+        onCancel={() => setLicenseWarningPayload(null)}
+      />
+    </FleetDataContext.Provider>
+  );
 }
 
 export function useFleetData() {

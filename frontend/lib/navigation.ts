@@ -10,6 +10,7 @@ import {
   Bell,
   MessageSquare,
   ClipboardList,
+  ClipboardCheck,
   ListTodo,
   Wrench,
   Shield,
@@ -18,6 +19,9 @@ import {
   Rocket,
   ScrollText,
   Clock,
+  IdCard,
+  Scale,
+  AlertTriangle,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -81,6 +85,10 @@ const ALL_ITEMS: Record<string, NavItem> = {
   documents: { href: '/documents', labelKey: 'nav.documents', icon: FileText },
   serviceHistory: { href: '/service-history', labelKey: 'nav.service.history', icon: Wrench },
   workSessions: { href: '/work-sessions', labelKey: 'nav.workSessions', icon: Clock },
+  licenseChecks: { href: '/license-checks', labelKey: 'nav.licenseChecks', icon: IdCard },
+  fines: { href: '/fines', labelKey: 'nav.fines', icon: Scale },
+  departureChecks: { href: '/departure-checks', labelKey: 'nav.departureChecks', icon: ClipboardCheck },
+  defects: { href: '/defects', labelKey: 'nav.defects', icon: AlertTriangle },
 };
 
 const VEHICLES_SECTION: NavSection = {
@@ -127,6 +135,10 @@ const OFFICE_NAV: NavGroup[] = [
   group('fleet', 'nav.group.fleet', [item('drivers'), VEHICLES_SECTION, item('companies')]),
   group('compliance', 'nav.group.compliance', [
     item('documents'),
+    item('licenseChecks'),
+    item('fines'),
+    item('departureChecks'),
+    item('defects'),
     item('serviceHistory'),
     REMINDERS_SECTION,
     item('workSessions'),
@@ -144,6 +156,10 @@ const DEFAULT_NAV: NavGroup[] = [
   ]),
   group('operations', 'nav.group.operations', [
     item('requests'),
+    item('licenseChecks'),
+    item('fines'),
+    item('departureChecks'),
+    item('defects'),
     item('serviceHistory'),
     REMINDERS_SECTION,
     item('workSessions'),
