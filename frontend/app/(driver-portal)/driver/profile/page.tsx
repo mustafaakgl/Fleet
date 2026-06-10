@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Bell, FileText, Loader2, LogOut } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { DriverLocationSharingCard } from '@/components/driver-portal/DriverLocationSharingCard';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
@@ -11,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { driverPortalApi } from '@/lib/api';
-import { clearAuth } from '@/lib/auth';
+import { performLogout } from '@/lib/auth';
 import { DRIVER_MESSENGER_LANGUAGES } from '@/lib/driver-portal-utils';
 import { formatDriverHomeAddress } from '@/lib/driver-profile';
 import type { DriverPortalMe, MessengerLanguage } from '@/lib/types';
@@ -27,7 +26,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 export default function DriverProfilePage() {
   const { t } = useTranslation();
-  const router = useRouter();
   const [profile, setProfile] = useState<DriverPortalMe | null>(null);
   const [loading, setLoading] = useState(true);
   const [languageBusy, setLanguageBusy] = useState(false);
@@ -52,8 +50,7 @@ export default function DriverProfilePage() {
 
   function handleLogout() {
     void driverPortalApi.endWorkSession('logout').catch(() => undefined);
-    clearAuth();
-    router.replace('/login');
+    performLogout('/login');
   }
 
   const fullName = profile ? `${profile.driver.firstName} ${profile.driver.lastName}`.trim() : '';

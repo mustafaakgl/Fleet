@@ -6,6 +6,7 @@ import { ChevronDown, Menu, Phone, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { LanguageSwitcher } from '@/components/landing/LanguageSwitcher';
+import { LOGIN_HREF } from '@/components/landing/marketing/marketing-config';
 
 type MegaColumn = {
   titleKey: string;
@@ -200,7 +201,7 @@ export function LandingHeader() {
             +49 30 1234 5678
           </a>
           <Link
-            href="/login"
+            href={LOGIN_HREF}
             className="rounded-full bg-[#0066CC] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#0052a3]"
           >
             {t('nav.requestDemo')}
@@ -255,7 +256,7 @@ export function LandingHeader() {
               </a>
             ))}
             <Link
-              href="/login"
+              href={LOGIN_HREF}
               className="mt-2 rounded-full bg-[#0066CC] px-5 py-3 text-center text-sm font-bold text-white"
               onClick={() => setMobileOpen(false)}
             >

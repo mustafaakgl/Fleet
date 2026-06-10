@@ -22,6 +22,7 @@ import {
 import { cn, formatDate, statusColor } from '@/lib/utils';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { ServiceRecordInlineField } from '@/components/service-records/ServiceRecordInlineField';
+import { VehicleHandoverHistory, type VehicleHandoverHistoryRow } from '@/components/vehicles/VehicleHandoverHistory';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { getUser } from '@/lib/auth';
 import { canEditServiceRecords } from '@/lib/permissions';
@@ -41,17 +42,7 @@ interface VehicleAssignmentRow {
   company: { id: string; name: string };
 }
 
-interface VehicleHandoverRow {
-  id: string;
-  handoverDateTime: string;
-  handoverType: string;
-  photoRequired: boolean;
-  photoStatus: string;
-  damageDetected: boolean;
-  damageNotes?: string | null;
-  status: string;
-  driver?: { firstName: string; lastName: string };
-}
+type VehicleHandoverRow = VehicleHandoverHistoryRow;
 
 interface VehicleIncidentRow {
   id: string;
@@ -648,45 +639,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       <Card>
         <CardHeader>
           <CardTitle>{t('vehicleDetail.handoverHistory')}</CardTitle>
+          <p className="text-sm text-slate-500">{t('vehicleDetail.handoverHistoryHint')}</p>
         </CardHeader>
         <CardContent className="p-0">
           {handoversError ? (
             <p className="p-4 text-sm text-gray-500">{t('vehicleDetail.handoversLoadError')}</p>
           ) : (
-            <Table className={FLEET_TABLE}>
-              <TableHeader>
-                <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.date')}</TableHead>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.driver')}</TableHead>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colType')}</TableHead>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colPhotoStatus')}</TableHead>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.colDamage')}</TableHead>
-                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className={FLEET_TABLE_BODY}>
-                {handovers.length === 0 ? (
-                  <TableRow className={FLEET_TABLE_ROW}>
-                    <TableCell colSpan={6} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
-                      {t('common.noRecords')}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  handovers.map((h) => (
-                    <TableRow className={FLEET_TABLE_ROW} key={h.id}>
-                      <TableCell className={FLEET_TABLE_CELL}>{formatDate(h.handoverDateTime)}</TableCell>
-                      <TableCell className={FLEET_TABLE_CELL}>
-                        {h.driver ? `${h.driver.firstName} ${h.driver.lastName}` : '-'}
-                      </TableCell>
-                      <TableCell className={FLEET_TABLE_CELL}>{h.handoverType}</TableCell>
-                      <TableCell className={FLEET_TABLE_CELL}>{h.photoStatus.replace(/_/g, ' ')}</TableCell>
-                      <TableCell className={FLEET_TABLE_CELL}>{h.damageDetected ? h.damageNotes ?? t('vehicleDetail.yes') : '-'}</TableCell>
-                      <TableCell className={FLEET_TABLE_CELL}>{h.status}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+            <VehicleHandoverHistory handovers={handovers} />
           )}
         </CardContent>
       </Card>

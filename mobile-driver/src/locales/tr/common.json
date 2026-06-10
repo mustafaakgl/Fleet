@@ -239,7 +239,7 @@
     "notes": "Notlar",
     "submit": "Check-in gönder",
     "submitting": "Submitting...",
-    "validationRequired": "Plaka, firma, mal ve miktar zorunludur.",
+    "validationRequired": "Plaka ve firma zorunludur.",
     "success": "Sabah check-in gönderildi.",
     "successWithLocation": "Check-in saved. Live location sharing is on.",
     "locationHint": "Check-in ile GPS ayrıdır. Yola çıkınca Bugün ekranındaki GPS kartından «Yola çıktım»a bas.",

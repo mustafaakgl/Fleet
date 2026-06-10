@@ -12,8 +12,17 @@ import { useTranslation } from 'react-i18next';
 import { IBM_Plex_Mono, Inter } from 'next/font/google';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { TRIAL_CTA_LABEL, TRIAL_CTA_LINK, whatsAppHref } from '@/components/landing/marketing/marketing-config';
-import { authApi, onboardingApi } from '@/lib/api';
-import { isAuthenticated, saveAuth, MOCK_CURRENT_USER, getPostLoginPath, getUser } from '@/lib/auth';
+import { authApi, getApiErrorMessage, onboardingApi } from '@/lib/api';
+import {
+  isAuthenticated,
+  saveAuth,
+  MOCK_CURRENT_USER,
+  getPostLoginPath,
+  getUser,
+  shouldSkipAutoLogin,
+  clearManualLoginRequired,
+  markManualLoginRequired,
+} from '@/lib/auth';
 import './login-page.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-login-inter' });
@@ -42,7 +51,11 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [autoLoggingIn, setAutoLoggingIn] = useState(autoLoginEnabled);
+  const [autoLoggingIn, setAutoLoggingIn] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const manual = new URLSearchParams(window.location.search).get('manual') === '1';
+    return autoLoginEnabled && !shouldSkipAutoLogin() && !manual;
+  });
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
@@ -58,34 +71,46 @@ export default function LoginPage() {
     let cancelled = false;
 
     async function bootstrap() {
-      if (isAuthenticated()) {
+      const searchParams =
+        typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const wantsManualLogin = searchParams?.get('manual') === '1';
+
+      if (wantsManualLogin) {
+        markManualLoginRequired();
+        setAutoLoggingIn(false);
+      }
+
+      if (isAuthenticated() && !wantsManualLogin) {
         const user = getUser();
         router.replace(getPostLoginPath(user?.role ?? 'office'));
         return;
       }
 
-      const pendingMfaToken =
-        typeof window !== 'undefined'
-          ? new URLSearchParams(window.location.search).get('mfa_token')
-          : null;
+      const pendingMfaToken = searchParams?.get('mfa_token') ?? null;
       if (pendingMfaToken) {
         setMfaToken(pendingMfaToken);
         setAutoLoggingIn(false);
         return;
       }
 
-      try {
-        const status = await onboardingApi.status();
-        if (cancelled) return;
-        if (status.needs_setup) {
-          router.replace('/onboarding');
-          return;
+      if (!wantsManualLogin && !shouldSkipAutoLogin()) {
+        try {
+          const status = await onboardingApi.status();
+          if (cancelled) return;
+          if (status.needs_setup) {
+            router.replace('/onboarding');
+            return;
+          }
+        } catch {
+          // Backend unavailable — continue.
         }
-      } catch {
-        // Backend unavailable — continue.
       }
 
-      if (autoLoginEnabled) {
+      if (shouldSkipAutoLogin()) {
+        setAutoLoggingIn(false);
+      }
+
+      if (autoLoginEnabled && !shouldSkipAutoLogin()) {
         setAutoLoggingIn(true);
         try {
           const res = await authApi.signIn(AUTO_LOGIN_EMAIL, AUTO_LOGIN_PASSWORD);
@@ -101,12 +126,12 @@ export default function LoginPage() {
               ...res.user,
               name: res.user.name ?? res.user.email,
             });
-            router.replace(getPostLoginPath(res.user.role));
+            window.location.assign(getPostLoginPath(res.user.role));
             return;
           }
         } catch {
           if (cancelled) return;
-          loginWithDemo();
+          setAutoLoggingIn(false);
           return;
         }
       }
@@ -159,7 +184,8 @@ export default function LoginPage() {
         ...res.user,
         name: res.user.name ?? res.user.email,
       });
-      router.push(getPostLoginPath(res.user.role));
+      clearManualLoginRequired();
+      window.location.assign(getPostLoginPath(res.user.role));
     } catch (err) {
       if (err instanceof AxiosError) {
         if (!err.response) {
@@ -175,7 +201,7 @@ export default function LoginPage() {
           return;
         }
       }
-      setError(t('auth.errors.unexpected'));
+      setError(getApiErrorMessage(err, t('auth.errors.unexpected')));
     }
   }
 
@@ -194,13 +220,14 @@ export default function LoginPage() {
         ...res.user,
         name: res.user.name ?? res.user.email,
       });
-      router.push(getPostLoginPath(res.user.role));
+      clearManualLoginRequired();
+      window.location.assign(getPostLoginPath(res.user.role));
     } catch (err) {
       if (err instanceof AxiosError && err.response?.status === 401) {
         setError(t('auth.mfa.invalidCode'));
         return;
       }
-      setError(t('auth.errors.unexpected'));
+      setError(getApiErrorMessage(err, t('auth.errors.unexpected')));
     } finally {
       setMfaSubmitting(false);
     }

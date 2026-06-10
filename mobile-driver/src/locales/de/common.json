@@ -223,7 +223,7 @@
     "notes": "Notizen",
     "submit": "Check-in senden",
     "submitting": "Wird gesendet...",
-    "validationRequired": "Kennzeichen, Firma, Ladung und Menge sind Pflicht.",
+    "validationRequired": "Kennzeichen und Firma sind Pflicht.",
     "success": "Morgen-Check-in gesendet.",
     "successWithLocation": "Check-in gespeichert. Live-Standort wird geteilt.",
     "locationHint": "Check-in und GPS sind getrennt. Live-Standort startest du auf der Startseite mit „Fahrt starten“.",

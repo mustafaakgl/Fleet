@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
@@ -15,6 +16,7 @@ import type { DriverMorningCheckin } from '@/lib/types';
 
 export default function DriverMorningCheckinPage() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [existing, setExisting] = useState<DriverMorningCheckin | null>(null);
   const [vehiclePlate, setVehiclePlate] = useState('');
@@ -33,20 +35,30 @@ export default function DriverMorningCheckinPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!vehiclePlate.trim() || !companyName.trim() || !cargoName.trim() || !cargoQuantity.trim()) {
+    if (!vehiclePlate.trim() || !companyName.trim()) {
       setError(t('driverPortal.morningCheckin.validationRequired'));
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await driverPortalApi.createMorningCheckin({
+      const result = await driverPortalApi.createMorningCheckin({
         date: driverTodayIso(),
         vehiclePlate: vehiclePlate.trim(),
         companyName: companyName.trim(),
-        cargoName: cargoName.trim(),
-        cargoQuantity: cargoQuantity.trim(),
+        cargoName: cargoName.trim() || undefined,
+        cargoQuantity: cargoQuantity.trim() || undefined,
       });
+      if (
+        result.handoverRequired &&
+        result.handoverAssignmentId &&
+        result.handoverVehicleId
+      ) {
+        router.push(
+          `/driver/handover?assignmentId=${result.handoverAssignmentId}&vehicleId=${result.handoverVehicleId}`,
+        );
+        return;
+      }
       const rows = await driverPortalApi.listMorningCheckins(driverTodayIso());
       setExisting(rows[0] ?? null);
     } catch (err) {
@@ -84,12 +96,20 @@ export default function DriverMorningCheckinPage() {
             <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
               <p className="text-sm text-slate-600">{t('driverPortal.morningCheckin.locationHint')}</p>
               <div className="space-y-2">
-                <Label>{t('driverPortal.morningCheckin.vehiclePlate')}</Label>
-                <Input value={vehiclePlate} onChange={(e) => setVehiclePlate(e.target.value)} />
+                <Label>{t('driverPortal.morningCheckin.vehiclePlate')} *</Label>
+                <Input
+                  value={vehiclePlate}
+                  onChange={(e) => setVehiclePlate(e.target.value)}
+                  required
+                />
               </div>
               <div className="space-y-2">
-                <Label>{t('driverPortal.morningCheckin.companyName')}</Label>
-                <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                <Label>{t('driverPortal.morningCheckin.companyName')} *</Label>
+                <Input
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>{t('driverPortal.morningCheckin.cargoName')}</Label>

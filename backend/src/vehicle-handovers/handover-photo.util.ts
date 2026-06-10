@@ -45,15 +45,36 @@ export function slotFromHandoverDocumentType(documentType: string): HandoverPhot
   return parseHandoverPhotoSlot(documentType.slice(prefix.length));
 }
 
-export function calculatePhotoRequirement(
-  yesterdayVehicleId: string | null,
-  currentVehicleId: string,
-): {
+export type PhotoRequirementInput = {
+  yesterdayVehicleId: string | null;
+  currentVehicleId: string;
+  yesterdayPlate?: string | null;
+  todayPlate?: string | null;
+};
+
+export function normalizePlate(plate: string): string {
+  return plate.replace(/\s+/g, '').replace(/-/g, '').toUpperCase();
+}
+
+function resolvePhotoRequirement(input: PhotoRequirementInput): {
   photoRequired: boolean;
   photoStatus: 'not_required' | 'missing';
   status: 'pending' | 'completed';
 } {
-  const photoRequired = yesterdayVehicleId !== null && yesterdayVehicleId !== currentVehicleId;
+  const vehicleChanged =
+    input.yesterdayVehicleId !== null &&
+    input.yesterdayVehicleId !== input.currentVehicleId;
+
+  const yesterdayNorm = input.yesterdayPlate?.trim()
+    ? normalizePlate(input.yesterdayPlate)
+    : null;
+  const todayNorm = input.todayPlate?.trim() ? normalizePlate(input.todayPlate) : null;
+  const plateChanged =
+    yesterdayNorm !== null &&
+    todayNorm !== null &&
+    yesterdayNorm !== todayNorm;
+
+  const photoRequired = vehicleChanged || plateChanged;
 
   if (!photoRequired) {
     return {
@@ -68,6 +89,37 @@ export function calculatePhotoRequirement(
     photoStatus: 'missing',
     status: 'pending',
   };
+}
+
+export function calculatePhotoRequirement(
+  yesterdayVehicleId: string | null,
+  currentVehicleId: string,
+): {
+  photoRequired: boolean;
+  photoStatus: 'not_required' | 'missing';
+  status: 'pending' | 'completed';
+};
+export function calculatePhotoRequirement(input: PhotoRequirementInput): {
+  photoRequired: boolean;
+  photoStatus: 'not_required' | 'missing';
+  status: 'pending' | 'completed';
+};
+export function calculatePhotoRequirement(
+  arg1: string | null | PhotoRequirementInput,
+  arg2?: string,
+): {
+  photoRequired: boolean;
+  photoStatus: 'not_required' | 'missing';
+  status: 'pending' | 'completed';
+} {
+  if (typeof arg1 === 'object' && arg1 !== null && 'currentVehicleId' in arg1) {
+    return resolvePhotoRequirement(arg1);
+  }
+
+  return resolvePhotoRequirement({
+    yesterdayVehicleId: arg1 as string | null,
+    currentVehicleId: arg2!,
+  });
 }
 
 export function getCalendarDayRange(referenceDate: Date): { start: Date; end: Date } {
@@ -103,6 +155,38 @@ export async function findYesterdayVehicleId(
   });
 
   return assignment?.vehicleId ?? null;
+}
+
+export async function findYesterdayPlate(
+  prisma: PrismaService,
+  driverId: string,
+  referenceDate = new Date(),
+): Promise<string | null> {
+  const { start, end } = getYesterdayRange(referenceDate);
+
+  const checkin = await prisma.morningCheckin.findFirst({
+    where: {
+      driverId,
+      date: { gte: start, lt: end },
+    },
+    orderBy: { submittedAt: 'desc' },
+    select: { vehiclePlate: true },
+  });
+  if (checkin?.vehiclePlate?.trim()) {
+    return checkin.vehiclePlate.trim();
+  }
+
+  const assignment = await prisma.assignment.findFirst({
+    where: {
+      driverId,
+      workDate: { gte: start, lt: end },
+      status: { notIn: [AssignmentStatus.cancelled] },
+    },
+    orderBy: [{ startTime: 'desc' }, { createdAt: 'desc' }],
+    select: { vehicle: { select: { plateNumber: true } } },
+  });
+
+  return assignment?.vehicle?.plateNumber?.trim() ?? null;
 }
 
 export async function loadHandoverPhotosBySlot(

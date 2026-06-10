@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { clearAuth } from './auth';
+import { clearAuth, markManualLoginRequired } from './auth';
 import type {
   AuthResponse,
   MfaSetupResponse,
@@ -95,8 +95,13 @@ api.interceptors.response.use(
   (res) => res,
   (error) => {
     const status = error.response?.status;
-    if (status === 401) {
+    const requestUrl = String(error.config?.url ?? '');
+    const isAuthLoginRequest =
+      requestUrl.includes('/auth/login') || requestUrl.includes('/auth/mfa/verify-login');
+
+    if (status === 401 && !isAuthLoginRequest) {
       clearAuth();
+      markManualLoginRequired();
       const path = typeof window !== 'undefined' ? window.location.pathname : '';
       if (
         path
@@ -105,7 +110,7 @@ api.interceptors.response.use(
         && !path.startsWith('/accept-invite')
         && !path.startsWith('/onboarding')
       ) {
-        window.location.href = '/login';
+        window.location.href = '/login?manual=1';
       }
     } else if (status === 403 && typeof window !== 'undefined') {
       // Surface a one-time toast so silent forbidden errors don't confuse the user.
@@ -1715,8 +1720,8 @@ export const driverPortalApi = {
 
   createMorningCheckin: (payload: {
     date: string;
-    vehiclePlate?: string;
-    companyName?: string;
+    vehiclePlate: string;
+    companyName: string;
     cargoName?: string;
     cargoQuantity?: string;
     notes?: string;

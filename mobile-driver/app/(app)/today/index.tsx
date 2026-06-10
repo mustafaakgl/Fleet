@@ -45,9 +45,13 @@ export default function HomeTodayScreen() {
     queryFn: () => driverApi.me(),
   });
   const { data: handovers } = useQuery({
-    queryKey: ['driver-handovers'],
-    queryFn: () => driverApi.listHandovers({ photoStatus: 'missing' }),
+    queryKey: ['driver-handovers', localTodayDate()],
+    queryFn: () =>
+      driverApi.listHandovers({ date: localTodayDate(), photoStatus: 'missing' }),
   });
+  const pendingHandover = (handovers ?? []).find(
+    (row) => row.photoRequired && row.status !== 'completed',
+  );
   const { data: unreadMessages } = useQuery({
     queryKey: ['messenger-unread-count'],
     queryFn: () => messengerApi.getUnreadCount(),
@@ -207,14 +211,16 @@ export default function HomeTodayScreen() {
               <SectionHeader title={t('home.quickActions')} />
               <View style={styles.actionGrid}>
                 <ActionButton label={t('home.morningCheckin')} onPress={() => router.push('/(app)/today/morning-checkin')} />
-                <ActionButton
-                  label={t('home.handoverPhoto')}
-                  onPress={() =>
-                    router.push(
-                      `/(app)/today/handover-upload?assignmentId=${todayAssignments[0].id}&vehicleId=${todayAssignments[0].vehicle.id}`,
-                    )
-                  }
-                />
+                {pendingHandover?.assignmentId && pendingHandover.vehicleId ? (
+                  <ActionButton
+                    label={t('home.handoverPhoto')}
+                    onPress={() =>
+                      router.push(
+                        `/(app)/today/handover-upload?assignmentId=${pendingHandover.assignmentId}&vehicleId=${pendingHandover.vehicleId}`,
+                      )
+                    }
+                  />
+                ) : null}
                 <ActionButton
                   label={t('home.reportAccident')}
                   onPress={() =>
@@ -236,7 +242,7 @@ export default function HomeTodayScreen() {
               </View>
 
               <PendingTaskCard
-                missingHandover={handovers?.length ?? 0}
+                missingHandover={pendingHandover ? 1 : 0}
                 unreadMessages={unreadMessages?.total ?? 0}
                 unreadNotifications={unreadNotifications?.count ?? 0}
                 pendingRequests={pendingRequests}

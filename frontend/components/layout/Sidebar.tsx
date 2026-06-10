@@ -6,7 +6,7 @@ import { Building2, ChevronDown, CircleHelp, LogOut, Menu, X } from 'lucide-reac
 import { useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
-import { clearAuth, getUser } from '@/lib/auth';
+import { getUser, performLogout } from '@/lib/auth';
 import {
   getNavigationForRole,
   isNavItemActive,
@@ -16,7 +16,6 @@ import {
   type NavItem,
   type NavSection,
 } from '@/lib/navigation';
-import { useRouter } from 'next/navigation';
 import type { AuthUser, Role } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 
@@ -29,7 +28,6 @@ const NAV_ACTIVE = 'bg-[#1a4d7a] text-white shadow-sm';
 export function Sidebar() {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const [user] = useState<AuthUser | null>(() => getUser());
@@ -147,8 +145,7 @@ export function Sidebar() {
   }
 
   function handleLogout() {
-    clearAuth();
-    router.push('/login');
+    performLogout('/login');
   }
 
   function renderFooterLink(href: string, label: string, icon: ReactNode, active = false) {

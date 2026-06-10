@@ -110,8 +110,8 @@ export const driverApi = {
   },
   async createMorningCheckin(payload: {
     date: string;
-    vehiclePlate?: string;
-    companyName?: string;
+    vehiclePlate: string;
+    companyName: string;
     cargoName?: string;
     cargoQuantity?: string;
     notes?: string;

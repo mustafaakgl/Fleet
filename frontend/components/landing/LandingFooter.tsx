@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
+import { LOGIN_HREF } from '@/components/landing/marketing/marketing-config';
 
 export function LandingFooter() {
   const { t } = useTranslation('landing');
@@ -84,7 +85,7 @@ export function LandingFooter() {
             <Link href="/kvkk" className="transition hover:text-white">
               KVKK
             </Link>
-            <Link href="/login" className="font-semibold text-white transition hover:text-blue-200">
+            <Link href={LOGIN_HREF} className="font-semibold text-white transition hover:text-blue-200">
               {t('nav.signIn')}
             </Link>
           </div>

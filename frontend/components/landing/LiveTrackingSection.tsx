@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useTranslation } from 'react-i18next';
+import { LOGIN_HREF } from '@/components/landing/marketing/marketing-config';
 
 export function LiveTrackingSection() {
   const { t } = useTranslation('landing');
@@ -17,7 +18,7 @@ export function LiveTrackingSection() {
             {t('split.liveTracking.desc')}
           </p>
           <a
-            href="/login"
+            href={LOGIN_HREF}
             className="mt-10 inline-flex items-center justify-center rounded-md border border-slate-300 bg-slate-200/80 px-6 py-3 text-base font-semibold text-[#002B5C] transition hover:border-slate-400 hover:bg-slate-200"
           >
             {t('split.liveTracking.cta')}

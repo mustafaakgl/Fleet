@@ -76,6 +76,11 @@ export type DriverMorningCheckin = {
   conflictReason?: string | null;
   assignmentId?: string | null;
   notes?: string | null;
+  locationSharingStarted?: boolean;
+  handoverRequired?: boolean;
+  handoverId?: string | null;
+  handoverAssignmentId?: string | null;
+  handoverVehicleId?: string | null;
 };
 
 export type HandoverPhotoSlot =

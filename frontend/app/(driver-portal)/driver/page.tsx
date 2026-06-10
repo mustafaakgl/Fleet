@@ -20,6 +20,10 @@ export default function DriverPortalHomePage() {
   const [driverName, setDriverName] = useState<string | null>(null);
   const [driverStatus, setDriverStatus] = useState<string | null>(null);
   const [firstAssignment, setFirstAssignment] = useState<DriverPortalAssignment | null>(null);
+  const [pendingHandover, setPendingHandover] = useState<{
+    assignmentId: string;
+    vehicleId: string;
+  } | null>(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
@@ -28,13 +32,22 @@ export default function DriverPortalHomePage() {
     Promise.all([
       driverPortalApi.me(),
       driverPortalApi.todayAssignments(today),
+      driverPortalApi.listHandovers({ date: today, photoStatus: 'missing' }),
       messengerApi.getUnreadCount(),
       driverPortalApi.unreadNotifications(),
     ])
-      .then(([profile, assignments, messages, notifications]) => {
+      .then(([profile, assignments, handovers, messages, notifications]) => {
         setDriverName(profile.driver.firstName);
         setDriverStatus(profile.driver.status);
         setFirstAssignment(assignments[0] ?? null);
+        const pending = handovers.find(
+          (row) => row.photoRequired && row.status !== 'completed',
+        );
+        setPendingHandover(
+          pending?.assignmentId && pending.vehicleId
+            ? { assignmentId: pending.assignmentId, vehicleId: pending.vehicleId }
+            : null,
+        );
         setUnreadMessages(messages.total);
         setUnreadNotifications(notifications.count);
       })
@@ -103,14 +116,16 @@ export default function DriverPortalHomePage() {
                   {t('driverPortal.home.morningCheckin')}
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="justify-start">
-                <Link
-                  href={`/driver/handover?assignmentId=${firstAssignment.id}&vehicleId=${firstAssignment.vehicle.id}`}
-                >
-                  <Camera className="mr-2 h-4 w-4" />
-                  {t('driverPortal.home.handoverPhoto')}
-                </Link>
-              </Button>
+              {pendingHandover ? (
+                <Button asChild variant="outline" className="justify-start">
+                  <Link
+                    href={`/driver/handover?assignmentId=${pendingHandover.assignmentId}&vehicleId=${pendingHandover.vehicleId}`}
+                  >
+                    <Camera className="mr-2 h-4 w-4" />
+                    {t('driverPortal.home.handoverPhoto')}
+                  </Link>
+                </Button>
+              ) : null}
               <Button asChild variant="outline" className="justify-start text-red-700 hover:text-red-800">
                 <Link
                   href={`/driver/accident-report?assignmentId=${firstAssignment.id}&vehicleId=${firstAssignment.vehicle.id}`}

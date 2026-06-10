@@ -9,7 +9,7 @@ import { canEditVehicleHandovers } from '@/lib/permissions';
 import { vehicleHandoversApi, type VehicleHandoverRecord } from '@/lib/api';
 import { HANDOVER_PHOTO_SLOTS } from '@/lib/driver-portal-utils';
 import type { DriverHandoverPhotoSlot } from '@/lib/types';
-import { documentDownloadApiPath, useAuthenticatedImageUrl } from '@/lib/file-access';
+import { HandoverPhotoPreview } from '@/components/handovers/HandoverPhotoPreview';
 import {
   FLEET_LIST_CARD,
   FLEET_RAW_TABLE,
@@ -496,46 +496,3 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HandoverPhotoPreview({
-  slot,
-  photo,
-  slotLabel,
-  validatedLabel,
-  mismatchLabel,
-}: {
-  slot: DriverHandoverPhotoSlot;
-  photo?: {
-    id: string;
-    fileName: string;
-    download_url?: string | null;
-    validationStatus?: 'validated' | 'location_mismatch';
-  };
-  slotLabel: string;
-  validatedLabel: string;
-  mismatchLabel: string;
-}) {
-  const imageUrl = useAuthenticatedImageUrl(
-    photo?.id ? documentDownloadApiPath(photo.id) : null,
-  );
-
-  return (
-    <div className="rounded-lg border border-slate-200 p-2">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-slate-700">{slotLabel}</p>
-        {photo?.validationStatus === 'location_mismatch' ? (
-          <span className="text-xs font-medium text-amber-700">⚠ {mismatchLabel}</span>
-        ) : photo ? (
-          <span className="text-xs font-medium text-emerald-700">✓ {validatedLabel}</span>
-        ) : null}
-      </div>
-      {imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt={`${slot} handover`} className="h-28 w-full rounded-md object-cover" />
-      ) : (
-        <div className="flex h-28 items-center justify-center rounded-md bg-slate-100 text-xs text-slate-500">
-          —
-        </div>
-      )}
-    </div>
-  );
-}

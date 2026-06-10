@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Check, Loader2 } from 'lucide-react';
+import { DriverHandoverPhotoPreview } from '@/components/driver-portal/DriverHandoverPhotoPreview';
 import { HandoverCameraCapture } from '@/components/driver-portal/HandoverCameraCapture';
 import { useTranslation } from 'react-i18next';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
@@ -141,9 +142,13 @@ export default function DriverHandoverPage() {
           ) : (
             <>
               <p className="text-sm text-slate-600">{t('driverPortal.handover.vehicleChanged')}</p>
+              <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-[#1a4d7a]">
+                {t('driverPortal.handover.cameraOnlyHint')}
+              </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {requiredSlots.map((slot) => {
-                  const uploaded = Boolean(handover?.photos?.[slot]);
+                  const photo = handover?.photos?.[slot];
+                  const uploaded = Boolean(photo);
                   return (
                     <div
                       key={slot}
@@ -156,8 +161,14 @@ export default function DriverHandoverPage() {
                         {t(slotLabelKey(slot))}
                         {uploaded ? <Check className="h-4 w-4 text-emerald-600" /> : null}
                       </span>
+                      {photo?.id ? (
+                        <DriverHandoverPhotoPreview
+                          documentId={photo.id}
+                          alt={t(slotLabelKey(slot))}
+                        />
+                      ) : null}
                       <HandoverCameraCapture
-                        slotLabel={t('driverPortal.handover.cameraOnlyHint')}
+                        slotLabel={uploaded ? t('driverPortal.handover.replacePhoto') : t('driverPortal.handover.openCamera')}
                         disabled={uploadingSlot === slot}
                         onError={(message) => setError(message)}
                         onCaptured={(file, metadata) => void uploadSlot(slot, file, metadata)}

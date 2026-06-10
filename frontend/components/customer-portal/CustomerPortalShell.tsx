@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { Button } from '@/components/ui/button';
-import { clearAuth, getUser } from '@/lib/auth';
+import { getUser, performLogout } from '@/lib/auth';
 
 interface CustomerPortalShellProps {
   children: React.ReactNode;
@@ -18,7 +18,6 @@ const NAV_ITEMS = [
 ];
 
 export function CustomerPortalShell({ children }: CustomerPortalShellProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const user = getUser();
   const companyLabel =
@@ -27,8 +26,7 @@ export function CustomerPortalShell({ children }: CustomerPortalShellProps) {
     'Customer Portal';
 
   function handleLogout() {
-    clearAuth();
-    router.replace('/login');
+    performLogout('/login');
   }
 
   return (

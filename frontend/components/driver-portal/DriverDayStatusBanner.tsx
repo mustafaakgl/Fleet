@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { driverPortalApi } from '@/lib/api';
 import { driverTodayIso } from '@/lib/driver-portal-utils';
 import { cn } from '@/lib/utils';
-import type { DriverLocationStatus, DriverMorningCheckin } from '@/lib/types';
+import type { DriverHandover, DriverLocationStatus, DriverMorningCheckin } from '@/lib/types';
 
 type BannerTone = 'info' | 'success' | 'warning' | 'action';
 
@@ -22,16 +22,21 @@ export function DriverDayStatusBanner() {
   const { t } = useTranslation();
   const [checkin, setCheckin] = useState<DriverMorningCheckin | null>(null);
   const [status, setStatus] = useState<DriverLocationStatus | null>(null);
+  const [pendingHandover, setPendingHandover] = useState<DriverHandover | null>(null);
 
   useEffect(() => {
     const today = driverTodayIso();
     Promise.all([
       driverPortalApi.listMorningCheckins(today),
       driverPortalApi.getLocationStatus(),
+      driverPortalApi.listHandovers({ date: today, photoStatus: 'missing' }),
     ])
-      .then(([checkins, locationStatus]) => {
+      .then(([checkins, locationStatus, handovers]) => {
         setCheckin(checkins[0] ?? null);
         setStatus(locationStatus);
+        setPendingHandover(
+          handovers.find((row) => row.photoRequired && row.status !== 'completed') ?? null,
+        );
       })
       .catch(() => {
         setCheckin(null);
@@ -48,7 +53,12 @@ export function DriverDayStatusBanner() {
   let href: string | null = '/driver/morning-checkin';
   let ctaLabel: string | null = t('driverPortal.dayStatus.ctaCheckin');
 
-  if (checkinStatus === 'waiting_for_review') {
+  if (checkin && pendingHandover?.assignmentId && pendingHandover.vehicleId) {
+    message = t('driverPortal.dayStatus.handoverRequired');
+    tone = 'action';
+    href = `/driver/handover?assignmentId=${pendingHandover.assignmentId}&vehicleId=${pendingHandover.vehicleId}`;
+    ctaLabel = t('driverPortal.dayStatus.ctaHandover');
+  } else if (checkinStatus === 'waiting_for_review') {
     message = t('driverPortal.dayStatus.waitingReview');
     tone = 'warning';
     href = null;

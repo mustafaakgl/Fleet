@@ -16,7 +16,7 @@
     "verify:smtp": "ts-node scripts/verify-smtp.ts",
     "verify:stripe": "ts-node scripts/verify-stripe.ts",
     "verify:s3": "ts-node scripts/verify-s3.ts",
-    "test": "node -r ts-node/register/transpile-only --test src/tenant/tenant-scoped-models.spec.ts src/tenant/tenant-access.service.spec.ts src/vehicle-handovers/handover-photo-validation.util.spec.ts"
+    "test": "node -r ts-node/register/transpile-only --test src/tenant/tenant-scoped-models.spec.ts src/tenant/tenant-access.service.spec.ts src/vehicle-handovers/handover-photo-validation.util.spec.ts src/vehicle-handovers/handover-photo.util.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1062.0",

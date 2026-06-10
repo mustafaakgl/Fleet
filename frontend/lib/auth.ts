@@ -5,6 +5,7 @@ const TOKEN_KEY = 'accessToken';
 const USER_KEY = 'user';
 const LEGACY_TOKEN_KEY = 'fleet_access_token';
 const LEGACY_USER_KEY = 'fleet_user';
+const SKIP_AUTO_LOGIN_KEY = 'fleet_skip_auto_login';
 
 export const MOCK_CURRENT_USER: AuthUser = {
   id: 'u1',
@@ -112,6 +113,31 @@ export function clearAuth(): void {
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
+}
+
+/** After explicit logout, skip dev auto-login so the user can sign in manually. */
+export function markManualLoginRequired(): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(SKIP_AUTO_LOGIN_KEY, '1');
+}
+
+export function shouldSkipAutoLogin(): boolean {
+  if (typeof window === 'undefined') return false;
+  return sessionStorage.getItem(SKIP_AUTO_LOGIN_KEY) === '1';
+}
+
+export function clearManualLoginRequired(): void {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(SKIP_AUTO_LOGIN_KEY);
+}
+
+/** Clear session and redirect to the manual login page. */
+export function performLogout(redirectTo = '/login?manual=1'): void {
+  clearAuth();
+  markManualLoginRequired();
+  if (typeof window !== 'undefined') {
+    window.location.assign(redirectTo);
+  }
 }
 
 export function isTokenValid(): boolean {

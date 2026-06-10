@@ -239,7 +239,7 @@
     "notes": "Notes",
     "submit": "Submit check-in",
     "submitting": "Submitting...",
-    "validationRequired": "Plate, company, cargo, and quantity are required.",
+    "validationRequired": "Plate and company are required.",
     "success": "Morning check-in submitted.",
     "successWithLocation": "Check-in saved. Live location sharing is on.",
     "locationHint": "Check-in is separate from GPS. Start live location from the home screen when you begin your route.",

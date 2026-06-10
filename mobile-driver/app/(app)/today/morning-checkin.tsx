@@ -31,15 +31,21 @@ export default function MorningCheckinScreen() {
         date: localTodayDate(),
         vehiclePlate: vehiclePlate.trim(),
         companyName: companyName.trim(),
-        cargoName: cargoName.trim(),
-        cargoQuantity: cargoQuantity.trim(),
+        cargoName: cargoName.trim() || undefined,
+        cargoQuantity: cargoQuantity.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setVehiclePlate('');
       setCompanyName('');
       setCargoName('');
       setCargoQuantity('');
       showSuccess(t('morningCheckin.success'));
+      if (result.handoverRequired && result.handoverAssignmentId && result.handoverVehicleId) {
+        router.replace(
+          `/(app)/today/handover-upload?assignmentId=${result.handoverAssignmentId}&vehicleId=${result.handoverVehicleId}`,
+        );
+        return;
+      }
       router.back();
     },
     onError: (mutationError) => {
@@ -48,12 +54,7 @@ export default function MorningCheckinScreen() {
   });
 
   const onSubmit = () => {
-    if (
-      !vehiclePlate.trim() ||
-      !companyName.trim() ||
-      !cargoName.trim() ||
-      !cargoQuantity.trim()
-    ) {
+    if (!vehiclePlate.trim() || !companyName.trim()) {
       setValidationError(t('morningCheckin.validationRequired'));
       return;
     }

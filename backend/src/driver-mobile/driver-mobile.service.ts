@@ -27,8 +27,10 @@ import { DepartureCheckService } from '../departure-check/departure-check.servic
 import type { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import {
   allRequiredHandoverPhotosUploaded,
+  findYesterdayPlate,
   findYesterdayVehicleId,
   calculatePhotoRequirement,
+  getCalendarDayRange,
   handoverPhotoDocumentType,
   HANDOVER_PHOTO_SLOTS,
   loadHandoverPhotosBySlot,
@@ -561,14 +563,20 @@ export class DriverMobileService {
       data: {
         driverId: driver.id,
         date: start,
-        vehiclePlate: dto.vehiclePlate ?? null,
-        companyName: dto.companyName ?? null,
+        vehiclePlate: dto.vehiclePlate.trim(),
+        companyName: dto.companyName.trim(),
         cargoName: dto.cargoName?.trim() || null,
         cargoQuantity: dto.cargoQuantity?.trim() || null,
         notes: dto.notes,
         status: MorningCheckinStatus.waiting_for_review,
       },
     });
+
+    const handoverInfo = await this.ensureHandoverForPlateChange(
+      driver.id,
+      dto.vehiclePlate.trim(),
+      start,
+    );
 
     await this.safeAuditLog({
       actorUserId: userId,
@@ -598,11 +606,17 @@ export class DriverMobileService {
       submittedAt: row.submittedAt.toISOString(),
       vehiclePlate: row.vehiclePlate,
       companyName: row.companyName,
+      cargoName: row.cargoName,
+      cargoQuantity: row.cargoQuantity,
       status: row.status,
       conflictReason: row.conflictReason,
       assignmentId: row.assignmentId,
       notes: row.notes,
       locationSharingStarted: locationSharing?.sharingActive ?? false,
+      handoverRequired: handoverInfo.handoverRequired,
+      handoverId: handoverInfo.handoverId ?? null,
+      handoverAssignmentId: handoverInfo.assignmentId ?? null,
+      handoverVehicleId: handoverInfo.vehicleId ?? null,
     };
   }
 
@@ -705,6 +719,97 @@ export class DriverMobileService {
         status: 'completed',
       },
     });
+  }
+
+  private async ensureHandoverForPlateChange(
+    driverId: string,
+    vehiclePlate: string,
+    referenceDate: Date,
+  ): Promise<{
+    handoverRequired: boolean;
+    handoverId?: string;
+    assignmentId?: string;
+    vehicleId?: string;
+  }> {
+    const { start, end } = getCalendarDayRange(referenceDate);
+
+    const assignment = await this.prisma.assignment.findFirst({
+      where: {
+        driverId,
+        workDate: { gte: start, lt: end },
+        status: { notIn: [AssignmentStatus.cancelled] },
+      },
+      orderBy: [{ startTime: 'desc' }, { createdAt: 'desc' }],
+      select: { id: true, vehicleId: true },
+    });
+
+    if (!assignment) {
+      return { handoverRequired: false };
+    }
+
+    const yesterdayVehicleId = await findYesterdayVehicleId(this.prisma, driverId, referenceDate);
+    const yesterdayPlate = await findYesterdayPlate(this.prisma, driverId, referenceDate);
+    const rule = calculatePhotoRequirement({
+      yesterdayVehicleId,
+      currentVehicleId: assignment.vehicleId,
+      yesterdayPlate,
+      todayPlate: vehiclePlate,
+    });
+
+    if (!rule.photoRequired) {
+      return { handoverRequired: false };
+    }
+
+    const existingHandover = await this.prisma.vehicleHandover.findFirst({
+      where: {
+        driverId,
+        assignmentId: assignment.id,
+        handoverDateTime: { gte: start, lt: end },
+      },
+      select: { id: true, photoRequired: true },
+    });
+
+    if (existingHandover) {
+      if (!existingHandover.photoRequired) {
+        await this.prisma.vehicleHandover.update({
+          where: { id: existingHandover.id },
+          data: {
+            photoRequired: true,
+            photoStatus: 'missing',
+            status: 'pending',
+            previousVehicleId: yesterdayVehicleId,
+          },
+        });
+      }
+
+      return {
+        handoverRequired: true,
+        handoverId: existingHandover.id,
+        assignmentId: assignment.id,
+        vehicleId: assignment.vehicleId,
+      };
+    }
+
+    const created = await this.prisma.vehicleHandover.create({
+      data: {
+        driverId,
+        vehicleId: assignment.vehicleId,
+        previousVehicleId: yesterdayVehicleId,
+        assignmentId: assignment.id,
+        handoverType: 'pickup',
+        handoverDateTime: new Date(),
+        photoRequired: true,
+        photoStatus: 'missing',
+        status: 'pending',
+      },
+    });
+
+    return {
+      handoverRequired: true,
+      handoverId: created.id,
+      assignmentId: assignment.id,
+      vehicleId: assignment.vehicleId,
+    };
   }
 
   private async assertHandoverGateForDriver(driverId: string, referenceDate = new Date()) {
@@ -883,7 +988,22 @@ export class DriverMobileService {
 
     const yesterdayVehicleId =
       dto.previousVehicleId ?? (await findYesterdayVehicleId(this.prisma, driver.id, handoverDateTime));
-    const rule = calculatePhotoRequirement(yesterdayVehicleId, dto.vehicleId);
+    const yesterdayPlate = await findYesterdayPlate(this.prisma, driver.id, handoverDateTime);
+    const { start, end } = getCalendarDayRange(handoverDateTime);
+    const todayCheckin = await this.prisma.morningCheckin.findFirst({
+      where: {
+        driverId: driver.id,
+        date: { gte: start, lt: end },
+      },
+      orderBy: { submittedAt: 'desc' },
+      select: { vehiclePlate: true },
+    });
+    const rule = calculatePhotoRequirement({
+      yesterdayVehicleId,
+      currentVehicleId: dto.vehicleId,
+      yesterdayPlate,
+      todayPlate: todayCheckin?.vehiclePlate ?? null,
+    });
 
     const created = await this.prisma.vehicleHandover.create({
       data: {

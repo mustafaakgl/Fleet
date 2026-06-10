@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { mimeTypeFromFileName } from '../storage/file-path.util';
 import { ObjectStorageService } from '../storage/object-storage.service';
 import { StorageService } from '../storage/storage.service';
+import { loadHandoverPhotosBySlot } from '../vehicle-handovers/handover-photo.util';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 
@@ -369,13 +370,26 @@ export class VehiclesService {
 
   async getHandovers(id: string) {
     await this.assertExists(id);
-    return this.prisma.vehicleHandover.findMany({
+    const rows = await this.prisma.vehicleHandover.findMany({
       where: { vehicleId: id },
       include: {
         driver: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { handoverDateTime: 'desc' },
     });
+
+    return Promise.all(
+      rows.map(async (row) => {
+        const photos = await loadHandoverPhotosBySlot(this.prisma, row.id, {
+          downloadPathPrefix: '/documents',
+        });
+        return {
+          ...row,
+          handoverDateTime: row.handoverDateTime.toISOString(),
+          photos,
+        };
+      }),
+    );
   }
 
   async getIncidents(id: string) {

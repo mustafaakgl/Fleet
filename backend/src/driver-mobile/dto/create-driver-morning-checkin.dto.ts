@@ -1,16 +1,16 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateDriverMorningCheckinDto {
   @IsDateString()
   date!: string;
 
-  @IsOptional()
   @IsString()
-  vehiclePlate?: string;
+  @MinLength(1)
+  vehiclePlate!: string;
 
-  @IsOptional()
   @IsString()
-  companyName?: string;
+  @MinLength(1)
+  companyName!: string;
 
   @IsOptional()
   @IsString()
