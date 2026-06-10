@@ -97,7 +97,7 @@ export function DriverLicenseForm({ driverId, onCreated }: DriverLicenseFormProp
             id="license-number"
             value={licenseNumber}
             onChange={(e) => setLicenseNumber(e.target.value)}
-            placeholder="LIC-DE-..."
+            placeholder={t('licenseCompliance.form.licensePlaceholder')}
           />
         </div>
         <div className="space-y-1.5">
@@ -106,7 +106,7 @@ export function DriverLicenseForm({ driverId, onCreated }: DriverLicenseFormProp
             id="issuing-authority"
             value={issuingAuthority}
             onChange={(e) => setIssuingAuthority(e.target.value)}
-            placeholder="Stadt München"
+            placeholder={t('licenseCompliance.form.authorityPlaceholder')}
           />
         </div>
         <div className="space-y-1.5">

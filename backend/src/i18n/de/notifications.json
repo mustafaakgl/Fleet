@@ -1,0 +1,67 @@
+{
+  "request_approved": {
+    "title": "Antrag genehmigt",
+    "message": "Dein Antrag wurde genehmigt und im Kalender eingetragen."
+  },
+  "request_rejected": {
+    "title": "Antrag abgelehnt",
+    "message": "Dein Antrag wurde abgelehnt. Bitte wende dich an das Büro."
+  },
+  "assignment_created": {
+    "title": "Neuer Einsatz",
+    "message": "Du hast einen neuen Einsatz am {{date}}."
+  },
+  "checkin_added_to_einsatzplan": {
+    "title": "Check-in freigegeben",
+    "message": "Dein Morgen-Check-in ist freigegeben. Tippe „Fahrt starten“, wenn du losfährst.",
+    "message_with_company": "Dein Check-in ({{company}}) ist im Einsatzplan. Tippe „Fahrt starten“, wenn du losfährst."
+  },
+  "messenger_message": {
+    "title": "Neue Nachricht",
+    "message": "Du hast eine neue Nachricht erhalten.",
+    "message_with_preview": "{{preview}}"
+  },
+  "transport_approved": {
+    "title": "Transportanfrage genehmigt",
+    "message": "Deine Transportanfrage wurde genehmigt und ein Einsatz wurde erstellt."
+  },
+  "transport_rejected": {
+    "title": "Transportanfrage abgelehnt",
+    "message": "Deine Transportanfrage wurde abgelehnt.",
+    "message_with_reason": "Deine Transportanfrage wurde abgelehnt: {{reason}}"
+  },
+  "license_check_due": {
+    "title": "Führerscheinkontrolle fällig",
+    "message": "Bitte digitale Führerscheinkontrolle in der App durchführen (Vorderseite, Rückseite, Selfie)."
+  },
+  "license_check_reminder": {
+    "title": "Erinnerung: Führerscheinkontrolle",
+    "message": "Deine Führerscheinkontrolle ist noch offen. Bitte heute abschließen."
+  },
+  "license_check_approved": {
+    "title": "Führerscheinkontrolle bestätigt",
+    "message": "Deine digitale Führerscheinkontrolle wurde bestätigt."
+  },
+  "license_check_rejected": {
+    "title": "Führerscheinkontrolle abgelehnt",
+    "message": "Deine Führerscheinkontrolle wurde abgelehnt. Bitte erneut einreichen.",
+    "message_with_reason": "{{reason}}"
+  },
+  "license_expiry_soon": {
+    "title": "Führerschein läuft ab",
+    "message": "Dein Führerschein läuft am {{date}} ab ({{days}} Tage Hinweis)."
+  },
+  "departure_check_reminder": {
+    "title": "Abfahrtskontrolle fehlt",
+    "message": "Bitte die morgendliche Abfahrtskontrolle abschließen — vor Arbeitsbeginn Pflicht."
+  },
+  "defect_confirm_due": {
+    "title": "Mangel bestätigen",
+    "message": "Ein behobener Mangel wartet auf deine Bestätigung in der App."
+  },
+  "fine_assigned": {
+    "title": "Neuer Bußgeldbescheid",
+    "message": "Bußgeld für {{plate}} vom {{date}} — bitte in der App bestätigen.",
+    "default_plate": "Fahrzeug"
+  }
+}

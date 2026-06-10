@@ -213,7 +213,20 @@ export type DriverNotification = {
   updatedAt: string;
 };
 
-export type MessengerLanguage = 'de' | 'tr' | 'en' | 'pl' | 'nl' | 'it' | 'es' | 'ru';
+export type MessengerLanguage =
+  | 'de'
+  | 'tr'
+  | 'en'
+  | 'pl'
+  | 'ro'
+  | 'bg'
+  | 'ar'
+  | 'uk'
+  | 'fr'
+  | 'it'
+  | 'es'
+  | 'nl'
+  | 'ru';
 export type MessageTranslationStatus = 'translated' | 'failed' | 'not_requested' | 'pending';
 
 export type ConversationParticipant = {

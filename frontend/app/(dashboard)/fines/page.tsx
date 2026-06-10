@@ -25,6 +25,7 @@ import {
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
 import type { Fine, FineStats, FineStatus } from '@/lib/types';
+import { formatFleetCurrency } from '@/lib/locale-format';
 import { formatDate } from '@/lib/utils';
 
 const STATUS_VALUES: FineStatus[] = [
@@ -35,11 +36,6 @@ const STATUS_VALUES: FineStatus[] = [
   'widerspruch',
   'abgeschlossen',
 ];
-
-function formatEuro(amount?: number | null) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
-}
 
 export default function FinesPage() {
   const { t } = useTranslation();
@@ -246,7 +242,7 @@ export default function FinesPage() {
                   </TableCell>
                   <TableCell className={FLEET_TABLE_CELL}>
                     <Link href={`/fines/${fine.id}`} className="block">
-                      {formatEuro(fine.amount)}
+                      {formatFleetCurrency(fine.amount)}
                     </Link>
                   </TableCell>
                   <TableCell className={FLEET_TABLE_CELL}>

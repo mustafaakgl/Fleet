@@ -79,7 +79,7 @@ export default function LoginScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.hero}>
         <View style={styles.logoWrap}>
-          <Text style={styles.logoText}>MyFleet</Text>
+          <Text style={styles.logoText}>{t('login.brandName')}</Text>
         </View>
         <Text style={styles.title}>{t('login.title')}</Text>
         <Text style={styles.subtitle}>{t('login.subtitle')}</Text>
@@ -91,7 +91,7 @@ export default function LoginScreen() {
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
-          placeholder="name@company.com"
+          placeholder={t('login.emailPlaceholder')}
         />
         {!isEmailValid && email.length > 0 ? (
           <Text style={styles.validation}>{t('login.invalidEmail')}</Text>
@@ -101,7 +101,7 @@ export default function LoginScreen() {
           secureTextEntry
           value={password}
           onChangeText={setPassword}
-          placeholder="••••••••"
+          placeholder={t('login.passwordPlaceholder')}
         />
         {!isPasswordValid && password.length > 0 ? (
           <Text style={styles.validation}>{t('login.invalidPassword')}</Text>

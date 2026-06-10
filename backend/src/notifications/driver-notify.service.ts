@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
-import { DriverNotifyKey, resolveDriverNotifyCopy } from './driver-notify.copy';
+import { NotificationI18nService } from '../i18n/notification-i18n.service';
+import type { DriverNotifyKey } from './driver-notify.copy';
 
 type NotifyInput = {
   userId: string;
@@ -20,6 +21,7 @@ export class DriverNotifyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly notificationI18n: NotificationI18nService,
   ) {}
 
   async notifyUser(input: NotifyInput): Promise<void> {
@@ -31,7 +33,7 @@ export class DriverNotifyService {
       return;
     }
 
-    const copy = resolveDriverNotifyCopy(user.language, input.key, input.params ?? {});
+    const copy = this.notificationI18n.resolve(user.language, input.key, input.params ?? {});
 
     try {
       await this.notifications.createNotification({

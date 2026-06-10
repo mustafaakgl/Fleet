@@ -14,6 +14,7 @@ import { driversApi, finesApi, getApiErrorMessage } from '@/lib/api';
 import { fineDocumentApiPath, openAuthenticatedFile } from '@/lib/file-access';
 import { FLEET_PAGE, FLEET_PAGE_HEADER, FLEET_PAGE_TITLE } from '@/lib/fleet-table';
 import type { Driver, Fine, FineStatus } from '@/lib/types';
+import { formatFleetCurrency } from '@/lib/locale-format';
 import { formatDate } from '@/lib/utils';
 
 const NEXT_STATUS: Partial<Record<FineStatus, FineStatus[]>> = {
@@ -23,11 +24,6 @@ const NEXT_STATUS: Partial<Record<FineStatus, FineStatus[]>> = {
   bezahlt: ['abgeschlossen'],
   widerspruch: ['bezahlt', 'abgeschlossen'],
 };
-
-function formatEuro(amount?: number | null) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
-}
 
 export default function FineDetailPage() {
   const { t } = useTranslation();
@@ -194,7 +190,7 @@ export default function FineDetailPage() {
               </div>
               <div>
                 <div className="text-slate-500">{t('fines.colAmount', 'Betrag')}</div>
-                <div className="font-medium">{formatEuro(fine.amount)}</div>
+                <div className="font-medium">{formatFleetCurrency(fine.amount)}</div>
               </div>
               <div>
                 <div className="text-slate-500">{t('fines.colDriver', 'Fahrer')}</div>

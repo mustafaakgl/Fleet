@@ -30,14 +30,8 @@ import {
   FLEET_TABLE_ROW,
 } from '@/lib/fleet-table';
 import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
+import { formatFleetDateTime, formatFleetDurationMinutes } from '@/lib/locale-format';
 import { cn } from '@/lib/utils';
-
-function formatDateTime(value?: string | null) {
-  if (!value) return '—';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
-}
 
 function durationMinutes(startedAt: string, endedAt?: string | null) {
   const start = new Date(startedAt);
@@ -47,16 +41,7 @@ function durationMinutes(startedAt: string, endedAt?: string | null) {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
 }
 
-function formatDuration(minutes: number | null) {
-  if (minutes === null) return '—';
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours === 0) return `${mins} min`;
-  return `${hours}h ${mins}m`;
-}
-
-function sessionsToCsv(rows: WorkSessionRow[]) {
-  const header = 'Driver,Employee Number,Started,Ended,Duration (minutes),End Reason,Status\n';
+function sessionsToCsv(rows: WorkSessionRow[], header: string) {
   const lines = rows.map((row) => {
     const name = row.driver
       ? `${row.driver.firstName} ${row.driver.lastName}`.trim()
@@ -148,7 +133,7 @@ export default function WorkSessionsPage() {
   async function handleExport() {
     setExporting(true);
     try {
-      const csv = sessionsToCsv(rows);
+      const csv = sessionsToCsv(rows, `${t('workSessions.csvHeader')}\n`);
       const stamp = new Date().toISOString().slice(0, 10);
       downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `work-sessions-${stamp}.csv`);
     } catch {
@@ -188,13 +173,17 @@ export default function WorkSessionsPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-600">{t('workSessions.summary.totalHours')}</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{formatDuration(summary.totalMinutes)}</CardContent>
+            <CardContent className="text-2xl font-bold">
+              {formatFleetDurationMinutes(summary.totalMinutes, t)}
+            </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-slate-600">{t('workSessions.summary.avgSession')}</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-bold">{formatDuration(summary.avgMinutes)}</CardContent>
+            <CardContent className="text-2xl font-bold">
+              {formatFleetDurationMinutes(summary.avgMinutes, t)}
+            </CardContent>
         </Card>
       </div>
 
@@ -264,7 +253,7 @@ export default function WorkSessionsPage() {
                   <MobileDataCard
                     key={row.id}
                     title={driverName}
-                    subtitle={formatDateTime(row.startedAt)}
+                    subtitle={formatFleetDateTime(row.startedAt)}
                     badge={
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                         {t(`workSessions.status.${row.status}`)}
@@ -272,8 +261,8 @@ export default function WorkSessionsPage() {
                     }
                   >
                     <MobileFieldGrid>
-                      <MobileField label={t('workSessions.col.duration')} value={row.status === 'active' ? t('workSessions.status.active') : formatDuration(minutes)} />
-                      <MobileField label={t('workSessions.col.ended')} value={formatDateTime(row.endedAt)} />
+                      <MobileField label={t('workSessions.col.duration')} value={row.status === 'active' ? t('workSessions.status.active') : formatFleetDurationMinutes(minutes, t)} />
+                      <MobileField label={t('workSessions.col.ended')} value={formatFleetDateTime(row.endedAt)} />
                     </MobileFieldGrid>
                   </MobileDataCard>
                 );
@@ -307,10 +296,10 @@ export default function WorkSessionsPage() {
                     return (
                       <TableRow key={row.id} className={FLEET_TABLE_ROW}>
                         <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{driverName}</TableCell>
-                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDateTime(row.startedAt)}</TableCell>
-                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatDateTime(row.endedAt)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatFleetDateTime(row.startedAt)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{formatFleetDateTime(row.endedAt)}</TableCell>
                         <TableCell className={FLEET_TABLE_CELL}>
-                          {row.status === 'active' ? t('workSessions.status.active') : formatDuration(minutes)}
+                          {row.status === 'active' ? t('workSessions.status.active') : formatFleetDurationMinutes(minutes, t)}
                         </TableCell>
                         <TableCell className={FLEET_TABLE_CELL_MUTED}>
                           {row.endReason ? t(`workSessions.endReason.${row.endReason}`) : '—'}

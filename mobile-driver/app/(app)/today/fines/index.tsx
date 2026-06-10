@@ -8,16 +8,11 @@ import { LoadingState } from '@/components/LoadingState';
 import { ErrorState } from '@/components/ErrorState';
 import { EmptyState } from '@/components/EmptyState';
 import { useTranslation } from '@/i18n/useTranslation';
-import { formatAppDate } from '@/i18n/format';
+import { formatAppCurrency, formatAppDate } from '@/i18n/format';
+import type { AppLocale } from '@/i18n/languages';
 import { getErrorMessage } from '@/utils/errors';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import type { DriverFine } from '@/api/types';
-import type { AppLocale } from '@/i18n/translations';
-
-function formatEuro(amount?: number | null) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
-}
 
 export default function DriverFinesListScreen() {
   const { t, locale } = useTranslation();
@@ -111,7 +106,7 @@ function FineRow({
         {formatAppDate(locale, new Date(fine.violation_at))} · {fine.violation_location}
       </Text>
       <View style={styles.rowBottom}>
-        <Text style={styles.amount}>{formatEuro(fine.amount)}</Text>
+        <Text style={styles.amount}>{formatAppCurrency(locale, fine.amount)}</Text>
         <Text style={styles.status}>{statusLabel}</Text>
       </View>
     </Pressable>

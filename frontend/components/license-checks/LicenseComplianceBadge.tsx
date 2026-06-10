@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 export type LicenseComplianceBadge = 'green' | 'yellow' | 'red';
@@ -8,12 +11,6 @@ const STYLES: Record<LicenseComplianceBadge, string> = {
   red: 'bg-red-100 text-red-800 border-red-200',
 };
 
-const LABELS: Record<LicenseComplianceBadge, string> = {
-  green: 'FS OK',
-  yellow: 'FS bald',
-  red: 'FS kritisch',
-};
-
 export function LicenseComplianceBadgePill({
   badge,
   className,
@@ -21,6 +18,8 @@ export function LicenseComplianceBadgePill({
   badge?: LicenseComplianceBadge | string | null;
   className?: string;
 }) {
+  const { t } = useTranslation();
+
   if (!badge || !(badge in STYLES)) {
     return <span className={cn('text-xs text-gray-400', className)}>—</span>;
   }
@@ -33,9 +32,9 @@ export function LicenseComplianceBadgePill({
         STYLES[key],
         className,
       )}
-      title="Digitale Führerscheinkontrolle"
+      title={t('licenseCompliance.badge.title')}
     >
-      {LABELS[key]}
+      {t(`licenseCompliance.badge.${key}`)}
     </span>
   );
 }

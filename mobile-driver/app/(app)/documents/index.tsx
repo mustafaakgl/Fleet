@@ -242,7 +242,7 @@ export default function DriverDocumentsScreen() {
               style={styles.input}
               value={expiryDate}
               onChangeText={setExpiryDate}
-              placeholder="2027-12-31"
+              placeholder={t('common.datePlaceholder')}
               placeholderTextColor={colors.muted}
               autoCapitalize="none"
             />

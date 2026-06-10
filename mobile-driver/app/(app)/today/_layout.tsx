@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import i18n from '@/i18n/i18n';
 import { colors } from '@/theme';
 
 export default function TodayStackLayout() {
@@ -24,7 +25,7 @@ export default function TodayStackLayout() {
       <Stack.Screen name="defects/index" />
       <Stack.Screen name="defect/[id]" />
       <Stack.Screen name="defect-report" />
-      <Stack.Screen name="fines/index" options={{ title: 'Fines' }} />
+      <Stack.Screen name="fines/index" options={{ title: i18n.t('fines.title') }} />
       <Stack.Screen name="fine/[id]" />
     </Stack>
   );

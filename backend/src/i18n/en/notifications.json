@@ -1,0 +1,67 @@
+{
+  "request_approved": {
+    "title": "Request approved",
+    "message": "Your leave request was approved and added to the calendar."
+  },
+  "request_rejected": {
+    "title": "Request rejected",
+    "message": "Your leave request was rejected. Contact the office for details."
+  },
+  "assignment_created": {
+    "title": "New assignment",
+    "message": "You have a new assignment on {{date}}."
+  },
+  "checkin_added_to_einsatzplan": {
+    "title": "Check-in approved",
+    "message": "Your morning check-in was approved. Tap Start journey when you leave.",
+    "message_with_company": "Your {{company}} assignment is ready. Tap Start journey when you leave."
+  },
+  "messenger_message": {
+    "title": "New message",
+    "message": "You have a new message.",
+    "message_with_preview": "{{preview}}"
+  },
+  "transport_approved": {
+    "title": "Transport request approved",
+    "message": "Your transport request was approved and an assignment was created."
+  },
+  "transport_rejected": {
+    "title": "Transport request rejected",
+    "message": "Your transport request was rejected.",
+    "message_with_reason": "Your transport request was rejected: {{reason}}"
+  },
+  "license_check_due": {
+    "title": "License check due",
+    "message": "Complete your digital license check in the app: front, back, and selfie."
+  },
+  "license_check_reminder": {
+    "title": "License check reminder",
+    "message": "Your license check is still pending. Please complete it today."
+  },
+  "license_check_approved": {
+    "title": "License check approved",
+    "message": "Your digital license check was approved."
+  },
+  "license_check_rejected": {
+    "title": "License check rejected",
+    "message": "Your license check was rejected. Please resubmit.",
+    "message_with_reason": "{{reason}}"
+  },
+  "license_expiry_soon": {
+    "title": "License expiring soon",
+    "message": "Your license expires on {{date}} ({{days}}-day notice)."
+  },
+  "departure_check_reminder": {
+    "title": "Departure check missing",
+    "message": "Complete your morning vehicle check before starting work."
+  },
+  "defect_confirm_due": {
+    "title": "Confirm repaired defect",
+    "message": "A repaired defect is waiting for your confirmation in the app."
+  },
+  "fine_assigned": {
+    "title": "New traffic fine",
+    "message": "Fine for {{plate}} on {{date}} — please acknowledge in the app.",
+    "default_plate": "vehicle"
+  }
+}

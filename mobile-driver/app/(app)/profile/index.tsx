@@ -12,22 +12,12 @@ import { ListRow } from '@/components/ListRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Avatar } from '@/components/Avatar';
 import type { MessengerLanguage } from '@/api/types';
+import { SUPPORTED_LOCALES, type AppLocale } from '@/i18n/languages';
 import { useTranslation } from '@/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
 import { Card } from '@/components/ui/Card';
-
-const LANGUAGE_OPTIONS = [
-  { code: 'pl', label: 'Polski' },
-  { code: 'nl', label: 'Nederlands' },
-  { code: 'tr', label: 'Türkçe' },
-  { code: 'it', label: 'Italiano' },
-  { code: 'es', label: 'Español' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'en', label: 'English' },
-] as const;
 
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
@@ -159,23 +149,23 @@ export default function ProfileSettingsScreen() {
             <SectionHeader title={t('profile.language')} />
             <Text style={styles.hint}>{t('profile.languageHint')}</Text>
             <View style={styles.languageRow}>
-              {LANGUAGE_OPTIONS.map((item) => (
+              {SUPPORTED_LOCALES.map((code) => (
                 <Pressable
-                  key={item.code}
+                  key={code}
                   style={[
                     styles.languageChip,
-                    data.user.language === item.code && styles.languageChipActive,
+                    data.user.language === code && styles.languageChipActive,
                   ]}
-                  onPress={() => languageMutation.mutate(item.code)}
+                  onPress={() => languageMutation.mutate(code as MessengerLanguage)}
                   disabled={languageMutation.isPending}
                 >
                   <Text
                     style={[
                       styles.languageText,
-                      data.user.language === item.code && styles.languageTextActive,
+                      data.user.language === code && styles.languageTextActive,
                     ]}
                   >
-                    {item.label}
+                    {t(`languages.${code as AppLocale}`)}
                   </Text>
                 </Pressable>
               ))}

@@ -10,16 +10,11 @@ import { ErrorState } from '@/components/ErrorState';
 import { driverApi } from '@/api/endpoints';
 import { driverFineDocumentPath, openAuthenticatedFineDocument } from '@/lib/authenticated-files';
 import { useTranslation } from '@/i18n/useTranslation';
-import { formatAppDate } from '@/i18n/format';
+import { formatAppCurrency, formatAppDate } from '@/i18n/format';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
 import { colors, radius, spacing, typography } from '@/theme';
 import { Card } from '@/components/ui/Card';
-
-function formatEuro(amount?: number | null) {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
-}
 
 export default function DriverFineDetailScreen() {
   const { t, locale } = useTranslation();
@@ -92,7 +87,7 @@ export default function DriverFineDetailScreen() {
               label={t('fines.fieldCategory')}
               value={t(`fines.category.${fine.violation_category}`)}
             />
-            <Info label={t('fines.fieldAmount')} value={formatEuro(fine.amount)} />
+            <Info label={t('fines.fieldAmount')} value={formatAppCurrency(locale, fine.amount)} />
             {fine.payment_due_date ? (
               <Info
                 label={t('fines.fieldPaymentDue')}

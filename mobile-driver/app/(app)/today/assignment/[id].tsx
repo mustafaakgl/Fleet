@@ -55,7 +55,7 @@ export default function AssignmentDetailScreen() {
     <>
       <Stack.Screen options={{ title: t('assignment.title') }} />
       <ScreenLayout title={t('assignment.title')} subtitle={t('assignment.subtitle')}>
-        {!assignmentId ? <ErrorState message="Missing assignment id." /> : null}
+        {!assignmentId ? <ErrorState message={t('assignment.missingId')} /> : null}
         {assignmentId && isLoading ? <SkeletonCard /> : null}
         {assignmentId && !isLoading && error ? (
           <ErrorState

@@ -1,0 +1,67 @@
+{
+  "request_approved": {
+    "title": "İzin talebin onaylandı",
+    "message": "İzin talebin onaylandı ve takvime işlendi."
+  },
+  "request_rejected": {
+    "title": "İzin talebin reddedildi",
+    "message": "İzin talebin reddedildi. Detaylar için ofisle iletişime geç."
+  },
+  "assignment_created": {
+    "title": "Yeni einsatz",
+    "message": "{{date}} tarihinde yeni bir einsatzın var."
+  },
+  "checkin_added_to_einsatzplan": {
+    "title": "Check-in onaylandı",
+    "message": "Sabah check-in'in onaylandı. Yola çıkınca «Yola çıktım»a bas.",
+    "message_with_company": "{{company}} einsatzın hazır. Yola çıkınca «Yola çıktım»a bas."
+  },
+  "messenger_message": {
+    "title": "Yeni mesaj",
+    "message": "Ofisten yeni bir mesajın var.",
+    "message_with_preview": "{{preview}}"
+  },
+  "transport_approved": {
+    "title": "Taşıma talebin onaylandı",
+    "message": "Taşıma talebin onaylandı ve einsatz oluşturuldu."
+  },
+  "transport_rejected": {
+    "title": "Taşıma talebin reddedildi",
+    "message": "Taşıma talebin reddedildi.",
+    "message_with_reason": "Taşıma talebin reddedildi: {{reason}}"
+  },
+  "license_check_due": {
+    "title": "Ehliyet kontrolü zamanı",
+    "message": "Dijital ehliyet kontrolünü uygulamadan tamamla: ön yüz, arka yüz ve selfie."
+  },
+  "license_check_reminder": {
+    "title": "Ehliyet kontrolü hatırlatması",
+    "message": "Ehliyet kontrolün hâlâ bekliyor. Lütfen bugün tamamla."
+  },
+  "license_check_approved": {
+    "title": "Ehliyet kontrolü onaylandı",
+    "message": "Dijital ehliyet kontrolün onaylandı."
+  },
+  "license_check_rejected": {
+    "title": "Ehliyet kontrolü reddedildi",
+    "message": "Ehliyet kontrolün reddedildi. Lütfen yeniden gönder.",
+    "message_with_reason": "{{reason}}"
+  },
+  "license_expiry_soon": {
+    "title": "Ehliyet süresi doluyor",
+    "message": "Ehliyetin {{date}} tarihinde sona eriyor ({{days}} gün kaldı)."
+  },
+  "departure_check_reminder": {
+    "title": "Çıkış kontrolü eksik",
+    "message": "Sabah araç kontrolünü tamamla — işe başlamadan önce zorunlu."
+  },
+  "defect_confirm_due": {
+    "title": "Arıza onayı bekliyor",
+    "message": "Giderilen bir arıza onayını bekliyor. Uygulamadan onayla."
+  },
+  "fine_assigned": {
+    "title": "Yeni trafik cezası",
+    "message": "{{plate}} için {{date}} tarihli ceza bildirimi — uygulamadan onayla.",
+    "default_plate": "Araç"
+  }
+}

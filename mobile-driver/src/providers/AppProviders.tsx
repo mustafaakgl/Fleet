@@ -1,10 +1,15 @@
 import { PropsWithChildren, useEffect, useMemo } from 'react';
+import { initI18n } from '@/i18n/i18n';
 import { registerNotificationResponseHandler } from '@/lib/setup-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider } from '@/providers/ToastProvider';
 
 export function AppProviders({ children }: PropsWithChildren) {
+  useEffect(() => {
+    initI18n();
+  }, []);
+
   useEffect(() => {
     const subscription = registerNotificationResponseHandler();
     return () => {
