@@ -17,6 +17,7 @@ export type HandoverPhotoSummary = {
   id: string;
   fileName: string;
   download_url: string | null;
+  validationStatus?: 'validated' | 'location_mismatch';
 };
 
 export type HandoverPhotosBySlot = Partial<Record<HandoverPhotoSlot, HandoverPhotoSummary>>;
@@ -107,35 +108,72 @@ export async function findYesterdayVehicleId(
 export async function loadHandoverPhotosBySlot(
   prisma: PrismaService,
   handoverId: string,
+  options?: { downloadPathPrefix?: string },
 ): Promise<HandoverPhotosBySlot> {
-  const documents = await prisma.document.findMany({
-    where: {
-      ownerType: 'vehicle_handover',
-      ownerId: handoverId,
-      documentType: { startsWith: 'handover_photo_' },
-    },
+  const downloadPrefix = options?.downloadPathPrefix ?? '/driver/documents';
+
+  const records = await prisma.handoverPhoto.findMany({
+    where: { handoverId },
     orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      documentType: true,
-      fileName: true,
-      fileUrl: true,
+    include: {
+      document: {
+        select: {
+          id: true,
+          documentType: true,
+          fileName: true,
+          fileUrl: true,
+        },
+      },
     },
   });
 
   const photos: HandoverPhotosBySlot = {};
 
-  for (const document of documents) {
-    const slot = slotFromHandoverDocumentType(document.documentType);
+  for (const record of records) {
+    const slot = parseHandoverPhotoSlot(record.slot);
     if (!slot || photos[slot]) {
       continue;
     }
 
     photos[slot] = {
-      id: document.id,
-      fileName: document.fileName,
-      download_url: document.fileUrl ? `/driver/documents/${document.id}/download` : null,
+      id: record.document.id,
+      fileName: record.document.fileName,
+      download_url: record.document.fileUrl
+        ? `${downloadPrefix}/${record.document.id}/download`
+        : null,
+      validationStatus: record.validationStatus,
     };
+  }
+
+  // Legacy rows created before handover_photos table existed.
+  if (Object.keys(photos).length === 0) {
+    const documents = await prisma.document.findMany({
+      where: {
+        ownerType: 'vehicle_handover',
+        ownerId: handoverId,
+        documentType: { startsWith: 'handover_photo_' },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        documentType: true,
+        fileName: true,
+        fileUrl: true,
+      },
+    });
+
+    for (const document of documents) {
+      const slot = slotFromHandoverDocumentType(document.documentType);
+      if (!slot || photos[slot]) {
+        continue;
+      }
+
+      photos[slot] = {
+        id: document.id,
+        fileName: document.fileName,
+        download_url: document.fileUrl ? `${downloadPrefix}/${document.id}/download` : null,
+      };
+    }
   }
 
   return photos;

@@ -35,6 +35,13 @@ import {
   missingHandoverPhotoSlots,
   parseHandoverPhotoSlot,
 } from '../vehicle-handovers/handover-photo.util';
+import { UploadHandoverPhotoDto } from './dto/upload-handover-photo.dto';
+import {
+  HandoverPhotoValidationError,
+  resolveLocationValidationStatus,
+  validateHandoverPhotoUpload,
+} from '../vehicle-handovers/handover-photo-validation.util';
+import { readFileSync, unlinkSync } from 'node:fs';
 import { dedupeDriverDayAssignments } from '../assignments/assignment-dedupe';
 import { MAX_REQUEST_ATTACHMENTS } from './driver-upload.config';
 import {
@@ -906,7 +913,9 @@ export class DriverMobileService {
     file: {
       originalname: string;
       filename: string;
+      path: string;
     },
+    metadata: UploadHandoverPhotoDto,
   ) {
     const { user, driver } = await this.resolveDriver(userId);
     const slot = parseHandoverPhotoSlot(slotValue);
@@ -931,14 +940,81 @@ export class DriverMobileService {
     }
 
     const documentType = handoverPhotoDocumentType(slot);
+    let buffer: Buffer;
 
-    await this.prisma.document.deleteMany({
-      where: {
-        ownerType: 'vehicle_handover',
-        ownerId: handoverId,
-        documentType,
-      },
+    try {
+      buffer = readFileSync(file.path);
+    } catch {
+      throw new BadRequestException('Could not read uploaded photo');
+    }
+
+    let validated;
+    try {
+      validated = await validateHandoverPhotoUpload({
+        buffer,
+        clientTakenAt: metadata.taken_at,
+        gpsLat: metadata.gps_lat,
+        gpsLng: metadata.gps_lng,
+      });
+    } catch (error) {
+      try {
+        unlinkSync(file.path);
+      } catch {
+        // ignore cleanup errors
+      }
+      if (error instanceof HandoverPhotoValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+
+    const duplicate = await this.prisma.handoverPhoto.findUnique({
+      where: { fileHash: validated.fileHash },
+      select: { id: true, handoverId: true },
     });
+    if (duplicate) {
+      try {
+        unlinkSync(file.path);
+      } catch {
+        // ignore cleanup errors
+      }
+      throw new BadRequestException('This photo was already uploaded');
+    }
+
+    const driverLocation = await this.prisma.driverLocationLatest.findUnique({
+      where: { driverId: driver.id },
+      select: { latitude: true, longitude: true },
+    });
+
+    const validationStatus = resolveLocationValidationStatus(
+      validated.gpsLat,
+      validated.gpsLng,
+      driverLocation ? Number(driverLocation.latitude) : null,
+      driverLocation ? Number(driverLocation.longitude) : null,
+    );
+
+    const existingPhoto = await this.prisma.handoverPhoto.findUnique({
+      where: {
+        handoverId_slot: {
+          handoverId,
+          slot,
+        },
+      },
+      select: { id: true, documentId: true },
+    });
+
+    if (existingPhoto) {
+      await this.prisma.handoverPhoto.delete({ where: { id: existingPhoto.id } });
+      await this.prisma.document.delete({ where: { id: existingPhoto.documentId } });
+    } else {
+      await this.prisma.document.deleteMany({
+        where: {
+          ownerType: 'vehicle_handover',
+          ownerId: handoverId,
+          documentType,
+        },
+      });
+    }
 
     const document = await this.prisma.document.create({
       data: {
@@ -948,6 +1024,21 @@ export class DriverMobileService {
         fileName: file.originalname,
         fileUrl: this.storage.buildStoredPath('documents', file.filename),
         uploadedById: user.id,
+      },
+    });
+
+    await this.prisma.handoverPhoto.create({
+      data: {
+        handoverId,
+        slot,
+        documentId: document.id,
+        fileHash: validated.fileHash,
+        clientTakenAt: validated.clientTakenAt,
+        exifTakenAt: validated.exifTakenAt,
+        gpsLat: validated.gpsLat,
+        gpsLng: validated.gpsLng,
+        deviceInfo: metadata.device_info ?? null,
+        validationStatus,
       },
     });
 
@@ -981,6 +1072,8 @@ export class DriverMobileService {
         photoDocumentId: document.id,
         photoStatus: updatedHandover.photoStatus,
         photosComplete,
+        validationStatus,
+        fileHash: validated.fileHash,
       },
     });
 
@@ -993,6 +1086,7 @@ export class DriverMobileService {
         id: document.id,
         fileName: document.fileName,
         download_url: `/driver/documents/${document.id}/download`,
+        validationStatus,
       },
     };
   }

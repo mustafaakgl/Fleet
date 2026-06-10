@@ -7,6 +7,7 @@ import { UpdateVehicleHandoverDto } from './dto/update-vehicle-handover.dto';
 import {
   calculatePhotoRequirement,
   findYesterdayVehicleId,
+  loadHandoverPhotosBySlot,
 } from './handover-photo.util';
 
 type HandoverType = 'pickup' | 'return';
@@ -303,7 +304,15 @@ export class VehicleHandoversService {
       throw new NotFoundException('Vehicle handover not found');
     }
 
-    return handover;
+    const photos = await loadHandoverPhotosBySlot(this.prisma, handoverId, {
+      downloadPathPrefix: '/documents',
+    });
+
+    return {
+      ...handover,
+      handoverDateTime: handover.handoverDateTime.toISOString(),
+      photos,
+    };
   }
 
   async updateHandover(handoverId: string, dto: UpdateVehicleHandoverDto) {

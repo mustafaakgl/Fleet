@@ -1136,7 +1136,13 @@ export interface DriverHandover {
   photos?: Partial<
     Record<
       DriverHandoverPhotoSlot,
-      { id: string; fileName: string; fileUrl?: string | null; download_url?: string | null }
+      {
+        id: string;
+        fileName: string;
+        fileUrl?: string | null;
+        download_url?: string | null;
+        validationStatus?: 'validated' | 'location_mismatch';
+      }
     >
   >;
   missingSlots?: DriverHandoverPhotoSlot[];

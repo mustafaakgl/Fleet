@@ -7,6 +7,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { canEditVehicleHandovers } from '@/lib/permissions';
 import { vehicleHandoversApi, type VehicleHandoverRecord } from '@/lib/api';
+import { HANDOVER_PHOTO_SLOTS } from '@/lib/driver-portal-utils';
+import type { DriverHandoverPhotoSlot } from '@/lib/types';
+import { documentDownloadApiPath, useAuthenticatedImageUrl } from '@/lib/file-access';
 import {
   FLEET_LIST_CARD,
   FLEET_RAW_TABLE,
@@ -70,6 +73,8 @@ export function VehicleHandovers() {
   const [statusFilter, setStatusFilter] = useState<TableStatusFilter>('all');
   const [dateFilter, setDateFilter] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<VehicleHandoverRecord | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const currentUser = getUser();
   const canEdit = currentUser ? canEditVehicleHandovers(currentUser.role) : false;
@@ -93,9 +98,34 @@ export function VehicleHandovers() {
   }, [refresh]);
 
   const selected = useMemo(
-    () => rows.find((item) => item.id === selectedId) ?? null,
-    [rows, selectedId],
+    () => selectedDetail ?? rows.find((item) => item.id === selectedId) ?? null,
+    [rows, selectedId, selectedDetail],
   );
+
+  useEffect(() => {
+    if (!selectedId) {
+      setSelectedDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDetailLoading(true);
+    vehicleHandoversApi
+      .getById(selectedId)
+      .then((detail) => {
+        if (!cancelled) setSelectedDetail(detail);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedDetail(rows.find((item) => item.id === selectedId) ?? null);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, rows]);
 
   const filteredRows = useMemo(() => {
     const driverNeedle = driverQuery.trim().toLowerCase();
@@ -382,6 +412,33 @@ export function VehicleHandovers() {
               <DetailRow label={t('handover.colPhotoStatus')} value={t(photoStatusLabelKey(selected.photoStatus))} />
               <DetailRow label={t('handover.colDamageDetected')} value={selected.damageDetected ? t('handover.yes') : t('handover.no')} />
               <DetailRow label={t('handover.notes')} value={selected.notes ?? selected.damageNotes ?? '-'} />
+
+              {selected.photoRequired ? (
+                <div className="space-y-3 border-t border-slate-100 pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {t('handover.photosTitle')}
+                  </p>
+                  {detailLoading ? (
+                    <p className="text-sm text-slate-500">{t('handover.loading')}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {HANDOVER_PHOTO_SLOTS.map((slot) => {
+                        const photo = selected.photos?.[slot as DriverHandoverPhotoSlot];
+                        return (
+                          <HandoverPhotoPreview
+                            key={slot}
+                            slot={slot as DriverHandoverPhotoSlot}
+                            photo={photo}
+                            slotLabel={t(`driverPortal.handover.slot_${slot}`)}
+                            validatedLabel={t('handover.photoValidated')}
+                            mismatchLabel={t('handover.photoLocationMismatch')}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-slate-200 bg-white px-5 py-4">
@@ -435,6 +492,50 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="grid grid-cols-1 gap-1 border-b border-slate-100 pb-2 sm:grid-cols-[180px_1fr]">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="text-sm text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function HandoverPhotoPreview({
+  slot,
+  photo,
+  slotLabel,
+  validatedLabel,
+  mismatchLabel,
+}: {
+  slot: DriverHandoverPhotoSlot;
+  photo?: {
+    id: string;
+    fileName: string;
+    download_url?: string | null;
+    validationStatus?: 'validated' | 'location_mismatch';
+  };
+  slotLabel: string;
+  validatedLabel: string;
+  mismatchLabel: string;
+}) {
+  const imageUrl = useAuthenticatedImageUrl(
+    photo?.id ? documentDownloadApiPath(photo.id) : null,
+  );
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-slate-700">{slotLabel}</p>
+        {photo?.validationStatus === 'location_mismatch' ? (
+          <span className="text-xs font-medium text-amber-700">⚠ {mismatchLabel}</span>
+        ) : photo ? (
+          <span className="text-xs font-medium text-emerald-700">✓ {validatedLabel}</span>
+        ) : null}
+      </div>
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageUrl} alt={`${slot} handover`} className="h-28 w-full rounded-md object-cover" />
+      ) : (
+        <div className="flex h-28 items-center justify-center rounded-md bg-slate-100 text-xs text-slate-500">
+          —
+        </div>
+      )}
     </div>
   );
 }

@@ -829,6 +829,17 @@ export interface VehicleHandoverRecord {
   notes?: string | null;
   driver?: { id: string; firstName: string; lastName: string };
   vehicle?: { id: string; plateNumber: string };
+  photos?: Partial<
+    Record<
+      DriverHandoverPhotoSlot,
+      {
+        id: string;
+        fileName: string;
+        download_url?: string | null;
+        validationStatus?: 'validated' | 'location_mismatch';
+      }
+    >
+  >;
 }
 
 export interface CreateVehicleHandoverInput {
@@ -1728,9 +1739,23 @@ export const driverPortalApi = {
     notes?: string;
   }) => api.post<DriverHandover>('/driver/vehicle-handovers', payload).then((r) => r.data),
 
-  uploadHandoverPhoto: (handoverId: string, slot: DriverHandoverPhotoSlot, file: File) => {
+  uploadHandoverPhoto: (
+    handoverId: string,
+    slot: DriverHandoverPhotoSlot,
+    file: File,
+    metadata: {
+      takenAt: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      deviceInfo?: string;
+    },
+  ) => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('taken_at', metadata.takenAt);
+    if (metadata.gpsLat != null) formData.append('gps_lat', String(metadata.gpsLat));
+    if (metadata.gpsLng != null) formData.append('gps_lng', String(metadata.gpsLng));
+    if (metadata.deviceInfo) formData.append('device_info', metadata.deviceInfo);
     return api
       .post<{ handover: DriverHandover }>(
         `/driver/vehicle-handovers/${handoverId}/photo?slot=${slot}`,

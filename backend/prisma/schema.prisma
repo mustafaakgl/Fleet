@@ -174,6 +174,11 @@ enum HandoverPhotoStatus {
   rejected
 }
 
+enum HandoverPhotoValidationStatus {
+  validated
+  location_mismatch
+}
+
 enum HandoverStatus {
   pending
   completed
@@ -926,13 +931,37 @@ model Document {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
-  uploadedBy User? @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedBy    User?          @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  handoverPhoto HandoverPhoto?
 
   @@index([tenantId])
   @@index([ownerType, ownerId])
   @@index([status])
   @@index([documentType])
   @@index([expiryDate])
+}
+
+model HandoverPhoto {
+  id               String                        @id @default(uuid())
+  handoverId       String
+  slot             String
+  documentId       String                        @unique
+  fileHash         String                        @unique @map("file_hash")
+  clientTakenAt    DateTime?                     @map("client_taken_at")
+  exifTakenAt      DateTime?                     @map("exif_taken_at")
+  gpsLat           Decimal?                      @db.Decimal(10, 7) @map("gps_lat")
+  gpsLng           Decimal?                      @db.Decimal(10, 7) @map("gps_lng")
+  deviceInfo       String?                       @map("device_info")
+  validationStatus HandoverPhotoValidationStatus @default(validated) @map("validation_status")
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+
+  handover VehicleHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  document Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([handoverId, slot])
+  @@index([handoverId])
+  @@map("handover_photos")
 }
 
 model VehicleHandover {
@@ -960,9 +989,10 @@ model VehicleHandover {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  driver     Driver      @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  driver         Driver          @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  assignment     Assignment?     @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  handoverPhotos HandoverPhoto[]
 
   @@index([tenantId])
   @@index([driverId, handoverDateTime])

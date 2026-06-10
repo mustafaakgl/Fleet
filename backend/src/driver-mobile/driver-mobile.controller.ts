@@ -29,6 +29,7 @@ import { CreateDriverTransportRequestDto } from './dto/create-driver-transport-r
 import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
 import { SubmitHandoverEquipmentChecklistDto } from './dto/submit-handover-equipment.dto';
+import { UploadHandoverPhotoDto } from './dto/upload-handover-photo.dto';
 import { UpdateDriverLanguageDto } from './dto/update-driver-language.dto';
 import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
@@ -74,6 +75,8 @@ const HANDOVER_PHOTO_UPLOAD_INTERCEPTOR = FileInterceptor('file', {
 type UploadedImageFile = {
   originalname: string;
   filename: string;
+  path: string;
+  mimetype: string;
 };
 
 @Controller('driver')
@@ -248,6 +251,7 @@ export class DriverMobileController {
     @CurrentUser('id') userId: string,
     @Param('id') handoverId: string,
     @Query('slot') slot: string,
+    @Body() metadata: UploadHandoverPhotoDto,
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addMaxSizeValidator({
@@ -260,7 +264,7 @@ export class DriverMobileController {
     )
     file: UploadedImageFile,
   ) {
-    return this.driverMobile.uploadHandoverPhoto(userId, handoverId, slot, file);
+    return this.driverMobile.uploadHandoverPhoto(userId, handoverId, slot, file, metadata);
   }
 
   @Post('vehicle-handovers/:id/equipment-checklist')

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Check, Loader2, Upload } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
+import { HandoverCameraCapture } from '@/components/driver-portal/HandoverCameraCapture';
 import { useTranslation } from 'react-i18next';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
@@ -82,12 +83,17 @@ export default function DriverHandoverPage() {
     return HANDOVER_PHOTO_SLOTS;
   }, [handover?.requiredPhotoSlots]);
 
-  async function uploadSlot(slot: DriverHandoverPhotoSlot, file: File) {
+  async function uploadSlot(
+    slot: DriverHandoverPhotoSlot,
+    file: File,
+    metadata: { takenAt: string; gpsLat?: number; gpsLng?: number; deviceInfo: string },
+  ) {
     if (!handover?.id) return;
     setUploadingSlot(slot);
     try {
-      const result = await driverPortalApi.uploadHandoverPhoto(handover.id, slot, file);
+      const result = await driverPortalApi.uploadHandoverPhoto(handover.id, slot, file, metadata);
       setHandover(result.handover);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('driverPortal.handover.uploadFailed'));
     } finally {
@@ -139,10 +145,10 @@ export default function DriverHandoverPage() {
                 {requiredSlots.map((slot) => {
                   const uploaded = Boolean(handover?.photos?.[slot]);
                   return (
-                    <label
+                    <div
                       key={slot}
                       className={cn(
-                        'flex cursor-pointer flex-col gap-2 rounded-lg border p-3 text-sm',
+                        'flex flex-col gap-2 rounded-lg border p-3 text-sm',
                         uploaded ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white',
                       )}
                     >
@@ -150,29 +156,19 @@ export default function DriverHandoverPage() {
                         {t(slotLabelKey(slot))}
                         {uploaded ? <Check className="h-4 w-4 text-emerald-600" /> : null}
                       </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="text-xs"
+                      <HandoverCameraCapture
+                        slotLabel={t('driverPortal.handover.cameraOnlyHint')}
                         disabled={uploadingSlot === slot}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) void uploadSlot(slot, file);
-                          e.target.value = '';
-                        }}
+                        onError={(message) => setError(message)}
+                        onCaptured={(file, metadata) => void uploadSlot(slot, file, metadata)}
                       />
                       {uploadingSlot === slot ? (
                         <span className="flex items-center gap-1 text-xs text-slate-500">
                           <Loader2 className="h-3 w-3 animate-spin" />
                           {t('driverPortal.handover.uploading')}
                         </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-slate-500">
-                          <Upload className="h-3 w-3" />
-                          {t('driverPortal.handover.uploadHint')}
-                        </span>
-                      )}
-                    </label>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>

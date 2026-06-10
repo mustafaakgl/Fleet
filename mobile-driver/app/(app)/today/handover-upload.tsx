@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import axios from 'axios';
-import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Image, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
+import { HandoverCameraModal } from '@/components/HandoverCameraModal';
 import { ScreenLayout } from '@/components/ScreenLayout';
 import { driverApi } from '@/api/endpoints';
 import type { HandoverPhotoSlot } from '@/api/types';
@@ -17,11 +17,7 @@ import { showError, showSuccess } from '@/utils/feedback';
 import { colors, radius, spacing, typography } from '@/theme';
 import { localTodayDate } from '@/lib/calendar-date';
 import { resolveHandoverSlots } from '@/lib/handover-photos';
-import {
-  ensureScannerCameraPermission,
-  isDocumentScannerNativeAvailable,
-  scanDocumentImage,
-} from '@/lib/document-scanner';
+import { buildHandoverPhotoMetadata } from '@/lib/handover-photo-metadata';
 
 function slotLabel(t: (key: string) => string, slot: HandoverPhotoSlot): string {
   if (slot === 'front') return t('handover.slotFront');
@@ -41,6 +37,7 @@ export default function VehicleHandoverUploadScreen() {
   const vehicleId = params.vehicleId ?? '';
   const assignmentId = params.assignmentId ?? '';
   const [uploadingSlot, setUploadingSlot] = useState<HandoverPhotoSlot | null>(null);
+  const [cameraSlot, setCameraSlot] = useState<HandoverPhotoSlot | null>(null);
   const [firstAidKit, setFirstAidKit] = useState(false);
   const [fireExtinguisher, setFireExtinguisher] = useState(false);
   const [straps, setStraps] = useState(false);
@@ -96,16 +93,28 @@ export default function VehicleHandoverUploadScreen() {
       uri,
       name,
       type,
+      metadata,
     }: {
       slot: HandoverPhotoSlot;
       uri: string;
       name: string;
       type: string;
+      metadata: Awaited<ReturnType<typeof buildHandoverPhotoMetadata>>;
     }) => {
       if (!handover?.id) {
         throw new Error('Handover not ready');
       }
-      return driverApi.uploadHandoverPhoto(handover.id, slot, { uri, name, type });
+      return driverApi.uploadHandoverPhoto(
+        handover.id,
+        slot,
+        { uri, name, type },
+        {
+          takenAt: metadata.takenAt,
+          gpsLat: metadata.gpsLat,
+          gpsLng: metadata.gpsLng,
+          deviceInfo: metadata.deviceInfo,
+        },
+      );
     },
     onSuccess: async () => {
       showSuccess(t('handover.uploadSuccess'));
@@ -149,97 +158,16 @@ export default function VehicleHandoverUploadScreen() {
     return requiredSlots.filter((slot) => handover.photos?.[slot]).length;
   }, [handover, requiredSlots]);
 
-  const uploadAsset = (slot: HandoverPhotoSlot, asset: PickedImage) => {
+  const uploadAsset = async (slot: HandoverPhotoSlot, asset: PickedImage) => {
+    const metadata = await buildHandoverPhotoMetadata();
     setUploadingSlot(slot);
     uploadMutation.mutate({
       slot,
       uri: asset.uri,
       name: asset.name,
       type: asset.type,
+      metadata,
     });
-  };
-
-  const pickFromGallery = async (slot: HandoverPhotoSlot) => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showError(t('handover.permissionRequired'));
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-    });
-    if (result.canceled || !result.assets[0]) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    uploadAsset(slot, {
-      uri: asset.uri,
-      name: asset.fileName ?? `handover-${slot}-${Date.now()}.jpg`,
-      type: asset.mimeType ?? 'image/jpeg',
-    });
-  };
-
-  const pickFromCamera = async (slot: HandoverPhotoSlot) => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      showError(t('handover.cameraPermissionRequired'));
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-    });
-    if (result.canceled || !result.assets[0]) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    uploadAsset(slot, {
-      uri: asset.uri,
-      name: asset.fileName ?? `handover-${slot}-${Date.now()}.jpg`,
-      type: asset.mimeType ?? 'image/jpeg',
-    });
-  };
-
-  const pickFromScanner = async (slot: HandoverPhotoSlot) => {
-    if (!isDocumentScannerNativeAvailable()) {
-      showError(t('handover.scanUnavailable'));
-      return;
-    }
-    const permitted = await ensureScannerCameraPermission();
-    if (!permitted) {
-      showError(t('handover.cameraPermissionRequired'));
-      return;
-    }
-
-    const result = await scanDocumentImage({ maxNumDocuments: 1, quality: 90 });
-    if (!result.ok) {
-      if (result.reason === 'cancelled') {
-        return;
-      }
-      showError(result.message ?? t('handover.scanFailed'));
-      return;
-    }
-
-    uploadAsset(slot, {
-      uri: result.uri,
-      name: `handover-${slot}-${result.fileName}`,
-      type: result.mimeType,
-    });
-  };
-
-  const pickAndUpload = (slot: HandoverPhotoSlot) => {
-    const actions: Array<{ text: string; onPress?: () => void; style?: 'cancel' }> = [
-      { text: t('handover.scanDocument'), onPress: () => void pickFromScanner(slot) },
-      { text: t('handover.takePhoto'), onPress: () => void pickFromCamera(slot) },
-      { text: t('handover.chooseGallery'), onPress: () => void pickFromGallery(slot) },
-      { text: t('common.cancel'), style: 'cancel' },
-    ];
-    Alert.alert(t('handover.pickSourceTitle'), slotLabel(t, slot), actions);
   };
 
   if (!vehicleId) {
@@ -272,7 +200,7 @@ export default function VehicleHandoverUploadScreen() {
 
           {handover.photoRequired ? (
             <>
-              <Text style={styles.scanHint}>{t('handover.scanHint')}</Text>
+              <Text style={styles.scanHint}>{t('handover.cameraOnlyHint')}</Text>
               <Text style={styles.progress}>
                 {handover.photosComplete
                   ? t('handover.allComplete')
@@ -301,7 +229,7 @@ export default function VehicleHandoverUploadScreen() {
                       )}
                       <Pressable
                         style={[styles.slotButton, isUploading && styles.slotButtonDisabled]}
-                        onPress={() => pickAndUpload(slot)}
+                        onPress={() => setCameraSlot(slot)}
                         disabled={isUploading}
                       >
                         <Text style={styles.slotButtonText}>
@@ -363,6 +291,17 @@ export default function VehicleHandoverUploadScreen() {
           )}
         </View>
       ) : null}
+
+      <HandoverCameraModal
+        visible={cameraSlot != null}
+        slotLabel={cameraSlot ? slotLabel(t, cameraSlot) : ''}
+        onClose={() => setCameraSlot(null)}
+        onCaptured={(asset) => {
+          if (!cameraSlot) return;
+          void uploadAsset(cameraSlot, asset);
+          setCameraSlot(null);
+        }}
+      />
     </ScreenLayout>
   );
 }

@@ -168,10 +168,20 @@ export const driverApi = {
     handoverId: string,
     slot: HandoverPhotoSlot,
     file: { uri: string; name: string; type: string },
+    metadata: {
+      takenAt: string;
+      gpsLat?: number;
+      gpsLng?: number;
+      deviceInfo?: string;
+    },
     onProgress?: (progress: number) => void,
   ) {
     const formData = new FormData();
     formData.append('file', file as unknown as Blob);
+    formData.append('taken_at', metadata.takenAt);
+    if (metadata.gpsLat != null) formData.append('gps_lat', String(metadata.gpsLat));
+    if (metadata.gpsLng != null) formData.append('gps_lng', String(metadata.gpsLng));
+    if (metadata.deviceInfo) formData.append('device_info', metadata.deviceInfo);
     const { data } = await apiClient.post<DriverHandoverPhotoUploadResponse>(
       `/driver/vehicle-handovers/${handoverId}/photo?slot=${slot}`,
       formData,
