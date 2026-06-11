@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { IBM_Plex_Mono, Inter } from 'next/font/google';
-import { dashboardApi, messengerApi, onboardingApi } from '@/lib/api';
+import { dashboardApi, messengerApi, onboardingApi, assignmentsApi } from '@/lib/api';
 import { canViewFinancials } from '@/lib/permissions';
 import { getUser } from '@/lib/auth';
 import {
@@ -76,6 +76,25 @@ function currency(value: number | null | undefined, language: string) {
 function chartHeight(value: number, max: number): string {
   if (max <= 0) return '8%';
   return `${Math.max(8, Math.round((value / max) * 100))}%`;
+}
+
+type KpiTrend = {
+  pct: number;
+  direction: 'up' | 'down' | 'flat';
+  tone: 'gut' | 'schlecht' | 'neutral';
+  labelKey: string;
+};
+
+function buildTrend(current: number, previous: number | undefined, labelKey: string): KpiTrend | null {
+  if (previous === undefined || previous <= 0) return null;
+  const pct = Math.round(((current - previous) / previous) * 100);
+  const direction = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+  return {
+    pct: Math.abs(pct),
+    direction,
+    tone: pct > 0 ? 'gut' : pct < 0 ? 'schlecht' : 'neutral',
+    labelKey,
+  };
 }
 
 function buildActionItems(summary: DashboardSummary, t: TFunction): ActionItem[] {
@@ -207,6 +226,15 @@ function dismissStorageKey(tenantId: string) {
   return `onboarding-banner-dismissed:${tenantId}`;
 }
 
+function isoDay(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function FleetOperationsDashboard() {
   const { t, i18n } = useTranslation();
   const user = getUser();
@@ -224,6 +252,8 @@ export function FleetOperationsDashboard() {
     tenantId: string;
   } | null>(null);
   const [onbDismissed, setOnbDismissed] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copyResult, setCopyResult] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -254,6 +284,27 @@ export function FleetOperationsDashboard() {
     void load();
   }, [load]);
 
+  const copyPlan = useCallback(
+    async (fromOffset: number, toOffset: number) => {
+      setCopying(true);
+      setCopyResult(null);
+      try {
+        const result = await assignmentsApi.copyDay(isoDay(fromOffset), isoDay(toOffset));
+        setCopyResult(
+          result.created > 0
+            ? t('dashboard.v2.planning.copyDone', { created: result.created, skipped: result.skipped })
+            : t('dashboard.v2.planning.copyNothing'),
+        );
+        if (result.created > 0) void load();
+      } catch (e) {
+        setCopyResult(e instanceof Error ? e.message : t('dashboard.loadError'));
+      } finally {
+        setCopying(false);
+      }
+    },
+    [load, t],
+  );
+
   const actions = useMemo(() => (summary ? buildActionItems(summary, t) : []), [summary, t]);
   const attentionCount = actions.length;
 
@@ -268,6 +319,18 @@ export function FleetOperationsDashboard() {
 
     const lang = i18n.language;
 
+    const vehiclesTrend = buildTrend(k.vehiclesInUse, k.vehiclesInUseLastWeek, 'dashboard.v2.trend.vsLastWeek');
+    const todayRevTrend = buildTrend(
+      rev?.todayRevenue ?? 0,
+      rev?.lastWeekSameDayRevenue,
+      'dashboard.v2.trend.vsLastWeek',
+    );
+    const monthRevTrend = buildTrend(
+      rev?.monthlyRevenue ?? 0,
+      rev?.prevMonthToDateRevenue,
+      'dashboard.v2.trend.vsPrevMonth',
+    );
+
     return [
       {
         id: 'drivers',
@@ -275,6 +338,8 @@ export function FleetOperationsDashboard() {
         value: String(k.activeDrivers),
         sub: t('dashboard.v2.kpi.driversSub', { vacation: k.driversOnVacation, sick: k.sickDrivers }),
         subTone: 'neutral' as const,
+        accent: k.sickDrivers > 2 ? ('schlecht' as const) : ('neutral' as const),
+        trend: null as KpiTrend | null,
       },
       {
         id: 'vehicles',
@@ -287,6 +352,13 @@ export function FleetOperationsDashboard() {
         ),
         sub: k.vehiclesInUse === 0 ? t('dashboard.v2.kpi.noAssignmentsPlanned') : t('dashboard.v2.kpi.inUse'),
         subTone: k.vehiclesInUse === 0 ? ('schlecht' as const) : ('neutral' as const),
+        accent:
+          k.vehiclesInUse === 0
+            ? ('schlecht' as const)
+            : k.vehiclesInUse < totalVehicles / 2
+              ? ('warn' as const)
+              : ('gut' as const),
+        trend: vehiclesTrend,
       },
       {
         id: 'status',
@@ -299,6 +371,8 @@ export function FleetOperationsDashboard() {
         ),
         sub: t('dashboard.v2.kpi.inWorkshop', { count: fw?.vehicleStatus.maintenance ?? 0 }),
         subTone: 'neutral' as const,
+        accent: (fw?.vehicleStatus.maintenance ?? 0) > 0 ? ('warn' as const) : ('gut' as const),
+        trend: null as KpiTrend | null,
       },
       {
         id: 'assign',
@@ -311,6 +385,8 @@ export function FleetOperationsDashboard() {
         ),
         sub: unassigned > 0 ? t('dashboard.v2.kpi.unassignedCount', { count: unassigned }) : t('dashboard.v2.kpi.allAssigned'),
         subTone: unassigned > 0 ? ('schlecht' as const) : ('gut' as const),
+        accent: unassigned > 0 ? ('schlecht' as const) : ('gut' as const),
+        trend: null as KpiTrend | null,
       },
       {
         id: 'rev-today',
@@ -318,6 +394,8 @@ export function FleetOperationsDashboard() {
         value: currency(rev?.todayRevenue ?? 0, lang),
         sub: t('dashboard.v2.kpi.weekRevenue', { amount: currency(rev?.weeklyRevenue ?? 0, lang) }),
         subTone: 'neutral' as const,
+        accent: 'neutral' as const,
+        trend: todayRevTrend,
       },
       {
         id: 'rev-month',
@@ -325,6 +403,8 @@ export function FleetOperationsDashboard() {
         value: currency(rev?.monthlyRevenue ?? 0, lang),
         sub: t('dashboard.v2.kpi.monthRunning'),
         subTone: 'gut' as const,
+        accent: 'neutral' as const,
+        trend: monthRevTrend,
       },
     ];
   }, [summary, t, i18n.language]);
@@ -441,10 +521,16 @@ export function FleetOperationsDashboard() {
 
         <section className="fdb-kpis">
           {kpis.map((kpi) => (
-            <div key={kpi.id} className="fdb-kpi">
+            <div key={kpi.id} className={`fdb-kpi fdb-kpi-${kpi.accent}`}>
               <div className="fdb-k-label">{kpi.label}</div>
               <div className="fdb-k-wert">{kpi.value}</div>
               <div className={`fdb-k-sub fdb-k-sub-${kpi.subTone}`}>{kpi.sub}</div>
+              {kpi.trend ? (
+                <div className={`fdb-k-trend fdb-k-trend-${kpi.trend.tone}`}>
+                  {kpi.trend.direction === 'up' ? '▲' : kpi.trend.direction === 'down' ? '▼' : '▶'}{' '}
+                  {kpi.trend.pct} % {t(kpi.trend.labelKey)}
+                </div>
+              ) : null}
             </div>
           ))}
         </section>
@@ -476,9 +562,20 @@ export function FleetOperationsDashboard() {
                   <div className="fdb-leer-hinweis">
                     {t('dashboard.v2.planning.noToday')}
                     <br />
-                    <Link href="/assignments?panel=tagesplanung&view=planning" className="fdb-a-btn">
-                      {t('dashboard.v2.planning.createAssignment')}
-                    </Link>
+                    <div className="fdb-leer-aktionen">
+                      <button
+                        type="button"
+                        className="fdb-a-btn"
+                        disabled={copying}
+                        onClick={() => void copyPlan(-1, 0)}
+                      >
+                        {copying ? t('dashboard.v2.planning.copying') : t('dashboard.v2.planning.copyYesterday')}
+                      </button>
+                      <Link href="/assignments?panel=tagesplanung&view=planning" className="fdb-a-btn">
+                        {t('dashboard.v2.planning.createAssignment')}
+                      </Link>
+                    </div>
+                    {copyResult ? <div className="fdb-copy-ergebnis">{copyResult}</div> : null}
                   </div>
                 ) : (
                   <div className="fdb-leer-hinweis">
@@ -520,9 +617,22 @@ export function FleetOperationsDashboard() {
                         ? t('dashboard.v2.planning.driversWaiting', { count: tomorrow.missingAssignments })
                         : t('dashboard.v2.planning.tomorrowGood')}
                       <br />
-                      <Link href="/assignments?panel=tagesplanung&view=daily-overview" className="fdb-a-btn">
-                        {t('dashboard.openEinsatzplan')}
-                      </Link>
+                      <div className="fdb-leer-aktionen">
+                        {tomorrow.missingAssignments > 0 ? (
+                          <button
+                            type="button"
+                            className="fdb-a-btn"
+                            disabled={copying}
+                            onClick={() => void copyPlan(0, 1)}
+                          >
+                            {copying ? t('dashboard.v2.planning.copying') : t('dashboard.v2.planning.copyTodayToTomorrow')}
+                          </button>
+                        ) : null}
+                        <Link href="/assignments?panel=tagesplanung&view=daily-overview" className="fdb-a-btn">
+                          {t('dashboard.openEinsatzplan')}
+                        </Link>
+                      </div>
+                      {copyResult ? <div className="fdb-copy-ergebnis">{copyResult}</div> : null}
                     </div>
                   </>
                 ) : null}

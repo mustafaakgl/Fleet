@@ -344,6 +344,38 @@ export interface FineStatusLog {
   created_at: string;
 }
 
+export interface VehicleCostRow {
+  vehicle_id: string;
+  plate_number: string;
+  internal_code: string;
+  brand: string;
+  model: string;
+  status: string;
+  service_cost: number;
+  service_count: number;
+  fine_cost: number;
+  fine_count: number;
+  total_cost: number;
+  revenue: number;
+  assignment_count: number;
+  margin: number;
+}
+
+export interface VehicleCostsResponse {
+  period_months: number;
+  from: string;
+  to: string;
+  fleet: {
+    service_cost: number;
+    fine_cost: number;
+    total_cost: number;
+    revenue: number;
+    margin: number;
+    avg_cost_per_vehicle: number;
+  };
+  vehicles: VehicleCostRow[];
+}
+
 export interface Fine {
   id: string;
   vehicle_id: string;
@@ -808,6 +840,7 @@ export interface DashboardKpis {
   driversOnVacation: number;
   sickDrivers: number;
   vehiclesInUse: number;
+  vehiclesInUseLastWeek?: number;
   openAccidents: number;
   cargoDamages: number;
   expiringDocuments: number;
@@ -867,6 +900,8 @@ export interface DashboardRevenueAnalytics {
   todayRevenue?: number;
   weeklyRevenue?: number;
   monthlyRevenue?: number;
+  lastWeekSameDayRevenue?: number;
+  prevMonthToDateRevenue?: number;
   revenueByCompany?: Array<{
     companyId: string;
     companyName: string;

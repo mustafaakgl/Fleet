@@ -314,6 +314,66 @@
   color: var(--fdb-grau);
 }
 
+.fdb .fdb-kpi-gut {
+  border-left: 3px solid var(--fdb-gruen);
+}
+
+.fdb .fdb-kpi-warn {
+  border-left: 3px solid var(--fdb-gelb);
+}
+
+.fdb .fdb-kpi-schlecht {
+  border-left: 3px solid var(--fdb-rot);
+}
+
+.fdb .fdb-k-trend {
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 6px;
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 99px;
+}
+
+.fdb .fdb-k-trend-gut {
+  color: var(--fdb-gruen);
+  background: #e3f3e9;
+}
+
+.fdb .fdb-k-trend-schlecht {
+  color: var(--fdb-rot);
+  background: #fdeae8;
+}
+
+.fdb .fdb-k-trend-neutral {
+  color: var(--fdb-grau);
+  background: var(--fdb-bg);
+}
+
+.fdb .fdb-leer-aktionen {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.fdb .fdb-leer-aktionen button.fdb-a-btn {
+  cursor: pointer;
+}
+
+.fdb .fdb-leer-aktionen button.fdb-a-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.fdb .fdb-copy-ergebnis {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fdb-blau);
+}
+
 .fdb .fdb-reihe3 {
   display: grid;
   grid-template-columns: 1.35fr 1fr 1fr;

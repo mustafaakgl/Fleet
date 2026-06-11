@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, Scale, WifiOff } from 'lucide-react';
+import { Plus, Scale, WifiOff, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { FineStatusBadge } from '@/components/fines/FineStatusBadge';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { finesApi, getApiErrorMessage } from '@/lib/api';
+import { downloadFinesCsv } from '@/lib/fines-csv';
 import {
   FLEET_FILTER_SELECT,
   FLEET_LIST_CARD,
@@ -93,12 +94,22 @@ export default function FinesPage() {
           <Scale className="h-8 w-8 text-blue-700" />
           <h1 className={FLEET_PAGE_TITLE}>{t('fines.title', 'Bußgeldverwaltung')}</h1>
         </div>
-        <Button asChild>
-          <Link href="/fines/new">
-            <Plus className="mr-2 h-4 w-4" />
-            {t('fines.create', 'Bußgeld erfassen')}
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={fines.length === 0}
+            onClick={() => downloadFinesCsv(fines)}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv', 'CSV exportieren')}
+          </Button>
+          <Button asChild>
+            <Link href="/fines/new">
+              <Plus className="mr-2 h-4 w-4" />
+              {t('fines.create', 'Bußgeld erfassen')}
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {!loading && error ? (

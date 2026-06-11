@@ -22,6 +22,7 @@ import { CustomerMessagesService } from '../customer-portal/customer-messages.se
 import { SendCustomerMessageDto } from '../customer-portal/dto/send-customer-message.dto';
 import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
+import { CopyDayDto } from './dto/copy-day.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { TransitionAssignmentDto } from './dto/transition-assignment.dto';
 
@@ -71,6 +72,13 @@ export class AssignmentsController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.customerMessages.sendFromFleet(id, req.user.id, dto.body);
+  }
+
+  @Post('copy-day')
+  @RequiresWrite()
+  @HttpCode(HttpStatus.OK)
+  copyDay(@Body() dto: CopyDayDto, @Req() req: AuthenticatedRequest) {
+    return this.assignments.copyDay(dto.from_date, dto.to_date, req.user.id);
   }
 
   @Get(':id')

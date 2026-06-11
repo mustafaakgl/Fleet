@@ -106,6 +106,10 @@ export class DashboardService {
 
   async getKpis(date: Date) {
     const { start, end } = this.getDayRange(date);
+    const lastWeekStart = new Date(start);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    const lastWeekEnd = new Date(lastWeekStart);
+    lastWeekEnd.setDate(lastWeekEnd.getDate() + 1);
     const db = this.prisma as any;
 
     const [
@@ -113,6 +117,7 @@ export class DashboardService {
       vacationRows,
       sickRows,
       vehiclesInUse,
+      vehiclesInUseLastWeek,
       openAccidents,
       cargoDamages,
       expiringDocuments,
@@ -127,6 +132,12 @@ export class DashboardService {
           status: { in: ['planned', 'confirmed', 'in_progress', 'completed'] },
         },
       }),
+      db.assignment.count({
+        where: {
+          workDate: { gte: lastWeekStart, lt: lastWeekEnd },
+          status: { in: ['planned', 'confirmed', 'in_progress', 'completed'] },
+        },
+      }),
       db.accident.count({ where: { type: 'vehicle_accident', status: { in: ['reported', 'under_review'] } } }),
       db.accident.count({ where: { type: 'cargo_damage', status: { in: ['reported', 'under_review'] } } }),
       db.document.count({ where: { status: { in: ['expiring_soon', 'expired'] } } }),
@@ -138,6 +149,7 @@ export class DashboardService {
       driversOnVacation: new Set(vacationRows.map((x: any) => x.driverId)).size,
       sickDrivers: new Set(sickRows.map((x: any) => x.driverId)).size,
       vehiclesInUse,
+      vehiclesInUseLastWeek,
       openAccidents,
       cargoDamages,
       expiringDocuments,
@@ -550,26 +562,41 @@ export class DashboardService {
     const week = this.getWeekRange(date);
     const month = this.getMonthRange(date);
 
-    const [todayRevenue, weeklyRevenue, monthlyRevenue, dayRows] = await Promise.all([
-      sumByRange(day.start, day.end),
-      sumByRange(week.start, week.end),
-      sumByRange(month.start, month.end),
-      db.assignment.findMany({
-        where: {
-          workDate: { gte: day.start, lt: day.end },
-          status: { in: ['planned', 'confirmed', 'in_progress', 'completed'] },
-        },
-        include: {
-          company: {
-            select: {
-              id: true,
-              name: true,
-              defaultDailyRevenue: true,
+    // Comparison ranges for trend indicators
+    const lastWeekDayStart = new Date(day.start);
+    lastWeekDayStart.setDate(lastWeekDayStart.getDate() - 7);
+    const lastWeekDayEnd = new Date(lastWeekDayStart);
+    lastWeekDayEnd.setDate(lastWeekDayEnd.getDate() + 1);
+
+    const prevMonthStart = new Date(month.start.getFullYear(), month.start.getMonth() - 1, 1);
+    const elapsedMs = day.end.getTime() - month.start.getTime();
+    const prevMonthToDateEnd = new Date(
+      Math.min(prevMonthStart.getTime() + elapsedMs, month.start.getTime()),
+    );
+
+    const [todayRevenue, weeklyRevenue, monthlyRevenue, lastWeekSameDayRevenue, prevMonthToDateRevenue, dayRows] =
+      await Promise.all([
+        sumByRange(day.start, day.end),
+        sumByRange(week.start, week.end),
+        sumByRange(month.start, month.end),
+        sumByRange(lastWeekDayStart, lastWeekDayEnd),
+        sumByRange(prevMonthStart, prevMonthToDateEnd),
+        db.assignment.findMany({
+          where: {
+            workDate: { gte: day.start, lt: day.end },
+            status: { in: ['planned', 'confirmed', 'in_progress', 'completed'] },
+          },
+          include: {
+            company: {
+              select: {
+                id: true,
+                name: true,
+                defaultDailyRevenue: true,
+              },
             },
           },
-        },
-      }),
-    ]);
+        }),
+      ]);
 
     const byCompanyMap = new Map<string, { companyId: string; companyName: string; assignments: number; revenue: number }>();
     for (const row of dayRows) {
@@ -593,6 +620,8 @@ export class DashboardService {
       todayRevenue,
       weeklyRevenue,
       monthlyRevenue,
+      lastWeekSameDayRevenue,
+      prevMonthToDateRevenue,
       revenueByCompany: Array.from(byCompanyMap.values()).sort((a, b) => b.revenue - a.revenue),
     };
   }
@@ -984,6 +1013,140 @@ export class DashboardService {
       totalCosts: toSeries(totalByMonth),
       otherCosts: toSeries(otherByMonth),
       topRepairReasons,
+    };
+  }
+
+  async getVehicleCosts(months = 6) {
+    const safeMonths = Math.min(Math.max(Math.trunc(months) || 6, 1), 24);
+    const end = this.normalizeDate(new Date());
+    const dayAfterEnd = new Date(end);
+    dayAfterEnd.setDate(dayAfterEnd.getDate() + 1);
+    const start = new Date(end.getFullYear(), end.getMonth() - (safeMonths - 1), 1);
+
+    const db = this.prisma as any;
+    const [vehicles, serviceRecords, fines, assignments] = await Promise.all([
+      db.vehicle.findMany({
+        select: {
+          id: true,
+          plateNumber: true,
+          internalCode: true,
+          brand: true,
+          model: true,
+          status: true,
+        },
+        orderBy: { plateNumber: 'asc' },
+      }),
+      db.serviceRecord.findMany({
+        where: { date: { gte: start, lt: dayAfterEnd } },
+        select: { vehicleId: true, costAmount: true },
+      }),
+      db.fine.findMany({
+        where: { violationAt: { gte: start, lt: dayAfterEnd } },
+        select: { vehicleId: true, amount: true },
+      }),
+      db.assignment.findMany({
+        where: {
+          workDate: { gte: start, lt: dayAfterEnd },
+          status: { in: ['completed', 'in_progress'] },
+        },
+        select: {
+          vehicleId: true,
+          expectedDailyRevenue: true,
+          company: { select: { defaultDailyRevenue: true } },
+        },
+      }),
+    ]);
+
+    type Agg = {
+      serviceCost: number;
+      serviceCount: number;
+      fineCost: number;
+      fineCount: number;
+      revenue: number;
+      assignmentCount: number;
+    };
+    const byVehicle = new Map<string, Agg>();
+    const aggFor = (vehicleId: string): Agg => {
+      let agg = byVehicle.get(vehicleId);
+      if (!agg) {
+        agg = {
+          serviceCost: 0,
+          serviceCount: 0,
+          fineCost: 0,
+          fineCount: 0,
+          revenue: 0,
+          assignmentCount: 0,
+        };
+        byVehicle.set(vehicleId, agg);
+      }
+      return agg;
+    };
+
+    for (const row of serviceRecords) {
+      const agg = aggFor(row.vehicleId);
+      agg.serviceCost += this.toCurrencyNumber(row.costAmount);
+      agg.serviceCount += 1;
+    }
+    for (const row of fines) {
+      const agg = aggFor(row.vehicleId);
+      agg.fineCost += this.toCurrencyNumber(row.amount);
+      agg.fineCount += 1;
+    }
+    for (const row of assignments) {
+      const agg = aggFor(row.vehicleId);
+      agg.revenue += this.assignmentRevenue(row);
+      agg.assignmentCount += 1;
+    }
+
+    const rows = vehicles.map((vehicle: any) => {
+      const agg = byVehicle.get(vehicle.id) ?? {
+        serviceCost: 0,
+        serviceCount: 0,
+        fineCost: 0,
+        fineCount: 0,
+        revenue: 0,
+        assignmentCount: 0,
+      };
+      const totalCost = agg.serviceCost + agg.fineCost;
+      return {
+        vehicle_id: vehicle.id,
+        plate_number: vehicle.plateNumber,
+        internal_code: vehicle.internalCode,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        status: vehicle.status,
+        service_cost: agg.serviceCost,
+        service_count: agg.serviceCount,
+        fine_cost: agg.fineCost,
+        fine_count: agg.fineCount,
+        total_cost: totalCost,
+        revenue: agg.revenue,
+        assignment_count: agg.assignmentCount,
+        margin: agg.revenue - totalCost,
+      };
+    });
+
+    rows.sort((a: any, b: any) => b.total_cost - a.total_cost);
+
+    const fleet = rows.reduce(
+      (acc: any, row: any) => {
+        acc.service_cost += row.service_cost;
+        acc.fine_cost += row.fine_cost;
+        acc.total_cost += row.total_cost;
+        acc.revenue += row.revenue;
+        return acc;
+      },
+      { service_cost: 0, fine_cost: 0, total_cost: 0, revenue: 0 },
+    );
+    fleet.margin = fleet.revenue - fleet.total_cost;
+    fleet.avg_cost_per_vehicle = rows.length > 0 ? fleet.total_cost / rows.length : 0;
+
+    return {
+      period_months: safeMonths,
+      from: this.toDateKey(start),
+      to: this.toDateKey(end),
+      fleet,
+      vehicles: rows,
     };
   }
 

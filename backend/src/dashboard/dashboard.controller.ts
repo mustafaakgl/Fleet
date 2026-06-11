@@ -26,4 +26,11 @@ export class DashboardController {
     const selectedDate = date ? new Date(date) : new Date();
     return this.dashboardService.getRevenueAnalytics(selectedDate, role);
   }
+
+  @Get('vehicle-costs')
+  @Roles(...FINANCIAL_ROLES)
+  getVehicleCosts(@Query('months') months?: string) {
+    const parsed = months ? Number.parseInt(months, 10) : 6;
+    return this.dashboardService.getVehicleCosts(Number.isNaN(parsed) ? 6 : parsed);
+  }
 }

@@ -30,15 +30,12 @@ export function I18nProvider({ children, initialLanguage }: I18nProviderProps) {
 
     if (readLanguageCookie()) return;
 
+    // Only honor an explicit prior choice (localStorage). New users always
+    // start in German — the product targets the German market; the language
+    // can be switched manually in the header at any time.
     const stored = localStorage.getItem(LANG_STORAGE_KEY);
     if (isSupportedLanguage(stored) && stored !== i18n.language) {
       void i18n.changeLanguage(stored);
-      return;
-    }
-
-    const browser = navigator.language?.slice(0, 2).toLowerCase() ?? 'de';
-    if (isSupportedLanguage(browser) && browser !== i18n.language) {
-      void i18n.changeLanguage(browser);
     }
   }, [initialLanguage]);
 

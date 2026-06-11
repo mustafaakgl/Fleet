@@ -22,6 +22,7 @@ import {
   IdCard,
   Scale,
   AlertTriangle,
+  Euro,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -89,6 +90,7 @@ const ALL_ITEMS: Record<string, NavItem> = {
   fines: { href: '/fines', labelKey: 'nav.fines', icon: Scale },
   departureChecks: { href: '/departure-checks', labelKey: 'nav.departureChecks', icon: ClipboardCheck },
   defects: { href: '/defects', labelKey: 'nav.defects', icon: AlertTriangle },
+  costs: { href: '/costs', labelKey: 'nav.costs', icon: Euro },
 };
 
 const VEHICLES_SECTION: NavSection = {
@@ -147,7 +149,12 @@ const OFFICE_NAV: NavGroup[] = [
 
 /** Default operational layout (admin, boss, accounting). */
 const DEFAULT_NAV: NavGroup[] = [
-  group('overview', 'nav.group.overview', [item('dashboard'), item('assignments'), item('liveTracking')]),
+  group('overview', 'nav.group.overview', [
+    item('dashboard'),
+    item('costs'),
+    item('assignments'),
+    item('liveTracking'),
+  ]),
   group('master', 'nav.group.master', [
     item('drivers'),
     VEHICLES_SECTION,

@@ -6,6 +6,7 @@ import type {
   MfaStatus,
   DashboardSummary,
   DashboardRevenueAnalytics,
+  VehicleCostsResponse,
   Driver,
   DriverDetail,
   PaginatedDrivers,
@@ -404,6 +405,12 @@ export const dashboardApi = {
     api
       .get<DashboardRevenueAnalytics | null>('/dashboard/revenue-analytics', { params: { date } })
       .then((r) => r.data),
+
+  // Financial-roles only: per-vehicle cost breakdown (TCO).
+  getVehicleCosts: (months?: number) =>
+    api
+      .get<VehicleCostsResponse>('/dashboard/vehicle-costs', { params: { months } })
+      .then((r) => r.data),
 };
 
 // ─── Drivers ─────────────────────────────────────────────────────────────────
@@ -714,6 +721,14 @@ export const assignmentsApi = {
 
   create: (data: AssignmentWritePayload) =>
     api.post<Assignment>('/assignments', data).then((r) => r.data),
+
+  copyDay: (fromDate: string, toDate: string) =>
+    api
+      .post<{ created: number; skipped: number; total: number }>('/assignments/copy-day', {
+        from_date: fromDate,
+        to_date: toDate,
+      })
+      .then((r) => r.data),
 
   update: (id: string, data: AssignmentWritePayload) =>
     api.patch<Assignment>(`/assignments/${id}`, data).then((r) => r.data),

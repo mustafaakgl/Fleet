@@ -346,6 +346,128 @@ export class AssignmentsService {
     return toClientAssignment(assignment);
   }
 
+  /**
+   * Copies all active assignments from one day to another. Drivers that
+   * already have an assignment on the target day, or that fail the license /
+   * vehicle-defect gates, are skipped and reported back to the caller.
+   */
+  async copyDay(fromDateStr: string, toDateStr: string, currentUserId: string) {
+    const fromDate = new Date(fromDateStr);
+    const toDate = new Date(toDateStr);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      throw new BadRequestException('Invalid date');
+    }
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(0, 0, 0, 0);
+    if (fromDate.getTime() === toDate.getTime()) {
+      throw new BadRequestException('Source and target day must differ');
+    }
+
+    const dayEnd = (d: Date) => {
+      const end = new Date(d);
+      end.setDate(end.getDate() + 1);
+      return end;
+    };
+
+    const source = await this.prisma.assignment.findMany({
+      where: {
+        workDate: { gte: fromDate, lt: dayEnd(fromDate) },
+        status: {
+          in: [
+            AssignmentStatus.planned,
+            AssignmentStatus.confirmed,
+            AssignmentStatus.in_progress,
+            AssignmentStatus.completed,
+          ],
+        },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    if (source.length === 0) {
+      return { created: 0, skipped: 0, total: 0 };
+    }
+
+    const existing = await this.prisma.assignment.findMany({
+      where: {
+        workDate: { gte: toDate, lt: dayEnd(toDate) },
+        status: { in: ACTIVE_ASSIGNMENT_STATUSES },
+      },
+      select: { driverId: true },
+    });
+    const busyDrivers = new Set(existing.map((row) => row.driverId));
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const row of source) {
+      if (busyDrivers.has(row.driverId)) {
+        skipped += 1;
+        continue;
+      }
+
+      const licenseGate = await this.licenseCompliance.assertAssignmentAllowed(row.driverId, false);
+      if (!licenseGate.allowed) {
+        skipped += 1;
+        continue;
+      }
+
+      const defectGate = await this.departureCheck.assertAssignmentAllowed(row.vehicleId, false);
+      if (!defectGate.allowed) {
+        skipped += 1;
+        continue;
+      }
+
+      busyDrivers.add(row.driverId);
+
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const assignment = await tx.assignment.create({
+            data: {
+              driverId: row.driverId,
+              vehicleId: row.vehicleId,
+              companyId: row.companyId,
+              cargoName: row.cargoName,
+              cargoOwner: row.cargoOwner,
+              pickupAddress: row.pickupAddress,
+              deliveryAddress: row.deliveryAddress,
+              workDate: toDate,
+              startTime: row.startTime,
+              endTime: row.endTime,
+              routeName: row.routeName,
+              expectedDailyRevenue: row.expectedDailyRevenue,
+              status: AssignmentStatus.planned,
+              createdById: currentUserId,
+            },
+          });
+
+          await tx.calendarEvent.create({
+            data: {
+              driverId: row.driverId,
+              assignmentId: assignment.id,
+              date: toDate,
+              status: CalendarStatus.AT,
+              source: CalendarSource.assignment,
+            },
+          });
+        });
+        created += 1;
+      } catch {
+        skipped += 1;
+      }
+    }
+
+    await this.safeAuditLog({
+      actorUserId: currentUserId,
+      action: 'assignment.day_copied',
+      entityType: 'assignment',
+      summary: `Copied ${created} assignments from ${fromDateStr} to ${toDateStr} (${skipped} skipped)`,
+      metadata: { fromDate: fromDateStr, toDate: toDateStr, created, skipped },
+    });
+
+    return { created, skipped, total: source.length };
+  }
+
   async create(dto: CreateAssignmentDto, currentUserId: string) {
     const workDate = new Date(dto.work_date);
     if (Number.isNaN(workDate.getTime())) {
