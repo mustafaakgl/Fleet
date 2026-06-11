@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { Mail, Save, Search, Truck, X } from 'lucide-react';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { createPlanningPlaceholder } from '@/lib/planning-assignment';
 import { vehicleAssignmentsHref } from '@/lib/office-deep-links';
+import { companiesApi, vehiclesApi } from '@/lib/api';
 import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
@@ -47,6 +48,23 @@ const AVAILABILITY_KEY: Record<string, string> = {
 };
 type PlanSubTab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
 
+type QuickAssignState = {
+  driverId: string;
+  company: string;
+  vehicle: string;
+  startTime: string;
+  endTime: string;
+};
+
+type VehicleOption = {
+  plate: string;
+  status: 'active' | 'maintenance' | 'broken' | 'inactive' | string;
+};
+
+function isAssignableAvailability(value: string): boolean {
+  return value === 'Available' || value === 'Not Assigned';
+}
+
 function currency(value: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
 }
@@ -83,11 +101,51 @@ export function Tagesplanung({
   const [companyEmailAttentionCount, setCompanyEmailAttentionCount] = useState(0);
   const [selectedTransportRequestId, setSelectedTransportRequestId] = useState<string | null>(null);
   const [driverSearch, setDriverSearch] = useState('');
+  const [quickAssignAssignmentId, setQuickAssignAssignmentId] = useState<string | null>(null);
+  const [quickAssign, setQuickAssign] = useState<QuickAssignState | null>(null);
+  const [vehicleOptions, setVehicleOptions] = useState<VehicleOption[]>([]);
+  const [companyOptions, setCompanyOptions] = useState<string[]>([]);
   const planningDate = planningDateProp ?? getTodayDate();
   const transportStatusLabel = (status: string) =>
     ['approved', 'rejected', 'needs_review', 'pending'].includes(status)
       ? t(`planning.tstatus.${status}`)
       : status;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSelectorData() {
+      try {
+        const [vehiclesRes, companiesRes] = await Promise.all([
+          vehiclesApi.list({ limit: 250 }),
+          companiesApi.list({ limit: 250 }),
+        ]);
+        if (cancelled) return;
+
+        const vehiclesFromApi = vehiclesRes.data
+          .map((vehicle) => ({ plate: vehicle.plate_number, status: vehicle.status }))
+          .filter((vehicle) => vehicle.plate.trim().length > 0);
+        setVehicleOptions(vehiclesFromApi);
+
+        const companyNames = companiesRes.data
+          .map((company) => company.name.trim())
+          .filter((name) => name.length > 0)
+          .sort((a, b) => a.localeCompare(b, 'de'));
+        setCompanyOptions(companyNames);
+      } catch {
+        if (!cancelled) {
+          setVehicleOptions([]);
+          setCompanyOptions([]);
+        }
+      }
+    }
+
+    void loadSelectorData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const transportId = searchParams.get('transport');
@@ -128,6 +186,68 @@ export function Tagesplanung({
     return planningRows.filter((row) => row.driverName.toLowerCase().includes(needle));
   }, [driverSearch, planningRows]);
 
+  const assignedDriverIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of planningRows) {
+      if (row.assignment.company.trim() && row.assignment.vehicle.trim()) {
+        set.add(row.assignment.driverId);
+      }
+    }
+    return set;
+  }, [planningRows]);
+
+  const assignedVehiclePlates = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of planningRows) {
+      const plate = row.assignment.vehicle.trim();
+      if (plate.length > 0 && row.assignment.company.trim()) {
+        set.add(plate);
+      }
+    }
+    return set;
+  }, [planningRows]);
+
+  const mergedCompanyOptions = useMemo(() => {
+    const set = new Set(companyOptions);
+    for (const row of planningRows) {
+      const company = row.assignment.company.trim();
+      if (company.length > 0) set.add(company);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'de'));
+  }, [companyOptions, planningRows]);
+
+  const mergedVehicleOptions = useMemo(() => {
+    const options = new Map<string, VehicleOption>();
+    for (const option of vehicleOptions) {
+      options.set(option.plate, option);
+    }
+    for (const row of planningRows) {
+      const plate = row.assignment.vehicle.trim();
+      if (plate.length > 0 && !options.has(plate)) {
+        options.set(plate, { plate, status: 'active' });
+      }
+    }
+    return Array.from(options.values()).sort((a, b) => a.plate.localeCompare(b.plate, 'de'));
+  }, [planningRows, vehicleOptions]);
+
+  const canQuickAssign = useCallback((row: (typeof planningRows)[number]) => {
+    if (!isAssignableAvailability(row.effectiveAvailability)) return false;
+    return !(row.assignment.company.trim() && row.assignment.vehicle.trim());
+  }, []);
+
+  const openQuickAssign = useCallback((assignmentId: string) => {
+    const row = planningRows.find((item) => item.assignment.id === assignmentId);
+    if (!row || !canQuickAssign(row)) return;
+    setQuickAssignAssignmentId(assignmentId);
+    setQuickAssign({
+      driverId: row.assignment.driverId,
+      company: row.assignment.company,
+      vehicle: row.assignment.vehicle,
+      startTime: row.assignment.startTime || '07:00',
+      endTime: row.assignment.endTime || '15:00',
+    });
+  }, [canQuickAssign, planningRows]);
+
   const availableCount = planningRows.filter((row) => row.effectiveAvailability === 'Available').length;
   const vacationCount = planningRows.filter((row) => row.effectiveAvailability === 'Urlaub').length;
   const sickCount = planningRows.filter((row) => row.effectiveAvailability === 'Krank').length;
@@ -138,6 +258,60 @@ export function Tagesplanung({
   const expectedDailyRevenue = calculateDailyRevenue(planningDate);
   const unavailableCount = planningRows.filter((row) => row.effectiveAvailability !== 'Available').length;
   const lostRevenueEstimate = unavailableCount * 900;
+
+  const quickAssignRow = quickAssignAssignmentId
+    ? planningRows.find((row) => row.assignment.id === quickAssignAssignmentId) ?? null
+    : null;
+
+  const handleQuickAssignSave = useCallback(() => {
+    if (!quickAssignAssignmentId || !quickAssign || !quickAssignRow) return;
+
+    const company = quickAssign.company.trim();
+    const vehicle = quickAssign.vehicle.trim();
+    if (!company || !vehicle) {
+      setInfoMessage(t('planning.quickAssignValidation'));
+      setTimeout(() => setInfoMessage(null), 2200);
+      return;
+    }
+
+    updateAssignment(quickAssignAssignmentId, {
+      company,
+      vehicle,
+      startTime: quickAssign.startTime,
+      endTime: quickAssign.endTime,
+      expectedRevenue: COMPANY_REVENUE_MAP[company] ?? quickAssignRow.assignment.expectedRevenue,
+      availability: 'Available',
+      status: 'Planned',
+    });
+
+    setQuickAssignAssignmentId(null);
+    setQuickAssign(null);
+    setInfoMessage(t('planning.quickAssignSaved', { driver: quickAssignRow.driverName }));
+    setTimeout(() => setInfoMessage(null), 2200);
+  }, [quickAssignAssignmentId, quickAssign, quickAssignRow, t, updateAssignment]);
+
+  const driverReasonLabel = useCallback((driverId: string) => {
+    const row = planningRows.find((item) => item.assignment.driverId === driverId);
+    if (!row) return '';
+    if (row.effectiveAvailability === 'Urlaub') return t('planning.selector.driverVacation');
+    if (row.effectiveAvailability === 'Krank') return t('planning.selector.driverSick');
+    if (row.effectiveAvailability === 'Feiertag') return t('planning.selector.driverHoliday');
+    if (assignedDriverIds.has(driverId)) return t('planning.selector.driverAssigned');
+    return '';
+  }, [assignedDriverIds, planningRows, t]);
+
+  const vehicleReasonLabel = useCallback((plate: string, status: string) => {
+    if (status === 'maintenance' || status === 'broken') {
+      return t('planning.selector.vehicleInShop');
+    }
+    if (status === 'inactive') {
+      return t('planning.selector.vehicleInactive');
+    }
+    if (assignedVehiclePlates.has(plate)) {
+      return t('planning.selector.vehicleAssigned');
+    }
+    return '';
+  }, [assignedVehiclePlates, t]);
 
   return (
     <div className="space-y-4">
@@ -371,9 +545,25 @@ export function Tagesplanung({
                 </tr>
               ) : null}
               {filteredPlanningRows.map((row) => {
-                const disabled = row.effectiveAvailability !== 'Available';
-                return (
-                  <tr key={row.assignment.id} className={FLEET_RAW_TR}>
+                const disabled = !isAssignableAvailability(row.effectiveAvailability);
+                const isQuickRow = quickAssignAssignmentId === row.assignment.id;
+                const rowCanQuickAssign = canQuickAssign(row);
+                const rowClassName = cn(
+                  FLEET_RAW_TR,
+                  rowCanQuickAssign && 'cursor-pointer hover:bg-blue-50/50',
+                  isQuickRow && 'bg-blue-50/40',
+                );
+
+                return [
+                  <tr
+                    key={row.assignment.id}
+                    className={rowClassName}
+                    onClick={() => {
+                      if (rowCanQuickAssign) {
+                        openQuickAssign(row.assignment.id);
+                      }
+                    }}
+                  >
                     <td className={FLEET_RAW_TD_PRIMARY}>{row.driverName}</td>
                     <td className={FLEET_RAW_TD}>
                       <select
@@ -493,18 +683,193 @@ export function Tagesplanung({
                     <td className={FLEET_RAW_TD}>
                       <button
                         type="button"
-                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (rowCanQuickAssign) {
+                            openQuickAssign(row.assignment.id);
+                            return;
+                          }
                           updateAssignment(row.assignment.id, {
                             availability: 'Not Assigned',
                           });
                         }}
+                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                       >
-                        {t('planning.clear')}
+                        {rowCanQuickAssign ? t('planning.quickAssignOpen') : t('planning.clear')}
                       </button>
                     </td>
-                  </tr>
-                );
+                  </tr>,
+                  isQuickRow && quickAssign ? (
+                    <tr key={`${row.assignment.id}-quick`} className="border-b border-blue-100 bg-blue-50/50">
+                      <td colSpan={11} className="px-4 py-3">
+                        <div className="grid gap-3 lg:grid-cols-6">
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.quickAssignDriver')}
+                            </label>
+                            <select
+                              value={quickAssign.driverId}
+                              onChange={(event) => {
+                                const nextDriverId = event.target.value;
+                                const target = planningRows.find((item) => item.assignment.driverId === nextDriverId);
+                                if (!target) return;
+                                setQuickAssignAssignmentId(target.assignment.id);
+                                setQuickAssign((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        driverId: nextDriverId,
+                                      }
+                                    : current,
+                                );
+                              }}
+                              className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
+                            >
+                              {planningRows.map((driverRow) => {
+                                const reason = driverReasonLabel(driverRow.assignment.driverId);
+                                const isCurrentDriver = driverRow.assignment.driverId === quickAssign.driverId;
+                                const blocked = Boolean(reason) && !isCurrentDriver;
+                                return (
+                                  <option key={driverRow.assignment.driverId} value={driverRow.assignment.driverId} disabled={blocked}>
+                                    {reason
+                                      ? `${driverRow.driverName} - ${reason}`
+                                      : driverRow.driverName}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.quickAssignCompany')}
+                            </label>
+                            <select
+                              value={quickAssign.company}
+                              onChange={(event) =>
+                                setQuickAssign((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        company: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
+                            >
+                              <option value="">{t('planning.quickAssignSelectCompany')}</option>
+                              {mergedCompanyOptions.map((companyName) => (
+                                <option key={companyName} value={companyName}>
+                                  {companyName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.quickAssignVehicle')}
+                            </label>
+                            <select
+                              value={quickAssign.vehicle}
+                              onChange={(event) =>
+                                setQuickAssign((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        vehicle: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
+                            >
+                              <option value="">{t('planning.quickAssignSelectVehicle')}</option>
+                              {mergedVehicleOptions.map((vehicle) => {
+                                const reason = vehicleReasonLabel(vehicle.plate, vehicle.status);
+                                const isCurrentVehicle = vehicle.plate === quickAssign.vehicle;
+                                const blocked = Boolean(reason) && !isCurrentVehicle;
+                                return (
+                                  <option key={vehicle.plate} value={vehicle.plate} disabled={blocked}>
+                                    {reason ? `${vehicle.plate} - ${reason}` : vehicle.plate}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.colStartTime')}
+                            </label>
+                            <input
+                              value={quickAssign.startTime}
+                              onChange={(event) =>
+                                setQuickAssign((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        startTime: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
+                              placeholder="07:00"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.colEndTime')}
+                            </label>
+                            <input
+                              value={quickAssign.endTime}
+                              onChange={(event) =>
+                                setQuickAssign((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        endTime: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
+                              placeholder="15:00"
+                            />
+                          </div>
+
+                          <div className="flex items-end gap-2">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleQuickAssignSave();
+                              }}
+                              className={cn('h-9 rounded-md px-3 text-sm font-semibold', BRAND_BTN_OUTLINE)}
+                            >
+                              {t('planning.quickAssignSave')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setQuickAssignAssignmentId(null);
+                                setQuickAssign(null);
+                              }}
+                              className="h-9 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                            >
+                              {t('planning.quickAssignCancel')}
+                            </button>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">{t('planning.quickAssignHint')}</p>
+                      </td>
+                    </tr>
+                  ) : null,
+                ];
               })}
             </tbody>
           </table>
