@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { IBM_Plex_Mono, Inter } from 'next/font/google';
 import { HeroMockup } from './HeroMockup';
@@ -12,7 +13,7 @@ import { TrialForm } from './TrialForm';
 import {
   TRIAL_CTA_LABEL,
   TRIAL_CTA_LINK,
-  TRIAL_CTA_SUBLINE,
+  faqItems,
   partnerStory,
   whatsAppHref,
 } from './marketing-config';
@@ -60,9 +61,9 @@ const steps = [
 ];
 
 const pricingTiers = [
-  { range: 'Bis 20 Fahrzeuge', price: '149', popular: false },
-  { range: '21 – 50 Fahrzeuge', price: '299', popular: true },
-  { range: '51 – 100 Fahrzeuge', price: '499', popular: false },
+  { range: 'Bis 20 Fahrzeuge', price: '149', perVehicle: 'ab 7,45 € pro Fahrzeug', popular: false },
+  { range: '21 – 50 Fahrzeuge', price: '299', perVehicle: 'ab 5,98 € pro Fahrzeug', popular: true },
+  { range: '51 – 100 Fahrzeuge', price: '499', perVehicle: 'ab 4,99 € pro Fahrzeug', popular: false },
 ];
 
 const compareRows = [
@@ -73,35 +74,29 @@ const compareRows = [
   ['Fristen & Dokumente', 'Kernfunktion', 'Zusatzmodul'],
 ];
 
-const faqItems = [
-  {
-    q: 'Brauche ich Hardware?',
-    a: 'Nein. Das Smartphone des Fahrers reicht — keine Einbauten, keine Werkstatttermine, keine Gerätekosten.',
-  },
-  {
-    q: 'Ist das DSGVO-konform?',
-    a: 'Ja. Ortung läuft nur während der Schicht, der Fahrer sieht jederzeit transparent, was erfasst wird. Einen Auftragsverarbeitungsvertrag (AVV) stellen wir bereit.',
-  },
-  {
-    q: 'Was sagt der Betriebsrat dazu?',
-    a: 'Keine Ortung außerhalb der Arbeitszeit, volle Transparenz für Fahrer — und wir liefern eine Muster-Betriebsvereinbarung mit.',
-  },
-  {
-    q: 'Wie lange dauert die Einrichtung?',
-    a: 'Unter einer Stunde. Fahrzeuge per Excel importieren, Fahrer per Link einladen — fertig.',
-  },
-  {
-    q: 'Welche Sprachen unterstützt die Fahrer-App?',
-    a: 'Deutsch, Polnisch, Türkisch, Englisch, Französisch, Italienisch, Spanisch und Niederländisch — Nachrichten werden automatisch übersetzt.',
-  },
-  {
-    q: 'Kann ich monatlich kündigen?',
-    a: 'Ja. Keine Mindestlaufzeit, keine versteckten Kosten.',
-  },
-];
-
 export function HomeLandingPage() {
   const partner = partnerStory();
+
+  useEffect(() => {
+    const els = document.querySelectorAll('.marketing-landing [data-reveal]');
+    if (typeof IntersectionObserver === 'undefined') {
+      els.forEach((el) => el.classList.add('is-visible'));
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -40px 0px' },
+    );
+    els.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className={`marketing-landing ${inter.variable} ${ibmPlexMono.variable}`}>
@@ -127,7 +122,11 @@ export function HomeLandingPage() {
                 Funktionen ansehen
               </Link>
             </div>
-            <span className="m-btn-note">{TRIAL_CTA_SUBLINE}</span>
+            <div className="m-hero-badges">
+              <span>✓ Keine Kreditkarte</span>
+              <span>✓ Keine Hardware</span>
+              <span>✓ DSGVO-konform · Server in Deutschland</span>
+            </div>
           </div>
           <HeroMockup />
         </div>
@@ -137,7 +136,7 @@ export function HomeLandingPage() {
 
       <section className="m-teaser m-section" id="tools">
         <div className="m-wrap">
-          <div className="m-teaser-card">
+          <div className="m-teaser-card" data-reveal>
             <div className="m-teaser-text">
               <span className="m-eyebrow">Kostenloser Risiko-Check</span>
               <h2>Was kostet Sie eine verpasste Frist?</h2>
@@ -186,7 +185,7 @@ export function HomeLandingPage() {
           </h2>
           <div className="m-karten">
             {problemCards.map((card) => (
-              <article key={card.title} className="m-karte">
+              <article key={card.title} className="m-karte" data-reveal>
                 <div className="m-icon">{card.icon}</div>
                 <div className="m-frage">{card.title}</div>
                 <p>{card.body}</p>
@@ -201,7 +200,7 @@ export function HomeLandingPage() {
 
       <section className="m-zitat m-section">
         <div className="m-wrap">
-          <div className="m-zitat-card">
+          <div className="m-zitat-card" data-reveal>
             <div className="m-portrait">{partner.initials}</div>
             <div>
               <blockquote className="m-blockquote">&ldquo;{partner.quote}&rdquo;</blockquote>
@@ -219,7 +218,7 @@ export function HomeLandingPage() {
           <h2 className="m-h2">So einfach geht&apos;s</h2>
           <div className="m-schritte">
             {steps.map((step) => (
-              <div key={step.title} className="m-schritt">
+              <div key={step.title} className="m-schritt" data-reveal>
                 <h3>{step.title}</h3>
                 <p>{step.desc}</p>
               </div>
@@ -234,12 +233,13 @@ export function HomeLandingPage() {
           <h2 className="m-h2">Ein Preis. Alles drin.</h2>
           <div className="m-preise-grid">
             {pricingTiers.map((tier) => (
-              <article key={tier.range} className={`m-preis${tier.popular ? ' m-preis-beliebt' : ''}`}>
+              <article key={tier.range} className={`m-preis${tier.popular ? ' m-preis-beliebt' : ''}`} data-reveal>
                 {tier.popular ? <div className="m-tag">Am beliebtesten</div> : null}
                 <div className="m-gruppe">{tier.range}</div>
                 <div className="m-betrag">
                   {tier.price} €<small> /Monat</small>
                 </div>
+                <div className="m-pro-fahrzeug">{tier.perVehicle}</div>
                 <ul>
                   <li>Alle Funktionen</li>
                   <li>Unbegrenzte Fahrer</li>
@@ -258,6 +258,12 @@ export function HomeLandingPage() {
             <b>Alle Funktionen inklusive.</b> Keine Hardware · Keine Plattformgebühr · Keine Kosten pro Fahrer ·
             Monatlich kündbar
           </p>
+          <p className="m-enterprise-hint">
+            Mehr als 100 Fahrzeuge?{' '}
+            <a href={whatsAppHref()} target="_blank" rel="noopener noreferrer" data-track="pricing-enterprise-cta">
+              Sprechen Sie mit uns — wir erstellen ein individuelles Angebot.
+            </a>
+          </p>
         </div>
       </section>
 
@@ -269,16 +275,18 @@ export function HomeLandingPage() {
             Wir verwalten alles drumherum:{' '}
             <span className="m-highlight">Papiere, Fristen, Menschen.</span>
           </p>
-          <div className="m-vgl-tabelle">
+          <div className="m-vgl-tabelle" data-reveal>
             <div className="m-vgl-zeile m-vgl-kopf">
               <div />
-              <div>Wir</div>
+              <div className="m-vgl-brand">TRANSIQ</div>
               <div>Typische Telematik</div>
             </div>
             {compareRows.map(([label, us, them]) => (
               <div key={label} className="m-vgl-zeile">
                 <div>{label}</div>
-                <div className="m-wir">{us}</div>
+                <div className="m-wir">
+                  <span className="m-vgl-check" aria-hidden="true">✓</span> {us}
+                </div>
                 <div className="m-andere">{them}</div>
               </div>
             ))}
@@ -315,6 +323,11 @@ export function HomeLandingPage() {
 
       <MarketingFooter />
       <WhatsAppButton />
+      <div className="m-mobile-cta">
+        <Link href={TRIAL_CTA_LINK} className="m-btn m-btn-primary" data-track="mobile-sticky-cta">
+          {TRIAL_CTA_LABEL}
+        </Link>
+      </div>
     </div>
   );
 }

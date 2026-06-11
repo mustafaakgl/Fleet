@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { LandingPage } from '@/components/landing/LandingPage';
+import { faqItems } from '@/components/landing/marketing/marketing-config';
 
 export const metadata: Metadata = {
   title: 'Fuhrpark-Software für Speditionen — Fristen, Dokumente, Fahrer',
@@ -14,6 +15,24 @@ export const metadata: Metadata = {
   },
 };
 
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.q,
+    acceptedAnswer: { '@type': 'Answer', text: item.a },
+  })),
+};
+
 export default function RootPage() {
-  return <LandingPage />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <LandingPage />
+    </>
+  );
 }

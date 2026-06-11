@@ -184,7 +184,7 @@
 /* Hero */
 .marketing-landing .m-hero {
   background: linear-gradient(180deg, var(--bg-alt) 0%, #fff 100%);
-  padding: 84px 0 0;
+  padding: 84px 0 56px;
   overflow: hidden;
 }
 
@@ -239,6 +239,24 @@
   gap: 14px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.marketing-landing .m-hero-badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.marketing-landing .m-hero-badges span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--grau);
+  background: #fff;
+  border: 1px solid var(--linie);
+  border-radius: 99px;
+  padding: 6px 12px;
+  white-space: nowrap;
 }
 
 /* Mockup */
@@ -1163,6 +1181,26 @@
   font-size: 13px;
 }
 
+.marketing-landing .m-vgl-brand {
+  color: var(--navy);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.marketing-landing .m-vgl-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #e3f3e9;
+  color: var(--gruen);
+  font-size: 11px;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
 .marketing-landing .m-vgl-zeile .m-wir {
   color: var(--gruen);
   font-weight: 700;
@@ -1266,6 +1304,92 @@
   color: #9aa7b6;
   padding: 44px 0;
   font-size: 13.5px;
+}
+
+/* Scroll reveal */
+@media (prefers-reduced-motion: no-preference) {
+  .marketing-landing [data-reveal] {
+    opacity: 0;
+    transform: translateY(22px);
+    transition: opacity 0.55s ease, transform 0.55s ease;
+  }
+
+  .marketing-landing [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  .marketing-landing .m-karten [data-reveal]:nth-child(2),
+  .marketing-landing .m-schritte [data-reveal]:nth-child(2),
+  .marketing-landing .m-preise-grid [data-reveal]:nth-child(2) {
+    transition-delay: 0.1s;
+  }
+
+  .marketing-landing .m-karten [data-reveal]:nth-child(3),
+  .marketing-landing .m-schritte [data-reveal]:nth-child(3),
+  .marketing-landing .m-preise-grid [data-reveal]:nth-child(3) {
+    transition-delay: 0.2s;
+  }
+}
+
+/* Pricing extras */
+.marketing-landing .m-pro-fahrzeug {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--grau);
+  margin: 4px 0 10px;
+}
+
+.marketing-landing .m-enterprise-hint {
+  text-align: center;
+  font-size: 14px;
+  color: var(--grau);
+  margin-top: 14px;
+}
+
+.marketing-landing .m-enterprise-hint a {
+  color: var(--blau);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.marketing-landing .m-enterprise-hint a:hover {
+  text-decoration: underline;
+}
+
+/* Sticky mobile CTA */
+.marketing-landing .m-mobile-cta {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .marketing-landing .m-mobile-cta {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--linie);
+  }
+
+  .marketing-landing .m-mobile-cta .m-btn {
+    display: block;
+    text-align: center;
+    width: 100%;
+    padding: 13px 16px;
+  }
+
+  .marketing-landing .m-wa-float {
+    bottom: 78px !important;
+  }
+
+  .marketing-landing .m-footer {
+    padding-bottom: 92px;
+  }
 }
 
 .marketing-landing .m-foot {

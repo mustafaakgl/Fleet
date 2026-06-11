@@ -32,6 +32,33 @@ export function landingStatsAnimated() {
   };
 }
 
+export const faqItems = [
+  {
+    q: 'Brauche ich Hardware?',
+    a: 'Nein. Das Smartphone des Fahrers reicht — keine Einbauten, keine Werkstatttermine, keine Gerätekosten.',
+  },
+  {
+    q: 'Ist das DSGVO-konform?',
+    a: 'Ja. Ortung läuft nur während der Schicht, der Fahrer sieht jederzeit transparent, was erfasst wird. Einen Auftragsverarbeitungsvertrag (AVV) stellen wir bereit.',
+  },
+  {
+    q: 'Was sagt der Betriebsrat dazu?',
+    a: 'Keine Ortung außerhalb der Arbeitszeit, volle Transparenz für Fahrer — und wir liefern eine Muster-Betriebsvereinbarung mit.',
+  },
+  {
+    q: 'Wie lange dauert die Einrichtung?',
+    a: 'Unter einer Stunde. Fahrzeuge per Excel importieren, Fahrer per Link einladen — fertig.',
+  },
+  {
+    q: 'Welche Sprachen unterstützt die Fahrer-App?',
+    a: 'Deutsch, Polnisch, Türkisch, Englisch, Französisch, Italienisch, Spanisch und Niederländisch — Nachrichten werden automatisch übersetzt.',
+  },
+  {
+    q: 'Kann ich monatlich kündigen?',
+    a: 'Ja. Keine Mindestlaufzeit, keine versteckten Kosten.',
+  },
+];
+
 export function partnerStory() {
   const name = process.env.NEXT_PUBLIC_PARTNER_NAME?.trim() ?? 'Michael Schneider';
   return {
