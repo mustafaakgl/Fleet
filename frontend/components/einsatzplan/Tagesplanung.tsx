@@ -1,14 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { Mail, Save, Search, Truck, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, Loader2, Mail, Search, Truck, X } from 'lucide-react';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { createPlanningPlaceholder } from '@/lib/planning-assignment';
 import { vehicleAssignmentsHref } from '@/lib/office-deep-links';
-import { companiesApi, vehiclesApi } from '@/lib/api';
+import { assignmentsApi, companiesApi, vehiclesApi } from '@/lib/api';
 import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
@@ -27,7 +27,7 @@ import {
 } from '@/lib/fleet-table';
 import { BRAND_BTN_OUTLINE, BRAND_FOCUS, BRAND_KPI, BRAND_TAB_ACTIVE_PLAIN, BRAND_TAB_BADGE } from '@/lib/brand-colors';
 import { StructuredAddressCell } from '@/components/shared/StructuredAddressCell';
-import { buildAssignmentRouteName } from '@/lib/address-format';
+import { buildAssignmentRouteName, parseFormattedAddress } from '@/lib/address-format';
 import { cn } from '@/lib/utils';
 
 const COMPANY_REVENUE_MAP: Record<string, number> = {
@@ -54,6 +54,19 @@ type QuickAssignState = {
   vehicle: string;
   startTime: string;
   endTime: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  expectedRevenue: number;
+};
+
+type RowKind = 'open' | 'planned' | 'unavailable';
+
+type KpiFilter = 'all' | 'available' | 'vacation' | 'sick' | 'planned' | 'open';
+
+const KIND_BAR: Record<RowKind, string> = {
+  open: 'border-l-4 border-l-amber-400',
+  planned: 'border-l-4 border-l-[#1a4d7a]',
+  unavailable: 'border-l-4 border-l-slate-300',
 };
 
 type VehicleOption = {
@@ -63,6 +76,23 @@ type VehicleOption = {
 
 function isAssignableAvailability(value: string): boolean {
   return value === 'Available' || value === 'Not Assigned';
+}
+
+function shiftDate(date: string, deltaDays: number): string {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  parsed.setDate(parsed.getDate() + deltaDays);
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shortAddress(formatted: string): string {
+  const trimmed = formatted.trim();
+  if (!trimmed) return '';
+  const parts = parseFormattedAddress(trimmed);
+  return parts.city || parts.street;
 }
 
 function currency(value: number) {
@@ -92,6 +122,7 @@ export function Tagesplanung({
     updateAssignment,
     approveTransportRequest,
     rejectTransportRequest,
+    refetchHydrate,
   } = useFleetData();
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const defaultSubTab: PlanSubTab = operationsOnly
@@ -105,7 +136,29 @@ export function Tagesplanung({
   const [quickAssign, setQuickAssign] = useState<QuickAssignState | null>(null);
   const [vehicleOptions, setVehicleOptions] = useState<VehicleOption[]>([]);
   const [companyOptions, setCompanyOptions] = useState<string[]>([]);
-  const planningDate = planningDateProp ?? getTodayDate();
+  const [internalDate, setInternalDate] = useState<string>(() => planningDateProp ?? getTodayDate());
+  const [kpiFilter, setKpiFilter] = useState<KpiFilter>('all');
+  const [copying, setCopying] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const saveIndicatorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const planningDate = planningDateProp ?? internalDate;
+  const dateNavEnabled = !planningDateProp;
+
+  const trackUpdate = useCallback(
+    (assignmentId: string, patch: Parameters<typeof updateAssignment>[1]) => {
+      updateAssignment(assignmentId, patch);
+      setSaveState('saving');
+      if (saveIndicatorTimer.current) clearTimeout(saveIndicatorTimer.current);
+      saveIndicatorTimer.current = setTimeout(() => setSaveState('saved'), 1400);
+    },
+    [updateAssignment],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveIndicatorTimer.current) clearTimeout(saveIndicatorTimer.current);
+    };
+  }, []);
   const transportStatusLabel = (status: string) =>
     ['approved', 'rejected', 'needs_review', 'pending'].includes(status)
       ? t(`planning.tstatus.${status}`)
@@ -230,14 +283,47 @@ export function Tagesplanung({
     return Array.from(options.values()).sort((a, b) => a.plate.localeCompare(b.plate, 'de'));
   }, [planningRows, vehicleOptions]);
 
-  const canQuickAssign = useCallback((row: (typeof planningRows)[number]) => {
-    if (!isAssignableAvailability(row.effectiveAvailability)) return false;
-    return !(row.assignment.company.trim() && row.assignment.vehicle.trim());
+  const rowKindOf = useCallback((row: (typeof planningRows)[number]): RowKind => {
+    if (!isAssignableAvailability(row.effectiveAvailability)) return 'unavailable';
+    return row.assignment.company.trim() && row.assignment.vehicle.trim() ? 'planned' : 'open';
   }, []);
+
+  const visibleRows = useMemo(() => {
+    if (kpiFilter === 'all') return filteredPlanningRows;
+    return filteredPlanningRows.filter((row) => {
+      switch (kpiFilter) {
+        case 'available':
+          return row.effectiveAvailability === 'Available';
+        case 'vacation':
+          return row.effectiveAvailability === 'Urlaub';
+        case 'sick':
+          return row.effectiveAvailability === 'Krank';
+        case 'planned':
+          return rowKindOf(row) === 'planned';
+        case 'open':
+          return rowKindOf(row) === 'open';
+        default:
+          return true;
+      }
+    });
+  }, [filteredPlanningRows, kpiFilter, rowKindOf]);
+
+  const rowGroups = useMemo(() => {
+    const groups: { kind: RowKind; labelKey: string; rows: typeof visibleRows }[] = [
+      { kind: 'open', labelKey: 'planning.groupOpen', rows: [] },
+      { kind: 'planned', labelKey: 'planning.groupPlanned', rows: [] },
+      { kind: 'unavailable', labelKey: 'planning.groupUnavailable', rows: [] },
+    ];
+    for (const row of visibleRows) {
+      const group = groups.find((item) => item.kind === rowKindOf(row));
+      group?.rows.push(row);
+    }
+    return groups.filter((group) => group.rows.length > 0);
+  }, [rowKindOf, visibleRows]);
 
   const openQuickAssign = useCallback((assignmentId: string) => {
     const row = planningRows.find((item) => item.assignment.id === assignmentId);
-    if (!row || !canQuickAssign(row)) return;
+    if (!row || !isAssignableAvailability(row.effectiveAvailability)) return;
     setQuickAssignAssignmentId(assignmentId);
     setQuickAssign({
       driverId: row.assignment.driverId,
@@ -245,19 +331,55 @@ export function Tagesplanung({
       vehicle: row.assignment.vehicle,
       startTime: row.assignment.startTime || '07:00',
       endTime: row.assignment.endTime || '15:00',
+      pickupAddress: row.assignment.pickupAddress ?? '',
+      deliveryAddress: row.assignment.deliveryAddress ?? '',
+      expectedRevenue: row.assignment.expectedRevenue || 0,
     });
-  }, [canQuickAssign, planningRows]);
+  }, [planningRows]);
+
+  const changePlanningDate = useCallback((nextDate: string) => {
+    setInternalDate(nextDate);
+    setQuickAssignAssignmentId(null);
+    setQuickAssign(null);
+  }, []);
+
+  const handleCopyYesterday = useCallback(async () => {
+    if (copying) return;
+    setCopying(true);
+    try {
+      const result = await assignmentsApi.copyDay(shiftDate(planningDate, -1), planningDate);
+      refetchHydrate();
+      setInfoMessage(
+        result.total === 0
+          ? tCommon('dashboard.v2.planning.copyNothing')
+          : tCommon('dashboard.v2.planning.copyDone', { created: result.created, skipped: result.skipped }),
+      );
+    } catch {
+      setInfoMessage(t('planning.copyError'));
+    } finally {
+      setCopying(false);
+      setTimeout(() => setInfoMessage(null), 3200);
+    }
+  }, [copying, planningDate, refetchHydrate, t, tCommon]);
 
   const availableCount = planningRows.filter((row) => row.effectiveAvailability === 'Available').length;
   const vacationCount = planningRows.filter((row) => row.effectiveAvailability === 'Urlaub').length;
   const sickCount = planningRows.filter((row) => row.effectiveAvailability === 'Krank').length;
   const plannedTrucks = planningRows.filter((row) => row.assignment.vehicle).length;
-  const openAssignments = planningRows.filter(
-    (row) => row.effectiveAvailability === 'Available' && (!row.assignment.vehicle || !row.assignment.company),
-  ).length;
+  const openAssignments = planningRows.filter((row) => rowKindOf(row) === 'open').length;
   const expectedDailyRevenue = calculateDailyRevenue(planningDate);
-  const unavailableCount = planningRows.filter((row) => row.effectiveAvailability !== 'Available').length;
-  const lostRevenueEstimate = unavailableCount * 900;
+  const absentCount = planningRows.filter((row) =>
+    ['Urlaub', 'Krank', 'Feiertag'].includes(row.effectiveAvailability),
+  ).length;
+  const lostRevenueEstimate = absentCount * 900;
+
+  const assignableTotal = planningRows.filter((row) => isAssignableAvailability(row.effectiveAvailability)).length;
+  const plannedDrivers = planningRows.filter((row) => rowKindOf(row) === 'planned').length;
+  const progressPercent = assignableTotal > 0 ? Math.round((plannedDrivers / assignableTotal) * 100) : 0;
+
+  const toggleKpiFilter = useCallback((filter: KpiFilter) => {
+    setKpiFilter((current) => (current === filter ? 'all' : filter));
+  }, []);
 
   const quickAssignRow = quickAssignAssignmentId
     ? planningRows.find((row) => row.assignment.id === quickAssignAssignmentId) ?? null
@@ -274,12 +396,18 @@ export function Tagesplanung({
       return;
     }
 
-    updateAssignment(quickAssignAssignmentId, {
+    trackUpdate(quickAssignAssignmentId, {
       company,
       vehicle,
       startTime: quickAssign.startTime,
       endTime: quickAssign.endTime,
-      expectedRevenue: COMPANY_REVENUE_MAP[company] ?? quickAssignRow.assignment.expectedRevenue,
+      pickupAddress: quickAssign.pickupAddress,
+      deliveryAddress: quickAssign.deliveryAddress,
+      routeName: buildAssignmentRouteName(quickAssign.pickupAddress, quickAssign.deliveryAddress),
+      expectedRevenue:
+        quickAssign.expectedRevenue > 0
+          ? quickAssign.expectedRevenue
+          : COMPANY_REVENUE_MAP[company] ?? quickAssignRow.assignment.expectedRevenue,
       availability: 'Available',
       status: 'Planned',
     });
@@ -288,7 +416,7 @@ export function Tagesplanung({
     setQuickAssign(null);
     setInfoMessage(t('planning.quickAssignSaved', { driver: quickAssignRow.driverName }));
     setTimeout(() => setInfoMessage(null), 2200);
-  }, [quickAssignAssignmentId, quickAssign, quickAssignRow, t, updateAssignment]);
+  }, [quickAssignAssignmentId, quickAssign, quickAssignRow, t, trackUpdate]);
 
   const driverReasonLabel = useCallback((driverId: string) => {
     const row = planningRows.find((item) => item.assignment.driverId === driverId);
@@ -430,11 +558,41 @@ export function Tagesplanung({
         <>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-7">
-        <SummaryCard label={t('planning.kpiAvailable')} value={String(availableCount)} tone={BRAND_KPI} />
-        <SummaryCard label={t('planning.kpiVacation')} value={String(vacationCount)} tone={BRAND_KPI} />
-        <SummaryCard label={t('planning.kpiSick')} value={String(sickCount)} tone="text-red-700" />
-        <SummaryCard label={t('planning.kpiPlannedTrucks')} value={String(plannedTrucks)} tone="text-slate-900" />
-        <SummaryCard label={t('planning.kpiOpenAssignments')} value={String(openAssignments)} tone="text-amber-700" />
+        <SummaryCard
+          label={t('planning.kpiAvailable')}
+          value={String(availableCount)}
+          tone={BRAND_KPI}
+          onClick={() => toggleKpiFilter('available')}
+          active={kpiFilter === 'available'}
+        />
+        <SummaryCard
+          label={t('planning.kpiVacation')}
+          value={String(vacationCount)}
+          tone={BRAND_KPI}
+          onClick={() => toggleKpiFilter('vacation')}
+          active={kpiFilter === 'vacation'}
+        />
+        <SummaryCard
+          label={t('planning.kpiSick')}
+          value={String(sickCount)}
+          tone="text-red-700"
+          onClick={() => toggleKpiFilter('sick')}
+          active={kpiFilter === 'sick'}
+        />
+        <SummaryCard
+          label={t('planning.kpiPlannedTrucks')}
+          value={String(plannedTrucks)}
+          tone="text-slate-900"
+          onClick={() => toggleKpiFilter('planned')}
+          active={kpiFilter === 'planned'}
+        />
+        <SummaryCard
+          label={t('planning.kpiOpenAssignments')}
+          value={String(openAssignments)}
+          tone="text-amber-700"
+          onClick={() => toggleKpiFilter('open')}
+          active={kpiFilter === 'open'}
+        />
         <SummaryCard label={t('planning.kpiExpectedRevenue')} value={currency(expectedDailyRevenue)} tone={BRAND_KPI} />
         <SummaryCard label={t('planning.kpiLostRevenue')} value={currency(lostRevenueEstimate)} tone="text-red-700" />
       </div>
@@ -442,9 +600,57 @@ export function Tagesplanung({
       <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
         <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            <p className="text-sm font-semibold text-slate-800 sm:pb-2">
-              {t('planning.planningDate', { date: planningDate })}
-            </p>
+            {dateNavEnabled ? (
+              <div className="flex flex-wrap items-center gap-1.5 sm:pb-1">
+                <button
+                  type="button"
+                  onClick={() => changePlanningDate(shiftDate(planningDate, -1))}
+                  aria-label={t('planning.datePrev')}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <input
+                  type="date"
+                  value={planningDate}
+                  onChange={(event) => {
+                    if (event.target.value) changePlanningDate(event.target.value);
+                  }}
+                  className={cn('h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none', BRAND_FOCUS)}
+                />
+                <button
+                  type="button"
+                  onClick={() => changePlanningDate(shiftDate(planningDate, 1))}
+                  aria-label={t('planning.dateNext')}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changePlanningDate(getTodayDate())}
+                  disabled={planningDate === getTodayDate()}
+                  className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t('planning.dateToday')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyYesterday()}
+                  disabled={copying}
+                  className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Copy className="h-4 w-4" />
+                  {copying
+                    ? tCommon('dashboard.v2.planning.copying')
+                    : tCommon('dashboard.v2.planning.copyYesterday')}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold text-slate-800 sm:pb-2">
+                {t('planning.planningDate', { date: planningDate })}
+              </p>
+            )}
             <div className="min-w-[220px] flex-1 sm:max-w-md">
               <label
                 htmlFor="planning-driver-search"
@@ -489,27 +695,31 @@ export function Tagesplanung({
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setInfoMessage(t('planning.savedToast'));
-                setTimeout(() => setInfoMessage(null), 2200);
-              }}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Save className="h-4 w-4" />
-              {t('planning.savePlan')}
-            </button>
+          <div className="flex items-center gap-3">
+            {saveState !== 'idle' ? (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 text-xs font-medium',
+                  saveState === 'saving' ? 'text-slate-500' : 'text-emerald-600',
+                )}
+              >
+                {saveState === 'saving' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Check className="h-3.5 w-3.5" />
+                )}
+                {saveState === 'saving' ? t('planning.autoSaving') : t('planning.autoSaved')}
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={() => {
                 setActiveSubTab('company-notifications');
               }}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className={cn('inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold', BRAND_BTN_OUTLINE)}
             >
               <Mail className="h-4 w-4" />
-              {t('planning.companyEmails')}
+              {t('planning.finishPlan')}
               {companyEmailAttentionCount > 0 && (
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
                   {companyEmailAttentionCount}
@@ -519,63 +729,91 @@ export function Tagesplanung({
           </div>
         </div>
 
+        <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50/60 px-4 py-2">
+          <p className="text-xs font-semibold text-slate-600">
+            {t('planning.progressLabel', { done: plannedDrivers, total: assignableTotal })}
+          </p>
+          <div className="h-1.5 w-full max-w-xs flex-1 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className={cn('h-full rounded-full transition-all', progressPercent === 100 ? 'bg-emerald-500' : 'bg-[#1a4d7a]')}
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          {kpiFilter !== 'all' ? (
+            <button
+              type="button"
+              onClick={() => setKpiFilter('all')}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              <X className="h-3 w-3" />
+              {t('planning.kpiFilterReset')}
+            </button>
+          ) : null}
+        </div>
+
         <div className="overflow-x-auto">
-          <table className={cn(FLEET_RAW_TABLE, 'min-w-[1400px]')}>
+          <table className={cn(FLEET_RAW_TABLE, 'min-w-[980px]')}>
             <thead className={FLEET_RAW_THEAD}>
               <tr>
                 <th className={FLEET_RAW_TH}>{t('planning.colDriver')}</th>
                 <th className={FLEET_RAW_TH}>{t('planning.colAvailability')}</th>
-                <th className={FLEET_RAW_TH}>{t('planning.colVehicle')}</th>
-                <th className={FLEET_RAW_TH}>{t('planning.colCompany')}</th>
-                <th className={FLEET_RAW_TH}>{t('planning.colFrom')}</th>
-                <th className={FLEET_RAW_TH}>{t('planning.colTo')}</th>
-                <th className={FLEET_RAW_TH}>{t('planning.colStartTime')}</th>
-                <th className={FLEET_RAW_TH}>{t('planning.colEndTime')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colAssignment')}</th>
+                <th className={FLEET_RAW_TH}>{t('planning.colTime')}</th>
                 <th className={FLEET_RAW_TH}>{t('planning.colStatus')}</th>
                 <th className={FLEET_RAW_TH}>{t('planning.colExpectedRevenue')}</th>
                 <th className={FLEET_RAW_TH}>{t('planning.colActions')}</th>
               </tr>
             </thead>
             <tbody className={FLEET_RAW_TBODY}>
-              {filteredPlanningRows.length === 0 ? (
+              {visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
                     {t('planning.driverSearchEmpty')}
                   </td>
                 </tr>
               ) : null}
-              {filteredPlanningRows.map((row) => {
-                const disabled = !isAssignableAvailability(row.effectiveAvailability);
-                const isQuickRow = quickAssignAssignmentId === row.assignment.id;
-                const rowCanQuickAssign = canQuickAssign(row);
-                const rowClassName = cn(
-                  FLEET_RAW_TR,
-                  rowCanQuickAssign && 'cursor-pointer hover:bg-blue-50/50',
-                  isQuickRow && 'bg-blue-50/40',
-                );
+              {rowGroups.map((group) => [
+                <tr key={`group-${group.kind}`} className="bg-slate-100/70">
+                  <td colSpan={7} className="px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+                    {t(group.labelKey, { count: group.rows.length })}
+                  </td>
+                </tr>,
+                ...group.rows.flatMap((row) => {
+                  const kind = rowKindOf(row);
+                  const editable = kind !== 'unavailable';
+                  const isQuickRow = quickAssignAssignmentId === row.assignment.id;
+                  const fromShort = shortAddress(row.assignment.pickupAddress ?? '');
+                  const toShort = shortAddress(row.assignment.deliveryAddress ?? '');
+                  const routeSummary = fromShort && toShort ? `${fromShort} → ${toShort}` : fromShort || toShort;
+                  const rowClassName = cn(
+                    FLEET_RAW_TR,
+                    editable && 'cursor-pointer hover:bg-blue-50/50',
+                    isQuickRow && 'bg-blue-50/40',
+                  );
 
-                return [
+                  return [
                   <tr
                     key={row.assignment.id}
                     className={rowClassName}
                     onClick={() => {
-                      if (rowCanQuickAssign) {
+                      if (editable) {
                         openQuickAssign(row.assignment.id);
                       }
                     }}
                   >
-                    <td className={FLEET_RAW_TD_PRIMARY}>{row.driverName}</td>
+                    <td className={cn(FLEET_RAW_TD_PRIMARY, KIND_BAR[kind])}>{row.driverName}</td>
                     <td className={FLEET_RAW_TD}>
                       <select
                         value={row.effectiveAvailability}
+                        onClick={(event) => event.stopPropagation()}
                         onChange={(event) => {
                           const nextAvailability = event.target.value as (typeof AVAILABILITY_OPTIONS)[number];
-                          updateAssignment(row.assignment.id, {
+                          trackUpdate(row.assignment.id, {
                             availability: nextAvailability,
                             expectedRevenue: nextAvailability === 'Available' ? row.assignment.expectedRevenue || 900 : 0,
                           });
                         }}
-                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
+                        className={cn('w-36 rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
                       >
                         {AVAILABILITY_OPTIONS.map((option) => (
                           <option key={option} value={option}>
@@ -585,123 +823,81 @@ export function Tagesplanung({
                       </select>
                     </td>
                     <td className={FLEET_RAW_TD}>
-                      <input
-                        value={row.assignment.vehicle}
-                        disabled={disabled}
-                        onChange={(event) => updateAssignment(row.assignment.id, { vehicle: event.target.value })}
-                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
-                      />
+                      {kind === 'planned' ? (
+                        <div className="min-w-[200px]">
+                          <p className="text-sm font-medium text-slate-900">
+                            {row.assignment.vehicle} · {row.assignment.company}
+                          </p>
+                          {routeSummary ? <p className="text-xs text-slate-500">{routeSummary}</p> : null}
+                        </div>
+                      ) : kind === 'open' ? (
+                        <span className="text-sm italic text-slate-400">{t('planning.noAssignment')}</span>
+                      ) : (
+                        <span className="text-sm text-slate-400">—</span>
+                      )}
                     </td>
-                    <td className={FLEET_RAW_TD}>
-                      <input
-                        value={row.assignment.company}
-                        disabled={disabled}
-                        onChange={(event) => {
-                          const nextCompany = event.target.value;
-                          updateAssignment(row.assignment.id, {
-                            company: nextCompany,
-                            expectedRevenue: disabled ? 0 : COMPANY_REVENUE_MAP[nextCompany] ?? row.assignment.expectedRevenue,
-                          });
-                        }}
-                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
-                      />
-                    </td>
-                    <td className={FLEET_RAW_TD}>
-                      <StructuredAddressCell
-                        value={row.assignment.pickupAddress ?? ''}
-                        disabled={disabled}
-                        onChange={(pickupAddress) =>
-                          updateAssignment(row.assignment.id, {
-                            pickupAddress,
-                            routeName: buildAssignmentRouteName(
-                              pickupAddress,
-                              row.assignment.deliveryAddress ?? '',
-                            ),
-                          })
-                        }
-                      />
-                    </td>
-                    <td className={FLEET_RAW_TD}>
-                      <StructuredAddressCell
-                        value={row.assignment.deliveryAddress ?? ''}
-                        disabled={disabled}
-                        onChange={(deliveryAddress) =>
-                          updateAssignment(row.assignment.id, {
-                            deliveryAddress,
-                            routeName: buildAssignmentRouteName(
-                              row.assignment.pickupAddress ?? '',
-                              deliveryAddress,
-                            ),
-                          })
-                        }
-                      />
-                    </td>
-                    <td className={FLEET_RAW_TD}>
-                      <input
-                        value={row.assignment.startTime}
-                        disabled={disabled}
-                        onChange={(event) => updateAssignment(row.assignment.id, { startTime: event.target.value })}
-                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
-                      />
-                    </td>
-                    <td className={FLEET_RAW_TD}>
-                      <input
-                        value={row.assignment.endTime}
-                        disabled={disabled}
-                        onChange={(event) => updateAssignment(row.assignment.id, { endTime: event.target.value })}
-                        className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
-                      />
+                    <td className={FLEET_RAW_TD_MUTED}>
+                      {kind === 'unavailable' ? '—' : `${row.assignment.startTime}–${row.assignment.endTime}`}
                     </td>
                     <td className={FLEET_RAW_TD}>
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          disabled
+                          !editable
                             ? 'bg-slate-200 text-slate-700'
+                            : kind === 'open'
+                            ? 'bg-amber-50 text-amber-700'
                             : row.assignment.status === 'In Progress'
                             ? 'bg-amber-100 text-amber-700'
                             : 'bg-[#e8f0f8] text-[#1a4d7a]'
                         }`}
                       >
-                        {disabled ? t('planning.unavailable') : row.assignment.status}
+                        {!editable
+                          ? t('planning.unavailable')
+                          : kind === 'open'
+                          ? t('planning.tstatus.pending')
+                          : row.assignment.status}
                       </span>
                     </td>
-                    <td className={FLEET_RAW_TD}>
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={disabled ? 0 : row.assignment.expectedRevenue}
-                        disabled={disabled}
-                        onChange={(event) => {
-                          const nextRevenue = Math.max(0, Number.parseFloat(event.target.value) || 0);
-                          updateAssignment(row.assignment.id, { expectedRevenue: nextRevenue });
-                        }}
-                        className={cn('w-full min-w-[100px] rounded-md border border-slate-300 bg-white px-2 text-slate-900 disabled:bg-slate-100', FLEET_FILTER_INPUT)}
-                        aria-label={`${t('planning.colExpectedRevenue')} — ${row.driverName}`}
-                      />
+                    <td className={FLEET_RAW_TD_MUTED}>
+                      {kind === 'unavailable' ? '—' : currency(row.assignment.expectedRevenue || 0)}
                     </td>
                     <td className={FLEET_RAW_TD}>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (rowCanQuickAssign) {
-                            openQuickAssign(row.assignment.id);
-                            return;
-                          }
-                          updateAssignment(row.assignment.id, {
-                            availability: 'Not Assigned',
-                          });
-                        }}
-                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        {rowCanQuickAssign ? t('planning.quickAssignOpen') : t('planning.clear')}
-                      </button>
+                      <div className="flex gap-2">
+                        {editable ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openQuickAssign(row.assignment.id);
+                            }}
+                            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            {kind === 'open' ? t('planning.quickAssignOpen') : t('planning.editAssignment')}
+                          </button>
+                        ) : null}
+                        {kind !== 'open' ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              trackUpdate(row.assignment.id, {
+                                availability: 'Not Assigned',
+                                company: '',
+                                vehicle: '',
+                                expectedRevenue: 0,
+                              });
+                            }}
+                            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            {t('planning.clear')}
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>,
                   isQuickRow && quickAssign ? (
                     <tr key={`${row.assignment.id}-quick`} className="border-b border-blue-100 bg-blue-50/50">
-                      <td colSpan={11} className="px-4 py-3">
+                      <td colSpan={7} className="px-4 py-3">
                         <div className="grid gap-3 lg:grid-cols-6">
                           <div>
                             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -746,16 +942,18 @@ export function Tagesplanung({
                             </label>
                             <select
                               value={quickAssign.company}
-                              onChange={(event) =>
+                              onChange={(event) => {
+                                const nextCompany = event.target.value;
                                 setQuickAssign((current) =>
                                   current
                                     ? {
                                         ...current,
-                                        company: event.target.value,
+                                        company: nextCompany,
+                                        expectedRevenue: COMPANY_REVENUE_MAP[nextCompany] ?? current.expectedRevenue,
                                       }
                                     : current,
-                                )
-                              }
+                                );
+                              }}
                               className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
                             >
                               <option value="">{t('planning.quickAssignSelectCompany')}</option>
@@ -804,6 +1002,7 @@ export function Tagesplanung({
                               {t('planning.colStartTime')}
                             </label>
                             <input
+                              type="time"
                               value={quickAssign.startTime}
                               onChange={(event) =>
                                 setQuickAssign((current) =>
@@ -825,6 +1024,7 @@ export function Tagesplanung({
                               {t('planning.colEndTime')}
                             </label>
                             <input
+                              type="time"
                               value={quickAssign.endTime}
                               onChange={(event) =>
                                 setQuickAssign((current) =>
@@ -841,6 +1041,53 @@ export function Tagesplanung({
                             />
                           </div>
 
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.colExpectedRevenue')}
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={quickAssign.expectedRevenue}
+                              onChange={(event) =>
+                                setQuickAssign((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        expectedRevenue: Math.max(0, Number.parseFloat(event.target.value) || 0),
+                                      }
+                                    : current,
+                                )
+                              }
+                              className={cn('w-full rounded-md border border-slate-300 bg-white px-2 text-slate-900', FLEET_FILTER_INPUT)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.colFrom')}
+                            </label>
+                            <StructuredAddressCell
+                              value={quickAssign.pickupAddress}
+                              onChange={(pickupAddress) =>
+                                setQuickAssign((current) => (current ? { ...current, pickupAddress } : current))
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              {t('planning.colTo')}
+                            </label>
+                            <StructuredAddressCell
+                              value={quickAssign.deliveryAddress}
+                              onChange={(deliveryAddress) =>
+                                setQuickAssign((current) => (current ? { ...current, deliveryAddress } : current))
+                              }
+                            />
+                          </div>
                           <div className="flex items-end gap-2">
                             <button
                               type="button"
@@ -850,7 +1097,7 @@ export function Tagesplanung({
                               }}
                               className={cn('h-9 rounded-md px-3 text-sm font-semibold', BRAND_BTN_OUTLINE)}
                             >
-                              {t('planning.quickAssignSave')}
+                              {t('planning.editorSave')}
                             </button>
                             <button
                               type="button"
@@ -869,8 +1116,9 @@ export function Tagesplanung({
                       </td>
                     </tr>
                   ) : null,
-                ];
-              })}
+                  ];
+                }),
+              ])}
             </tbody>
           </table>
         </div>
@@ -1047,11 +1295,43 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+function SummaryCard({
+  label,
+  value,
+  tone,
+  onClick,
+  active = false,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+  onClick?: () => void;
+  active?: boolean;
+}) {
+  const content = (
+    <>
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className={`mt-1 text-xl font-bold ${tone}`}>{value}</p>
-    </div>
+    </>
+  );
+
+  if (!onClick) {
+    return <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">{content}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-lg border bg-white p-3 text-left shadow-sm transition',
+        active
+          ? 'border-[#1a4d7a] ring-2 ring-[#1a4d7a]/25'
+          : 'border-slate-200 hover:border-slate-300 hover:shadow',
+      )}
+    >
+      {content}
+    </button>
   );
 }
