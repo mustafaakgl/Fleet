@@ -3,6 +3,7 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, Fragment, StyleSheet, View } from 'react-native';
 import { LocationSessionHost } from '@/components/LocationSessionHost';
+import { FleetTripSessionHost } from '@/components/FleetTripSessionHost';
 import { WorkSessionHost } from '@/components/WorkSessionHost';
 import { authStore } from '@/features/auth/store';
 import { driverApi, messengerApi } from '@/api/endpoints';
@@ -69,6 +70,7 @@ export default function AppLayout() {
   return (
     <Fragment>
       {!documentsIncomplete ? <LocationSessionHost /> : null}
+      {!documentsIncomplete ? <FleetTripSessionHost /> : null}
       {!documentsIncomplete ? <WorkSessionHost /> : null}
     <Tabs
       screenOptions={{

@@ -1,10 +1,16 @@
-import type { Driver, DriverPortalMe } from '@/lib/types';
+type DriverHomeAddressInput = {
+  home_address_street?: string | null;
+  home_address_zip_code?: string | null;
+  home_address_city?: string | null;
+  home_address_country?: string | null;
+  homeAddressStreet?: string | null;
+  homeAddressZipCode?: string | null;
+  homeAddressCity?: string | null;
+  homeAddressCountry?: string | null;
+};
 
 export function isDriverHomeAddressComplete(
-  driver: Pick<
-    Driver | DriverPortalMe['driver'],
-    'home_address_street' | 'home_address_zip_code' | 'home_address_city' | 'home_address_country' | 'homeAddressStreet' | 'homeAddressZipCode' | 'homeAddressCity' | 'homeAddressCountry'
-  >,
+  driver: DriverHomeAddressInput,
 ): boolean {
   const street = ('home_address_street' in driver ? driver.home_address_street : driver.homeAddressStreet)?.trim();
   const zip = ('home_address_zip_code' in driver ? driver.home_address_zip_code : driver.homeAddressZipCode)?.trim();
@@ -14,10 +20,7 @@ export function isDriverHomeAddressComplete(
 }
 
 export function formatDriverHomeAddress(
-  driver: Pick<
-    Driver | DriverPortalMe['driver'],
-    'home_address_street' | 'home_address_zip_code' | 'home_address_city' | 'home_address_country' | 'homeAddressStreet' | 'homeAddressZipCode' | 'homeAddressCity' | 'homeAddressCountry'
-  >,
+  driver: DriverHomeAddressInput,
 ): string {
   const street = ('home_address_street' in driver ? driver.home_address_street : driver.homeAddressStreet)?.trim();
   const zip = ('home_address_zip_code' in driver ? driver.home_address_zip_code : driver.homeAddressZipCode)?.trim();

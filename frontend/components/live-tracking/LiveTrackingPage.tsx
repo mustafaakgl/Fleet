@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { trackingApi } from '@/lib/api';
+import { openSseStream } from '@/lib/sse-stream';
 import type { LiveTrackingItem } from '@/lib/types';
 import { LocationSourceBadge } from './LocationSourceBadge';
 import { LiveTrackingSidebar } from './LiveTrackingSidebar';
@@ -25,8 +26,6 @@ const LiveTrackingMap = dynamic(
   },
 );
 
-const VISIBLE_POLL_MS = 15_000;
-const HIDDEN_POLL_MS = 60_000;
 const STALE_AFTER_SEC = 300;
 
 export function LiveTrackingPage() {
@@ -93,32 +92,43 @@ export function LiveTrackingPage() {
   }, [debouncedSearch, includeOffline, fetchLiveTracking]);
 
   useEffect(() => {
-    let intervalId: number | undefined;
+    const params = new URLSearchParams({
+      staleAfterSec: String(STALE_AFTER_SEC),
+      includeOffline: String(includeOffline),
+    });
+    if (debouncedSearch) {
+      params.set('search', debouncedSearch);
+    }
 
-    const schedulePoll = () => {
-      window.clearInterval(intervalId);
-      const delay = document.hidden ? HIDDEN_POLL_MS : VISIBLE_POLL_MS;
-      intervalId = window.setInterval(() => {
-        void fetchLiveTracking();
-      }, delay);
-    };
-
-    schedulePoll();
+    const stop = openSseStream<LiveTrackingItem[]>(
+      `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'}/tracking/live/stream?${params.toString()}`,
+      {
+        onMessage: (payload) => {
+          setItems(payload);
+          setLastFetchedAt(new Date());
+          setLoading(false);
+          setRefreshing(false);
+          setError(null);
+        },
+        onError: () => {
+          // Fallback to one-shot refresh when stream is unavailable.
+          void fetchLiveTracking();
+        },
+      },
+    );
 
     const onVisibilityChange = () => {
       if (!document.hidden) {
         void fetchLiveTracking();
       }
-      schedulePoll();
     };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
-
     return () => {
-      window.clearInterval(intervalId);
+      stop();
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [fetchLiveTracking]);
+  }, [debouncedSearch, fetchLiveTracking, includeOffline]);
 
   const filteredItems = useMemo(
     () => filterBySource(filterByStatus(items, statusFilter), sourceFilter),

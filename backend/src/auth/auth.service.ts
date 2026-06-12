@@ -284,6 +284,35 @@ export class AuthService {
     };
   }
 
+  /**
+   * Issues a fresh access token for an already-authenticated user (refresh flow).
+   * Performs the same active-user and tenant-status checks as login, without
+   * emitting a login audit event.
+   */
+  async refreshSession(userId: string): Promise<{ accessToken: string; user: AuthUserPayload }> {
+    const user = await this.prisma.unscoped.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== 'active') {
+      throw new UnauthorizedException('User not found');
+    }
+
+    await this.tenantAccess.assertTenantAllowsLogin(user.tenantId).catch(() => {
+      throw new UnauthorizedException('Invalid session');
+    });
+
+    const accessToken = await this.jwt.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      fleetOps: isFleetOpsEmail(user.email),
+    });
+
+    return {
+      accessToken,
+      user: await this.buildAuthUserPayload(user),
+    };
+  }
+
   async getById(id: string): Promise<AuthUserPayload & { mfa_enabled: boolean }> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user || user.status !== 'active') {
@@ -465,6 +494,11 @@ export class AuthService {
           id: { not: row.id },
         },
         data: { usedAt: new Date() },
+      }),
+      // Revoke all active refresh tokens — password change invalidates sessions.
+      this.prisma.unscoped.refreshToken.updateMany({
+        where: { userId: row.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
       }),
     ]);
 

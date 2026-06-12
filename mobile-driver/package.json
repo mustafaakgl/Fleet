@@ -32,6 +32,7 @@
     "expo-notifications": "~0.29.14",
     "expo-router": "^4.0.17",
     "expo-secure-store": "~14.0.1",
+    "expo-sqlite": "~15.0.3",
     "expo-status-bar": "~2.0.1",
     "i18next": "^26.3.1",
     "jpeg-js": "^0.4.4",

@@ -357,6 +357,24 @@ enum LocationSource {
   telematics
 }
 
+/// Phone / device / API origin for fleet analytics (Faz 2-ready; distinct from live-tracking LocationSource).
+enum FleetTelemetrySource {
+  phone
+  device
+  api
+}
+
+enum FleetTripStatus {
+  active
+  closed
+}
+
+enum FleetDrivingEventType {
+  speeding
+  harsh_accel
+  harsh_brake
+}
+
 enum LocationTrackingStatus {
   active
   paused
@@ -409,6 +427,10 @@ model Tenant {
   departureCheckReminders DepartureCheckReminderState[]
   fines                 Fine[]
   fineStatusLogs        FineStatusLog[]
+  fleetTrips            FleetTrip[]
+  fleetDrivingEvents    FleetDrivingEvent[]
+  fleetFuelEntries      FleetFuelEntry[]
+  fleetMaintenanceRules FleetMaintenanceRule[]
 }
 
 model TenantSubscription {
@@ -473,9 +495,27 @@ model User {
   defectStatusChanges        DefectStatusLog[] @relation("DefectStatusChangedByUser")
   createdFines               Fine[] @relation("FineCreatedBy")
   fineStatusChanges          FineStatusLog[] @relation("FineStatusChangedByUser")
+  refreshTokens              RefreshToken[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  /// Rotation chain: when a token is rotated, the replacement's id is stored here.
+  replacedById String?
+  revokedAt  DateTime?
+  expiresAt  DateTime
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserInvitation {
@@ -571,6 +611,9 @@ model Driver {
   departureCheckReminders DepartureCheckReminderState[]
   fines                 Fine[]
   fineStatusChanges     FineStatusLog[] @relation("FineStatusChangedByDriver")
+  fleetTrips            FleetTrip[]
+  fleetDrivingEvents    FleetDrivingEvent[]
+  fleetFuelEntries      FleetFuelEntry[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -656,6 +699,10 @@ model Vehicle {
   registrationExpiryDate DateTime?
   photoUrl               String?
   notes                  String?
+  avgConsumptionLPer100Km Decimal?  @db.Decimal(6, 2)
+  initialOdometerKm       Decimal?  @db.Decimal(12, 3)
+  odometerCorrectedKm     Decimal?  @db.Decimal(12, 3)
+  odometerCorrectedAt     DateTime?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
@@ -672,6 +719,9 @@ model Vehicle {
   departureChecks   DepartureCheck[]
   defects           Defect[]
   fines             Fine[]
+  fleetTrips        FleetTrip[]
+  fleetFuelEntries  FleetFuelEntry[]
+  fleetMaintenanceRules FleetMaintenanceRule[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -767,6 +817,7 @@ model Assignment {
   customerMessages CustomerAssignmentMessage[]
   departureChecks  DepartureCheck[]
   matchedFines     Fine[]
+  fleetTrips       FleetTrip[]
 
   @@index([tenantId])
   @@index([driverId, workDate])
@@ -1014,6 +1065,7 @@ model WorkSession {
   updatedAt DateTime              @updatedAt
 
   matchedFines Fine[]
+  fleetTrips   FleetTrip[]
 
   @@index([tenantId])
   @@index([driverId, status])
@@ -1548,4 +1600,133 @@ model FineStatusLog {
 
   @@index([tenantId])
   @@index([fineId, createdAt])
+}
+
+// --- Fleet analytics (phone GPS Phase 1; Faz 2 device/API adapters write same tables) ---
+
+model FleetTrip {
+  id             String               @id @default(cuid())
+  tenantId       String               @default("default-tenant")
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId      String
+  driverId       String
+  source         FleetTelemetrySource @default(phone)
+  startedAt      DateTime
+  endedAt        DateTime?
+  distanceKm     Decimal?             @db.Decimal(12, 3)
+  durationS      Int?
+  avgSpeedKmh    Decimal?             @db.Decimal(8, 2)
+  maxSpeedKmh    Decimal?             @db.Decimal(8, 2)
+  idleS          Int?
+  score          Decimal?             @db.Decimal(5, 2)
+  hasDataGap     Boolean              @default(false)
+  status         FleetTripStatus      @default(active)
+  assignmentId   String?
+  workSessionId  String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  vehicle      Vehicle                  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver       Driver                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  assignment   Assignment?              @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  workSession  WorkSession?             @relation(fields: [workSessionId], references: [id], onDelete: SetNull)
+  locationPoints FleetTripLocationPoint[]
+  drivingEvents  FleetDrivingEvent[]
+
+  @@index([tenantId])
+  @@index([vehicleId, startedAt])
+  @@index([driverId, startedAt])
+  @@index([status, startedAt])
+  @@index([assignmentId])
+  @@index([workSessionId])
+  @@map("fleet_trips")
+}
+
+model FleetTripLocationPoint {
+  id          String               @id @default(cuid())
+  tripId      String
+  recordedAt  DateTime
+  latitude    Decimal              @db.Decimal(10, 7)
+  longitude   Decimal              @db.Decimal(10, 7)
+  speedKmh    Float?
+  headingDeg  Float?
+  accuracyM   Float?
+  source      FleetTelemetrySource @default(phone)
+  receivedAt  DateTime             @default(now())
+
+  trip FleetTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, recordedAt, latitude, longitude])
+  @@index([tripId, recordedAt])
+  @@map("fleet_trip_location_points")
+}
+
+model FleetDrivingEvent {
+  id         String                @id @default(cuid())
+  tenantId   String                @default("default-tenant")
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tripId     String
+  driverId   String
+  type       FleetDrivingEventType
+  occurredAt DateTime
+  latitude   Decimal               @db.Decimal(10, 7)
+  longitude  Decimal               @db.Decimal(10, 7)
+  value      Decimal               @db.Decimal(10, 3)
+  threshold  Decimal               @db.Decimal(10, 3)
+  createdAt  DateTime              @default(now())
+
+  trip   FleetTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver Driver    @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tripId, occurredAt])
+  @@index([driverId, occurredAt])
+  @@index([type, occurredAt])
+  @@map("fleet_driving_events")
+}
+
+model FleetFuelEntry {
+  id                 String   @id @default(cuid())
+  tenantId           String   @default("default-tenant")
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId          String
+  driverId           String
+  enteredAt          DateTime
+  liters             Decimal  @db.Decimal(10, 3)
+  totalCost          Decimal  @db.Decimal(12, 2)
+  currency           String   @default("EUR")
+  odometerKm         Decimal? @db.Decimal(12, 3)
+  isFullTank         Boolean  @default(false)
+  receiptStoredPath  String?
+  receiptMimeType    String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([vehicleId, enteredAt])
+  @@index([driverId, enteredAt])
+  @@map("fleet_fuel_entries")
+}
+
+model FleetMaintenanceRule {
+  id              String    @id @default(cuid())
+  tenantId        String    @default("default-tenant")
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId       String
+  name            String
+  intervalKm      Decimal?  @db.Decimal(12, 3)
+  intervalDays    Int?
+  lastDoneAtKm    Decimal?  @db.Decimal(12, 3)
+  lastDoneAtDate  DateTime? @db.Date
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId])
+  @@map("fleet_maintenance_rules")
 }

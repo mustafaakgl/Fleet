@@ -1,6 +1,6 @@
 import { isRoutineServiceType } from '@/lib/service-record-categories';
 import { parseServiceRecordTasks } from '@/lib/service-record-notes';
-import type { Reminder, ServiceRecord, Vehicle } from '@/lib/types';
+import type { ServiceRecord, Vehicle } from '@/lib/types';
 import { daysUntil } from '@/lib/utils';
 import { getReminderCategory, normalizeReminder, parseReminderMetadata } from '@/lib/reminder-utils';
 

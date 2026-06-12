@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { clearAuth, markManualLoginRequired } from './auth';
+import { clearAuth, markManualLoginRequired, saveAuth } from './auth';
 import type {
   AuthResponse,
   MfaSetupResponse,
@@ -71,6 +71,7 @@ const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 10000,
+  withCredentials: true,
 });
 
 // ─── Request interceptor: attach JWT ────────────────────────────────────────
@@ -92,13 +93,58 @@ api.interceptors.request.use((config) => {
 });
 
 // ─── Response interceptor: handle 401/403 ──────────────────────────────────
+let refreshPromise: Promise<string | null> | null = null;
+
+/** Attempts to refresh the session via the httpOnly refresh cookie. */
+async function tryRefreshSession(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post<AuthResponse>(`${BASE_URL}/auth/refresh`, undefined, { withCredentials: true })
+      .then((res) => {
+        const token = res.data.accessToken ?? res.data.access_token ?? null;
+        if (token && res.data.user) {
+          saveAuth(token, { ...res.data.user, name: res.data.user.name ?? res.data.user.email });
+        }
+        return token;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
+  async (error) => {
     const status = error.response?.status;
     const requestUrl = String(error.config?.url ?? '');
     const isAuthLoginRequest =
-      requestUrl.includes('/auth/login') || requestUrl.includes('/auth/mfa/verify-login');
+      requestUrl.includes('/auth/login')
+      || requestUrl.includes('/auth/mfa/verify-login')
+      || requestUrl.includes('/auth/refresh')
+      || requestUrl.includes('/auth/logout');
+
+    const originalConfig = error.config as
+      | (typeof error.config & { __retried?: boolean })
+      | undefined;
+
+    if (
+      status === 401
+      && !isAuthLoginRequest
+      && originalConfig
+      && !originalConfig.__retried
+      && typeof window !== 'undefined'
+    ) {
+      const newToken = await tryRefreshSession();
+      if (newToken) {
+        originalConfig.__retried = true;
+        originalConfig.headers = originalConfig.headers ?? {};
+        (originalConfig.headers as Record<string, unknown>).Authorization = `Bearer ${newToken}`;
+        return api.request(originalConfig);
+      }
+    }
 
     if (status === 401 && !isAuthLoginRequest) {
       clearAuth();
@@ -155,6 +201,10 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
 export const authApi = {
   signIn: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data),
+
+  refresh: () => api.post<AuthResponse>('/auth/refresh').then((r) => r.data),
+
+  logout: () => api.post<{ success: boolean }>('/auth/logout').then((r) => r.data),
 
   me: () =>
     api
@@ -1909,6 +1959,21 @@ export const driverPortalApi = {
 
   endWorkSession: (reason: 'manual' | 'app_background' | 'logout' = 'manual') =>
     api.post('/driver/work-sessions/end', { reason }).then((r) => r.data),
+};
+
+export const fleetFuelAnalyticsApi = {
+  getOverview: (params?: { from?: string; to?: string; vehicleId?: string }) =>
+    api
+      .get<import('./types').FleetFuelOverviewResponse>('/fleet/fuel-analytics', { params })
+      .then((r) => r.data),
+
+  getVehicleAnalytics: (vehicleId: string, params?: { from?: string; to?: string }) =>
+    api
+      .get<import('./types').FleetVehicleFuelAnalyticsResponse>(
+        `/fleet/vehicles/${vehicleId}/fuel-analytics`,
+        { params },
+      )
+      .then((r) => r.data),
 };
 
 export default api;

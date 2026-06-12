@@ -673,6 +673,7 @@ export class MessengerService {
     if (!driver.userId) {
       throw new BadRequestException('Driver has no linked user account');
     }
+    const conversationDriver = { id: driver.id, userId: driver.userId };
 
     const normalizedSubject = dto.subject?.trim() || null;
     const department = normalizeMessengerDepartment(dto.department);
@@ -682,12 +683,12 @@ export class MessengerService {
 
     return this.createConversationRecord({
       currentUser,
-      driver,
+      driver: conversationDriver,
       normalizedSubject,
       department,
-      participantIds: Array.from(new Set([currentUser.id, driver.userId])),
+      participantIds: Array.from(new Set([currentUser.id, conversationDriver.userId])),
       participantRoleForUser: (participantId) =>
-        participantId === driver.userId ? 'driver' : currentUser.role,
+        participantId === conversationDriver.userId ? 'driver' : currentUser.role,
     });
   }
 
@@ -711,15 +712,16 @@ export class MessengerService {
     if (!driver?.userId) {
       throw new BadRequestException('Driver has no linked user account');
     }
+    const conversationDriver = { id: driver.id, userId: driver.userId };
 
     const department = normalizeDriverConversationDepartment(dto.department);
 
     return this.createConversationRecord({
       currentUser,
-      driver,
+      driver: conversationDriver,
       normalizedSubject,
       department,
-      participantIds: [driver.userId],
+      participantIds: [conversationDriver.userId],
       participantRoleForUser: () => 'driver',
     });
   }

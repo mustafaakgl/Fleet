@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { auditApi, type AuditLogRow } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import {
-  FLEET_LIST_CARD,
   FLEET_TABLE,
   FLEET_TABLE_BODY,
   FLEET_TABLE_CELL,

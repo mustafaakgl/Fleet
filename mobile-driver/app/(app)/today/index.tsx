@@ -13,6 +13,9 @@ import { ActionButton } from '@/components/ActionButton';
 import { PendingTaskCard } from '@/components/PendingTaskCard';
 import { DayStatusBanner } from '@/components/DayStatusBanner';
 import { LocationTrackingCard } from '@/components/LocationTrackingCard';
+import { FleetTripCard } from '@/components/FleetTripCard';
+import { FleetFuelCard } from '@/components/FleetFuelCard';
+import { FleetVehicleStatusCard } from '@/components/FleetVehicleStatusCard';
 import { ListRow } from '@/components/ListRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { formatAppDate } from '@/i18n/format';
@@ -155,6 +158,9 @@ export default function HomeTodayScreen() {
 
       <SectionHeader title={t('home.locationSection')} />
       <LocationTrackingCard />
+      <FleetTripCard />
+      <FleetFuelCard />
+      <FleetVehicleStatusCard />
 
       <View style={styles.summaryRow}>
         <SummaryChip

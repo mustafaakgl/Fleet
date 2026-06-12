@@ -23,6 +23,7 @@ import {
   Scale,
   AlertTriangle,
   Euro,
+  Droplets,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -91,6 +92,11 @@ const ALL_ITEMS: Record<string, NavItem> = {
   departureChecks: { href: '/departure-checks', labelKey: 'nav.departureChecks', icon: ClipboardCheck },
   defects: { href: '/defects', labelKey: 'nav.defects', icon: AlertTriangle },
   costs: { href: '/costs', labelKey: 'nav.costs', icon: Euro },
+  fleetFuelAnalytics: {
+    href: '/fleet-analytics/fuel',
+    labelKey: 'nav.fleetFuelAnalytics',
+    icon: Droplets,
+  },
 };
 
 const VEHICLES_SECTION: NavSection = {
@@ -152,6 +158,7 @@ const DEFAULT_NAV: NavGroup[] = [
   group('overview', 'nav.group.overview', [
     item('dashboard'),
     item('costs'),
+    item('fleetFuelAnalytics'),
     item('assignments'),
     item('liveTracking'),
   ]),

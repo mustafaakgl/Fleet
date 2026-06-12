@@ -158,9 +158,11 @@ export default function DocumentsPage() {
     return map;
   }, [drivers, vehicles, companies]);
 
-  function ownerName(ownerType: string, ownerId: string): string {
-    return ownerNameMap.get(`${ownerType}:${ownerId}`) ?? ownerId;
-  }
+  const ownerName = useCallback(
+    (ownerType: string, ownerId: string): string =>
+      ownerNameMap.get(`${ownerType}:${ownerId}`) ?? ownerId,
+    [ownerNameMap],
+  );
 
   function ownerOptionsByType(ot: Document['ownerType']) {
     if (ot === 'driver') return drivers.map((d) => ({ id: d.id, label: `${d.first_name} ${d.last_name}` }));
@@ -207,7 +209,7 @@ export default function DocumentsPage() {
 
       return ownerTypePass && docTypePass && statusPass && searchPass;
     });
-  }, [combined, ownerTypeFilter, documentTypeFilter, statusFilter, search, searchParams, ownerNameMap]);
+  }, [combined, ownerTypeFilter, documentTypeFilter, statusFilter, search, searchParams, ownerName]);
 
   const availableTypes = useMemo(() => {
     const values = new Set<string>();

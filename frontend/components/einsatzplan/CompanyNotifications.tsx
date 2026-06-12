@@ -169,7 +169,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
     void refreshEmails();
   }, [refreshEmails]);
 
-  function groupAssignmentsByCompany(date: string) {
+  const groupAssignmentsByCompany = useCallback((date: string) => {
     const grouped = new Map<string, CompanyAssignmentItem[]>();
 
     assignments
@@ -196,7 +196,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
       });
 
     return grouped;
-  }
+  }, [assignments, driverNameById]);
 
   const groupedByDate = useMemo(() => {
     const output: Record<string, Map<string, CompanyAssignmentItem[]>> = {};
@@ -204,7 +204,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
       output[date] = groupAssignmentsByCompany(date);
     });
     return output;
-  }, [assignments, dates, driverNameById]);
+  }, [dates, groupAssignmentsByCompany]);
 
   const notificationRows = useMemo(() => {
     const emailByKey = new Map<string, CompanyEmail>();

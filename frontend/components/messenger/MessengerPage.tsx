@@ -16,6 +16,7 @@ import { authApi, driversApi, messengerApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
 import { FLEET_LIST_CARD, FLEET_PAGE, FLEET_PAGE_HEADER, FLEET_PAGE_HEADER_ACTIONS, FLEET_PAGE_HEADER_TITLE } from '@/lib/fleet-table';
+import { openSseStream } from '@/lib/sse-stream';
 import { cn } from '@/lib/utils';
 import type {
   ConversationDetail,
@@ -31,8 +32,6 @@ type ToastState = {
   type: 'success' | 'error';
   message: string;
 } | null;
-
-const POLL_INTERVAL_MS = 10000;
 
 export function MessengerPage() {
   const { t } = useTranslation();
@@ -193,11 +192,60 @@ export function MessengerPage() {
 
   useEffect(() => {
     if (bootLoading || forbidden) return;
-    const interval = window.setInterval(() => {
-      void refreshLeftPanel();
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [bootLoading, forbidden, refreshLeftPanel]);
+
+    const params = new URLSearchParams();
+    if (search.trim()) {
+      params.set('search', search.trim());
+    }
+    if (departmentFilter !== 'all') {
+      params.set('department', departmentFilter);
+    }
+    if (selectedConversationId) {
+      params.set('conversationId', selectedConversationId);
+    }
+
+    const stop = openSseStream<{
+      conversations: ConversationListItem[];
+      unread: MessengerUnreadCount;
+      stats: MessengerStats;
+      messages: MessengerMessage[];
+    }>(
+      `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'}/messenger/stream?${params.toString()}`,
+      {
+        onMessage: (payload) => {
+          setConversations(payload.conversations);
+          setUnreadCount(payload.unread);
+          setStats(payload.stats);
+          if (payload.messages.length > 0) {
+            setMessages((previous) => {
+              const seen = new Set(previous.map((item) => item.id));
+              const merged = [...previous];
+              for (const message of payload.messages) {
+                if (!seen.has(message.id)) {
+                  merged.push(message);
+                }
+              }
+              return merged;
+            });
+          }
+        },
+        onError: () => {
+          void refreshLeftPanel();
+        },
+      },
+    );
+
+    return () => {
+      stop();
+    };
+  }, [
+    bootLoading,
+    forbidden,
+    search,
+    departmentFilter,
+    selectedConversationId,
+    refreshLeftPanel,
+  ]);
 
   useEffect(() => {
     if (!selectedConversationId || forbidden || bootLoading) {
@@ -207,42 +255,6 @@ export function MessengerPage() {
     }
     void fetchConversationDetailAndMessages(selectedConversationId);
   }, [selectedConversationId, forbidden, bootLoading, fetchConversationDetailAndMessages]);
-
-  const pollMessages = useCallback(async () => {
-    if (!selectedConversationId) return;
-    try {
-      const last = messages[messages.length - 1];
-      const incremental = await messengerApi.listMessages(selectedConversationId, {
-        since: last?.createdAt,
-        afterId: last?.id,
-        limit: 50,
-      });
-      if (incremental.length > 0) {
-        setMessages((previous) => {
-          const seen = new Set(previous.map((item) => item.id));
-          const merged = [...previous];
-          for (const message of incremental) {
-            if (!seen.has(message.id)) {
-              merged.push(message);
-            }
-          }
-          return merged;
-        });
-        await messengerApi.markConversationRead(selectedConversationId);
-        await refreshLeftPanel();
-      }
-    } catch {
-      // Ignore transient polling errors.
-    }
-  }, [messages, refreshLeftPanel, selectedConversationId]);
-
-  useEffect(() => {
-    if (!selectedConversationId) return;
-    const interval = window.setInterval(() => {
-      void pollMessages();
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [pollMessages, selectedConversationId]);
 
   const canCreateConversation = useMemo(
     () => role === 'admin' || role === 'boss' || role === 'accounting' || role === 'office',

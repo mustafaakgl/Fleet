@@ -7,7 +7,7 @@ on:
     branches: [main, master, develop]
 
 jobs:
-  backend:
+  backend-security-auth:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -30,6 +30,7 @@ jobs:
       DATABASE_URL: postgresql://fleet:fleet123@localhost:5432/fleet
       JWT_SECRET: ci_test_jwt_secret_minimum_32_chars_long
       NODE_ENV: test
+      REFRESH_TOKEN_TTL_DAYS: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,8 +42,43 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npm run build
       - run: npm run test
-      - run: npx ts-node --transpile-only scripts/tenant-isolation-check.ts
       - run: npm audit --audit-level=high
+
+  tenant-isolation:
+    runs-on: ubuntu-latest
+    needs: [backend-security-auth]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fleet
+          POSTGRES_PASSWORD: fleet123
+          POSTGRES_DB: fleet
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fleet -d fleet"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://fleet:fleet123@localhost:5432/fleet
+      JWT_SECRET: ci_test_jwt_secret_minimum_32_chars_long
+      NODE_ENV: test
+      REFRESH_TOKEN_TTL_DAYS: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npx ts-node --transpile-only scripts/tenant-isolation-check.ts
       - name: Load test script present
         run: test -f ../scripts/load/k6-smoke.js
 

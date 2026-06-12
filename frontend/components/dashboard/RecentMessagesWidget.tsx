@@ -38,7 +38,7 @@ function messagePreview(conversation: ConversationListItem): string {
 
 export function RecentMessagesWidget() {
   const { t, i18n } = useTranslation();
-  const [hidden, setHidden] = useState(() => getUser()?.role === 'driver');
+  const hidden = getUser()?.role === 'driver';
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [unreadTotal, setUnreadTotal] = useState(0);
   const [loading, setLoading] = useState(true);

@@ -18,4 +18,11 @@ describe('TENANT_SCOPED_MODELS', () => {
   it('includes vehicle equipment for tenant isolation', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('VehicleEquipment'), true);
   });
+
+  it('includes fleet analytics models for tenant isolation', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('FleetTrip'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('FleetDrivingEvent'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('FleetFuelEntry'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('FleetMaintenanceRule'), true);
+  });
 });

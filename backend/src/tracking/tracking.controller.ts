@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -15,6 +16,44 @@ import { TrackingService } from './tracking.service';
 @Roles(...OPERATIONAL_ROLES)
 export class TrackingController {
   constructor(private readonly trackingService: TrackingService) {}
+
+  @Get('live/stream')
+  async streamLiveTracking(
+    @Query() query: LiveTrackingQueryDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const pollMs = 15_000;
+
+    const sendSnapshot = async () => {
+      try {
+        const items = await this.trackingService.getLiveTracking({
+          staleAfterSec: query.staleAfterSec ?? 300,
+          includeOffline: query.includeOffline ?? false,
+          search: query.search,
+        });
+        res.write(`event: live\ndata:${JSON.stringify(items)}\n\n`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'live_stream_failed';
+        res.write(`event: error\ndata:${JSON.stringify({ message })}\n\n`);
+      }
+    };
+
+    void sendSnapshot();
+    const interval = setInterval(() => {
+      void sendSnapshot();
+    }, pollMs);
+
+    req.on('close', () => {
+      clearInterval(interval);
+      res.end();
+    });
+  }
 
   @Get('live')
   getLiveTracking(@Query() query: LiveTrackingQueryDto) {

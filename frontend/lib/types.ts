@@ -376,6 +376,61 @@ export interface VehicleCostsResponse {
   vehicles: VehicleCostRow[];
 }
 
+export interface FleetFuelOverviewResponse {
+  from: string | null;
+  to: string | null;
+  vehicles: Array<{
+    vehicleId: string;
+    plateNumber: string;
+    avgLitersPer100Km: number | null;
+    avgEstimatedLitersPer100Km: number | null;
+    totalLiters: number;
+    totalEstimatedLiters: number;
+    tripDistanceKm: number;
+    totalCost: number;
+  }>;
+  totals: {
+    totalLiters: number;
+    totalEstimatedLiters: number;
+    tripDistanceKm: number;
+    totalCost: number;
+    avgLitersPer100Km: number | null;
+    avgEstimatedLitersPer100Km: number | null;
+  };
+}
+
+export interface FleetVehicleFuelAnalyticsResponse {
+  vehicleId: string;
+  from: string | null;
+  to: string | null;
+  avgConsumptionLPer100Km: number;
+  avgLitersPer100Km: number | null;
+  avgEstimatedLitersPer100Km: number | null;
+  totalLiters: number;
+  totalEstimatedLiters: number;
+  totalCost: number;
+  tripDistanceKm: number;
+  estimatedVsRealDeltaLiters: number | null;
+  weeklyTrend: Array<{
+    weekStart: string;
+    tripDistanceKm: number;
+    realDistanceKm: number;
+    realLiters: number;
+    estimatedLiters: number;
+    realLitersPer100Km: number | null;
+    estimatedLitersPer100Km: number | null;
+  }>;
+  driverBreakdown: Array<{
+    driverId: string;
+    tripDistanceKm: number;
+    realLiters: number;
+    estimatedLiters: number;
+    eventCount: number;
+    realLitersPer100Km: number | null;
+    estimatedLitersPer100Km: number | null;
+  }>;
+}
+
 export interface Fine {
   id: string;
   vehicle_id: string;
@@ -912,6 +967,7 @@ export interface DashboardRevenueAnalytics {
 
 export interface DashboardChartPoint {
   label: string;
+  shortLabel?: string;
   value: number;
 }
 

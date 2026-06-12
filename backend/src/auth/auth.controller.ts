@@ -8,6 +8,7 @@ import {
   Query,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -31,6 +32,7 @@ import { VerifyMfaLoginDto } from './dto/verify-mfa-login.dto';
 import { OidcExchangeDto } from './dto/oidc-exchange.dto';
 import { MfaService } from './mfa.service';
 import { OidcService } from './oidc.service';
+import { REFRESH_COOKIE_NAME, RefreshTokenService } from './refresh-token.service';
 
 interface AuthenticatedRequest extends Request {
   user: { id: string; email: string; role: string };
@@ -42,7 +44,25 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly mfa: MfaService,
     private readonly oidc: OidcService,
+    private readonly refreshTokens: RefreshTokenService,
   ) {}
+
+  private async issueRefreshCookie(
+    res: Response,
+    userId: string,
+    req: Request,
+  ): Promise<void> {
+    const { token, expiresAt } = await this.refreshTokens.issue(userId, {
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? undefined,
+    });
+    this.refreshTokens.setCookie(res, token, expiresAt);
+  }
+
+  private readRefreshCookie(req: Request): string | undefined {
+    const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
+    return cookies?.[REFRESH_COOKIE_NAME];
+  }
 
   @Public()
   @SkipThrottle()
@@ -79,19 +99,80 @@ export class AuthController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('oidc/exchange')
   @HttpCode(HttpStatus.OK)
-  oidcExchange(@Body() dto: OidcExchangeDto) {
-    return this.oidc.exchangeCode(dto.code);
+  async oidcExchange(
+    @Body() dto: OidcExchangeDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const payload = this.oidc.exchangeCode(dto.code);
+    if (!payload.mfa_required) {
+      await this.issueRefreshCookie(res, payload.user.id, req);
+    }
+    return payload;
   }
 
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  login(@Body() dto: LoginDto, @Req() req: Request) {
-    return this.auth.login(dto.email, dto.password, {
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.login(dto.email, dto.password, {
       ipAddress: req.ip,
       userAgent: req.get('user-agent') ?? undefined,
     });
+    if (!result.mfa_required) {
+      await this.issueRefreshCookie(res, result.user.id, req);
+    }
+    return result;
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const rawToken = this.readRefreshCookie(req);
+    if (!rawToken) {
+      this.refreshTokens.clearCookie(res);
+      throw new UnauthorizedException('No refresh token');
+    }
+
+    let rotated: { userId: string; token: string; expiresAt: Date };
+    try {
+      rotated = await this.refreshTokens.rotate(rawToken, {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? undefined,
+      });
+    } catch (error) {
+      this.refreshTokens.clearCookie(res);
+      throw error;
+    }
+
+    try {
+      const session = await this.auth.refreshSession(rotated.userId);
+      this.refreshTokens.setCookie(res, rotated.token, rotated.expiresAt);
+      return session;
+    } catch (error) {
+      this.refreshTokens.clearCookie(res);
+      throw error;
+    }
+  }
+
+  @Public()
+  @SkipThrottle()
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const rawToken = this.readRefreshCookie(req);
+    if (rawToken) {
+      await this.refreshTokens.revoke(rawToken);
+    }
+    this.refreshTokens.clearCookie(res);
+    return { success: true };
   }
 
   @SkipThrottle()
@@ -150,11 +231,17 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('mfa/verify-login')
   @HttpCode(HttpStatus.OK)
-  verifyMfaLogin(@Body() dto: VerifyMfaLoginDto, @Req() req: Request) {
-    return this.auth.completeMfaLogin(dto.mfa_token, dto.code, {
+  async verifyMfaLogin(
+    @Body() dto: VerifyMfaLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.completeMfaLogin(dto.mfa_token, dto.code, {
       ipAddress: req.ip,
       userAgent: req.get('user-agent') ?? undefined,
     });
+    await this.issueRefreshCookie(res, result.user.id, req);
+    return result;
   }
 
   @SkipThrottle()

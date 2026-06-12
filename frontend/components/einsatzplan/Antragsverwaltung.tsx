@@ -24,7 +24,6 @@ export function Antragsverwaltung() {
   const { requests, cancelRequest, refetchHydrate } = useFleetData();
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'Antragsdatum, Antragsart' | 'Antragsart, Antragsdatum'>('Antragsdatum, Antragsart');
-  const [refreshTick, setRefreshTick] = useState(0);
   const [toolbarFilter, setToolbarFilter] = useState('');
   const [filters, setFilters] = useState({
     antragsdatum: '',
@@ -81,7 +80,7 @@ export function Antragsverwaltung() {
       if (a.antragsart === b.antragsart) return a.antragsdatum.localeCompare(b.antragsdatum);
       return a.antragsart.localeCompare(b.antragsart);
     });
-  }, [requests, filters, sortBy, toolbarFilter, refreshTick]);
+  }, [requests, filters, sortBy, toolbarFilter]);
 
   const selectedRow = rows.find((row) => row.id === selectedRowId) ?? null;
 
@@ -118,7 +117,6 @@ export function Antragsverwaltung() {
             type="button"
             onClick={() => {
               refetchHydrate();
-              setRefreshTick((value) => value + 1);
             }}
             className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >

@@ -16,7 +16,6 @@ import { authApi, getApiErrorMessage, onboardingApi } from '@/lib/api';
 import {
   isAuthenticated,
   saveAuth,
-  MOCK_CURRENT_USER,
   getPostLoginPath,
   getUser,
   shouldSkipAutoLogin,
@@ -61,11 +60,6 @@ export default function LoginPage() {
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [ssoEnabled, setSsoEnabled] = useState(false);
   const [ssoLabel, setSsoLabel] = useState('Sign in with SSO');
-
-  function loginWithDemo() {
-    saveAuth('dev-demo-token', { ...MOCK_CURRENT_USER, role: 'admin', name: 'Demo Admin' });
-    router.replace('/dashboard');
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -452,15 +446,6 @@ export default function LoginPage() {
               Hilfe per WhatsApp
             </a>
           </div>
-
-          {!mfaToken && isDev ? (
-            <div className="login-dev-block">
-              <p>Dev only</p>
-              <button type="button" className="login-dev-btn" onClick={loginWithDemo}>
-                Demo login (no backend)
-              </button>
-            </div>
-          ) : null}
         </div>
       </main>
     </div>

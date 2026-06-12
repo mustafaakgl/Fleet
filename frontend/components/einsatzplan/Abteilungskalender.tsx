@@ -169,8 +169,7 @@ function isWeekend(year: number, month: number, day: number) {
 export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' }) {
   const { t } = useTranslation();
   const { drivers, getCalendarStatusEntry, getAssignmentById, refetchHydrate } = useFleetData();
-  const now = new Date();
-  const yearOptions = useMemo(() => buildYearOptions(now), [now]);
+  const yearOptions = useMemo(() => buildYearOptions(new Date()), []);
   const [statusMap, setStatusMap] = useState<Record<string, Record<string, StatusEntry>>>({});
   const [apiCalendarMap, setApiCalendarMap] = useState<Record<string, Record<string, StatusEntry>>>({});
   const departments = useMemo<Department[]>(() => {
@@ -191,8 +190,8 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
     [drivers],
   );
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string[]>([]);
-  const [month, setMonth] = useState(now.getMonth());
-  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth());
+  const [year, setYear] = useState(new Date().getFullYear());
   const [viewMode, setViewMode] = useState<ViewMode>('Überlappung');
   const [focusedEmployeeId, setFocusedEmployeeId] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -393,7 +392,6 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
   };
 
   const deleteManualEntry = async (target: SelectedEmptyCell) => {
-    const sourceDate = formatMonthDate(target.year, target.month, target.day);
     const mapKey = `${target.month}-${target.day}`;
     setSaveError(null);
 

@@ -253,7 +253,7 @@ export default function FinesPage() {
                   </TableCell>
                   <TableCell className={FLEET_TABLE_CELL}>
                     <Link href={`/fines/${fine.id}`} className="block">
-                      {formatFleetCurrency(fine.amount)}
+                      {formatFleetCurrency(fine.amount ?? 0)}
                     </Link>
                   </TableCell>
                   <TableCell className={FLEET_TABLE_CELL}>

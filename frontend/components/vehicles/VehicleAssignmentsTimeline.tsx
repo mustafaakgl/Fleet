@@ -163,7 +163,7 @@ export function VehicleAssignmentsTimeline() {
     const { start, end } = timelineRangeMinutes();
     if (minutes < start || minutes > end) return null;
     return positionPercent(minutes, minutes + 1).left;
-  }, [workDate]);
+  }, [today, workDate]);
 
   const activeDrag = useMemo(() => {
     if (!drag) return null;

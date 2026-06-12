@@ -190,7 +190,7 @@ export default function FineDetailPage() {
               </div>
               <div>
                 <div className="text-slate-500">{t('fines.colAmount', 'Betrag')}</div>
-                <div className="font-medium">{formatFleetCurrency(fine.amount)}</div>
+                <div className="font-medium">{formatFleetCurrency(fine.amount ?? 0)}</div>
               </div>
               <div>
                 <div className="text-slate-500">{t('fines.colDriver', 'Fahrer')}</div>

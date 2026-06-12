@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MapPinned } from 'lucide-react';
 import type { MorningCheckin } from '@/context/FleetDataContext';
@@ -112,52 +112,12 @@ export function MorningCheckins() {
     [todaysCheckins, selectedId],
   );
 
-  useEffect(() => {
-    if (!autoAddEnabled) {
-      autoAddInFlightRef.current.clear();
-      return;
-    }
-
-    const validPending = todaysCheckins.filter((checkin) => {
-      if (checkin.status === 'Added to Einsatzplan' || checkin.status === 'Rejected') return false;
-      const validation = validateMorningCheckin(checkin);
-      return validation.status === 'Confirmed';
-    });
-
-    for (const checkin of validPending) {
-      if (autoAddInFlightRef.current.has(checkin.id)) continue;
-      autoAddInFlightRef.current.add(checkin.id);
-      void handleAdd(checkin.id).finally(() => {
-        autoAddInFlightRef.current.delete(checkin.id);
-      });
-    }
-  }, [autoAddEnabled, todaysCheckins, validateMorningCheckin]);
-
-  function showToast(message: string) {
+  const showToast = useCallback((message: string) => {
     setToastMessage(message);
     setTimeout(() => setToastMessage(null), 2200);
-  }
+  }, []);
 
-  function handleView(checkin: MorningCheckin) {
-    setSelectedId(checkin.id);
-    setEditMode(false);
-    setDrawerOpen(true);
-  }
-
-  function handleEdit(checkin: MorningCheckin) {
-    setSelectedId(checkin.id);
-    setEditVehiclePlate(checkin.vehiclePlate ?? '');
-    setEditCompany(checkin.company ?? '');
-    setEditMode(true);
-    setDrawerOpen(true);
-  }
-
-  function handleReject(checkinId: string) {
-    rejectMorningCheckin(checkinId);
-    showToast(t('checkins.toastRejected'));
-  }
-
-  async function handleAdd(checkinId: string) {
+  const handleAdd = useCallback(async (checkinId: string) => {
     const checkin = todaysCheckins.find((item) => item.id === checkinId);
     if (!checkin) {
       showToast(t('checkins.notFound'));
@@ -179,6 +139,46 @@ export function MorningCheckins() {
       await refetchHydrate();
       showToast(formatApiError(error, t('checkins.addError')));
     }
+  }, [refetchHydrate, showToast, t, todaysCheckins, validateMorningCheckin]);
+
+  useEffect(() => {
+    if (!autoAddEnabled) {
+      autoAddInFlightRef.current.clear();
+      return;
+    }
+
+    const validPending = todaysCheckins.filter((checkin) => {
+      if (checkin.status === 'Added to Einsatzplan' || checkin.status === 'Rejected') return false;
+      const validation = validateMorningCheckin(checkin);
+      return validation.status === 'Confirmed';
+    });
+
+    for (const checkin of validPending) {
+      if (autoAddInFlightRef.current.has(checkin.id)) continue;
+      autoAddInFlightRef.current.add(checkin.id);
+      void handleAdd(checkin.id).finally(() => {
+        autoAddInFlightRef.current.delete(checkin.id);
+      });
+    }
+  }, [autoAddEnabled, todaysCheckins, validateMorningCheckin, handleAdd]);
+
+  function handleView(checkin: MorningCheckin) {
+    setSelectedId(checkin.id);
+    setEditMode(false);
+    setDrawerOpen(true);
+  }
+
+  function handleEdit(checkin: MorningCheckin) {
+    setSelectedId(checkin.id);
+    setEditVehiclePlate(checkin.vehiclePlate ?? '');
+    setEditCompany(checkin.company ?? '');
+    setEditMode(true);
+    setDrawerOpen(true);
+  }
+
+  function handleReject(checkinId: string) {
+    rejectMorningCheckin(checkinId);
+    showToast(t('checkins.toastRejected'));
   }
 
   function handleSaveEdit() {

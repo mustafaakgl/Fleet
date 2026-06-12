@@ -1,4 +1,4 @@
-import type { Reminder, ReminderType, Vehicle } from '@/lib/types';
+import type { ReminderType, Vehicle } from '@/lib/types';
 import { daysUntil } from '@/lib/utils';
 import { getReminderCategory, normalizeReminder, parseReminderMetadata } from '@/lib/reminder-utils';
 

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import {
@@ -24,6 +25,8 @@ async function bootstrap() {
     rawBody: true,
   });
   app.enableShutdownHooks();
+
+  app.use(cookieParser());
 
   app.setGlobalPrefix('api/v1');
 

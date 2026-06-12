@@ -11,6 +11,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { MfaService } from './mfa.service';
 import { OidcService } from './oidc.service';
+import { RefreshTokenService } from './refresh-token.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { OidcService } from './oidc.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, MfaService, OidcService, JwtStrategy],
-  exports: [AuthService, MfaService, OidcService],
+  providers: [AuthService, MfaService, OidcService, RefreshTokenService, JwtStrategy],
+  exports: [AuthService, MfaService, OidcService, RefreshTokenService],
 })
 export class AuthModule {}

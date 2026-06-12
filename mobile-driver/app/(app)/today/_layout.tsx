@@ -27,6 +27,9 @@ export default function TodayStackLayout() {
       <Stack.Screen name="defect-report" />
       <Stack.Screen name="fines/index" options={{ title: i18n.t('fines.title') }} />
       <Stack.Screen name="fine/[id]" />
+      <Stack.Screen name="trip" options={{ title: i18n.t('fleetTrip.title') }} />
+      <Stack.Screen name="fuel" options={{ title: i18n.t('fleetFuel.title') }} />
+      <Stack.Screen name="vehicle-status" options={{ title: i18n.t('fleetVehicle.title') }} />
     </Stack>
   );
 }

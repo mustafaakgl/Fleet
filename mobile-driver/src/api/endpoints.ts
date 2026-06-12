@@ -509,3 +509,111 @@ export const messengerApi = {
     return data;
   },
 };
+
+export const fleetTripApi = {
+  async start(payload: { vehicleId: string }) {
+    const { data } = await apiClient.post<import('@/features/fleet/types').FleetTripSummary>(
+      '/driver/fleet/trips/start',
+      payload,
+    );
+    return data;
+  },
+  async stop(tripId: string) {
+    const { data } = await apiClient.post<import('@/features/fleet/types').FleetTripSummary>(
+      `/driver/fleet/trips/${tripId}/stop`,
+    );
+    return data;
+  },
+  async appendLocations(
+    tripId: string,
+    points: import('@/features/fleet/types').FleetTripLocationPointInput[],
+  ) {
+    const { data } = await apiClient.post<
+      import('@/features/fleet/types').FleetTripLocationBatchResponse
+    >(`/driver/fleet/trips/${tripId}/locations`, { points });
+    return data;
+  },
+  async list(params?: { vehicleId?: string; from?: string; to?: string }) {
+    const { data } = await apiClient.get<import('@/features/fleet/types').FleetTripSummary[]>(
+      '/driver/fleet/trips',
+      { params },
+    );
+    return data;
+  },
+  async getById(tripId: string) {
+    const { data } = await apiClient.get<import('@/features/fleet/types').FleetTripDetail>(
+      `/driver/fleet/trips/${tripId}`,
+    );
+    return data;
+  },
+  async getScore(params?: { from?: string; to?: string }) {
+    const { data } = await apiClient.get<import('@/features/fleet/types').FleetDriverScore>(
+      '/driver/fleet/score',
+      { params },
+    );
+    return data;
+  },
+};
+
+export const fleetFuelApi = {
+  async create(payload: {
+    vehicleId: string;
+    liters: number;
+    totalCost: number;
+    currency?: string;
+    odometerKm?: number;
+    isFullTank?: boolean;
+    enteredAt?: string;
+    receipt?: { uri: string; name: string; type: string };
+  }) {
+    const formData = new FormData();
+    formData.append('vehicleId', payload.vehicleId);
+    formData.append('liters', String(payload.liters));
+    formData.append('totalCost', String(payload.totalCost));
+    if (payload.currency) formData.append('currency', payload.currency);
+    if (payload.odometerKm != null) formData.append('odometerKm', String(payload.odometerKm));
+    if (payload.isFullTank != null) formData.append('isFullTank', String(payload.isFullTank));
+    if (payload.enteredAt) formData.append('enteredAt', payload.enteredAt);
+    if (payload.receipt) {
+      formData.append('receipt', payload.receipt as unknown as Blob);
+    }
+    const { data } = await apiClient.post<import('@/features/fleet/types').FleetFuelEntry>(
+      '/driver/fleet/fuel-entries',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data;
+  },
+  async list(params?: { vehicleId?: string; from?: string; to?: string }) {
+    const { data } = await apiClient.get<import('@/features/fleet/types').FleetFuelEntry[]>(
+      '/driver/fleet/fuel-entries',
+      { params },
+    );
+    return data;
+  },
+  async getAnalytics(vehicleId: string, params?: { from?: string; to?: string }) {
+    const { data } = await apiClient.get<import('@/features/fleet/types').FleetFuelAnalytics>(
+      `/driver/fleet/vehicles/${vehicleId}/fuel-analytics`,
+      { params },
+    );
+    return data;
+  },
+};
+
+export const fleetVehicleApi = {
+  async getStatus(vehicleId: string) {
+    const { data } = await apiClient.get<import('@/features/fleet/types').FleetVehicleStatus>(
+      `/driver/fleet/vehicles/${vehicleId}/status`,
+    );
+    return data;
+  },
+  async correctOdometer(vehicleId: string, odometerKm: number) {
+    const { data } = await apiClient.post<{
+      vehicleId: string;
+      plateNumber: string;
+      odometerCorrectedKm: number;
+      odometerCorrectedAt: string;
+    }>(`/driver/fleet/vehicles/${vehicleId}/odometer-correction`, { odometerKm });
+    return data;
+  },
+};

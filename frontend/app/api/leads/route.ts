@@ -20,7 +20,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Lead source is required' }, { status: 400 });
   }
 
-  const { email: _email, source: _source, ...payload } = body;
+  const payload = Object.fromEntries(
+    Object.entries(body).filter(([key]) => key !== 'email' && key !== 'source'),
+  );
 
   const lead = {
     email,

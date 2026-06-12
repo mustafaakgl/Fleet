@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useTranslation } from 'react-i18next';
 import {
   Gauge,
@@ -18,15 +19,28 @@ import { dashboardApi } from '@/lib/api';
 import type { DashboardKpis } from '@/lib/types';
 import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { EinsatzplanOfficeView } from './EinsatzplanOfficeView';
-import { Benutzerverwaltung } from './Benutzerverwaltung';
 import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
 import { groupAssignmentsByCompany } from './companyBoard';
-import { RevenueSummary } from './RevenueSummary';
-import { Tagesplanung } from './Tagesplanung';
 import { BRAND_HERO, BRAND_TAB_ACTIVE } from '@/lib/brand-colors';
 import { FLEET_LIST_CARD } from '@/lib/fleet-table';
 import { cn } from '@/lib/utils';
-import { UrlaubsplanerPanel } from './UrlaubsplanerPanel';
+
+const Tagesplanung = dynamic(
+  () => import('./Tagesplanung').then((mod) => mod.Tagesplanung),
+  { loading: () => <div className="text-sm text-slate-500">Lade Tagesplanung...</div> },
+);
+const RevenueSummary = dynamic(
+  () => import('./RevenueSummary').then((mod) => mod.RevenueSummary),
+  { loading: () => <div className="text-sm text-slate-500">Lade Revenue...</div> },
+);
+const Benutzerverwaltung = dynamic(
+  () => import('./Benutzerverwaltung').then((mod) => mod.Benutzerverwaltung),
+  { loading: () => <div className="text-sm text-slate-500">Lade Benutzerverwaltung...</div> },
+);
+const UrlaubsplanerPanel = dynamic(
+  () => import('./UrlaubsplanerPanel').then((mod) => mod.UrlaubsplanerPanel),
+  { loading: () => <div className="text-sm text-slate-500">Lade Urlaubsplaner...</div> },
+);
 
 type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue' | 'users';
 type UrlaubSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';

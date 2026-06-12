@@ -269,7 +269,7 @@ export function ExpenseHistoryPage() {
           ? companies.filter(Boolean)
           : [...new Set(SERVICE_HISTORY_MOCK_RECORDS.map((row) => row.repair_company).filter(Boolean))],
       );
-    } catch (e) {
+    } catch {
       setUsingMockData(true);
       setRecords(SERVICE_HISTORY_MOCK_RECORDS);
       setVehicles(getServiceHistoryMockVehicles());
@@ -280,7 +280,7 @@ export function ExpenseHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFilter, fromFilter, repairCompanyFilter, toFilter, t, vehicleFilter]);
+  }, [dateFilter, fromFilter, repairCompanyFilter, toFilter, vehicleFilter]);
 
   useEffect(() => {
     void reload();

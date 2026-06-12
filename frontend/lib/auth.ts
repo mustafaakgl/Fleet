@@ -7,14 +7,6 @@ const LEGACY_TOKEN_KEY = 'fleet_access_token';
 const LEGACY_USER_KEY = 'fleet_user';
 const SKIP_AUTO_LOGIN_KEY = 'fleet_skip_auto_login';
 
-export const MOCK_CURRENT_USER: AuthUser = {
-  id: 'u1',
-  name: 'Meryem Erdogan',
-  email: 'meryem@fleet.com',
-  role: 'office',
-  department: 'fleet',
-};
-
 interface JwtPayload {
   sub: string;
   email: string;
@@ -64,17 +56,6 @@ export function getUser(): AuthUser | null {
   } catch {
     return null;
   }
-}
-
-export function setDevelopmentRole(role: AuthUser['role']): AuthUser | null {
-  if (typeof window === 'undefined') return null;
-  const current = getUser() ?? MOCK_CURRENT_USER;
-  const next: AuthUser = {
-    ...current,
-    role,
-  };
-  localStorage.setItem(USER_KEY, JSON.stringify(next));
-  return next;
 }
 
 function normalizeUserRole(user: AuthUser): AuthUser {
@@ -131,12 +112,18 @@ export function clearManualLoginRequired(): void {
   sessionStorage.removeItem(SKIP_AUTO_LOGIN_KEY);
 }
 
-/** Clear session and redirect to the manual login page. */
+/** Clear session, revoke the server-side refresh token, and redirect to login. */
 export function performLogout(redirectTo = '/login?manual=1'): void {
   clearAuth();
   markManualLoginRequired();
   if (typeof window !== 'undefined') {
-    window.location.assign(redirectTo);
+    const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+    // Fire-and-forget: revoke the refresh cookie server-side before navigating.
+    void fetch(`${base}/auth/logout`, { method: 'POST', credentials: 'include' })
+      .catch(() => undefined)
+      .finally(() => {
+        window.location.assign(redirectTo);
+      });
   }
 }
 

@@ -82,26 +82,55 @@ export interface FleetHydrationResult {
   errors: string[];
 }
 
+const DEFAULT_PAGE_LIMIT = 100;
+const MAX_PAGES = 30;
+
+async function loadAllDriversPaginated(limit = DEFAULT_PAGE_LIMIT) {
+  const rows: Awaited<ReturnType<typeof driversApi.list>>['data'] = [];
+  let page = 1;
+  let total = 0;
+
+  while (page <= MAX_PAGES) {
+    const response = await driversApi.list({ page, limit });
+    rows.push(...response.data);
+    total = response.total;
+    if (rows.length >= total || response.data.length === 0) {
+      break;
+    }
+    page += 1;
+  }
+
+  return rows;
+}
+
+async function loadAllAssignmentsPaginated(limit = DEFAULT_PAGE_LIMIT) {
+  const rows: Awaited<ReturnType<typeof assignmentsApi.list>>['data'] = [];
+  let page = 1;
+  let total = 0;
+
+  while (page <= MAX_PAGES) {
+    const response = await assignmentsApi.list({ page, limit });
+    rows.push(...response.data);
+    total = response.total ?? rows.length;
+    if (rows.length >= total || response.data.length === 0) {
+      break;
+    }
+    page += 1;
+  }
+
+  return rows;
+}
+
 export async function hydrateFleetData(
   departmentByDriverId?: Map<string, string>,
 ): Promise<FleetHydrationResult> {
   const dept = (driverId: string) => departmentByDriverId?.get(driverId) ?? DEFAULT_DEPARTMENT;
   const errors: string[] = [];
-  const empty: FleetHydrationResult = {
-    drivers: [],
-    calendarStatuses: [],
-    assignments: [],
-    transportRequests: [],
-    morningCheckins: [],
-    requests: [],
-    companyEmailDrafts: [],
-    errors,
-  };
 
   let drivers: FleetDriver[] = [];
   try {
-    const driversPage = await driversApi.list({ limit: 200 });
-    drivers = driversPage.data.map((d) => ({
+    const driverRows = await loadAllDriversPaginated();
+    drivers = driverRows.map((d) => ({
       id: d.id,
       name: `${d.first_name} ${d.last_name}`.trim(),
       department: dept(d.id),
@@ -143,8 +172,8 @@ export async function hydrateFleetData(
 
   let assignments: FleetAssignment[] = [];
   try {
-    const apiAssignments = await assignmentsApi.list();
-    const activeRows = apiAssignments.data.filter((a) => a.status !== 'cancelled');
+    const assignmentRows = await loadAllAssignmentsPaginated();
+    const activeRows = assignmentRows.filter((a) => a.status !== 'cancelled');
     assignments = dedupeAssignmentsByDriverDay(
       activeRows.map((a) => ({
         id: a.id,
