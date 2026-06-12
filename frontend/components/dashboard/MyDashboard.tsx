@@ -24,6 +24,7 @@ import type {
   MissingDepartureCheck,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { GettingStartedPill } from '@/components/dashboard/GettingStartedPill';
 import { OnboardingTasksWidget } from '@/components/dashboard/OnboardingTasksWidget';
 import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
 import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
@@ -172,6 +173,8 @@ export function MyDashboard() {
 
   return (
     <div className="space-y-4 pb-6 sm:space-y-6 sm:pb-8">
+      <GettingStartedPill />
+
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.my.title')}</h1>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>

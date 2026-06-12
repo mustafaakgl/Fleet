@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Query,
   Req,
@@ -23,10 +24,12 @@ import { ADMIN_ONLY_ROLES } from '../common/utils/permissions';
 import { SetupTenantDto } from '../onboarding/dto/setup-tenant.dto';
 import { AuthService } from './auth.service';
 import { ConfirmPasswordResetDto } from './dto/confirm-password-reset.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { DisableMfaDto } from './dto/disable-mfa.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { UpdateLoginProfileDto } from './dto/update-login-profile.dto';
 import { VerifyMfaCodeDto } from './dto/verify-mfa-code.dto';
 import { VerifyMfaLoginDto } from './dto/verify-mfa-login.dto';
 import { OidcExchangeDto } from './dto/oidc-exchange.dto';
@@ -180,6 +183,21 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@Req() req: AuthenticatedRequest) {
     return this.auth.getById(req.user.id);
+  }
+
+  @SkipThrottle()
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateLoginProfileDto) {
+    return this.auth.updateLoginProfile(userId, dto);
+  }
+
+  @SkipThrottle()
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  changePassword(@CurrentUser('id') userId: string, @Body() dto: ChangePasswordDto) {
+    return this.auth.changePassword(userId, dto.current_password, dto.new_password);
   }
 
   @Public()

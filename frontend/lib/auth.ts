@@ -112,6 +112,14 @@ export function clearManualLoginRequired(): void {
   sessionStorage.removeItem(SKIP_AUTO_LOGIN_KEY);
 }
 
+/** Update cached user fields after profile edits (keeps existing token). */
+export function updateLocalUser(partial: Partial<AuthUser>): void {
+  const token = getToken();
+  const user = getUser();
+  if (!token || !user) return;
+  saveAuth(token, { ...user, ...partial });
+}
+
 /** Clear session, revoke the server-side refresh token, and redirect to login. */
 export function performLogout(redirectTo = '/login?manual=1'): void {
   clearAuth();

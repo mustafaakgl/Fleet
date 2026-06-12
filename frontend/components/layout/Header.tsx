@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/src/i18n.client';
 import { NotificationCenter } from './NotificationCenter';
 import { GlobalSearch } from './GlobalSearch';
+import { AccountMenu } from './AccountMenu';
 
 interface HeaderProps {
   title?: string;
@@ -19,20 +20,22 @@ export function Header({ title }: HeaderProps) {
   const { t } = useTranslation();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 sm:h-16 sm:px-6 lg:px-8">
-      {/* Left: title or search */}
-      <div className="flex items-center gap-4">
-        {title && (
-          <h1 className="text-xl font-semibold text-gray-900 sm:hidden">{title}</h1>
-        )}
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 sm:h-16 sm:px-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] lg:px-8">
+      {/* Left: account / tenant */}
+      <div className="flex min-w-0 items-center gap-3">
+        <AccountMenu />
+        {title ? (
+          <h1 className="truncate text-xl font-semibold text-gray-900 sm:hidden">{title}</h1>
+        ) : null}
       </div>
 
-      {/* Right: notifications + user */}
-      <div className="flex items-center gap-3">
-        <div className="hidden md:block">
-          <GlobalSearch />
-        </div>
+      {/* Center: global search */}
+      <div className="hidden min-w-0 justify-center px-2 md:flex">
+        <GlobalSearch />
+      </div>
 
+      {/* Right: language, links, notifications, user */}
+      <div className="flex items-center justify-end gap-3">
         <div className="hidden items-center gap-2 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 md:flex">
           <Globe className="h-3.5 w-3.5 text-gray-500" />
           <span>{t('language.label')}</span>

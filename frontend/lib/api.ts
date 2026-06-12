@@ -211,6 +211,16 @@ export const authApi = {
       .get<NonNullable<AuthResponse['user']> & { mfa_enabled?: boolean }>('/auth/me')
       .then((r) => r.data),
 
+  updateLoginProfile: (data: { email?: string; language?: string }) =>
+    api
+      .patch<NonNullable<AuthResponse['user']> & { mfa_enabled?: boolean }>('/auth/profile', data)
+      .then((r) => r.data),
+
+  changePassword: (current_password: string, new_password: string) =>
+    api
+      .post<{ success: boolean }>('/auth/change-password', { current_password, new_password })
+      .then((r) => r.data),
+
   meWithToken: (token: string) =>
     api
       .get<NonNullable<AuthResponse['user']> & { mfa_enabled?: boolean }>('/auth/me', {

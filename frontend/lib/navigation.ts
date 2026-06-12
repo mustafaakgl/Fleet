@@ -195,7 +195,6 @@ const OFFICE_NAV: NavGroup[] = [
 const DEFAULT_NAV: NavGroup[] = [
   group('overview', 'nav.group.overview', [
     item('dashboard'),
-    item('fleetFuelAnalytics'),
     item('assignments'),
     item('liveTracking'),
   ]),
@@ -209,6 +208,7 @@ const DEFAULT_NAV: NavGroup[] = [
     item('messenger'),
   ]),
   group('operations', 'nav.group.operations', [
+    item('fleetFuelAnalytics'),
     item('requests'),
     CHECKS_SECTION,
     item('fines'),

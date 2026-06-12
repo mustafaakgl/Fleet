@@ -512,4 +512,96 @@ export class AuthService {
 
     return { success: true };
   }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, passwordHash: true, status: true },
+    });
+
+    if (!user || user.status !== 'active') {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const currentOk = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!currentOk) {
+      throw new UnauthorizedException('Invalid current password');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      }),
+      this.prisma.unscoped.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    await this.safeAuditLog({
+      actorUserId: userId,
+      action: 'auth.password_changed',
+      entityType: 'user',
+      entityId: userId,
+      summary: 'Password changed by user',
+    });
+
+    return { success: true };
+  }
+
+  async updateLoginProfile(
+    userId: string,
+    dto: { email?: string; language?: string },
+  ): Promise<AuthUserPayload & { mfa_enabled: boolean }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== 'active') {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const data: { email?: string; language?: string } = {};
+
+    if (dto.email !== undefined) {
+      const normalizedEmail = dto.email.trim().toLowerCase();
+      const existing = await this.prisma.user.findFirst({
+        where: {
+          tenantId: user.tenantId,
+          email: normalizedEmail,
+          NOT: { id: userId },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new BadRequestException('A user with this email already exists');
+      }
+      data.email = normalizedEmail;
+    }
+
+    if (dto.language !== undefined) {
+      data.language = dto.language;
+    }
+
+    const updated =
+      Object.keys(data).length > 0
+        ? await this.prisma.user.update({ where: { id: userId }, data })
+        : user;
+
+    if (Object.keys(data).length > 0) {
+      await this.safeAuditLog({
+        actorUserId: userId,
+        action: 'auth.profile_updated',
+        entityType: 'user',
+        entityId: userId,
+        summary: 'Login profile updated',
+        metadata: { changed_fields: Object.keys(data) },
+      });
+    }
+
+    return {
+      ...(await this.buildAuthUserPayload(updated)),
+      mfa_enabled: updated.mfaEnabled,
+    };
+  }
 }

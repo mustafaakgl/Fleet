@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Building2, ChevronDown, CircleHelp, LogOut, Menu, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
+import { OperionLogo } from '@/components/brand/OperionLogo';
 import { getUser, performLogout } from '@/lib/auth';
 import {
   getNavigationForRole,
@@ -183,11 +183,17 @@ export function Sidebar() {
           </button>
           <div
             className={cn(
-              'w-full',
-              tabletCollapsed ? 'h-9 md:h-9 lg:h-[5.25rem]' : 'h-[5.25rem] lg:h-[6.25rem]',
+              'flex w-full items-center px-1',
+              tabletCollapsed ? 'justify-center lg:justify-start' : 'justify-start',
+              tabletCollapsed ? 'h-12 lg:h-[4.5rem]' : 'h-[4.5rem] lg:h-[5rem]',
             )}
           >
-            <MyFleetLogo href={null} priority fillWidth />
+            <OperionLogo
+              href="/dashboard"
+              onDark
+              compact={tabletCollapsed}
+              showTagline={!tabletCollapsed}
+            />
           </div>
         </div>
 
