@@ -1,7 +1,7 @@
 'use client';
 
-import { FleetOperationsDashboard } from './FleetOperationsDashboard';
+import { MyDashboard } from './MyDashboard';
 
 export function StandardDashboard() {
-  return <FleetOperationsDashboard />;
+  return <MyDashboard />;
 }

@@ -1976,4 +1976,38 @@ export const fleetFuelAnalyticsApi = {
       .then((r) => r.data),
 };
 
+export const fleetFuelEntriesApi = {
+  list: (params?: { vehicleId?: string; driverId?: string; from?: string; to?: string }) =>
+    api
+      .get<import('./types').FleetFuelEntry[]>('/fleet/fuel-entries', { params })
+      .then((r) => r.data),
+
+  getById: (id: string) =>
+    api
+      .get<import('./types').FleetFuelEntryDetail>(`/fleet/fuel-entries/${id}`)
+      .then((r) => r.data),
+
+  create: (payload: {
+    vehicleId: string;
+    driverId?: string;
+    enteredAt?: string;
+    liters: number;
+    totalCost: number;
+    currency?: string;
+    odometerKm?: number;
+    isFullTank?: boolean;
+  }) =>
+    api
+      .post<import('./types').FleetFuelEntry>('/fleet/fuel-entries', payload)
+      .then((r) => r.data),
+};
+
+export const fleetTripsApi = {
+  list: (params?: { vehicleId?: string; driverId?: string; from?: string; to?: string }) =>
+    api.get<import('./types').FleetTripSummary[]>('/fleet/trips', { params }).then((r) => r.data),
+
+  getById: (tripId: string) =>
+    api.get<import('./types').FleetTripDetail>(`/fleet/trips/${tripId}`).then((r) => r.data),
+};
+
 export default api;

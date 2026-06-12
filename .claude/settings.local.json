@@ -25,7 +25,16 @@
       "Bash(PATH=/opt/homebrew/opt/node@22/bin:__TRACKED_VAR__ npm run dev)",
       "Bash(kill -9 59269 59237)",
       "Bash(tail -40 /tmp/be.log 2>/dev/null *)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(node -r ts-node/register/transpile-only --test src/invoicing/core/money.spec.ts src/invoicing/core/invoice-number.spec.ts)",
+      "Bash(python3 -)",
+      "Bash(npx tsc *)",
+      "Bash(node -r ts-node/register/transpile-only --test src/invoicing/core/e-invoice.spec.ts)",
+      "Bash(node -r ts-node/register/transpile-only --test src/invoicing/core/datev.spec.ts)",
+      "Bash(git checkout *)",
+      "Bash(echo \"checkout exit=$?\")",
+      "Bash(cp /tmp/schema_before.prisma backend/prisma/schema.prisma)",
+      "Bash(npm uninstall *)"
     ],
     "additionalDirectories": [
       "/Users/mustafaakgul/Desktop/Projects/Fleet/frontend/.next"

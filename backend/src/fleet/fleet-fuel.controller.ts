@@ -19,6 +19,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { DOCUMENT_UPLOAD_ABSOLUTE_DIR } from '../storage/local-storage.service';
 import { CreateFuelEntryDto } from './dto/create-fuel-entry.dto';
+import { CreateFuelEntryOfficeDto } from './dto/create-fuel-entry-office.dto';
 import { FuelAnalyticsQueryDto } from './dto/fuel-analytics.query';
 import { FleetFuelOverviewQueryDto } from './dto/fleet-fuel-overview.query';
 import { ListFuelEntriesQueryDto } from './dto/list-fuel-entries.query';
@@ -120,6 +121,16 @@ export class FleetFuelController {
   @Get()
   list(@Query() query: ListFuelEntriesQueryDto) {
     return this.fleetFuel.listFuelEntries(query);
+  }
+
+  @Get(':id')
+  getById(@Param('id') id: string) {
+    return this.fleetFuel.getFuelEntryById(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreateFuelEntryOfficeDto) {
+    return this.fleetFuel.createFuelEntry(dto);
   }
 }
 

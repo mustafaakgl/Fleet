@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Euro,
   Droplets,
+  Route,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -97,15 +98,49 @@ const ALL_ITEMS: Record<string, NavItem> = {
     labelKey: 'nav.fleetFuelAnalytics',
     icon: Droplets,
   },
+  fleetTripHistory: {
+    href: '/fleet-analytics/trips',
+    labelKey: 'nav.fleetTripHistory',
+    icon: Route,
+  },
 };
 
+const VEHICLES_SECTION_BASE: NavItem[] = [
+  { href: '/vehicles', labelKey: 'nav.vehicles.list' },
+  { href: '/vehicles/assignments', labelKey: 'nav.vehicles.assignments' },
+];
+
+/** Office layout: no financial cost page. */
 const VEHICLES_SECTION: NavSection = {
   id: 'vehicles',
   labelKey: 'nav.vehicles',
   icon: Truck,
   items: [
-    { href: '/vehicles', labelKey: 'nav.vehicles.list' },
-    { href: '/vehicles/assignments', labelKey: 'nav.vehicles.assignments' },
+    ...VEHICLES_SECTION_BASE,
+    { href: '/fleet-analytics/trips', labelKey: 'nav.fleetTripHistory' },
+  ],
+};
+
+/** Full layout (admin, boss, accounting): includes vehicle costs. */
+const VEHICLES_SECTION_FULL: NavSection = {
+  id: 'vehicles',
+  labelKey: 'nav.vehicles',
+  icon: Truck,
+  items: [
+    ...VEHICLES_SECTION_BASE,
+    { href: '/costs', labelKey: 'nav.costs' },
+    { href: '/fleet-analytics/trips', labelKey: 'nav.fleetTripHistory' },
+  ],
+};
+
+const CHECKS_SECTION: NavSection = {
+  id: 'checks',
+  labelKey: 'nav.section.checks',
+  icon: ClipboardCheck,
+  items: [
+    { href: '/license-checks', labelKey: 'nav.licenseChecks' },
+    { href: '/departure-checks', labelKey: 'nav.departureChecks' },
+    { href: '/defects', labelKey: 'nav.defects' },
   ],
 };
 
@@ -135,20 +170,23 @@ const OFFICE_NAV: NavGroup[] = [
   group('daily', 'nav.group.daily', [
     item('dashboard'),
     item('officeQueue'),
+    item('fleetFuelAnalytics'),
     item('assignments'),
     item('liveTracking'),
     item('requests'),
-    item('messenger'),
   ]),
-  group('fleet', 'nav.group.fleet', [item('drivers'), VEHICLES_SECTION, item('companies')]),
-  group('compliance', 'nav.group.compliance', [
-    item('documents'),
-    item('licenseChecks'),
-    item('fines'),
-    item('departureChecks'),
-    item('defects'),
+  group('fleet', 'nav.group.fleet', [
+    item('drivers'),
+    VEHICLES_SECTION,
+    item('companies'),
     item('serviceHistory'),
     REMINDERS_SECTION,
+    item('messenger'),
+  ]),
+  group('compliance', 'nav.group.compliance', [
+    item('documents'),
+    CHECKS_SECTION,
+    item('fines'),
     item('workSessions'),
   ]),
 ];
@@ -157,27 +195,24 @@ const OFFICE_NAV: NavGroup[] = [
 const DEFAULT_NAV: NavGroup[] = [
   group('overview', 'nav.group.overview', [
     item('dashboard'),
-    item('costs'),
     item('fleetFuelAnalytics'),
     item('assignments'),
     item('liveTracking'),
   ]),
   group('master', 'nav.group.master', [
     item('drivers'),
-    VEHICLES_SECTION,
+    VEHICLES_SECTION_FULL,
     item('companies'),
     item('documents'),
+    item('serviceHistory'),
+    REMINDERS_SECTION,
+    item('messenger'),
   ]),
   group('operations', 'nav.group.operations', [
     item('requests'),
-    item('licenseChecks'),
+    CHECKS_SECTION,
     item('fines'),
-    item('departureChecks'),
-    item('defects'),
-    item('serviceHistory'),
-    REMINDERS_SECTION,
     item('workSessions'),
-    item('messenger'),
   ]),
 ];
 

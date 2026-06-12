@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -27,6 +28,7 @@ import {
 } from './core/fleet-fuel-estimation.util';
 import { FLEET_TRIP_PROCESSING_CONFIG } from './core/fleet-trip-processing.config';
 import type { CreateFuelEntryDto } from './dto/create-fuel-entry.dto';
+import type { CreateFuelEntryOfficeDto } from './dto/create-fuel-entry-office.dto';
 import type { FleetFuelOverviewQueryDto } from './dto/fleet-fuel-overview.query';
 import type { FuelAnalyticsQueryDto } from './dto/fuel-analytics.query';
 import type { ListFuelEntriesQueryDto } from './dto/list-fuel-entries.query';
@@ -50,6 +52,15 @@ export type FleetFuelEntrySummary = {
   hasReceipt: boolean;
   createdAt: string;
   updatedAt: string;
+  vehiclePlate?: string;
+  driverName?: string;
+};
+
+export type FleetFuelEntryDetail = FleetFuelEntrySummary & {
+  vehiclePlate: string;
+  driverName: string;
+  previousEntryAt: string | null;
+  previousOdometerKm: number | null;
 };
 
 export type FleetFuelAnalyticsResponse = {
@@ -160,9 +171,104 @@ export class FleetFuelService {
       where: this.buildListWhere(query),
       orderBy: { enteredAt: 'desc' },
       take: 500,
+      include: {
+        vehicle: { select: { plateNumber: true } },
+        driver: { select: { firstName: true, lastName: true } },
+      },
     });
 
-    return entries.map((entry) => this.serializeFuelEntry(entry));
+    return entries.map((entry) => ({
+      ...this.serializeFuelEntry(entry),
+      vehiclePlate: entry.vehicle.plateNumber,
+      driverName: `${entry.driver.firstName} ${entry.driver.lastName}`.trim(),
+    }));
+  }
+
+  async getFuelEntryById(id: string): Promise<FleetFuelEntryDetail> {
+    const entry = await this.prisma.fleetFuelEntry.findFirst({
+      where: { id },
+      include: {
+        vehicle: { select: { plateNumber: true } },
+        driver: { select: { firstName: true, lastName: true } },
+      },
+    });
+    if (!entry) {
+      throw new NotFoundException('Fuel entry not found');
+    }
+
+    const previous = await this.prisma.fleetFuelEntry.findFirst({
+      where: {
+        vehicleId: entry.vehicleId,
+        enteredAt: { lt: entry.enteredAt },
+      },
+      orderBy: { enteredAt: 'desc' },
+      select: { enteredAt: true, odometerKm: true },
+    });
+
+    return {
+      ...this.serializeFuelEntry(entry),
+      vehiclePlate: entry.vehicle.plateNumber,
+      driverName: `${entry.driver.firstName} ${entry.driver.lastName}`.trim(),
+      previousEntryAt: previous ? previous.enteredAt.toISOString() : null,
+      previousOdometerKm:
+        previous?.odometerKm != null ? Number(previous.odometerKm) : null,
+    };
+  }
+
+  async createFuelEntry(dto: CreateFuelEntryOfficeDto): Promise<FleetFuelEntrySummary> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: dto.vehicleId },
+      select: { id: true, currentDriverId: true },
+    });
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    const driverId = dto.driverId ?? vehicle.currentDriverId;
+    if (!driverId) {
+      throw new BadRequestException(
+        'driverId is required when the vehicle has no assigned driver',
+      );
+    }
+
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId },
+      select: { id: true },
+    });
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const enteredAt = dto.enteredAt ? new Date(dto.enteredAt) : new Date();
+    const entry = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.fleetFuelEntry.create({
+        data: {
+          vehicleId: dto.vehicleId,
+          driverId,
+          enteredAt,
+          liters: new Prisma.Decimal(dto.liters),
+          totalCost: new Prisma.Decimal(dto.totalCost),
+          currency: dto.currency?.trim().toUpperCase() || 'EUR',
+          odometerKm:
+            dto.odometerKm != null ? new Prisma.Decimal(dto.odometerKm) : null,
+          isFullTank: dto.isFullTank ?? false,
+        },
+      });
+
+      if (dto.odometerKm != null) {
+        await tx.vehicle.update({
+          where: { id: dto.vehicleId },
+          data: {
+            odometerCorrectedKm: new Prisma.Decimal(dto.odometerKm),
+            odometerCorrectedAt: enteredAt,
+          },
+        });
+      }
+
+      return created;
+    });
+
+    return this.serializeFuelEntry(entry);
   }
 
   async listFuelEntriesForDriver(

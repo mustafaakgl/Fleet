@@ -376,6 +376,30 @@ export interface VehicleCostsResponse {
   vehicles: VehicleCostRow[];
 }
 
+export interface FleetFuelEntry {
+  id: string;
+  vehicleId: string;
+  driverId: string;
+  enteredAt: string;
+  liters: number;
+  totalCost: number;
+  currency: string;
+  odometerKm: number | null;
+  isFullTank: boolean;
+  hasReceipt: boolean;
+  createdAt: string;
+  updatedAt: string;
+  vehiclePlate?: string;
+  driverName?: string;
+}
+
+export interface FleetFuelEntryDetail extends FleetFuelEntry {
+  vehiclePlate: string;
+  driverName: string;
+  previousEntryAt: string | null;
+  previousOdometerKm: number | null;
+}
+
 export interface FleetFuelOverviewResponse {
   from: string | null;
   to: string | null;
@@ -429,6 +453,71 @@ export interface FleetVehicleFuelAnalyticsResponse {
     realLitersPer100Km: number | null;
     estimatedLitersPer100Km: number | null;
   }>;
+  entries: Array<{
+    id: string;
+    vehicleId: string;
+    driverId: string;
+    enteredAt: string;
+    liters: number;
+    totalCost: number;
+    currency: string;
+    odometerKm: number | null;
+    isFullTank: boolean;
+    hasReceipt: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}
+
+export type FleetTripStatus = 'active' | 'closed';
+export type FleetTelemetrySource = 'phone' | 'device' | 'api';
+export type FleetDrivingEventType = 'speeding' | 'harsh_accel' | 'harsh_brake';
+
+export interface FleetTripSummary {
+  id: string;
+  vehicleId: string;
+  driverId: string;
+  source: FleetTelemetrySource;
+  startedAt: string;
+  endedAt: string | null;
+  distanceKm: number | string | null;
+  durationS: number | null;
+  avgSpeedKmh: number | string | null;
+  maxSpeedKmh: number | string | null;
+  idleS: number | null;
+  score: number | string | null;
+  hasDataGap: boolean;
+  status: FleetTripStatus;
+  assignmentId: string | null;
+  workSessionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FleetTripLocationPoint {
+  id: string;
+  recordedAt: string;
+  lat: number;
+  lng: number;
+  speedKmh: number | null;
+  headingDeg: number | null;
+  accuracyM: number | null;
+  source: FleetTelemetrySource;
+}
+
+export interface FleetDrivingEvent {
+  id: string;
+  type: FleetDrivingEventType;
+  occurredAt: string;
+  lat: number;
+  lng: number;
+  value: number;
+  threshold: number;
+}
+
+export interface FleetTripDetail extends FleetTripSummary {
+  locationPoints: FleetTripLocationPoint[];
+  drivingEvents: FleetDrivingEvent[];
 }
 
 export interface Fine {
