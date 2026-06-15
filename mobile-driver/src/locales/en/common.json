@@ -36,7 +36,7 @@
   },
   "login": {
     "title": "Fleet Driver",
-    "brandName": "MyFleet",
+    "brandName": "Operion",
     "subtitle": "Sign in to your assignments and messages",
     "email": "Email",
     "password": "Password",
@@ -143,7 +143,20 @@
     "todayShift": "Today's shift",
     "loadError": "Failed to load profile.",
     "languageUpdated": "Language updated.",
-    "languageFailed": "Failed to update language."
+    "languageFailed": "Failed to update language.",
+    "workSessionTitle": "Work session",
+    "workSessionHint": "End your shift when you finish for the day (Feierabend). The office sees this in work sessions.",
+    "workSessionActive": "Shift active since {{time}}",
+    "workSessionInactive": "No active shift",
+    "workSessionEndedToday": "Shift ended for today",
+    "endWorkSession": "End shift (Feierabend)",
+    "startWorkSession": "Start shift",
+    "restartWorkSession": "Start shift again",
+    "workSessionEnded": "Shift ended.",
+    "workSessionStarted": "Shift started.",
+    "workSessionLoadError": "Could not load work session.",
+    "workSessionEndFailed": "Could not end shift.",
+    "workSessionStartFailed": "Could not start shift."
   },
   "requests": {
     "title": "Requests",

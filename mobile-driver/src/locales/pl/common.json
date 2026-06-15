@@ -34,7 +34,7 @@
     "invalidCredentials": "Invalid email or password.",
     "devApiHint": "API: {{url}}",
     "devCredentialsHint": "Test: driver@fleet.com / driver123",
-    "brandName": "MyFleet",
+    "brandName": "Operion",
     "emailPlaceholder": "name@firma.de",
     "passwordPlaceholder": "••••••••"
   },

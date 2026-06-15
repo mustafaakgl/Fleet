@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { router, Stack } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authApi, driverApi } from '@/api/endpoints';
 import { env } from '@/config/env';
@@ -82,7 +82,12 @@ export default function LoginScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.hero}>
         <View style={styles.logoWrap}>
-          <Text style={styles.logoText}>{t('login.brandName')}</Text>
+          <Image
+            source={require('../../assets/operion-logo.png')}
+            style={styles.logoImage}
+            accessibilityLabel={t('login.brandName')}
+            resizeMode="contain"
+          />
         </View>
         <Text style={styles.title}>{t('login.title')}</Text>
         <Text style={styles.subtitle}>{t('login.subtitle')}</Text>
@@ -141,18 +146,18 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   logoWrap: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radius.lg,
     marginBottom: spacing.sm,
-    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
   },
-  logoText: {
-    color: colors.white,
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  logoImage: {
+    width: 200,
+    height: 48,
   },
   title: { ...typography.h1, textAlign: 'center' },
   subtitle: { ...typography.caption, textAlign: 'center', textTransform: 'none', fontSize: 14 },

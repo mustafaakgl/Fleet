@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Bell, FileText, Loader2, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DriverLocationSharingCard } from '@/components/driver-portal/DriverLocationSharingCard';
+import { DriverWorkSessionCard } from '@/components/driver-portal/DriverWorkSessionCard';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -171,6 +172,8 @@ export default function DriverProfilePage() {
                 {languageError ? <p className="mt-2 text-sm text-red-600">{languageError}</p> : null}
               </CardContent>
             </Card>
+
+            <DriverWorkSessionCard />
 
             <DriverLocationSharingCard />
 

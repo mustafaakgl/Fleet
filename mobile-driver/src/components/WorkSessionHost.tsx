@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { authStore } from '@/features/auth/store';
 import { driverApi } from '@/api/endpoints';
+import { isFeierabendPausedToday } from '@/lib/work-session-feierabend';
 
 /**
  * Starts a work session when the driver opens the app and ends it on background (Feierabend).
@@ -15,9 +16,14 @@ export function WorkSessionHost() {
       return;
     }
 
-    void driverApi.startWorkSession().catch(() => {
-      // offline or already active — ignore
-    });
+    void (async () => {
+      if (await isFeierabendPausedToday()) {
+        return;
+      }
+      await driverApi.startWorkSession().catch(() => {
+        // offline or already active — ignore
+      });
+    })();
 
     const onAppStateChange = (next: AppStateStatus) => {
       if (next === 'background' || next === 'inactive') {
@@ -33,9 +39,14 @@ export function WorkSessionHost() {
 
       if (next === 'active') {
         backgroundEndedRef.current = false;
-        void driverApi.startWorkSession().catch(() => {
-          // ignore
-        });
+        void (async () => {
+          if (await isFeierabendPausedToday()) {
+            return;
+          }
+          await driverApi.startWorkSession().catch(() => {
+            // ignore
+          });
+        })();
       }
     };
 

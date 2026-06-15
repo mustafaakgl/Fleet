@@ -215,21 +215,24 @@ export function Sidebar() {
           </button>
           <div
             className={cn(
-              'flex w-full items-center px-1',
-              tabletCollapsed ? 'justify-center lg:justify-start' : 'justify-start',
+              'flex w-full items-center',
+              tabletCollapsed ? 'justify-center lg:justify-stretch' : 'justify-stretch',
               tabletCollapsed ? 'h-12 lg:h-[4.5rem]' : 'h-[4.5rem] lg:h-[5rem]',
             )}
           >
             <OperionLogo
               href="/dashboard"
-              onDark
               compact={tabletCollapsed}
-              showTagline={!tabletCollapsed}
+              variant="sidebar"
+              priority
             />
           </div>
         </div>
 
-        <nav ref={navScrollRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-2.5 py-3">
+        <nav
+          ref={navScrollRef}
+          className="scrollbar-hide flex-1 space-y-4 overflow-y-auto overscroll-contain px-2.5 py-3"
+        >
           {navGroups.map((group) => (
             <div key={group.id}>
               <p

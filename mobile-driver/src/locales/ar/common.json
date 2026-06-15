@@ -30,7 +30,7 @@
     "invalidPassword": "Passwort mindestens 6 Zeichen.",
     "notDriver": "Dieses Konto ist kein Fahrerkonto.",
     "failed": "Anmeldung fehlgeschlagen.",
-    "brandName": "MyFleet",
+    "brandName": "Operion",
     "emailPlaceholder": "name@firma.de",
     "passwordPlaceholder": "••••••••",
     "networkError": "Fleet-Backend nicht erreichbar. Gleiches WLAN wie der Computer, `npm run dev` starten und App neu starten.",

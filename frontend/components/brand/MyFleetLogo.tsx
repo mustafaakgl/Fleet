@@ -12,9 +12,11 @@ type MyFleetLogoProps = {
 /** @deprecated Use OperionLogo — kept for existing imports during rebrand. */
 export function MyFleetLogo({
   className,
+  height = 36,
   href = '/',
   onDark = false,
   fillWidth = false,
+  priority = false,
 }: MyFleetLogoProps) {
   return (
     <OperionLogo
@@ -23,6 +25,8 @@ export function MyFleetLogo({
       onDark={onDark}
       compact={fillWidth}
       showTagline={fillWidth}
+      height={height}
+      priority={priority}
     />
   );
 }

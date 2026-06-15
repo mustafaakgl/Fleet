@@ -264,7 +264,6 @@ export function getNavigationForRole(role: Role): NavGroup[] {
       const operationsGroup = groups.find((group) => group.id === 'operations');
       if (operationsGroup) {
         if (role === 'admin') {
-          operationsGroup.items.unshift(GETTING_STARTED_ITEM);
           operationsGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
         }
         operationsGroup.items.push(AUDIT_ITEM);

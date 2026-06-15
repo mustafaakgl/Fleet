@@ -37,7 +37,7 @@
   },
   "login": {
     "title": "Fleet Driver",
-    "brandName": "MyFleet",
+    "brandName": "Operion",
     "subtitle": "Anmelden für Einsätze und Nachrichten",
     "email": "E-Mail",
     "password": "Passwort",
@@ -128,7 +128,20 @@
     "todayShift": "Heutige Schicht",
     "loadError": "Profil konnte nicht geladen werden.",
     "languageUpdated": "Sprache aktualisiert.",
-    "languageFailed": "Sprache konnte nicht aktualisiert werden."
+    "languageFailed": "Sprache konnte nicht aktualisiert werden.",
+    "workSessionTitle": "Arbeitszeit",
+    "workSessionHint": "Beenden Sie die Schicht am Tagesende (Feierabend). Das Büro sieht dies unter Arbeitszeiten.",
+    "workSessionActive": "Schicht aktiv seit {{time}}",
+    "workSessionInactive": "Keine aktive Schicht",
+    "workSessionEndedToday": "Schicht für heute beendet",
+    "endWorkSession": "Feierabend / Schicht beenden",
+    "startWorkSession": "Schicht starten",
+    "restartWorkSession": "Schicht erneut starten",
+    "workSessionEnded": "Schicht beendet.",
+    "workSessionStarted": "Schicht gestartet.",
+    "workSessionLoadError": "Arbeitszeit konnte nicht geladen werden.",
+    "workSessionEndFailed": "Schicht konnte nicht beendet werden.",
+    "workSessionStartFailed": "Schicht konnte nicht gestartet werden."
   },
   "requests": {
     "title": "Anträge",

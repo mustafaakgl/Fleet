@@ -24,6 +24,7 @@ import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { ServiceRecordInlineField } from '@/components/service-records/ServiceRecordInlineField';
 import { VehicleHandoverHistory, type VehicleHandoverHistoryRow } from '@/components/vehicles/VehicleHandoverHistory';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
+import { EquipmentPhotoPreview } from '@/components/vehicles/EquipmentPhotoPreview';
 import { getUser } from '@/lib/auth';
 import { canEditServiceRecords } from '@/lib/permissions';
 import { Input } from '@/components/ui/input';
@@ -95,6 +96,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [equipmentError, setEquipmentError] = useState<string | null>(null);
   const [equipmentName, setEquipmentName] = useState('');
   const [equipmentQty, setEquipmentQty] = useState('1');
+  const [equipmentPhotoFile, setEquipmentPhotoFile] = useState<File | null>(null);
   const [equipmentSaving, setEquipmentSaving] = useState(false);
   const [equipmentPhotoUploadingId, setEquipmentPhotoUploadingId] = useState<string | null>(null);
 
@@ -143,25 +145,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       .catch((e) => setServiceRecordsError(e?.message ?? 'Failed'));
   }, [id]);
 
-  async function addEquipmentItem() {
-    if (!equipmentName.trim()) return;
-    setEquipmentSaving(true);
-    try {
-      const created = await vehiclesApi.createEquipment(id, {
-        name: equipmentName.trim(),
-        quantity: Number.parseInt(equipmentQty, 10) || 1,
-      });
-      setEquipment((current) => [...current, created]);
-      setEquipmentName('');
-      setEquipmentQty('1');
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : t('vehicleDetail.equipmentSaveError'));
-    } finally {
-      setEquipmentSaving(false);
-    }
-  }
-
-  async function uploadEquipmentPhoto(item: VehicleEquipmentItem, file: File) {
+  async function uploadEquipmentPhoto(item: VehicleEquipmentItem, file: File): Promise<VehicleEquipmentItem> {
     setEquipmentPhotoUploadingId(item.id);
     try {
       const formData = new FormData();
@@ -173,11 +157,45 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       const updated = await vehiclesApi.updateEquipment(id, item.id, {
         photoDocumentId: uploaded.id,
       });
-      setEquipment((current) => current.map((row) => (row.id === item.id ? updated : row)));
+      setEquipment((current) => {
+        const exists = current.some((row) => row.id === item.id);
+        if (!exists) {
+          return [...current, updated];
+        }
+        return current.map((row) => (row.id === item.id ? updated : row));
+      });
+      return updated;
     } catch (e) {
       window.alert(e instanceof Error ? e.message : t('vehicleDetail.equipmentPhotoFailed'));
+      return item;
     } finally {
       setEquipmentPhotoUploadingId(null);
+    }
+  }
+
+  async function addEquipmentItem() {
+    if (!equipmentName.trim()) return;
+    setEquipmentSaving(true);
+    try {
+      const created = await vehiclesApi.createEquipment(id, {
+        name: equipmentName.trim(),
+        quantity: Number.parseInt(equipmentQty, 10) || 1,
+      });
+      if (equipmentPhotoFile) {
+        const saved = await uploadEquipmentPhoto(created, equipmentPhotoFile);
+        if (!saved.photoDocumentId) {
+          setEquipment((current) => [...current, created]);
+        }
+      } else {
+        setEquipment((current) => [...current, created]);
+      }
+      setEquipmentName('');
+      setEquipmentQty('1');
+      setEquipmentPhotoFile(null);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : t('vehicleDetail.equipmentSaveError'));
+    } finally {
+      setEquipmentSaving(false);
     }
   }
 
@@ -208,6 +226,11 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       setUploadingDoc(false);
     }
   }
+
+  const activeEquipment = useMemo(
+    () => equipment.filter((item) => item.status === 'active'),
+    [equipment],
+  );
 
   const currentAssignment = vehicle?.recent_assignments?.[0] ?? null;
   const currentDriver =
@@ -466,22 +489,82 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           <CardTitle>{t('vehicleDetail.equipment')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
             <Input
               value={equipmentName}
               onChange={(e) => setEquipmentName(e.target.value)}
               placeholder={t('vehicleDetail.equipmentNamePlaceholder')}
+              className="lg:flex-1"
             />
             <Input
               value={equipmentQty}
               onChange={(e) => setEquipmentQty(e.target.value)}
-              className="sm:w-24"
+              className="lg:w-24"
               placeholder="Qty"
             />
+            <div className="space-y-1 lg:flex-1">
+              <label className="text-xs font-medium text-slate-600" htmlFor="equipment-add-photo">
+                {t('vehicleDetail.equipmentAddPhoto')}
+              </label>
+              <Input
+                id="equipment-add-photo"
+                type="file"
+                accept="image/*"
+                onChange={(e) => setEquipmentPhotoFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
             <Button onClick={() => void addEquipmentItem()} disabled={equipmentSaving || !equipmentName.trim()}>
               {t('vehicleDetail.equipmentAdd')}
             </Button>
           </div>
+
+          {activeEquipment.length > 0 ? (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">{t('vehicleDetail.equipmentPhotosTitle')}</p>
+                <p className="text-xs text-slate-600">{t('vehicleDetail.equipmentPhotosHint')}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {activeEquipment.map((item) => (
+                  <div
+                    key={`equipment-photo-${item.id}`}
+                    className="space-y-2 rounded-lg border border-slate-200 bg-white p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{item.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {t('vehicleDetail.equipmentExpectedQty', { count: item.quantity })}
+                        </p>
+                      </div>
+                      <Badge className="bg-emerald-100 text-emerald-700">{item.status}</Badge>
+                    </div>
+                    <EquipmentPhotoPreview documentId={item.photoDocumentId} alt={item.name} />
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-[#1a4d7a] hover:bg-slate-50">
+                      <Upload className="h-3.5 w-3.5" />
+                      {equipmentPhotoUploadingId === item.id
+                        ? t('vehicleDetail.equipmentPhotoUploading')
+                        : item.photoDocumentId
+                          ? t('vehicleDetail.equipmentPhotoReplace')
+                          : t('vehicleDetail.equipmentPhotoUpload')}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={equipmentPhotoUploadingId === item.id}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (file) void uploadEquipmentPhoto(item, file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {equipmentError ? (
             <p className="text-sm text-gray-500">{equipmentError}</p>
           ) : equipment.length === 0 ? (
@@ -502,34 +585,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                     <TableCell className={FLEET_TABLE_CELL}>{item.name}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>{item.quantity}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>
-                      {item.photoDocumentId ? (
-                        <DocumentFileLink
-                          document={{
-                            id: item.photoDocumentId,
-                            fileName: `${item.name}.jpg`,
-                            download_url: `/documents/${item.photoDocumentId}/download`,
-                          }}
-                          variant="link"
+                      <div className="w-24">
+                        <EquipmentPhotoPreview
+                          documentId={item.photoDocumentId}
+                          alt={item.name}
+                          className="h-16"
+                          placeholderClassName="h-16"
                         />
-                      ) : (
-                        <span className="text-xs text-slate-500">{t('vehicleDetail.equipmentNoPhoto')}</span>
-                      )}
-                      <label className="mt-1 block cursor-pointer text-xs text-[#1a4d7a] hover:underline">
-                        {equipmentPhotoUploadingId === item.id
-                          ? t('vehicleDetail.equipmentPhotoUploading')
-                          : t('vehicleDetail.equipmentPhotoUpload')}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          disabled={equipmentPhotoUploadingId === item.id}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            e.target.value = '';
-                            if (file) void uploadEquipmentPhoto(item, file);
-                          }}
-                        />
-                      </label>
+                      </div>
                     </TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>{item.status}</TableCell>
                   </TableRow>

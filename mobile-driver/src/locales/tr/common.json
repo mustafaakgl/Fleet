@@ -36,7 +36,7 @@
   },
   "login": {
     "title": "Fleet Sürücü",
-    "brandName": "MyFleet",
+    "brandName": "Operion",
     "subtitle": "Einsatz ve mesajlar için giriş yapın",
     "email": "E-posta",
     "password": "Şifre",
@@ -143,7 +143,20 @@
     "todayShift": "Bugünkü vardiya",
     "loadError": "Failed to load profile.",
     "languageUpdated": "Language updated.",
-    "languageFailed": "Failed to update language."
+    "languageFailed": "Dil güncellenemedi.",
+    "workSessionTitle": "Mesai",
+    "workSessionHint": "Gün sonunda mesainizi bitirin (Feierabend). Ofis bunu çalışma sürelerinde görür.",
+    "workSessionActive": "Mesai aktif — başlangıç: {{time}}",
+    "workSessionInactive": "Aktif mesai yok",
+    "workSessionEndedToday": "Bugünkü mesai bitti",
+    "endWorkSession": "Mesai bitir (Feierabend)",
+    "startWorkSession": "Mesai başlat",
+    "restartWorkSession": "Mesaiyi yeniden başlat",
+    "workSessionEnded": "Mesai bitti.",
+    "workSessionStarted": "Mesai başladı.",
+    "workSessionLoadError": "Mesai bilgisi yüklenemedi.",
+    "workSessionEndFailed": "Mesai bitirilemedi.",
+    "workSessionStartFailed": "Mesai başlatılamadı."
   },
   "requests": {
     "title": "Talepler",

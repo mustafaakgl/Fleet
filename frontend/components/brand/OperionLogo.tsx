@@ -1,17 +1,21 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { OperionMark } from './OperionMark';
 
 type OperionLogoProps = {
   className?: string;
   href?: string | null;
-  /** Sidebar / dark header */
+  /** Sidebar / dark header — logo asset includes a light background */
   onDark?: boolean;
-  /** Hide wordmark on md, show from lg (collapsed tablet sidebar) */
+  /** Smaller logo on md, full size from lg (collapsed tablet sidebar) */
   compact?: boolean;
-  /** Icon only — never show wordmark */
+  /** @deprecated Wordmark is in the logo image */
   iconOnly?: boolean;
   showTagline?: boolean;
+  height?: number;
+  priority?: boolean;
+  /** Dashboard sidebar: full-width white pill like product mock */
+  variant?: 'default' | 'sidebar';
 };
 
 export function OperionLogo({
@@ -19,40 +23,75 @@ export function OperionLogo({
   href = '/dashboard',
   onDark = false,
   compact = false,
-  iconOnly = false,
   showTagline = false,
+  height = 36,
+  priority = false,
+  variant = 'default',
 }: OperionLogoProps) {
-  const content = (
-    <div className={cn('flex items-center gap-2.5', className)}>
-      <OperionMark size={32} className={onDark ? 'text-white' : 'text-slate-900'} />
-      {!iconOnly ? (
-        <div className={cn('min-w-0 leading-none', compact ? 'hidden lg:block' : '')}>
+  const logoHeight = compact ? Math.min(height, 30) : height;
+
+  const content =
+    variant === 'sidebar' ? (
+      <div
+        className={cn(
+          'w-full rounded-lg bg-white px-2.5 py-1 shadow-sm',
+          compact && 'px-1.5 py-0.5 lg:px-2.5 lg:py-1',
+          className,
+        )}
+      >
+        <div
+          className={cn(
+            'relative w-full overflow-hidden',
+            compact ? 'h-8 lg:h-10' : 'h-10',
+          )}
+        >
+          <Image
+            src="/operion-logo.png"
+            alt="Operion"
+            fill
+            priority={priority}
+            sizes={compact ? '72px' : '240px'}
+            className={cn(
+              'object-cover',
+              compact ? 'object-[left_50%]' : 'object-[center_50%]',
+            )}
+            style={{
+              transform: 'scale(0.82)',
+              transformOrigin: compact ? 'left center' : 'center center',
+            }}
+          />
+        </div>
+      </div>
+    ) : (
+      <div className="inline-flex min-w-0 flex-col gap-1">
+        <Image
+          src="/operion-logo.png"
+          alt="Operion"
+          width={1024}
+          height={1024}
+          priority={priority}
+          className={cn('w-auto max-w-full object-contain', onDark && 'rounded-md', className)}
+          style={{ height: logoHeight }}
+        />
+        {showTagline ? (
           <span
             className={cn(
-              'block text-lg font-bold tracking-tight',
-              onDark ? 'text-white' : 'text-slate-900',
+              'text-[10px] font-medium uppercase tracking-[0.14em]',
+              onDark ? 'text-blue-100/70' : 'text-slate-500',
             )}
           >
-            Operion
+            10–100 vehicles
           </span>
-          {showTagline ? (
-            <span
-              className={cn(
-                'mt-0.5 block text-[10px] font-medium uppercase tracking-[0.14em]',
-                onDark ? 'text-blue-100/70' : 'text-slate-500',
-              )}
-            >
-              10–100 vehicles
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
+        ) : null}
+      </div>
+    );
 
   if (href) {
     return (
-      <Link href={href} className="inline-flex shrink-0 items-center">
+      <Link
+        href={href}
+        className={cn('inline-flex shrink-0 items-center', variant === 'sidebar' && 'w-full min-w-0')}
+      >
         {content}
       </Link>
     );

@@ -1983,6 +1983,14 @@ export const driverPortalApi = {
   startWorkSession: () =>
     api.post<{ id: string; startedAt: string; status: string }>('/driver/work-sessions/start').then((r) => r.data),
 
+  getCurrentWorkSession: () =>
+    api
+      .get<{
+        active: boolean;
+        session: { id: string; startedAt: string; status: string } | null;
+      }>('/driver/work-sessions/current')
+      .then((r) => r.data),
+
   endWorkSession: (reason: 'manual' | 'app_background' | 'logout' = 'manual') =>
     api.post('/driver/work-sessions/end', { reason }).then((r) => r.data),
 };

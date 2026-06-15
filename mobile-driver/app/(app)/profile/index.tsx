@@ -8,6 +8,7 @@ import { SkeletonCard } from '@/components/Skeleton';
 import { ErrorState } from '@/components/ErrorState';
 import { ActionButton } from '@/components/ActionButton';
 import { LocationTrackingCard } from '@/components/LocationTrackingCard';
+import { WorkSessionCard } from '@/components/WorkSessionCard';
 import { ListRow } from '@/components/ListRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Avatar } from '@/components/Avatar';
@@ -172,6 +173,8 @@ export default function ProfileSettingsScreen() {
                 </Pressable>
               ))}
             </View>
+
+            <WorkSessionCard />
 
             <SectionHeader title={t('profile.location')} />
             <ListRow
