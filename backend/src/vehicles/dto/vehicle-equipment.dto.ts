@@ -45,4 +45,8 @@ export class UpdateVehicleEquipmentDto {
   @IsOptional()
   @IsString()
   status?: 'active' | 'retired';
+
+  @IsOptional()
+  @IsString()
+  photoDocumentId?: string | null;
 }

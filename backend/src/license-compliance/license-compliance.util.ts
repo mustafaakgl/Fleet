@@ -25,7 +25,8 @@ export const PERIODIC_CHECK_INTERVAL_MONTHS = 6;
 export const CHECK_WARNING_DAYS = 14;
 export const CHECK_REMINDER_DAYS = 3;
 export const CHECK_ESCALATION_DAYS = 7;
-export const LICENSE_EXPIRY_NOTIFY_DAYS = [210, 60, 30] as const;
+/** License expiry windows — handled by RemindersService (driver.licenseExpiryDate). */
+export const LICENSE_EXPIRY_NOTIFY_DAYS = [90, 60, 30, 7] as const;
 
 export type LicenseComplianceInput = {
   license: Pick<DriverLicense, 'expiresAt' | 'nextCheckDueAt' | 'deletedAt'> | null;

@@ -45,19 +45,7 @@ export default function VehicleHandoverUploadScreen() {
   const [equipmentNotes, setEquipmentNotes] = useState('');
   const [damageDetected, setDamageDetected] = useState(false);
   const [damageNotes, setDamageNotes] = useState('');
-
-  useEffect(() => {
-    if (!handover) return;
-    setDamageDetected(handover.damageDetected ?? false);
-    setDamageNotes(handover.damageNotes ?? '');
-    if (handover.equipmentChecklist) {
-      setFirstAidKit(handover.equipmentChecklist.firstAidKit);
-      setFireExtinguisher(handover.equipmentChecklist.fireExtinguisher);
-      setStraps(handover.equipmentChecklist.straps);
-      setSafetyVest(handover.equipmentChecklist.safetyVest);
-      setEquipmentNotes(handover.equipmentChecklist.notes);
-    }
-  }, [handover?.id]);
+  const [inventoryQuantities, setInventoryQuantities] = useState<Record<string, string>>({});
 
   const {
     data: handover,
@@ -96,6 +84,29 @@ export default function VehicleHandoverUploadScreen() {
       }
     },
   });
+
+  useEffect(() => {
+    if (!handover) return;
+    setDamageDetected(handover.damageDetected ?? false);
+    setDamageNotes(handover.damageNotes ?? '');
+    if (handover.equipmentChecklist) {
+      setFirstAidKit(handover.equipmentChecklist.firstAidKit);
+      setFireExtinguisher(handover.equipmentChecklist.fireExtinguisher);
+      setStraps(handover.equipmentChecklist.straps);
+      setSafetyVest(handover.equipmentChecklist.safetyVest);
+      setEquipmentNotes(handover.equipmentChecklist.notes);
+      const nextInventory: Record<string, string> = {};
+      for (const row of handover.equipmentChecklist.inventoryChecks ?? []) {
+        nextInventory[row.equipmentId] = String(row.quantityPresent);
+      }
+      for (const item of handover.equipmentChecklist.vehicleEquipment ?? []) {
+        if (nextInventory[item.id] === undefined) {
+          nextInventory[item.id] = String(item.expectedQuantity);
+        }
+      }
+      setInventoryQuantities(nextInventory);
+    }
+  }, [handover?.id]);
 
   const requiredSlots = useMemo(
     () => resolveHandoverSlots(handover?.requiredPhotoSlots),
@@ -157,6 +168,13 @@ export default function VehicleHandoverUploadScreen() {
         notes: equipmentNotes.trim() || undefined,
         damageDetected,
         damageNotes: damageDetected ? damageNotes.trim() || undefined : undefined,
+        inventoryChecks:
+          (handover.equipmentChecklist?.vehicleEquipment ?? []).length > 0
+            ? (handover.equipmentChecklist?.vehicleEquipment ?? []).map((item) => ({
+                equipmentId: item.id,
+                quantityPresent: Number.parseInt(inventoryQuantities[item.id] ?? '0', 10) || 0,
+              }))
+            : undefined,
       });
     },
     onSuccess: async () => {
@@ -309,6 +327,53 @@ export default function VehicleHandoverUploadScreen() {
                   value={equipmentNotes}
                   onChangeText={setEquipmentNotes}
                 />
+
+                {(handover.equipmentChecklist?.vehicleEquipment ?? []).length > 0 ? (
+                  <View style={styles.inventoryCard}>
+                    <Text style={styles.slotTitle}>{t('handover.inventoryTitle')}</Text>
+                    <Text style={styles.scanHint}>{t('handover.inventoryHint')}</Text>
+                    {(handover.equipmentChecklist?.vehicleEquipment ?? []).map((item) => {
+                      const entered = Number.parseInt(inventoryQuantities[item.id] ?? '', 10);
+                      const mismatch =
+                        Number.isFinite(entered) && entered !== item.expectedQuantity;
+                      return (
+                        <View key={item.id} style={styles.inventoryItem}>
+                          <View style={styles.inventoryHeader}>
+                            <Text style={styles.inventoryName}>{item.name}</Text>
+                            <Text style={styles.scanHint}>
+                              {t('handover.inventoryExpected', { count: item.expectedQuantity })}
+                            </Text>
+                          </View>
+                          {item.photoDocumentId ? (
+                            <AuthenticatedImage
+                              apiPath={
+                                item.photoDownloadUrl
+                                  ?? `/driver/documents/${item.photoDocumentId}/download`
+                              }
+                              style={styles.inventoryPhoto}
+                              resizeMode="cover"
+                            />
+                          ) : null}
+                          <View style={styles.inventoryQtyRow}>
+                            <Text style={styles.inventoryQtyLabel}>{t('handover.inventoryPresent')}</Text>
+                            <TextInput
+                              style={styles.inventoryQtyInput}
+                              keyboardType="number-pad"
+                              value={inventoryQuantities[item.id] ?? ''}
+                              onChangeText={(value) =>
+                                setInventoryQuantities((current) => ({ ...current, [item.id]: value }))
+                              }
+                            />
+                          </View>
+                          {mismatch ? (
+                            <Text style={styles.inventoryMismatch}>{t('handover.inventoryMismatch')}</Text>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
                 <Pressable
                   style={[styles.slotButton, checklistMutation.isPending && styles.slotButtonDisabled]}
                   onPress={() => checklistMutation.mutate()}
@@ -461,5 +526,59 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: colors.background,
+  },
+  inventoryCard: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  inventoryItem: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+  },
+  inventoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  inventoryName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  inventoryPhoto: {
+    width: '100%',
+    height: 120,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+  },
+  inventoryQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  inventoryQtyLabel: {
+    fontSize: 14,
+    color: colors.primary,
+  },
+  inventoryQtyInput: {
+    width: 72,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: colors.card,
+    textAlign: 'center',
+  },
+  inventoryMismatch: {
+    fontSize: 12,
+    color: '#b45309',
   },
 });

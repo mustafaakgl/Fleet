@@ -112,33 +112,6 @@ export class LicenseComplianceService {
     };
   }
 
-  async findDriversDueForExpiryNotification(
-    notifyBeforeDays: number,
-    referenceDate = new Date(),
-  ) {
-    const today = normalizeDate(referenceDate);
-    const target = new Date(today);
-    target.setDate(target.getDate() + notifyBeforeDays);
-
-    return this.prisma.driverLicense.findMany({
-      where: {
-        deletedAt: null,
-        expiresAt: target,
-      },
-      include: {
-        driver: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            userId: true,
-            tenantId: true,
-          },
-        },
-      },
-    });
-  }
-
   async findLicensesDueForPeriodicCheck(referenceDate = new Date()) {
     const today = normalizeDate(referenceDate);
     return this.prisma.driverLicense.findMany({

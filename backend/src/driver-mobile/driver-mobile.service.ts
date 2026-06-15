@@ -692,14 +692,66 @@ export class DriverMobileService {
     );
   }
 
-  private buildEquipmentChecklist(handover: {
-    equipmentFirstAidKit: boolean | null;
-    equipmentFireExtinguisher: boolean | null;
-    equipmentStraps: boolean | null;
-    equipmentSafetyVest: boolean | null;
-    equipmentNotes: string | null;
-    equipmentVerifiedAt: Date | null;
-  }) {
+  private parseInventoryChecks(raw: unknown): Array<{ equipmentId: string; quantityPresent: number }> {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.filter(
+      (row): row is { equipmentId: string; quantityPresent: number } =>
+        typeof row === 'object'
+        && row !== null
+        && typeof (row as { equipmentId?: unknown }).equipmentId === 'string'
+        && typeof (row as { quantityPresent?: unknown }).quantityPresent === 'number',
+    );
+  }
+
+  private isHandoverInventoryComplete(
+    vehicleEquipment: Array<{ id: string }>,
+    equipmentInventoryChecks: unknown,
+  ) {
+    if (vehicleEquipment.length === 0) {
+      return true;
+    }
+    const checks = this.parseInventoryChecks(equipmentInventoryChecks);
+    if (checks.length !== vehicleEquipment.length) {
+      return false;
+    }
+    const submittedIds = new Set(checks.map((row) => row.equipmentId));
+    return vehicleEquipment.every((item) => submittedIds.has(item.id));
+  }
+
+  private async loadVehicleEquipmentForHandover(vehicleId: string) {
+    const items = await this.prisma.vehicleEquipment.findMany({
+      where: { vehicleId, status: 'active' },
+      orderBy: { name: 'asc' },
+    });
+    return items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      expectedQuantity: item.quantity,
+      photoDocumentId: item.photoDocumentId,
+      photoDownloadUrl: item.photoDocumentId
+        ? `/driver/documents/${item.photoDocumentId}/download`
+        : null,
+    }));
+  }
+
+  private buildEquipmentChecklist(
+    handover: {
+      equipmentFirstAidKit: boolean | null;
+      equipmentFireExtinguisher: boolean | null;
+      equipmentStraps: boolean | null;
+      equipmentSafetyVest: boolean | null;
+      equipmentNotes: string | null;
+      equipmentVerifiedAt: Date | null;
+      equipmentInventoryChecks: unknown;
+    },
+    vehicleEquipment: Array<{ id: string; name: string; expectedQuantity: number; photoDocumentId: string | null; photoDownloadUrl: string | null }>,
+  ) {
+    const inventoryChecks = this.parseInventoryChecks(handover.equipmentInventoryChecks);
+    const fixedComplete = this.isHandoverEquipmentChecklistComplete(handover);
+    const inventoryComplete = this.isHandoverInventoryComplete(vehicleEquipment, inventoryChecks);
+
     return {
       firstAidKit: handover.equipmentFirstAidKit ?? false,
       fireExtinguisher: handover.equipmentFireExtinguisher ?? false,
@@ -707,8 +759,31 @@ export class DriverMobileService {
       safetyVest: handover.equipmentSafetyVest ?? false,
       notes: handover.equipmentNotes ?? '',
       verifiedAt: handover.equipmentVerifiedAt?.toISOString() ?? null,
-      complete: this.isHandoverEquipmentChecklistComplete(handover),
+      inventoryChecks,
+      vehicleEquipment,
+      inventoryComplete,
+      complete: fixedComplete && inventoryComplete,
     };
+  }
+
+  private async isHandoverFullyComplete(
+    handover: {
+      equipmentFirstAidKit: boolean | null;
+      equipmentFireExtinguisher: boolean | null;
+      equipmentStraps: boolean | null;
+      equipmentSafetyVest: boolean | null;
+      vehicleId: string;
+      equipmentInventoryChecks: unknown;
+    },
+  ) {
+    if (!this.isHandoverEquipmentChecklistComplete(handover)) {
+      return false;
+    }
+    const vehicleEquipment = await this.prisma.vehicleEquipment.findMany({
+      where: { vehicleId: handover.vehicleId, status: 'active' },
+      select: { id: true },
+    });
+    return this.isHandoverInventoryComplete(vehicleEquipment, handover.equipmentInventoryChecks);
   }
 
   private async maybeCompleteHandover(handoverId: string) {
@@ -721,7 +796,7 @@ export class DriverMobileService {
 
     const photos = await loadHandoverPhotosBySlot(this.prisma, handoverId);
     const photosComplete = allRequiredHandoverPhotosUploaded(handover.photoRequired, photos);
-    const checklistComplete = this.isHandoverEquipmentChecklistComplete(handover);
+    const checklistComplete = await this.isHandoverFullyComplete(handover);
     if (!photosComplete || !checklistComplete) {
       return;
     }
@@ -930,6 +1005,24 @@ export class DriverMobileService {
       throw new BadRequestException('Equipment checklist is only required when photos are required');
     }
 
+    const activeEquipment = await this.prisma.vehicleEquipment.findMany({
+      where: { vehicleId: handover.vehicleId, status: 'active' },
+      select: { id: true },
+    });
+    if (activeEquipment.length > 0) {
+      if (!dto.inventoryChecks?.length) {
+        throw new BadRequestException('Inventory quantity verification is required for this vehicle');
+      }
+      const expectedIds = new Set(activeEquipment.map((item) => item.id));
+      const submittedIds = new Set(dto.inventoryChecks.map((item) => item.equipmentId));
+      if (
+        expectedIds.size !== submittedIds.size
+        || ![...expectedIds].every((equipmentId) => submittedIds.has(equipmentId))
+      ) {
+        throw new BadRequestException('Inventory checks must include every equipment item');
+      }
+    }
+
     const updated = await this.prisma.vehicleHandover.update({
       where: { id: handoverId },
       data: {
@@ -939,6 +1032,9 @@ export class DriverMobileService {
         equipmentSafetyVest: dto.safetyVest,
         equipmentNotes: dto.notes?.trim() || null,
         equipmentVerifiedAt: new Date(),
+        equipmentInventoryChecks: dto.inventoryChecks?.length
+          ? (dto.inventoryChecks as unknown as Prisma.InputJsonValue)
+          : undefined,
         ...(dto.damageDetected !== undefined ? { damageDetected: dto.damageDetected } : {}),
         ...(dto.damageNotes !== undefined
           ? { damageNotes: dto.damageNotes.trim() || null }
@@ -954,7 +1050,8 @@ export class DriverMobileService {
       where: { id: handoverId },
       include: handoverInclude,
     });
-    return this.enrichHandover(refreshed ?? updated);
+    const handoverForResponse = refreshed ?? updated;
+    return this.enrichHandover(handoverForResponse);
   }
 
   private async enrichHandover(
@@ -962,7 +1059,8 @@ export class DriverMobileService {
   ) {
     const photos = await loadHandoverPhotosBySlot(this.prisma, handover.id);
     const missingSlots = missingHandoverPhotoSlots(handover.photoRequired, photos);
-    const equipmentChecklist = this.buildEquipmentChecklist(handover);
+    const vehicleEquipment = await this.loadVehicleEquipmentForHandover(handover.vehicleId);
+    const equipmentChecklist = this.buildEquipmentChecklist(handover, vehicleEquipment);
     const photosComplete = allRequiredHandoverPhotosUploaded(handover.photoRequired, photos);
 
     return {

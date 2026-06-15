@@ -453,7 +453,6 @@ export class LicenseChecksService {
     let periodicRequests = 0;
     let reminders = 0;
     let escalations = 0;
-    let expiryNotices = 0;
 
     const dueLicenses = await this.compliance.findLicensesDueForPeriodicCheck(today);
     for (const license of dueLicenses) {
@@ -551,34 +550,7 @@ export class LicenseChecksService {
       }
     }
 
-    for (const windowDays of [210, 60, 30]) {
-      const targets = await this.compliance.findDriversDueForExpiryNotification(windowDays, today);
-      for (const license of targets) {
-        const dueLabel = license.expiresAt.toISOString().slice(0, 10);
-        if (license.driver.userId) {
-          this.driverNotify.notifyUserSafely({
-            userId: license.driver.userId,
-            key: 'license_expiry_soon',
-            params: { date: dueLabel, days: String(windowDays) },
-            type: 'system',
-            priority: 'high',
-            relatedEntityType: 'driver_license',
-            relatedEntityId: license.id,
-          });
-        }
-        await this.notifications.notifyAdminsAndOffice({
-          title: 'Führerschein läuft ab',
-          message: `${license.driver.firstName} ${license.driver.lastName}: Führerschein gültig bis ${dueLabel} (${windowDays}-Tage-Hinweis).`,
-          type: 'reminder',
-          priority: windowDays <= 30 ? 'critical' : 'high',
-          relatedEntityType: 'driver_license',
-          relatedEntityId: license.id,
-        });
-        expiryNotices += 1;
-      }
-    }
-
-    return { periodicRequests, reminders, escalations, expiryNotices };
+    return { periodicRequests, reminders, escalations };
   }
 
   async purgeRetainedData(cutoff: Date): Promise<number> {

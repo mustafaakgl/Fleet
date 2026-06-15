@@ -685,7 +685,7 @@ export const vehiclesApi = {
   updateEquipment: (
     vehicleId: string,
     equipmentId: string,
-    data: Partial<{ name: string; quantity: number; serialNumber: string | null; notes: string | null; status: 'active' | 'retired' }>,
+    data: Partial<{ name: string; quantity: number; serialNumber: string | null; notes: string | null; status: 'active' | 'retired'; photoDocumentId: string | null }>,
   ) => api.patch<VehicleEquipmentItem>(`/vehicles/${vehicleId}/equipment/${equipmentId}`, data).then((r) => r.data),
 
   removeEquipment: (vehicleId: string, equipmentId: string) =>
@@ -699,6 +699,7 @@ export interface VehicleEquipmentItem {
   quantity: number;
   serialNumber?: string | null;
   notes?: string | null;
+  photoDocumentId?: string | null;
   status: 'active' | 'retired';
   createdAt?: string;
   updatedAt?: string;
@@ -1866,6 +1867,7 @@ export const driverPortalApi = {
       notes?: string;
       damageDetected?: boolean;
       damageNotes?: string;
+      inventoryChecks?: Array<{ equipmentId: string; quantityPresent: number }>;
     },
   ) =>
     api

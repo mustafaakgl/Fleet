@@ -207,6 +207,7 @@ export const driverApi = {
       notes?: string;
       damageDetected?: boolean;
       damageNotes?: string;
+      inventoryChecks?: Array<{ equipmentId: string; quantityPresent: number }>;
     },
   ) {
     const { data } = await apiClient.post<DriverHandover>(

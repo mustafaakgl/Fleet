@@ -36,6 +36,7 @@ export default function DriverHandoverPage() {
   const [damageDetected, setDamageDetected] = useState(false);
   const [damageNotes, setDamageNotes] = useState('');
   const [equipmentBusy, setEquipmentBusy] = useState(false);
+  const [inventoryQuantities, setInventoryQuantities] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!handover) return;
@@ -47,6 +48,16 @@ export default function DriverHandoverPage() {
       setStraps(handover.equipmentChecklist.straps);
       setSafetyVest(handover.equipmentChecklist.safetyVest);
       setEquipmentNotes(handover.equipmentChecklist.notes);
+      const nextInventory: Record<string, string> = {};
+      for (const row of handover.equipmentChecklist.inventoryChecks ?? []) {
+        nextInventory[row.equipmentId] = String(row.quantityPresent);
+      }
+      for (const item of handover.equipmentChecklist.vehicleEquipment ?? []) {
+        if (nextInventory[item.id] === undefined) {
+          nextInventory[item.id] = String(item.expectedQuantity);
+        }
+      }
+      setInventoryQuantities(nextInventory);
     }
   }, [handover?.id]);
 
@@ -121,6 +132,11 @@ export default function DriverHandoverPage() {
     if (!handover?.id) return;
     setEquipmentBusy(true);
     try {
+      const vehicleEquipment = handover.equipmentChecklist?.vehicleEquipment ?? [];
+      const inventoryChecks = vehicleEquipment.map((item) => ({
+        equipmentId: item.id,
+        quantityPresent: Number.parseInt(inventoryQuantities[item.id] ?? '0', 10) || 0,
+      }));
       const updated = await driverPortalApi.submitHandoverEquipment(handover.id, {
         firstAidKit,
         fireExtinguisher,
@@ -129,6 +145,7 @@ export default function DriverHandoverPage() {
         notes: equipmentNotes.trim() || undefined,
         damageDetected,
         damageNotes: damageDetected ? damageNotes.trim() || undefined : undefined,
+        inventoryChecks: inventoryChecks.length > 0 ? inventoryChecks : undefined,
       });
       setHandover(updated);
     } catch (err) {
@@ -137,6 +154,8 @@ export default function DriverHandoverPage() {
       setEquipmentBusy(false);
     }
   }
+
+  const vehicleEquipment = handover?.equipmentChecklist?.vehicleEquipment ?? [];
 
   return (
     <DriverPortalShell>
@@ -251,6 +270,59 @@ export default function DriverHandoverPage() {
                   value={equipmentNotes}
                   onChange={(e) => setEquipmentNotes(e.target.value)}
                 />
+
+                {vehicleEquipment.length > 0 ? (
+                  <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {t('driverPortal.handover.inventoryTitle')}
+                    </p>
+                    <p className="text-xs text-slate-600">{t('driverPortal.handover.inventoryHint')}</p>
+                    {vehicleEquipment.map((item) => {
+                      const entered = Number.parseInt(inventoryQuantities[item.id] ?? '', 10);
+                      const mismatch =
+                        Number.isFinite(entered) && entered !== item.expectedQuantity;
+                      return (
+                        <div key={item.id} className="space-y-2 rounded-md border border-slate-200 bg-white p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-medium">{item.name}</span>
+                            <span className="text-xs text-slate-500">
+                              {t('driverPortal.handover.inventoryExpected', {
+                                count: item.expectedQuantity,
+                              })}
+                            </span>
+                          </div>
+                          {item.photoDocumentId ? (
+                            <DriverHandoverPhotoPreview
+                              documentId={item.photoDocumentId}
+                              alt={item.name}
+                            />
+                          ) : null}
+                          <label className="flex items-center justify-between gap-3 text-sm">
+                            <span>{t('driverPortal.handover.inventoryPresent')}</span>
+                            <input
+                              type="number"
+                              min={0}
+                              className="w-20 rounded-md border border-slate-200 px-2 py-1 text-sm"
+                              value={inventoryQuantities[item.id] ?? ''}
+                              onChange={(e) =>
+                                setInventoryQuantities((current) => ({
+                                  ...current,
+                                  [item.id]: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          {mismatch ? (
+                            <p className="text-xs text-amber-700">
+                              {t('driverPortal.handover.inventoryMismatch')}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
                 <Button
                   type="button"
                   variant="outline"

@@ -33,7 +33,8 @@ type DocumentOwnerType =
   | 'cargo_damage'
   | 'vehicle_handover'
   | 'assignment'
-  | 'service_record';
+  | 'service_record'
+  | 'vehicle_equipment';
 
 type DocumentStatus = 'valid' | 'expiring_soon' | 'expired' | 'missing' | 'archived';
 
@@ -48,6 +49,7 @@ const DOCUMENT_OWNER_TYPES: DocumentOwnerType[] = [
   'vehicle_handover',
   'assignment',
   'service_record',
+  'vehicle_equipment',
 ];
 
 const DOCUMENT_STATUSES: DocumentStatus[] = ['valid', 'expiring_soon', 'expired', 'missing', 'archived'];
@@ -166,6 +168,43 @@ export class DocumentsService {
       });
       if (accident?.driverId === driver.id) {
         return;
+      }
+    }
+
+    if (document.ownerType === 'vehicle_equipment') {
+      const equipment = await this.prisma.vehicleEquipment.findUnique({
+        where: { id: document.ownerId },
+        select: { vehicleId: true },
+      });
+      if (equipment) {
+        const handover = await this.prisma.vehicleHandover.findFirst({
+          where: {
+            driverId: driver.id,
+            vehicleId: equipment.vehicleId,
+          },
+          select: { id: true },
+        });
+        if (handover) {
+          return;
+        }
+
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+
+        const assignment = await this.prisma.assignment.findFirst({
+          where: {
+            driverId: driver.id,
+            vehicleId: equipment.vehicleId,
+            workDate: { gte: todayStart, lt: todayEnd },
+            status: { not: 'cancelled' },
+          },
+          select: { id: true },
+        });
+        if (assignment) {
+          return;
+        }
       }
     }
 

@@ -61,7 +61,7 @@ export class JobBootstrapService implements OnModuleInit {
       cutoff.setMonth(cutoff.getMonth() - (Number.isFinite(retentionMonths) ? retentionMonths : 6));
       const purged = await this.licenseChecks.purgeRetainedData(cutoff);
       this.logger.log(
-        `License checks: periodic=${result.periodicRequests}, reminders=${result.reminders}, escalations=${result.escalations}, expiry=${result.expiryNotices}, purged=${purged}`,
+        `License checks: periodic=${result.periodicRequests}, reminders=${result.reminders}, escalations=${result.escalations}, purged=${purged}`,
       );
     });
 

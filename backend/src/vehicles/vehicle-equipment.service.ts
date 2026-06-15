@@ -58,6 +58,7 @@ export class VehicleEquipmentService {
       serialNumber?: string | null;
       notes?: string | null;
       status?: EquipmentStatus;
+      photoDocumentId?: string | null;
     },
   ) {
     await this.ensureVehicle(vehicleId);
@@ -74,6 +75,7 @@ export class VehicleEquipmentService {
     if (data.serialNumber !== undefined) payload.serialNumber = data.serialNumber?.trim() || null;
     if (data.notes !== undefined) payload.notes = data.notes?.trim() || null;
     if (data.status !== undefined) payload.status = data.status;
+    if (data.photoDocumentId !== undefined) payload.photoDocumentId = data.photoDocumentId || null;
 
     return this.prisma.vehicleEquipment.update({
       where: { id: equipmentId },

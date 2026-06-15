@@ -3,10 +3,11 @@
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ChevronLeft, Pencil, Power, User } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Pencil, Power, Upload, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DriverLicenseForm } from '@/components/license-checks/DriverLicenseForm';
 import { LicenseComplianceBadgePill } from '@/components/license-checks/LicenseComplianceBadge';
@@ -97,6 +98,10 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [hrDocType, setHrDocType] = useState<'Contract' | 'Salary Document'>('Contract');
+  const [hrFile, setHrFile] = useState<File | null>(null);
+  const [hrUploading, setHrUploading] = useState(false);
+  const [hrUploadError, setHrUploadError] = useState<string | null>(null);
 
   const [handovers, setHandovers] = useState<DriverHandoverRow[]>([]);
   const [handoversError, setHandoversError] = useState<string | null>(null);
@@ -153,6 +158,30 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       .then(setFines)
       .catch((e) => setFinesError(e?.message ?? 'Failed'));
   }, [id]);
+
+  async function handleHrDocumentUpload() {
+    if (!hrFile) {
+      setHrUploadError(t('driverDetail.hrUploadFileRequired'));
+      return;
+    }
+    setHrUploading(true);
+    setHrUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append('ownerType', 'driver');
+      formData.append('ownerId', id);
+      formData.append('documentType', hrDocType);
+      formData.append('file', hrFile);
+      await documentsApi.upload(formData);
+      setHrFile(null);
+      const rows = await documentsApi.list('driver', id);
+      setDocuments(rows);
+    } catch (e) {
+      setHrUploadError(e instanceof Error ? e.message : t('driverDetail.hrUploadFailed'));
+    } finally {
+      setHrUploading(false);
+    }
+  }
 
   async function handleGdprExport() {
     if (!driver) return;
@@ -504,9 +533,46 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
         <CardHeader>
           <CardTitle>{t('driverDetail.documents')}</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-2 border-b border-slate-100 pb-4 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-1">
+              <label className="text-xs font-medium text-slate-600" htmlFor="hr-doc-type">
+                {t('driverDetail.hrUploadType')}
+              </label>
+              <select
+                id="hr-doc-type"
+                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                value={hrDocType}
+                onChange={(e) => setHrDocType(e.target.value as 'Contract' | 'Salary Document')}
+              >
+                <option value="Contract">{t('driverDetail.hrDocContract')}</option>
+                <option value="Salary Document">{t('driverDetail.hrDocSalary')}</option>
+              </select>
+            </div>
+            <div className="flex-1 space-y-1">
+              <label className="text-xs font-medium text-slate-600" htmlFor="hr-doc-file">
+                {t('driverDetail.hrUploadFile')}
+              </label>
+              <Input
+                id="hr-doc-file"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(e) => setHrFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={hrUploading || !hrFile}
+              onClick={() => void handleHrDocumentUpload()}
+            >
+              {hrUploading ? null : <Upload className="mr-2 h-4 w-4" />}
+              {hrUploading ? t('driverDetail.hrUploading') : t('driverDetail.hrUpload')}
+            </Button>
+          </div>
+          {hrUploadError ? <p className="text-sm text-red-600">{hrUploadError}</p> : null}
           {documentsError ? (
-            <p className="p-4 text-sm text-gray-500">{t('driverDetail.documentsLoadError')}</p>
+            <p className="text-sm text-gray-500">{t('driverDetail.documentsLoadError')}</p>
           ) : (
             <Table className={FLEET_TABLE}>
               <TableHeader>

@@ -96,6 +96,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [equipmentName, setEquipmentName] = useState('');
   const [equipmentQty, setEquipmentQty] = useState('1');
   const [equipmentSaving, setEquipmentSaving] = useState(false);
+  const [equipmentPhotoUploadingId, setEquipmentPhotoUploadingId] = useState<string | null>(null);
 
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [serviceRecordsError, setServiceRecordsError] = useState<string | null>(null);
@@ -157,6 +158,26 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       window.alert(e instanceof Error ? e.message : t('vehicleDetail.equipmentSaveError'));
     } finally {
       setEquipmentSaving(false);
+    }
+  }
+
+  async function uploadEquipmentPhoto(item: VehicleEquipmentItem, file: File) {
+    setEquipmentPhotoUploadingId(item.id);
+    try {
+      const formData = new FormData();
+      formData.append('ownerType', 'vehicle_equipment');
+      formData.append('ownerId', item.id);
+      formData.append('documentType', 'Equipment Photo');
+      formData.append('file', file);
+      const uploaded = await documentsApi.upload(formData);
+      const updated = await vehiclesApi.updateEquipment(id, item.id, {
+        photoDocumentId: uploaded.id,
+      });
+      setEquipment((current) => current.map((row) => (row.id === item.id ? updated : row)));
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : t('vehicleDetail.equipmentPhotoFailed'));
+    } finally {
+      setEquipmentPhotoUploadingId(null);
     }
   }
 
@@ -471,6 +492,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                 <TableRow className={FLEET_TABLE_HEADER_ROW}>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.equipmentColName')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.equipmentColQty')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.equipmentColPhoto')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('vehicleDetail.status')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -479,6 +501,36 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   <TableRow className={FLEET_TABLE_ROW} key={item.id}>
                     <TableCell className={FLEET_TABLE_CELL}>{item.name}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>{item.quantity}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL}>
+                      {item.photoDocumentId ? (
+                        <DocumentFileLink
+                          document={{
+                            id: item.photoDocumentId,
+                            fileName: `${item.name}.jpg`,
+                            download_url: `/documents/${item.photoDocumentId}/download`,
+                          }}
+                          variant="link"
+                        />
+                      ) : (
+                        <span className="text-xs text-slate-500">{t('vehicleDetail.equipmentNoPhoto')}</span>
+                      )}
+                      <label className="mt-1 block cursor-pointer text-xs text-[#1a4d7a] hover:underline">
+                        {equipmentPhotoUploadingId === item.id
+                          ? t('vehicleDetail.equipmentPhotoUploading')
+                          : t('vehicleDetail.equipmentPhotoUpload')}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={equipmentPhotoUploadingId === item.id}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = '';
+                            if (file) void uploadEquipmentPhoto(item, file);
+                          }}
+                        />
+                      </label>
+                    </TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>{item.status}</TableCell>
                   </TableRow>
                 ))}

@@ -1340,6 +1340,15 @@ export interface DriverHandover {
     notes: string;
     verifiedAt: string | null;
     complete: boolean;
+    inventoryComplete?: boolean;
+    inventoryChecks?: Array<{ equipmentId: string; quantityPresent: number }>;
+    vehicleEquipment?: Array<{
+      id: string;
+      name: string;
+      expectedQuantity: number;
+      photoDocumentId?: string | null;
+      photoDownloadUrl?: string | null;
+    }>;
   };
   vehicle?: { id: string; plateNumber: string };
   assignment?: { id: string; workDate: string; startTime: string; endTime: string } | null;

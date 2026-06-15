@@ -125,6 +125,15 @@ export type DriverHandover = {
     notes: string;
     verifiedAt: string | null;
     complete: boolean;
+    inventoryComplete?: boolean;
+    inventoryChecks?: Array<{ equipmentId: string; quantityPresent: number }>;
+    vehicleEquipment?: Array<{
+      id: string;
+      name: string;
+      expectedQuantity: number;
+      photoDocumentId?: string | null;
+      photoDownloadUrl?: string | null;
+    }>;
   };
   driver?: { id: string; firstName: string; lastName: string };
   vehicle?: { id: string; plateNumber: string };

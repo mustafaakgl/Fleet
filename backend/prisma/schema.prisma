@@ -1035,6 +1035,7 @@ model VehicleHandover {
   equipmentSafetyVest       Boolean?
   equipmentNotes            String?
   equipmentVerifiedAt       DateTime?
+  equipmentInventoryChecks  Json?
   status            HandoverStatus      @default(pending)
   notes             String?
   createdAt         DateTime            @default(now())
@@ -1082,6 +1083,7 @@ model VehicleEquipment {
   quantity     Int                    @default(1)
   serialNumber String?
   notes        String?
+  photoDocumentId String?
   status       VehicleEquipmentStatus @default(active)
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
