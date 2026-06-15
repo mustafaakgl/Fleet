@@ -90,7 +90,21 @@ const incidentInclude = {
   assignment: { select: { id: true, workDate: true } },
 } satisfies Prisma.AccidentInclude;
 
-const SUPPORTED_DRIVER_LANGUAGES = new Set(['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru']);
+const SUPPORTED_DRIVER_LANGUAGES = new Set([
+  'de',
+  'tr',
+  'en',
+  'pl',
+  'ro',
+  'bg',
+  'ar',
+  'uk',
+  'fr',
+  'it',
+  'es',
+  'nl',
+  'ru',
+]);
 
 function isHomeAddressComplete(driver: {
   homeAddressStreet: string | null;
@@ -1406,23 +1420,42 @@ export class DriverMobileService {
     const { driver } = await this.resolveDriver(userId);
     const { start, end } = this.dayRange(this.localCalendarDateString());
 
-    const assignments = await this.prisma.assignment.findMany({
-      where: {
-        driverId: driver.id,
-        workDate: { gte: start, lt: end },
-        status: { notIn: [AssignmentStatus.cancelled] },
-      },
-      include: {
-        vehicle: { select: { id: true, plateNumber: true } },
-        company: { select: { id: true, name: true } },
-      },
-      orderBy: [{ startTime: 'asc' }],
-    });
+    const [assignments, assignedVehicles] = await Promise.all([
+      this.prisma.assignment.findMany({
+        where: {
+          driverId: driver.id,
+          workDate: { gte: start, lt: end },
+          status: { notIn: [AssignmentStatus.cancelled] },
+        },
+        include: {
+          vehicle: { select: { id: true, plateNumber: true, brand: true, model: true } },
+          company: { select: { id: true, name: true } },
+        },
+        orderBy: [{ startTime: 'asc' }],
+      }),
+      this.prisma.vehicle.findMany({
+        where: {
+          currentDriverId: driver.id,
+          status: { not: 'inactive' },
+        },
+        select: { id: true, plateNumber: true, brand: true, model: true },
+        orderBy: { plateNumber: 'asc' },
+      }),
+    ]);
 
-    const vehicleMap = new Map<string, { id: string; plateNumber: string }>();
-    const companyMap = new Map<string, { id: string; name: string }>();
+    const vehicleMap = new Map<
+      string,
+      { id: string; plateNumber: string; brand: string; model: string }
+    >();
+    for (const vehicle of assignedVehicles) {
+      vehicleMap.set(vehicle.id, vehicle);
+    }
     for (const assignment of assignments) {
       vehicleMap.set(assignment.vehicle.id, assignment.vehicle);
+    }
+
+    const companyMap = new Map<string, { id: string; name: string }>();
+    for (const assignment of assignments) {
       companyMap.set(assignment.company.id, assignment.company);
     }
 
@@ -1661,6 +1694,7 @@ export class DriverMobileService {
         description: dto.description,
         cargoName: dto.cargoName,
         cargoOwner: dto.cargoOwner,
+        cargoQuantity: dto.cargoQuantity,
       },
       include: incidentInclude,
     });
@@ -1676,6 +1710,23 @@ export class DriverMobileService {
         type: created.type,
         status: created.status,
       },
+    });
+
+    const driverName = `${created.driver.firstName} ${created.driver.lastName}`.trim();
+    const cargoSummary = [dto.cargoName, dto.cargoQuantity].filter(Boolean).join(', ');
+    this.operationalNotify.notifyOperationalUsersSafely({
+      key: created.type === 'cargo_damage' ? 'cargo_damage_report_created' : 'accident_report_created',
+      params: {
+        driverName,
+        plateNumber: created.vehicle.plateNumber,
+        location: dto.location?.trim() ?? '',
+        cargoSummary,
+      },
+      type: created.type === 'cargo_damage' ? 'cargo_damage' : 'accident',
+      priority: 'high',
+      relatedEntityType: 'accident',
+      relatedEntityId: created.id,
+      excludeUserId: userId,
     });
 
     return {

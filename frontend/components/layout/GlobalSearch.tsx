@@ -147,7 +147,7 @@ export function GlobalSearch() {
 
   return (
     <>
-      <div className="relative w-full max-w-[420px]" ref={wrapperRef}>
+      <div className="relative min-w-0 w-full" ref={wrapperRef}>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           ref={inputRef}
@@ -159,12 +159,12 @@ export function GlobalSearch() {
           }}
           onKeyDown={onKeyDown}
           placeholder={t('search.placeholder')}
-          className="h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none ring-0 placeholder:text-gray-400 focus:border-blue-500"
+          className="h-9 w-full min-w-0 rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-700 outline-none ring-0 placeholder:text-gray-400 focus:border-blue-500 sm:h-10"
           aria-label={t('search.placeholder')}
         />
 
         {open && (
-          <div className="absolute right-0 top-full z-50 mt-2 w-full rounded-xl border border-slate-200 bg-white shadow-xl">
+          <div className="absolute left-0 right-0 top-full z-50 mt-2 min-w-[280px] rounded-xl border border-slate-200 bg-white shadow-xl">
             {loading ? (
               <p className="px-3 py-3 text-sm text-slate-500">{t('search.searching')}</p>
             ) : visibleResults.length === 0 ? (

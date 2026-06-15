@@ -230,18 +230,14 @@ export default function HomeTodayScreen() {
                 <ActionButton
                   label={t('home.reportAccident')}
                   onPress={() =>
-                    router.push(
-                      `/(app)/today/accident-report?assignmentId=${todayAssignments[0].id}&vehicleId=${todayAssignments[0].vehicle.id}`,
-                    )
+                    router.push('/(app)/reports')
                   }
                   variant="danger"
                 />
                 <ActionButton
                   label={t('home.reportCargo')}
                   onPress={() =>
-                    router.push(
-                      `/(app)/today/cargo-damage-report?assignmentId=${todayAssignments[0].id}&vehicleId=${todayAssignments[0].vehicle.id}`,
-                    )
+                    router.push('/(app)/reports')
                   }
                   variant="danger"
                 />

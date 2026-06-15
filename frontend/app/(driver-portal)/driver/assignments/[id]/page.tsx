@@ -173,7 +173,7 @@ export default function DriverAssignmentDetailPage() {
               </Button>
               <Button asChild variant="outline" className="justify-start text-red-700">
                 <Link
-                  href={`/driver/accident-report?assignmentId=${assignment.id}&vehicleId=${assignment.vehicle.id}`}
+                  href="/driver/reports"
                 >
                   <AlertTriangle className="mr-2 h-4 w-4" />
                   {t('driverPortal.home.reportAccident')}
@@ -181,7 +181,7 @@ export default function DriverAssignmentDetailPage() {
               </Button>
               <Button asChild variant="outline" className="justify-start text-red-700">
                 <Link
-                  href={`/driver/cargo-damage-report?assignmentId=${assignment.id}&vehicleId=${assignment.vehicle.id}`}
+                  href="/driver/reports"
                 >
                   <AlertTriangle className="mr-2 h-4 w-4" />
                   {t('driverPortal.home.reportCargo')}

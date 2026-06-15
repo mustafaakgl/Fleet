@@ -9,6 +9,7 @@ import { getUser } from '@/lib/auth';
 import { dashboardApi, notificationsApi } from '@/lib/api';
 import { canViewCriticalAlerts } from '@/lib/permissions';
 import { einsatzplanHref, officeQueueHref } from '@/lib/office-deep-links';
+import { criticalAlertHref, storedNotificationIncidentHref } from '@/lib/incident-routes';
 import { cn } from '@/lib/utils';
 import type { DashboardCriticalAlert } from '@/lib/types';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -82,20 +83,47 @@ function mapAlertType(type: string): NotificationType {
   return 'other';
 }
 
-function alertRoute(alert: DashboardCriticalAlert, office = false): string {
-  if (alert.relatedEntityType === 'document') return '/documents?status=expiring_soon,expired';
-  if (alert.relatedEntityType === 'accident') return '/cargo-damage';
-  if (alert.relatedEntityType === 'vehicle_handover') {
+function mapStoredNotificationType(type: string): NotificationType {
+  if (type === 'accident') return 'accident';
+  if (type === 'cargo_damage') return 'cargo_damage';
+  if (type === 'transport_request') return 'transport_request';
+  if (type === 'request') return 'absence_request';
+  if (type === 'company_email') return 'company_email';
+  if (type === 'document') return 'expiring_document';
+  if (type === 'handover') return 'missing_handover';
+  return 'other';
+}
+
+function storedNotificationRoute(
+  type: string,
+  relatedEntityType: string | null | undefined,
+  relatedEntityId: string | null | undefined,
+  office: boolean,
+): string | undefined {
+  const incidentHref = storedNotificationIncidentHref(type, relatedEntityId);
+  if (incidentHref) return incidentHref;
+  if (type === 'transport_request' && relatedEntityId) {
     return office
-      ? einsatzplanHref({ office: true, tab: 'betrieb', view: 'vehicle-handovers' })
-      : '/assignments?panel=tagesplanung&view=vehicle-handovers';
+      ? einsatzplanHref({
+          office: true,
+          tab: 'betrieb',
+          view: 'planning',
+          transportId: relatedEntityId,
+        })
+      : '/assignments?panel=tagesplanung&view=planning';
   }
-  if (alert.relatedEntityType === 'company_email') {
+  if (type === 'request') return '/requests';
+  if (type === 'company_email') {
     return office
       ? einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' })
       : '/assignments?panel=company_notifications&view=company-notifications';
   }
-  return office ? officeQueueHref() : '/dashboard';
+  if (relatedEntityType === 'document') return '/documents?status=expiring_soon,expired';
+  return undefined;
+}
+
+function alertRoute(alert: DashboardCriticalAlert, office = false): string {
+  return criticalAlertHref(alert, office);
 }
 
 type OfficeNotifFilter = 'all' | 'action' | 'handover' | 'documents' | 'requests';
@@ -129,6 +157,9 @@ export function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [alerts, setAlerts] = useState<DashboardCriticalAlert[]>([]);
+  const [storedNotifications, setStoredNotifications] = useState<
+    Awaited<ReturnType<typeof notificationsApi.list>>
+  >([]);
   const [readIds, setReadIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<OfficeNotifFilter>('action');
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -144,13 +175,21 @@ export function NotificationCenter() {
       };
     }
 
-    dashboardApi
-      .getSummary()
-      .then((data) => {
-        if (!cancelled) setAlerts(data.criticalAlerts ?? []);
+    Promise.all([
+      dashboardApi.getSummary(),
+      notificationsApi.list('unread').catch(() => []),
+    ])
+      .then(([data, stored]) => {
+        if (!cancelled) {
+          setAlerts(data.criticalAlerts ?? []);
+          setStoredNotifications(stored);
+        }
       })
       .catch(() => {
-        if (!cancelled) setAlerts([]);
+        if (!cancelled) {
+          setAlerts([]);
+          setStoredNotifications([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -162,6 +201,20 @@ export function NotificationCenter() {
 
   const notifications = useMemo<FleetNotification[]>(() => {
     const base: FleetNotification[] = [];
+
+    for (const n of storedNotifications) {
+      base.push({
+        id: `db-${n.id}`,
+        title: n.title,
+        message: n.message,
+        type: mapStoredNotificationType(n.type),
+        priority: n.priority,
+        status: n.status,
+        createdAt: n.createdAt,
+        relatedPage: storedNotificationRoute(n.type, n.relatedEntityType, n.relatedEntityId, isOffice),
+        relatedEntityId: n.relatedEntityId ?? undefined,
+      });
+    }
 
     // Backend-driven critical alerts (expired docs, missing handover, open accidents, failed emails)
     for (const a of alerts) {
@@ -254,7 +307,7 @@ export function NotificationCenter() {
       const dateB = parseDate(b.createdAt)?.getTime() ?? 0;
       return dateB - dateA;
     });
-  }, [alerts, companyEmailDrafts, isOffice, requests, transportRequests, t]);
+  }, [alerts, companyEmailDrafts, isOffice, requests, storedNotifications, transportRequests, t]);
 
   const notificationsWithStatus = useMemo(
     () =>
@@ -309,6 +362,10 @@ export function NotificationCenter() {
       if (current.includes(notification.id)) return current;
       return [...current, notification.id];
     });
+    if (notification.id.startsWith('db-')) {
+      notificationsApi.markRead(notification.id.slice(3)).catch(() => undefined);
+      setStoredNotifications((current) => current.filter((item) => `db-${item.id}` !== notification.id));
+    }
     setIsOpen(false);
     if (notification.relatedPage) router.push(notification.relatedPage);
   }

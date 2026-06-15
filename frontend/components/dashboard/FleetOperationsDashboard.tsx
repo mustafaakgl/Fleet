@@ -120,17 +120,29 @@ function buildActionItems(summary: DashboardSummary, t: TFunction): ActionItem[]
     });
   }
 
-  const openIncidents = k.openAccidents + k.cargoDamages;
-  if (openIncidents > 0) {
+  if (k.openAccidents > 0) {
     items.push({
-      id: 'incidents',
+      id: 'accidents',
       icon: '🚨',
       tone: 'rot',
-      title: t('dashboard.v2.actions.incidents.title'),
-      subtitle: t('dashboard.v2.actions.incidents.subtitle', { cargo: k.cargoDamages }),
-      count: openIncidents,
+      title: t('dashboard.v2.actions.accidents.title'),
+      subtitle: t('dashboard.v2.actions.accidents.subtitle'),
+      count: k.openAccidents,
       countTone: 'rot',
-      cta: t('dashboard.v2.actions.incidents.cta'),
+      cta: t('dashboard.v2.actions.accidents.cta'),
+      href: '/accidents?status=reported,under_review',
+    });
+  }
+  if (k.cargoDamages > 0) {
+    items.push({
+      id: 'cargo-damage',
+      icon: '📦',
+      tone: 'rot',
+      title: t('dashboard.v2.actions.cargoDamage.title'),
+      subtitle: t('dashboard.v2.actions.cargoDamage.subtitle'),
+      count: k.cargoDamages,
+      countTone: 'rot',
+      cta: t('dashboard.v2.actions.cargoDamage.cta'),
       href: '/cargo-damage?status=reported,under_review',
     });
   }

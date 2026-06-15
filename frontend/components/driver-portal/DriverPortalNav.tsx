@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, MessageSquare, FileText, User } from 'lucide-react';
+import { Home, MessageSquare, FileText, ClipboardList, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
@@ -12,8 +12,6 @@ const TABS = [
     path.startsWith('/driver/assignments') ||
     path.startsWith('/driver/morning-checkin') ||
     path.startsWith('/driver/handover') ||
-    path.startsWith('/driver/accident-report') ||
-    path.startsWith('/driver/cargo-damage-report') ||
     path.startsWith('/driver/notifications') ||
     path.startsWith('/driver/documents'),
   },
@@ -22,6 +20,11 @@ const TABS = [
   },
   { href: '/driver/requests', icon: FileText, labelKey: 'driverPortal.nav.requests', match: (path: string) =>
     path === '/driver/requests',
+  },
+  { href: '/driver/reports', icon: ClipboardList, labelKey: 'driverPortal.nav.reports', match: (path: string) =>
+    path === '/driver/reports' ||
+    path.startsWith('/driver/accident-report') ||
+    path.startsWith('/driver/cargo-damage-report'),
   },
   { href: '/driver/profile', icon: User, labelKey: 'driverPortal.nav.profile', match: (path: string) =>
     path === '/driver/profile',

@@ -122,6 +122,15 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="reports"
+        options={{
+          title: t('tabs.reports'),
+          tabBarLabel: t('tabs.reports'),
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => <Feather name="clipboard" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: t('tabs.profile'),

@@ -12,7 +12,8 @@ import { ListRow } from '@/components/ListRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Avatar } from '@/components/Avatar';
 import type { MessengerLanguage } from '@/api/types';
-import { SUPPORTED_LOCALES, type AppLocale } from '@/i18n/languages';
+import { SUPPORTED_LOCALES, normalizeLocale, type AppLocale } from '@/i18n/languages';
+import { setAppLanguage } from '@/i18n/i18n';
 import { useTranslation } from '@/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
@@ -30,8 +31,9 @@ export default function ProfileSettingsScreen() {
   const languageMutation = useMutation({
     mutationFn: (language: MessengerLanguage) => driverApi.updateLanguage(language),
     onSuccess: async (profile) => {
-      const language = profile.user.language ?? 'de';
+      const language = normalizeLocale(profile.user.language);
       await authStore.getState().updateSessionLanguage(language);
+      await setAppLanguage(language);
       queryClient.setQueryData(['driver-me'], profile);
       await queryClient.invalidateQueries({ queryKey: ['driver-me'] });
       showSuccess(t('profile.languageUpdated'));

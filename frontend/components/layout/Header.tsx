@@ -20,23 +20,23 @@ export function Header({ title }: HeaderProps) {
   const { t } = useTranslation();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 sm:h-16 sm:px-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] lg:px-8">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-3 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
       {/* Left: account / tenant */}
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <AccountMenu />
         {title ? (
-          <h1 className="truncate text-xl font-semibold text-gray-900 sm:hidden">{title}</h1>
+          <h1 className="truncate text-base font-semibold text-gray-900 sm:text-xl md:hidden">{title}</h1>
         ) : null}
       </div>
 
-      {/* Center: global search */}
-      <div className="hidden min-w-0 justify-center px-2 md:flex">
+      {/* Center: global search — constrained width, never overlaps siblings */}
+      <div className="hidden min-w-0 shrink md:block md:w-full md:max-w-xs lg:max-w-sm xl:max-w-md">
         <GlobalSearch />
       </div>
 
       {/* Right: language, links, notifications, user */}
-      <div className="flex items-center justify-end gap-3">
-        <div className="hidden items-center gap-2 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 md:flex">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-3">
+        <div className="hidden items-center gap-2 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 lg:flex">
           <Globe className="h-3.5 w-3.5 text-gray-500" />
           <span>{t('language.label')}</span>
           <select
@@ -55,7 +55,7 @@ export function Header({ title }: HeaderProps) {
 
         <Link
           href="/hilfe"
-          className="hidden items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:inline-flex"
+          className="hidden items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 lg:inline-flex"
         >
           <CircleHelp className="h-3.5 w-3.5" />
           {t('nav.help')}
@@ -63,7 +63,7 @@ export function Header({ title }: HeaderProps) {
 
         <Link
           href="/security"
-          className="hidden items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 sm:inline-flex"
+          className="hidden items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 xl:inline-flex"
         >
           <ShieldCheck className="h-3.5 w-3.5" />
           {t('nav.security')}
@@ -75,9 +75,9 @@ export function Header({ title }: HeaderProps) {
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold">
             {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
           </div>
-          <div className="hidden sm:block">
-            <p className="text-sm font-medium text-gray-900 leading-none">{user?.name ?? 'User'}</p>
-            <p className="text-xs text-gray-500 mt-0.5 capitalize">{user?.role?.replace('_', ' ') ?? ''}</p>
+          <div className="hidden min-w-0 sm:block">
+            <p className="truncate text-sm font-medium leading-none text-gray-900">{user?.name ?? 'User'}</p>
+            <p className="mt-0.5 truncate text-xs capitalize text-gray-500">{user?.role?.replace('_', ' ') ?? ''}</p>
           </div>
         </div>
       </div>

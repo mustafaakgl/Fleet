@@ -113,14 +113,14 @@ export default function AssignmentDetailScreen() {
               <ActionButton
                 label={t('home.reportAccident')}
                 onPress={() =>
-                  router.push(`/(app)/today/accident-report?assignmentId=${data.id}&vehicleId=${data.vehicle.id}`)
+                  router.push('/(app)/reports')
                 }
                 variant="danger"
               />
               <ActionButton
                 label={t('home.reportCargo')}
                 onPress={() =>
-                  router.push(`/(app)/today/cargo-damage-report?assignmentId=${data.id}&vehicleId=${data.vehicle.id}`)
+                  router.push('/(app)/reports')
                 }
                 variant="danger"
               />

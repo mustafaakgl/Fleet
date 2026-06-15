@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { IBM_Plex_Mono, Inter } from 'next/font/google';
-import { HeroMockup } from './HeroMockup';
+import { HeroScrollIndicator } from './HeroScrollIndicator';
 import { ProductTour } from './ProductTour';
 import { MarketingFooter } from './MarketingFooter';
 import { MarketingHeader } from './MarketingHeader';
@@ -128,9 +128,29 @@ export function HomeLandingPage() {
               <span>✓ DSGVO-konform · Server in Deutschland</span>
             </div>
           </div>
-          <HeroMockup />
         </div>
+        <HeroScrollIndicator />
       </header>
+
+      <section className="m-intro" id="intro">
+        <div className="m-wrap m-intro-inner" data-reveal>
+          <p>
+            Webfleet ist eine marktführende Software (SaaS), die das Fuhrparkmanagement erleichtert. Mit unserer
+            modernen Technologie und intuitiven Benutzeroberfläche können Sie Ihre Betriebsabläufe in nur wenigen
+            Klicks optimieren.
+          </p>
+          <p>
+            Sie bleiben besser mit Ihrem Fuhrpark vernetzt, haben Einblick in den Standort Ihrer Fahrzeuge und sehen
+            Echtzeit-Informationen zu ihrer Nutzung. Sie können diese Leistungsdaten von jedem beliebigen Gerät aus
+            abrufen, um zu analysieren, wo Verbesserungen möglich wären.
+          </p>
+          <p>
+            Dank Echtzeit-Verkehrsinformationen, Routenoptimierung und Funktionen für vordefinierte Fahrten sind
+            Auftragsabwicklung und Kraftstoffeinsparungen einfach und effektiv. Erfahren Sie mehr über Ihre
+            Möglichkeiten mit einer Fuhrparkmanagement Software.
+          </p>
+        </div>
+      </section>
 
       <TrustStrip />
 
@@ -205,7 +225,9 @@ export function HomeLandingPage() {
             <div>
               <blockquote className="m-blockquote">&ldquo;{partner.quote}&rdquo;</blockquote>
               <div className="m-zitat-meta">
-                <b>{partner.name}</b> · Geschäftsführer, {partner.company} · {partner.vehicleCount} Fahrzeuge
+                <b>{partner.name}</b>
+                {partner.company ? ` · Geschäftsführer, ${partner.company}` : ''} · {partner.vehicleCount}{' '}
+                Fahrzeuge
               </div>
             </div>
           </div>

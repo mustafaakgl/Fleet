@@ -54,17 +54,6 @@ export function HeroMockup() {
           </div>
         </div>
       </div>
-      <div className="m-phone">
-        <div className="m-ph-head">Fahrer-App</div>
-        <div className="m-bubble m-bubble-in">
-          Lieferschein fehlt für Tour 12
-          <span className="m-lang">automatisch übersetzt · PL → DE</span>
-        </div>
-        <div className="m-bubble m-bubble-out">
-          Foto erhalten, alles klar ✓
-          <span className="m-lang">DE → PL</span>
-        </div>
-      </div>
     </div>
   );
 }

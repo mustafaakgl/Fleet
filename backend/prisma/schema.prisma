@@ -1104,6 +1104,7 @@ model Accident {
   description      String
   cargoName        String?
   cargoOwner       String?
+  cargoQuantity    String?
   damageValue      Decimal?       @db.Decimal(12, 2)
   status           IncidentStatus @default(reported)
   createdAt        DateTime       @default(now())

@@ -1,6 +1,6 @@
 import type { PrismaService } from '../prisma/prisma.service';
 
-export const MAX_ACCIDENT_ATTACHMENTS = 8;
+export const MAX_ACCIDENT_ATTACHMENTS = 20;
 
 export const ACCIDENT_DOCUMENT_TYPES = [
   'Scene Photo',

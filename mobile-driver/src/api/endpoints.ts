@@ -319,6 +319,7 @@ export const driverApi = {
     location?: string;
     cargoName?: string;
     cargoOwner?: string;
+    cargoQuantity?: string;
   }) {
     const { data } = await apiClient.post<DriverIncident>('/driver/accidents', payload);
     return data;

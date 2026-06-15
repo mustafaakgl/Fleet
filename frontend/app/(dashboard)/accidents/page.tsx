@@ -87,6 +87,11 @@ export default function AccidentsPage() {
     reload();
   }, [reload]);
 
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) setSelectedId(id);
+  }, [searchParams]);
+
   const statusFilter = useMemo(() => {
     const statusParam = searchParams.get('status');
     if (!statusParam) return [] as IncidentStatus[];

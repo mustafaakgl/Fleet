@@ -8,6 +8,7 @@ import {
 } from '@/lib/api';
 import type { DashboardCriticalAlert } from '@/lib/types';
 import { einsatzplanHref } from './office-deep-links';
+import { criticalAlertHref } from './incident-routes';
 
 export type OfficeQueueCategory =
   | 'all'
@@ -36,18 +37,7 @@ function alertPriority(p: DashboardCriticalAlert['priority']): OfficeQueuePriori
 }
 
 function alertHref(alert: DashboardCriticalAlert): string {
-  if (alert.relatedEntityType === 'document') return '/documents?status=expiring_soon,expired';
-  if (alert.relatedEntityType === 'accident') return '/cargo-damage?status=reported,under_review';
-  if (alert.relatedEntityType === 'vehicle_handover') {
-    return einsatzplanHref({ office: true, tab: 'betrieb', view: 'vehicle-handovers' });
-  }
-  if (alert.relatedEntityType === 'company_email') {
-    return einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' });
-  }
-  if (alert.relatedEntityType === 'assignment') {
-    return einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' });
-  }
-  return '/dashboard';
+  return criticalAlertHref(alert, true);
 }
 
 function priorityWeight(p: OfficeQueuePriority): number {

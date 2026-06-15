@@ -8,7 +8,7 @@ import { OfficeNotifyKey, resolveOfficeNotifyCopy } from './office-notify.copy';
 type NotifyOperationalInput = {
   key: OfficeNotifyKey;
   params?: Record<string, string>;
-  type: 'transport_request' | 'request' | 'system';
+  type: 'transport_request' | 'request' | 'system' | 'accident' | 'cargo_damage';
   priority?: 'low' | 'medium' | 'high';
   relatedEntityType?: string;
   relatedEntityId?: string;

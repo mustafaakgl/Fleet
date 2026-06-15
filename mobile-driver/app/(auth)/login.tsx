@@ -8,6 +8,8 @@ import { env } from '@/config/env';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/TextField';
 import { authStore } from '@/features/auth/store';
+import { setAppLanguage } from '@/i18n/i18n';
+import { normalizeLocale } from '@/i18n/languages';
 import { useTranslation } from '@/i18n/useTranslation';
 import { registerPushTokenAfterLogin } from '@/lib/push-notifications';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
@@ -48,6 +50,7 @@ export default function LoginScreen() {
         user: driverProfile.user,
         driver: driverProfile.driver,
       });
+      await setAppLanguage(normalizeLocale(driverProfile.user.language));
       void registerPushTokenAfterLogin();
       const docs = await driverApi.listDocuments().catch(() => null);
       if (docs && (docs.missingUploadableRequired?.length ?? docs.missingRequired.length) > 0) {

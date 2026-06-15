@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router';
-import i18n from '@/i18n/i18n';
+import { useTranslation } from '@/i18n/useTranslation';
 import { colors } from '@/theme';
 
 export default function TodayStackLayout() {
+  const { t } = useTranslation();
+
   return (
     <Stack
       screenOptions={{
@@ -25,11 +27,11 @@ export default function TodayStackLayout() {
       <Stack.Screen name="defects/index" />
       <Stack.Screen name="defect/[id]" />
       <Stack.Screen name="defect-report" />
-      <Stack.Screen name="fines/index" options={{ title: i18n.t('fines.title') }} />
+      <Stack.Screen name="fines/index" options={{ title: t('fines.title') }} />
       <Stack.Screen name="fine/[id]" />
-      <Stack.Screen name="trip" options={{ title: i18n.t('fleetTrip.title') }} />
-      <Stack.Screen name="fuel" options={{ title: i18n.t('fleetFuel.title') }} />
-      <Stack.Screen name="vehicle-status" options={{ title: i18n.t('fleetVehicle.title') }} />
+      <Stack.Screen name="trip" options={{ title: t('fleetTrip.title') }} />
+      <Stack.Screen name="fuel" options={{ title: t('fleetFuel.title') }} />
+      <Stack.Screen name="vehicle-status" options={{ title: t('fleetVehicle.title') }} />
     </Stack>
   );
 }

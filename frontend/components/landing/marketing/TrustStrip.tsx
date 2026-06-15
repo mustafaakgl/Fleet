@@ -63,7 +63,7 @@ export function TrustStrip() {
   const stats = landingStatsAnimated();
 
   return (
-    <div className="m-trust">
+    <div className="m-trust" id="trust">
       <div className="m-wrap m-trust-inner">
         <div className="m-trust-claim">
           Entwickelt mit einem Spediteur — <span>70 Fahrzeuge, 20 Jahre Erfahrung</span>

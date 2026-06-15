@@ -1079,7 +1079,18 @@ export const remindersApi = {
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 export const notificationsApi = {
-  list: () => api.get<Notification[]>('/notifications').then((r) => r.data),
+  list: (status?: string) =>
+    api.get<Array<{
+      id: string;
+      title: string;
+      message: string;
+      type: string;
+      priority: 'low' | 'medium' | 'high' | 'critical';
+      status: 'unread' | 'read';
+      relatedEntityType?: string | null;
+      relatedEntityId?: string | null;
+      createdAt: string;
+    }>>('/notifications', { params: status ? { status } : undefined }).then((r) => r.data),
 
   getUnreadCount: () =>
     api.get<{ count: number }>('/notifications/unread-count').then((r) => r.data),
@@ -1937,6 +1948,7 @@ export const driverPortalApi = {
     location?: string;
     cargoName?: string;
     cargoOwner?: string;
+    cargoQuantity?: string;
   }) => api.post<DriverIncident>('/driver/accidents', payload).then((r) => r.data),
 
   uploadAccidentAttachment: (accidentId: string, file: File, documentType?: string) => {

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Building2, ChevronDown, CircleHelp, LogOut, Menu, X } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { OperionLogo } from '@/components/brand/OperionLogo';
 import { getUser, performLogout } from '@/lib/auth';
@@ -35,7 +35,37 @@ export function Sidebar() {
   const role = (user?.role ?? 'office') as Role;
   const navGroups = useMemo(() => getNavigationForRole(role), [role]);
   const isFleetOps = Boolean(user?.fleet_ops);
+  const navScrollRef = useRef<HTMLElement>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setExpandedSections((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const group of navGroups) {
+        for (const entry of group.items) {
+          if (isNavSection(entry) && isNavSectionActive(pathname, entry) && !next[entry.id]) {
+            next[entry.id] = true;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [pathname, navGroups]);
+
+  useEffect(() => {
+    const nav = navScrollRef.current;
+    if (!nav) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const active = nav.querySelector<HTMLElement>('[data-nav-active="true"]');
+      if (!active) return;
+      active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname, expandedSections, tabletCollapsed, mobileOpen, navGroups]);
 
   function toggleSection(sectionId: string, sectionActive: boolean) {
     setExpandedSections((current) => {
@@ -52,6 +82,7 @@ export function Sidebar() {
       <Link
         key={item.href}
         href={item.href}
+        data-nav-active={isActive ? 'true' : undefined}
         onClick={() => setMobileOpen(false)}
         className={cn(
           NAV_ROW,
@@ -114,6 +145,7 @@ export function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  data-nav-active={isActive ? 'true' : undefined}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'relative flex min-h-[36px] items-center rounded-md py-1.5 pr-3 text-[13px] leading-5 transition-colors',
@@ -197,7 +229,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto px-2.5 py-3">
+        <nav ref={navScrollRef} className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-2.5 py-3">
           {navGroups.map((group) => (
             <div key={group.id}>
               <p
@@ -249,7 +281,7 @@ export function Sidebar() {
     <>
       <aside
         className={cn(
-          'hidden min-h-screen md:flex md:flex-col',
+          'sticky top-0 hidden h-screen shrink-0 md:flex md:flex-col',
           SIDEBAR_BG,
           'border-r',
           SIDEBAR_BORDER,
@@ -276,7 +308,7 @@ export function Sidebar() {
       {mobileOpen ? (
         <div className="fixed inset-0 z-40 flex lg:hidden">
           <div className="fixed inset-0 bg-black/40" onClick={() => setMobileOpen(false)} aria-hidden />
-          <aside className={cn('relative z-50 min-h-screen w-64 shadow-xl', SIDEBAR_BG)}>
+          <aside className={cn('relative z-50 flex h-screen w-64 flex-col shadow-xl', SIDEBAR_BG)}>
             <button
               type="button"
               className="absolute right-4 top-4 rounded-md p-1 text-blue-100/80 hover:bg-white/10"

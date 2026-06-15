@@ -101,14 +101,15 @@ describe('applyTenantScope — write operations', () => {
     ]);
   });
 
-  it('scopes update by where filter', () => {
+  it('scopes update by unique id with tenantId', () => {
     const result = applyTenantScope(
       'update',
       { where: { id: 'd-1' }, data: { status: 'inactive' } },
       TENANT_A,
     );
     assert.deepEqual(result.where, {
-      AND: [{ id: 'd-1' }, { tenantId: TENANT_A }],
+      id: 'd-1',
+      tenantId: TENANT_A,
     });
   });
 
@@ -123,10 +124,11 @@ describe('applyTenantScope — write operations', () => {
     });
   });
 
-  it('scopes delete', () => {
+  it('scopes delete by unique id with tenantId', () => {
     const result = applyTenantScope('delete', { where: { id: 'd-1' } }, TENANT_A);
     assert.deepEqual(result.where, {
-      AND: [{ id: 'd-1' }, { tenantId: TENANT_A }],
+      id: 'd-1',
+      tenantId: TENANT_A,
     });
   });
 
@@ -147,7 +149,8 @@ describe('applyTenantScope — write operations', () => {
     );
     assert.deepEqual(result.create, { name: 'row', tenantId: TENANT_A });
     assert.deepEqual(result.where, {
-      AND: [{ id: 'r-1' }, { tenantId: TENANT_A }],
+      id: 'r-1',
+      tenantId: TENANT_A,
     });
   });
 });

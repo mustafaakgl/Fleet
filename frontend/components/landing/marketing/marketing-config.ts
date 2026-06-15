@@ -60,7 +60,7 @@ export const faqItems = [
 ];
 
 export function partnerStory() {
-  const name = process.env.NEXT_PUBLIC_PARTNER_NAME?.trim() ?? 'Michael Schneider';
+  const name = process.env.NEXT_PUBLIC_PARTNER_NAME?.trim() ?? 'Ümit Han';
   return {
     name,
     initials: name
@@ -69,10 +69,10 @@ export function partnerStory() {
       .join('')
       .slice(0, 2)
       .toUpperCase(),
-    company: process.env.NEXT_PUBLIC_PARTNER_COMPANY?.trim() ?? 'Schneider Spedition GmbH',
+    company: process.env.NEXT_PUBLIC_PARTNER_COMPANY?.trim() ?? '',
     vehicleCount: process.env.NEXT_PUBLIC_PARTNER_VEHICLES?.trim() ?? '70',
     quote:
       process.env.NEXT_PUBLIC_PARTNER_QUOTE?.trim() ??
-      'Seit 20 Jahren führe ich LKW-Flotten. Die bekannten Tools sind für Dienstwagen gebaut — nicht für uns. Also haben wir es selbst gemacht. Heute läuft meine ganze Flotte darüber.',
+      'Ich nutze es für meine 70 Fahrzeuge. Die bekannten Tools sind für Dienstwagen gebaut — nicht für uns. Also haben wir es selbst gemacht. Heute läuft meine ganze Flotte darüber.',
   };
 }

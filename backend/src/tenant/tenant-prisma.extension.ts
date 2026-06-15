@@ -27,6 +27,28 @@ function mergeWhere(
   return { AND: [where, { tenantId }] };
 }
 
+function scopeUniqueWhere(
+  where: Record<string, unknown> | undefined,
+  tenantId: string,
+): Record<string, unknown> {
+  const base = where ?? {};
+  if (base.id) {
+    return { ...base, tenantId };
+  }
+
+  const compoundKey = Object.keys(base).find((key) => key.includes('_'));
+  if (compoundKey && typeof base[compoundKey] === 'object' && base[compoundKey] !== null) {
+    return {
+      [compoundKey]: {
+        ...(base[compoundKey] as Record<string, unknown>),
+        tenantId,
+      },
+    };
+  }
+
+  return { ...base, tenantId };
+}
+
 function mergeData(
   data: Record<string, unknown> | Record<string, unknown>[],
   tenantId: string,
@@ -48,25 +70,13 @@ export function applyTenantScope(
 ): Record<string, unknown> {
   const nextArgs = { ...args };
 
-  if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
-    const where = (nextArgs.where ?? {}) as Record<string, unknown>;
-    if (where.id) {
-      // extendedWhereUnique: non-unique filter fields are allowed
-      // alongside the unique key — enforce tenant scoping on id reads.
-      nextArgs.where = { ...where, tenantId };
-    } else {
-      const compoundKey = Object.keys(where).find((key) => key.includes('_'));
-      if (compoundKey && typeof where[compoundKey] === 'object' && where[compoundKey] !== null) {
-        nextArgs.where = {
-          [compoundKey]: {
-            ...(where[compoundKey] as Record<string, unknown>),
-            tenantId,
-          },
-        };
-      } else {
-        nextArgs.where = { ...where, tenantId };
-      }
-    }
+  if (
+    operation === 'findUnique'
+    || operation === 'findUniqueOrThrow'
+    || operation === 'update'
+    || operation === 'delete'
+  ) {
+    nextArgs.where = scopeUniqueWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId);
   } else if (READ_OPS.has(operation) || WRITE_FILTER_OPS.has(operation)) {
     nextArgs.where = mergeWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId);
   }
@@ -81,7 +91,7 @@ export function applyTenantScope(
     if (operation === 'upsert') {
       nextArgs.create = mergeData(nextArgs.create as Record<string, unknown>, tenantId);
       nextArgs.update = nextArgs.update ?? {};
-      nextArgs.where = mergeWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId);
+      nextArgs.where = scopeUniqueWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId);
     }
   }
 

@@ -1,7 +1,9 @@
 export type OfficeNotifyKey =
   | 'transport_request_created'
   | 'transport_request_needs_review'
-  | 'driver_request_created';
+  | 'driver_request_created'
+  | 'accident_report_created'
+  | 'cargo_damage_report_created';
 
 type CopyTemplate = {
   title: string;
@@ -24,6 +26,16 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'Neuer Fahrerantrag',
       message: (p) => `${p.driverName} hat einen Antrag (${p.requestType}) eingereicht.`,
     },
+    accident_report_created: {
+      title: 'Neue Unfallmeldung',
+      message: (p) =>
+        `${p.driverName} hat einen Unfall gemeldet (${p.plateNumber}${p.location ? ` · ${p.location}` : ''}).`,
+    },
+    cargo_damage_report_created: {
+      title: 'Neuer Ladungsschaden',
+      message: (p) =>
+        `${p.driverName} hat Ladungsschaden gemeldet (${p.plateNumber}${p.cargoSummary ? ` · ${p.cargoSummary}` : ''}).`,
+    },
   },
   en: {
     transport_request_created: {
@@ -40,6 +52,16 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'New driver request',
       message: (p) => `${p.driverName} submitted a ${p.requestType} request.`,
     },
+    accident_report_created: {
+      title: 'New accident report',
+      message: (p) =>
+        `${p.driverName} reported an accident (${p.plateNumber}${p.location ? ` · ${p.location}` : ''}).`,
+    },
+    cargo_damage_report_created: {
+      title: 'New cargo damage report',
+      message: (p) =>
+        `${p.driverName} reported cargo damage (${p.plateNumber}${p.cargoSummary ? ` · ${p.cargoSummary}` : ''}).`,
+    },
   },
   tr: {
     transport_request_created: {
@@ -55,6 +77,16 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
     driver_request_created: {
       title: 'Yeni şoför talebi',
       message: (p) => `${p.driverName} yeni bir talep gönderdi (${p.requestType}).`,
+    },
+    accident_report_created: {
+      title: 'Yeni kaza bildirimi',
+      message: (p) =>
+        `${p.driverName} kaza bildirdi (${p.plateNumber}${p.location ? ` · ${p.location}` : ''}).`,
+    },
+    cargo_damage_report_created: {
+      title: 'Yeni yük hasarı bildirimi',
+      message: (p) =>
+        `${p.driverName} yük hasarı bildirdi (${p.plateNumber}${p.cargoSummary ? ` · ${p.cargoSummary}` : ''}).`,
     },
   },
 };

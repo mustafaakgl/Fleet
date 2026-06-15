@@ -3,6 +3,7 @@
 import { Navigation } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
+import { DriverLanguageSync } from '@/components/driver-portal/DriverLanguageSync';
 import { DriverPortalNav } from '@/components/driver-portal/DriverPortalNav';
 import { getUser } from '@/lib/auth';
 
@@ -18,6 +19,7 @@ export function DriverPortalShell({ children, hideHeader, hideNav }: DriverPorta
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
+      <DriverLanguageSync />
       {!hideHeader ? (
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">

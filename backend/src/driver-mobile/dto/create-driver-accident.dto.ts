@@ -35,4 +35,8 @@ export class CreateDriverAccidentDto {
   @IsOptional()
   @IsString()
   cargoOwner?: string;
+
+  @IsOptional()
+  @IsString()
+  cargoQuantity?: string;
 }

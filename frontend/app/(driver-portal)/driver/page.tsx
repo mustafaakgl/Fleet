@@ -128,7 +128,7 @@ export default function DriverPortalHomePage() {
               ) : null}
               <Button asChild variant="outline" className="justify-start text-red-700 hover:text-red-800">
                 <Link
-                  href={`/driver/accident-report?assignmentId=${firstAssignment.id}&vehicleId=${firstAssignment.vehicle.id}`}
+                  href="/driver/reports"
                 >
                   <AlertTriangle className="mr-2 h-4 w-4" />
                   {t('driverPortal.home.reportAccident')}
@@ -136,7 +136,7 @@ export default function DriverPortalHomePage() {
               </Button>
               <Button asChild variant="outline" className="justify-start text-red-700 hover:text-red-800">
                 <Link
-                  href={`/driver/cargo-damage-report?assignmentId=${firstAssignment.id}&vehicleId=${firstAssignment.vehicle.id}`}
+                  href="/driver/reports"
                 >
                   <AlertTriangle className="mr-2 h-4 w-4" />
                   {t('driverPortal.home.reportCargo')}

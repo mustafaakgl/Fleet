@@ -1378,7 +1378,7 @@ export interface DriverTransportRequest {
 }
 
 export interface DriverTransportFormOptions {
-  vehicles: Array<{ id: string; plateNumber: string }>;
+  vehicles: Array<{ id: string; plateNumber: string; brand?: string; model?: string }>;
   companies: Array<{ id: string; name: string }>;
   assignments: Array<{
     id: string;

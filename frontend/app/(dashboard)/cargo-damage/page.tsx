@@ -35,6 +35,7 @@ interface CargoDamageRow {
   description: string;
   cargoName?: string | null;
   cargoOwner?: string | null;
+  cargoQuantity?: string | null;
   damageValue?: number | string | null;
   status: IncidentStatus;
   driver?: { id: string; firstName: string; lastName: string };
@@ -86,6 +87,11 @@ export default function CargoDamagePage() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) setSelectedId(id);
+  }, [searchParams]);
 
   const statusFilter = useMemo(() => {
     const statusParam = searchParams.get('status');
@@ -180,6 +186,7 @@ export default function CargoDamagePage() {
               >
                 <MobileFieldGrid>
                   <MobileField label={t('cargoDamage.colCompany')} value={r.company?.name ?? '—'} />
+                  <MobileField label={t('cargoDamage.colCargoQuantity')} value={r.cargoQuantity ?? '—'} />
                   <MobileField label={t('cargoDamage.colDamageValue')} value={currency(r.damageValue)} />
                 </MobileFieldGrid>
               </MobileDataCard>
@@ -195,6 +202,7 @@ export default function CargoDamagePage() {
                   <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colCompany')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colCargoName')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colCargoOwner')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colCargoQuantity')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colDamageValue')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colStatus')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('cargoDamage.colActions')}</TableHead>
@@ -211,6 +219,7 @@ export default function CargoDamagePage() {
                     <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.company?.name ?? '-'}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.cargoName ?? '-'}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.cargoOwner ?? '-'}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_MUTED}>{r.cargoQuantity ?? '-'}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>{currency(r.damageValue)}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>
                       <span
@@ -285,6 +294,7 @@ export default function CargoDamagePage() {
               <DetailRow label={t('cargoDamage.colCompany')} value={selectedReport.company?.name ?? '-'} />
               <DetailRow label={t('cargoDamage.colCargoName')} value={selectedReport.cargoName ?? '-'} />
               <DetailRow label={t('cargoDamage.colCargoOwner')} value={selectedReport.cargoOwner ?? '-'} />
+              <DetailRow label={t('cargoDamage.colCargoQuantity')} value={selectedReport.cargoQuantity ?? '-'} />
               <DetailRow label={t('cargoDamage.colDescription')} value={selectedReport.description || '-'} />
               <DetailRow
                 label={t('cargoDamage.colDamageValue')}

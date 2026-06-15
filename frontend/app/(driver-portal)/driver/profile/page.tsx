@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { driverPortalApi } from '@/lib/api';
 import { performLogout } from '@/lib/auth';
+import { applyDriverPortalLanguage } from '@/lib/driver-portal-language';
 import { DRIVER_MESSENGER_LANGUAGES } from '@/lib/driver-portal-utils';
 import { formatDriverHomeAddress } from '@/lib/driver-profile';
 import type { DriverPortalMe, MessengerLanguage } from '@/lib/types';
@@ -29,20 +30,28 @@ export default function DriverProfilePage() {
   const [profile, setProfile] = useState<DriverPortalMe | null>(null);
   const [loading, setLoading] = useState(true);
   const [languageBusy, setLanguageBusy] = useState(false);
+  const [languageError, setLanguageError] = useState<string | null>(null);
 
   useEffect(() => {
     driverPortalApi
       .me()
-      .then(setProfile)
+      .then(async (nextProfile) => {
+        setProfile(nextProfile);
+        await applyDriverPortalLanguage(nextProfile.user.language);
+      })
       .catch(() => setProfile(null))
       .finally(() => setLoading(false));
   }, []);
 
   async function handleLanguageChange(language: MessengerLanguage) {
     setLanguageBusy(true);
+    setLanguageError(null);
     try {
       const updated = await driverPortalApi.updateLanguage(language);
       setProfile(updated);
+      await applyDriverPortalLanguage(updated.user.language);
+    } catch {
+      setLanguageError(t('driverPortal.profile.languageFailed'));
     } finally {
       setLanguageBusy(false);
     }
@@ -159,6 +168,7 @@ export default function DriverProfilePage() {
                     </option>
                   ))}
                 </Select>
+                {languageError ? <p className="mt-2 text-sm text-red-600">{languageError}</p> : null}
               </CardContent>
             </Card>
 

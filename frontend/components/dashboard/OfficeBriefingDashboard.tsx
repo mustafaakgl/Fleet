@@ -24,6 +24,7 @@ import { PageError } from '@/components/ui/page-error';
 import { dashboardApi, trackingApi } from '@/lib/api';
 import { fetchOfficeQueueItems } from '@/lib/office-queue';
 import { einsatzplanHref, officeQueueHref } from '@/lib/office-deep-links';
+import { criticalAlertHref } from '@/lib/incident-routes';
 import type { DashboardCriticalAlert, DashboardSummary } from '@/lib/types';
 import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
@@ -40,18 +41,7 @@ function alertClass(priority: DashboardCriticalAlert['priority']) {
 }
 
 function alertHref(alert: DashboardCriticalAlert): string {
-  if (alert.relatedEntityType === 'document') return '/documents?status=expiring_soon,expired';
-  if (alert.relatedEntityType === 'accident') return '/cargo-damage?status=reported,under_review';
-  if (alert.relatedEntityType === 'vehicle_handover') {
-    return einsatzplanHref({ office: true, tab: 'betrieb', view: 'vehicle-handovers' });
-  }
-  if (alert.relatedEntityType === 'company_email') {
-    return einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' });
-  }
-  if (alert.relatedEntityType === 'assignment') {
-    return einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' });
-  }
-  return '/dashboard';
+  return criticalAlertHref(alert, true);
 }
 
 const QUICK_ACTIONS = [
