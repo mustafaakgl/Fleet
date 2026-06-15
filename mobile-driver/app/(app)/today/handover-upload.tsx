@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import axios from 'axios';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -43,6 +43,21 @@ export default function VehicleHandoverUploadScreen() {
   const [straps, setStraps] = useState(false);
   const [safetyVest, setSafetyVest] = useState(false);
   const [equipmentNotes, setEquipmentNotes] = useState('');
+  const [damageDetected, setDamageDetected] = useState(false);
+  const [damageNotes, setDamageNotes] = useState('');
+
+  useEffect(() => {
+    if (!handover) return;
+    setDamageDetected(handover.damageDetected ?? false);
+    setDamageNotes(handover.damageNotes ?? '');
+    if (handover.equipmentChecklist) {
+      setFirstAidKit(handover.equipmentChecklist.firstAidKit);
+      setFireExtinguisher(handover.equipmentChecklist.fireExtinguisher);
+      setStraps(handover.equipmentChecklist.straps);
+      setSafetyVest(handover.equipmentChecklist.safetyVest);
+      setEquipmentNotes(handover.equipmentChecklist.notes);
+    }
+  }, [handover?.id]);
 
   const {
     data: handover,
@@ -140,6 +155,8 @@ export default function VehicleHandoverUploadScreen() {
         straps,
         safetyVest,
         notes: equipmentNotes.trim() || undefined,
+        damageDetected,
+        damageNotes: damageDetected ? damageNotes.trim() || undefined : undefined,
       });
     },
     onSuccess: async () => {
@@ -200,6 +217,25 @@ export default function VehicleHandoverUploadScreen() {
 
           {handover.photoRequired ? (
             <>
+              <View style={styles.damageCard}>
+                <Text style={styles.slotTitle}>{t('handover.damageTitle')}</Text>
+                <Text style={styles.scanHint}>{t('handover.damageHint')}</Text>
+                <ChecklistRow
+                  label={t('handover.damageDetected')}
+                  value={damageDetected}
+                  onChange={setDamageDetected}
+                />
+                {damageDetected ? (
+                  <TextInput
+                    style={styles.notesInput}
+                    placeholder={t('handover.damageNotes')}
+                    value={damageNotes}
+                    onChangeText={setDamageNotes}
+                    multiline
+                  />
+                ) : null}
+              </View>
+
               <Text style={styles.scanHint}>{t('handover.cameraOnlyHint')}</Text>
               <Text style={styles.progress}>
                 {handover.photosComplete
@@ -392,6 +428,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   checklistCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: colors.card,
+  },
+  damageCard: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,

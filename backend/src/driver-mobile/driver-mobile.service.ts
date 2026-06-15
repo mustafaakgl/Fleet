@@ -939,6 +939,12 @@ export class DriverMobileService {
         equipmentSafetyVest: dto.safetyVest,
         equipmentNotes: dto.notes?.trim() || null,
         equipmentVerifiedAt: new Date(),
+        ...(dto.damageDetected !== undefined ? { damageDetected: dto.damageDetected } : {}),
+        ...(dto.damageNotes !== undefined
+          ? { damageNotes: dto.damageNotes.trim() || null }
+          : dto.damageDetected === false
+            ? { damageNotes: null }
+            : {}),
       },
       include: handoverInclude,
     });

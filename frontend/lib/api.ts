@@ -1864,6 +1864,8 @@ export const driverPortalApi = {
       straps: boolean;
       safetyVest: boolean;
       notes?: string;
+      damageDetected?: boolean;
+      damageNotes?: string;
     },
   ) =>
     api

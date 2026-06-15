@@ -117,6 +117,15 @@ export type DriverHandover = {
   photos?: Partial<Record<HandoverPhotoSlot, HandoverPhotoSummary>>;
   missingSlots?: HandoverPhotoSlot[];
   photosComplete?: boolean;
+  equipmentChecklist?: {
+    firstAidKit: boolean;
+    fireExtinguisher: boolean;
+    straps: boolean;
+    safetyVest: boolean;
+    notes: string;
+    verifiedAt: string | null;
+    complete: boolean;
+  };
   driver?: { id: string; firstName: string; lastName: string };
   vehicle?: { id: string; plateNumber: string };
   assignment?: { id: string; workDate: string; startTime: string; endTime: string } | null;

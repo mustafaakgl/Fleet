@@ -299,7 +299,11 @@
     "equipmentSave": "Confirm equipment checklist",
     "equipmentSaving": "Saving checklist...",
     "equipmentSaved": "Equipment checklist saved.",
-    "equipmentFailed": "Could not save equipment checklist."
+    "equipmentFailed": "Could not save equipment checklist.",
+    "damageTitle": "Damage before takeover",
+    "damageHint": "Mark existing damage and document it in the handover photos.",
+    "damageDetected": "Damage present",
+    "damageNotes": "Damage description (optional)"
   },
   "documentOnboarding": {
     "title": "Required documents",

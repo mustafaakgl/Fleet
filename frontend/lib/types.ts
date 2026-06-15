@@ -1332,6 +1332,15 @@ export interface DriverHandover {
   >;
   missingSlots?: DriverHandoverPhotoSlot[];
   photosComplete?: boolean;
+  equipmentChecklist?: {
+    firstAidKit: boolean;
+    fireExtinguisher: boolean;
+    straps: boolean;
+    safetyVest: boolean;
+    notes: string;
+    verifiedAt: string | null;
+    complete: boolean;
+  };
   vehicle?: { id: string; plateNumber: string };
   assignment?: { id: string; workDate: string; startTime: string; endTime: string } | null;
 }

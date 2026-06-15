@@ -284,7 +284,11 @@
     "equipmentSave": "Checkliste bestätigen",
     "equipmentSaving": "Checkliste wird gespeichert...",
     "equipmentSaved": "Ausrüstungs-Checkliste gespeichert.",
-    "equipmentFailed": "Checkliste konnte nicht gespeichert werden."
+    "equipmentFailed": "Checkliste konnte nicht gespeichert werden.",
+    "damageTitle": "Schäden vor Übernahme",
+    "damageHint": "Bestehende Schäden am Fahrzeug markieren und in den Fotos dokumentieren.",
+    "damageDetected": "Schaden vorhanden",
+    "damageNotes": "Schadenbeschreibung (optional)"
   },
   "documentOnboarding": {
     "title": "Pflichtdokumente",

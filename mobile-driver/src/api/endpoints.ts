@@ -205,6 +205,8 @@ export const driverApi = {
       straps: boolean;
       safetyVest: boolean;
       notes?: string;
+      damageDetected?: boolean;
+      damageNotes?: string;
     },
   ) {
     const { data } = await apiClient.post<DriverHandover>(

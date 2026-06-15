@@ -299,7 +299,11 @@
     "equipmentSave": "Confirm equipment checklist",
     "equipmentSaving": "Saving checklist...",
     "equipmentSaved": "Equipment checklist saved.",
-    "equipmentFailed": "Could not save equipment checklist."
+    "equipmentFailed": "Ekipman listesi kaydedilemedi.",
+    "damageTitle": "Devralmadan önce hasar",
+    "damageHint": "Mevcut hasarı işaretleyin ve devir fotoğraflarında belgeleyin.",
+    "damageDetected": "Hasar var",
+    "damageNotes": "Hasar açıklaması (isteğe bağlı)"
   },
   "documentOnboarding": {
     "title": "Zorunlu evraklar",

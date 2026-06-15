@@ -33,7 +33,22 @@ export default function DriverHandoverPage() {
   const [straps, setStraps] = useState(false);
   const [safetyVest, setSafetyVest] = useState(false);
   const [equipmentNotes, setEquipmentNotes] = useState('');
+  const [damageDetected, setDamageDetected] = useState(false);
+  const [damageNotes, setDamageNotes] = useState('');
   const [equipmentBusy, setEquipmentBusy] = useState(false);
+
+  useEffect(() => {
+    if (!handover) return;
+    setDamageDetected(handover.damageDetected ?? false);
+    setDamageNotes(handover.damageNotes ?? '');
+    if (handover.equipmentChecklist) {
+      setFirstAidKit(handover.equipmentChecklist.firstAidKit);
+      setFireExtinguisher(handover.equipmentChecklist.fireExtinguisher);
+      setStraps(handover.equipmentChecklist.straps);
+      setSafetyVest(handover.equipmentChecklist.safetyVest);
+      setEquipmentNotes(handover.equipmentChecklist.notes);
+    }
+  }, [handover?.id]);
 
   const loadHandover = useCallback(async () => {
     if (!vehicleId) {
@@ -112,6 +127,8 @@ export default function DriverHandoverPage() {
         straps,
         safetyVest,
         notes: equipmentNotes.trim() || undefined,
+        damageDetected,
+        damageNotes: damageDetected ? damageNotes.trim() || undefined : undefined,
       });
       setHandover(updated);
     } catch (err) {
@@ -142,6 +159,28 @@ export default function DriverHandoverPage() {
           ) : (
             <>
               <p className="text-sm text-slate-600">{t('driverPortal.handover.vehicleChanged')}</p>
+
+              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+                <p className="text-sm font-semibold text-slate-900">{t('driverPortal.handover.damageTitle')}</p>
+                <p className="text-xs text-slate-600">{t('driverPortal.handover.damageHint')}</p>
+                <label className="flex items-center justify-between gap-3">
+                  <span>{t('driverPortal.handover.damageDetected')}</span>
+                  <input
+                    type="checkbox"
+                    checked={damageDetected}
+                    onChange={(e) => setDamageDetected(e.target.checked)}
+                  />
+                </label>
+                {damageDetected ? (
+                  <textarea
+                    className="min-h-20 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                    placeholder={t('driverPortal.handover.damageNotes')}
+                    value={damageNotes}
+                    onChange={(e) => setDamageNotes(e.target.value)}
+                  />
+                ) : null}
+              </div>
+
               <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-[#1a4d7a]">
                 {t('driverPortal.handover.cameraOnlyHint')}
               </p>

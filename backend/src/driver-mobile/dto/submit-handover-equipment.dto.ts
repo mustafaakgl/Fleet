@@ -17,4 +17,13 @@ export class SubmitHandoverEquipmentChecklistDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  damageDetected?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  damageNotes?: string;
 }
