@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/select';
 import { BRAND_BTN_PRIMARY, BRAND_FOCUS, BRAND_LINK } from '@/lib/brand-colors';
 import type { TimeUnit } from '@/lib/custom-service-reminders';
 import { remindersApi, vehiclesApi } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 import { COMMON_SERVICE_TASKS } from '@/lib/service-reminders';
 import type { Vehicle } from '@/lib/types';
 import { FLEET_FILTER_INPUT, FLEET_FILTER_SELECT } from '@/lib/fleet-table';
@@ -95,8 +96,10 @@ export function AddServiceReminderPage() {
     try {
       await remindersApi.createServiceReminder(buildPayload());
       if (redirectToList) {
+        showToast({ message: t('serviceReminders.create.saveSuccess'), type: 'success' });
         router.push('/reminders/service');
       } else {
+        showToast({ message: t('serviceReminders.create.saveAndAddSuccess'), type: 'success' });
         setVehicleId('');
         setServiceTask('');
         setError(null);

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Droplets, Plus, Receipt, WifiOff } from 'lucide-react';
+import { ChevronRight, Download, Droplets, Plus, Receipt, WifiOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +26,52 @@ import {
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
 import type { FleetFuelEntry, FleetFuelOverviewResponse } from '@/lib/types';
+
+function escapeCsvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function downloadFuelEntriesCsv(entries: FleetFuelEntry[]) {
+  const headers = [
+    'entered_at',
+    'vehicle',
+    'driver',
+    'odometer_km',
+    'liters',
+    'total_cost',
+    'price_per_liter',
+    'is_full_tank',
+  ];
+  const lines = [headers.join(',')];
+
+  for (const row of entries) {
+    lines.push(
+      [
+        row.enteredAt,
+        row.vehiclePlate,
+        row.driverName ?? '',
+        row.odometerKm ?? '',
+        row.liters,
+        row.totalCost,
+        row.liters > 0 ? row.totalCost / row.liters : '',
+        row.isFullTank ? 'true' : 'false',
+      ]
+        .map((cell) => escapeCsvCell(String(cell)))
+        .join(','),
+    );
+  }
+
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `fuel-entries-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 function intlLocale(language: string): string {
   if (language.startsWith('tr')) return 'tr-TR';
@@ -282,6 +328,16 @@ export default function FleetFuelAnalyticsPage() {
                     })
                   )}
                 </TableBody>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={entries.length === 0}
+                    onClick={() => downloadFuelEntriesCsv(entries)}
+                  >
+                    <Download className="mr-1.5 h-4 w-4" />
+                    {t('common.exportCsv', 'CSV exportieren')}
+                  </Button>
               </Table>
             </CardContent>
           </Card>

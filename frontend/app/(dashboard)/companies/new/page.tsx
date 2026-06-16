@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { companiesApi } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 
 const schema = z.object({
   name: z.string().min(1, 'form.required'),
@@ -85,6 +86,7 @@ export default function NewCompanyPage() {
     try {
       const payload = blankToUndefined(data);
       const company = await companiesApi.create(payload as Record<string, unknown>);
+      showToast({ message: t('form.createCompanySuccess'), type: 'success' });
       router.push(`/companies/${company.id}`);
     } catch (e) {
       setServerError(extractServerError(e, t('form.createCompanyError')));

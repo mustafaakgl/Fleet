@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { MessageSquare, Plus } from 'lucide-react';
-import { MessengerActionsMenu } from '@/components/messenger/MessengerActionsMenu';
+import { Download, MessageSquare, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MessengerChatPanel } from '@/components/messenger/MessengerChatPanel';
 import { MessengerConversationList } from '@/components/messenger/MessengerConversationList';
@@ -400,7 +399,16 @@ export function MessengerPage() {
           ) : null}
         </div>
         <div className={FLEET_PAGE_HEADER_ACTIONS}>
-          <MessengerActionsMenu onExport={() => void handleExport()} exporting={exporting} />
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => void handleExport()}
+            disabled={exporting}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv')}
+          </Button>
           {canCreateConversation ? (
             <Button
               type="button"

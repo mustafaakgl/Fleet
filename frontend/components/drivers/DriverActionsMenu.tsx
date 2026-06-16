@@ -9,10 +9,16 @@ import { cn } from '@/lib/utils';
 interface DriverActionsMenuProps {
   canImport: boolean;
   onImport: () => void;
-  onExport: () => void;
+  onExport?: () => void;
+  showExport?: boolean;
 }
 
-export function DriverActionsMenu({ canImport, onImport, onExport }: DriverActionsMenuProps) {
+export function DriverActionsMenu({
+  canImport,
+  onImport,
+  onExport,
+  showExport = true,
+}: DriverActionsMenuProps) {
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -67,20 +73,22 @@ export function DriverActionsMenu({ canImport, onImport, onExport }: DriverActio
               <Upload className="h-4 w-4 text-slate-400" />
             </button>
           ) : null}
-          <button
-            type="button"
-            className={cn(
-              'flex w-full items-center justify-between px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50',
-              canImport && 'border-t border-slate-100',
-            )}
-            onClick={() => {
-              setOpen(false);
-              onExport();
-            }}
-          >
-            <span>{t('drivers.export.menuLabel', { defaultValue: 'Export Driver' })}</span>
-            <CloudDownload className="h-4 w-4 text-slate-400" />
-          </button>
+          {showExport ? (
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center justify-between px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50',
+                canImport && 'border-t border-slate-100',
+              )}
+              onClick={() => {
+                setOpen(false);
+                onExport?.();
+              }}
+            >
+              <span>{t('drivers.export.menuLabel', { defaultValue: 'Export Driver' })}</span>
+              <CloudDownload className="h-4 w-4 text-slate-400" />
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

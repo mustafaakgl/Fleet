@@ -9,6 +9,7 @@ import {
   ArrowUp,
   ChevronLeft,
   ChevronRight,
+  Download,
   Filter,
   Paperclip,
   Plus,
@@ -426,10 +427,21 @@ export function ExpenseHistoryPage() {
         </div>
 
         <div className={FLEET_PAGE_HEADER_ACTIONS}>
+          <Button
+            type="button"
+            variant="outline"
+            className={cn('w-full sm:w-auto', FLEET_FILTER_SELECT)}
+            onClick={handleExport}
+            disabled={sortedRecords.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv')}
+          </Button>
           <ServiceHistoryActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
             onExport={handleExport}
+            showExport={false}
           />
           {canEdit ? (
             <Button type="button" className={cn(BRAND_BTN_PRIMARY, 'w-full sm:w-auto')} onClick={() => setCreateOpen(true)}>

@@ -8,10 +8,15 @@ import { cn } from '@/lib/utils';
 
 interface VehicleReminderActionsMenuProps {
   onImport: () => void;
-  onExport: () => void;
+  onExport?: () => void;
+  showExport?: boolean;
 }
 
-export function VehicleReminderActionsMenu({ onImport, onExport }: VehicleReminderActionsMenuProps) {
+export function VehicleReminderActionsMenu({
+  onImport,
+  onExport,
+  showExport = true,
+}: VehicleReminderActionsMenuProps) {
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -64,19 +69,21 @@ export function VehicleReminderActionsMenu({ onImport, onExport }: VehicleRemind
             <span>{t('vehicleReminders.import.menuLabel')}</span>
             <Upload className="h-4 w-4 text-slate-400" />
           </button>
-          <button
-            type="button"
-            className={cn(
-              'flex w-full items-center justify-between border-t border-slate-100 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50',
-            )}
-            onClick={() => {
-              setOpen(false);
-              onExport();
-            }}
-          >
-            <span>{t('vehicleReminders.export.menuLabel')}</span>
-            <CloudDownload className="h-4 w-4 text-slate-400" />
-          </button>
+          {showExport ? (
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center justify-between border-t border-slate-100 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50',
+              )}
+              onClick={() => {
+                setOpen(false);
+                onExport?.();
+              }}
+            >
+              <span>{t('vehicleReminders.export.menuLabel')}</span>
+              <CloudDownload className="h-4 w-4 text-slate-400" />
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

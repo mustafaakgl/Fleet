@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { driversApi, finesApi, getApiErrorMessage, vehiclesApi } from '@/lib/api';
 import { FLEET_PAGE, FLEET_PAGE_HEADER, FLEET_PAGE_TITLE } from '@/lib/fleet-table';
+import { showToast } from '@/lib/toast';
 import type { Driver, FineMatchCandidate, FineMatchPreview, FineViolationCategory, Vehicle } from '@/lib/types';
 
 const CATEGORIES: FineViolationCategory[] = ['speed', 'parking', 'red_light', 'distance', 'other'];
@@ -122,6 +123,7 @@ export default function NewFinePage() {
       if (documentFile) payload.append('document', documentFile);
 
       const created = await finesApi.create(payload);
+      showToast({ message: t('fines.createSuccess'), type: 'success' });
       router.push(`/fines/${created.id}`);
     } catch (e) {
       setError(getApiErrorMessage(e, t('fines.createError', 'Bußgeld konnte nicht gespeichert werden.')));

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Truck, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Truck, Plus, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -119,6 +119,10 @@ export default function VehiclesPage() {
     }
   }
 
+  function vehicleStatusLabel(value: string) {
+    return t(`form.vehicleStatus.${value}`, { defaultValue: value.replace('_', ' ') });
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -130,10 +134,15 @@ export default function VehiclesPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleExport()}>
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv')}
+          </Button>
           <VehicleActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
             onExport={() => void handleExport()}
+            showExport={false}
           />
           <Button asChild className="w-full sm:w-auto">
             <Link href="/vehicles/new">
@@ -172,10 +181,10 @@ export default function VehiclesPage() {
           className={cn('w-40', FLEET_FILTER_SELECT)}
         >
           <option value="">{t('vehicles.allStatuses')}</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="broken">Broken</option>
-          <option value="maintenance">Maintenance</option>
+          <option value="active">{vehicleStatusLabel('active')}</option>
+          <option value="inactive">{vehicleStatusLabel('inactive')}</option>
+          <option value="broken">{vehicleStatusLabel('broken')}</option>
+          <option value="maintenance">{vehicleStatusLabel('maintenance')}</option>
         </Select>
       </div>
 
@@ -197,9 +206,9 @@ export default function VehiclesPage() {
           <div className="p-4">
             <EmptyState
               icon={Truck}
-              title="Failed to load vehicles"
+              title={t('vehicles.loadFailedTitle')}
               subtitle={error}
-              actionLabel="Retry"
+              actionLabel={t('errors.retry')}
               onAction={fetchVehicles}
             />
           </div>
@@ -207,9 +216,9 @@ export default function VehiclesPage() {
           <div className="p-4">
             <EmptyState
               icon={Truck}
-              title="No vehicles found"
-              subtitle="No vehicles match current filters."
-              actionLabel="Clear filters"
+              title={t('vehicles.emptyTitle')}
+              subtitle={t('vehicles.emptySubtitle')}
+              actionLabel={t('common.clearFilters')}
               onAction={() => {
                 setSearch('');
                 setStatus('');
@@ -240,9 +249,9 @@ export default function VehiclesPage() {
                   }
                 />
                 <div className="flex flex-col items-end gap-2" onClick={(event) => event.stopPropagation()}>
-                  <Badge className={statusColor(v.status)}>{v.status.replace('_', ' ')}</Badge>
+                  <Badge className={statusColor(v.status)}>{vehicleStatusLabel(v.status)}</Badge>
                   <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/vehicles/${v.id}`}>View</Link>
+                    <Link href={`/vehicles/${v.id}`}>{t('common.view')}</Link>
                   </Button>
                 </div>
               </div>
@@ -296,7 +305,7 @@ export default function VehiclesPage() {
                           className={cn('inline-block h-2 w-2 rounded-full', vehicleStatusDot(v.status))}
                           aria-hidden
                         />
-                        {v.status.replace('_', ' ')}
+                        {vehicleStatusLabel(v.status)}
                       </span>
                     </TableCell>
                     <TableCell
@@ -304,7 +313,7 @@ export default function VehiclesPage() {
                       onClick={(event) => event.stopPropagation()}
                     >
                       <Link href={`/vehicles/${v.id}`} className={FLEET_LINK_ACTION}>
-                        View
+                        {t('common.view')}
                       </Link>
                     </TableCell>
                   </TableRow>
@@ -319,7 +328,7 @@ export default function VehiclesPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-[13px] text-gray-500">
-            Page {page} of {totalPages} · {total} total
+            {t('common.pageOfTotal', { page, total: totalPages, count: total })}
           </p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft className="w-4 h-4" /></Button>

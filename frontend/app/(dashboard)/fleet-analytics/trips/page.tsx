@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronRight, Route, WifiOff } from 'lucide-react';
+import { ChevronRight, Download, Route, WifiOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,55 @@ import {
 } from '@/lib/fleet-table';
 import { formatFleetDateTime } from '@/lib/locale-format';
 import type { Driver, FleetTripSummary, Vehicle } from '@/lib/types';
+
+function escapeCsvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function downloadTripsCsv(
+  rows: FleetTripSummary[],
+  vehicleLabels: Map<string, string>,
+  driverLabels: Map<string, string>,
+) {
+  const headers = [
+    'started_at',
+    'vehicle',
+    'driver',
+    'distance_km',
+    'duration_seconds',
+    'avg_speed_kmh',
+    'score',
+    'status',
+  ];
+  const lines = [headers.join(',')];
+  for (const row of rows) {
+    lines.push(
+      [
+        row.startedAt,
+        vehicleLabels.get(row.vehicleId) ?? row.vehicleId,
+        driverLabels.get(row.driverId) ?? row.driverId,
+        row.distanceKm ?? '',
+        row.durationS ?? '',
+        row.avgSpeedKmh ?? '',
+        row.score ?? '',
+        row.status,
+      ]
+        .map((cell) => escapeCsvCell(String(cell)))
+        .join(','),
+    );
+  }
+
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `fleet-trips-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function FleetTripsPage() {
   const { t } = useTranslation();
@@ -126,17 +176,27 @@ export default function FleetTripsPage() {
           <Route className="h-6 w-6 text-primary" />
           <h1 className={FLEET_PAGE_TITLE}>{t('fleetTrips.title', 'Sefer geçmişi')}</h1>
         </div>
-        <select
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm"
-          value={weeks}
-          onChange={(event) => setWeeks(Number(event.target.value))}
-        >
-          {FLEET_FUEL_PERIOD_WEEKS.map((option) => (
-            <option key={option} value={option}>
-              {t('fleetFuelReport.periodWeeks', '{{count}} hafta', { count: option })}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            value={weeks}
+            onChange={(event) => setWeeks(Number(event.target.value))}
+          >
+            {FLEET_FUEL_PERIOD_WEEKS.map((option) => (
+              <option key={option} value={option}>
+                {t('fleetFuelReport.periodWeeks', '{{count}} hafta', { count: option })}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="outline"
+            onClick={() => downloadTripsCsv(trips, vehicleLabels, driverLabels)}
+            disabled={trips.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv', 'CSV exportieren')}
+          </Button>
+        </div>
       </div>
 
       <div className={`${FLEET_TOOLBAR} mb-2`}>

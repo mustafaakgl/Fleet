@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   Filter,
   Plus,
   Search,
@@ -267,9 +268,20 @@ export function VehicleRemindersPage() {
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{t('vehicleReminders.title')}</h1>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => downloadVehicleRemindersCsv(filteredRows)}
+            disabled={filteredRows.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv')}
+          </Button>
           <VehicleReminderActionsMenu
             onImport={() => setImportOpen(true)}
             onExport={() => downloadVehicleRemindersCsv(filteredRows)}
+            showExport={false}
           />
           <Button
             type="button"

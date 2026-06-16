@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Users, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Plus, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -117,6 +117,10 @@ export default function DriversPage() {
     return <span className={`inline-block h-2 w-2 rounded-full ${colors[risk] ?? 'bg-gray-400'}`} />;
   }
 
+  function driverStatusLabel(value: string) {
+    return t(`form.driverStatus.${value}`, { defaultValue: value.replace('_', ' ') });
+  }
+
   return (
     <div className={FLEET_PAGE}>
       <div className={FLEET_PAGE_HEADER}>
@@ -128,10 +132,15 @@ export default function DriversPage() {
           )}
         </div>
         <div className={FLEET_PAGE_HEADER_ACTIONS}>
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleExport()}>
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv')}
+          </Button>
           <DriverActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
             onExport={() => void handleExport()}
+            showExport={false}
           />
           <Button asChild className="w-full sm:w-auto">
             <Link href="/drivers/new">
@@ -170,11 +179,11 @@ export default function DriversPage() {
           className={cn('w-40', FLEET_FILTER_SELECT)}
         >
           <option value="">{t('drivers.allStatuses')}</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="on_leave">On Leave</option>
-          <option value="sick">Sick</option>
-          <option value="terminated">Terminated</option>
+          <option value="active">{driverStatusLabel('active')}</option>
+          <option value="inactive">{driverStatusLabel('inactive')}</option>
+          <option value="on_leave">{driverStatusLabel('on_leave')}</option>
+          <option value="sick">{driverStatusLabel('sick')}</option>
+          <option value="terminated">{driverStatusLabel('terminated')}</option>
         </Select>
       </div>
 
@@ -196,9 +205,9 @@ export default function DriversPage() {
           <div className="p-4">
             <EmptyState
               icon={Users}
-              title="Failed to load drivers"
+              title={t('drivers.loadFailedTitle')}
               subtitle={error}
-              actionLabel="Retry"
+              actionLabel={t('errors.retry')}
               onAction={fetchDrivers}
             />
           </div>
@@ -206,9 +215,9 @@ export default function DriversPage() {
           <div className="p-4">
             <EmptyState
               icon={Users}
-              title="No drivers found"
-              subtitle="No drivers match current filters."
-              actionLabel="Clear filters"
+              title={t('drivers.emptyTitle')}
+              subtitle={t('drivers.emptySubtitle')}
+              actionLabel={t('common.clearFilters')}
               onAction={() => {
                 setSearch('');
                 setStatus('');
@@ -226,14 +235,14 @@ export default function DriversPage() {
                 onClick={() => openDriver(d.id)}
               >
                 <p className="font-semibold text-slate-900">{fullName(d.first_name, d.last_name)}</p>
-                <p className="text-xs text-slate-600">Phone: {d.phone ?? '—'}</p>
-                <p className="text-xs text-slate-600">Status: {d.status}</p>
+                <p className="text-xs text-slate-600">{t('form.phone')}: {d.phone ?? '—'}</p>
+                <p className="text-xs text-slate-600">{t('common.status')}: {driverStatusLabel(d.status)}</p>
                 <div className="mt-2 flex gap-2" onClick={(event) => event.stopPropagation()}>
                   <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/drivers/${d.id}`}>View</Link>
+                    <Link href={`/drivers/${d.id}`}>{t('common.view')}</Link>
                   </Button>
                   <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/drivers/${d.id}/edit`}>Edit</Link>
+                    <Link href={`/drivers/${d.id}/edit`}>{t('common.edit')}</Link>
                   </Button>
                 </div>
               </div>
@@ -281,7 +290,7 @@ export default function DriversPage() {
                     onClick={(event) => event.stopPropagation()}
                   >
                     <Link href={`/drivers/${d.id}`} className={FLEET_LINK_ACTION}>
-                      View
+                      {t('common.view')}
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -296,7 +305,7 @@ export default function DriversPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-[13px] text-gray-500">
-            Page {page} of {totalPages} · {total} total
+            {t('common.pageOfTotal', { page, total: totalPages, count: total })}
           </p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>

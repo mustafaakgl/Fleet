@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
+import { GlobalToaster } from '@/components/ui/global-toaster';
 import { I18nProvider } from '@/components/providers/I18nProvider';
 import { LANG_STORAGE_KEY, resolveLanguage } from '@/src/language';
 
@@ -21,7 +22,10 @@ export default async function RootLayout({
   return (
     <html lang={language} className="h-full" suppressHydrationWarning>
       <body className="min-h-full">
-        <I18nProvider initialLanguage={language}>{children}</I18nProvider>
+        <I18nProvider initialLanguage={language}>
+          {children}
+          <GlobalToaster />
+        </I18nProvider>
       </body>
     </html>
   );

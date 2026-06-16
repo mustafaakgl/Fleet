@@ -16,6 +16,7 @@ import {
   vehiclesApi,
 } from '@/lib/api';
 import { FLEET_LIST_CARD, FLEET_PAGE, FLEET_PAGE_TITLE } from '@/lib/fleet-table';
+import { showToast } from '@/lib/toast';
 import type { Driver, Vehicle } from '@/lib/types';
 
 const SELECT_CLASS =
@@ -123,6 +124,7 @@ export default function AddFuelEntryPage() {
         odometerKm: odometerKm ? Number(odometerKm) : undefined,
         isFullTank,
       });
+      showToast({ message: t('fuelHistory.form.saveSuccess'), type: 'success' });
       router.push('/fleet-analytics/fuel');
     } catch (e) {
       setError(getApiErrorMessage(e, t('fuelHistory.form.saveError', 'Yakıt girişi kaydedilemedi.')));

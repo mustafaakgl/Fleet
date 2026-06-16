@@ -21,6 +21,7 @@ import {
   shouldWarnLicenseCompliance,
 } from '@/lib/license-compliance-assignment';
 import { buildAssignmentRouteName, formatStructuredAddress } from '@/lib/address-format';
+import { showToast } from '@/lib/toast';
 import type { Driver, Vehicle, Company } from '@/lib/types';
 
 const addressPart = z.string().min(1, 'assignmentForm.required');
@@ -174,6 +175,7 @@ export default function NewAssignmentPage() {
         },
         acknowledgeLicenseWarning,
       );
+      showToast({ message: t('assignmentForm.createSuccess'), type: 'success' });
       router.push('/assignments');
     } catch (err: unknown) {
       if (parseLicenseComplianceError(err)) {

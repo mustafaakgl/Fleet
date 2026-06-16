@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { driversApi } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 
 function blankToUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const out: Partial<T> = {};
@@ -93,6 +94,7 @@ export default function NewDriverPage() {
     try {
       const payload = blankToUndefined(data);
       const driver = await driversApi.create(payload);
+      showToast({ message: t('form.createDriverSuccess'), type: 'success' });
       router.push(`/drivers/${driver.id}`);
     } catch (e) {
       setServerError(extractServerError(e, t('form.createDriverError')));

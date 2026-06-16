@@ -6,9 +6,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   ChevronDown,
+  CircleHelp,
   CloudUpload,
   CreditCard,
-  ImageIcon,
+  Globe,
   KeyRound,
   LogOut,
   Settings,
@@ -17,6 +18,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/src/i18n.client';
 import { cn } from '@/lib/utils';
 import { getUser, performLogout } from '@/lib/auth';
 import { onboardingApi } from '@/lib/api';
@@ -62,15 +64,21 @@ const MENU_SECTIONS: MenuItem[][] = [
     { href: '/settings/profile', labelKey: 'accountMenu.userProfile', icon: UserCircle },
     { href: '/settings/notifications', labelKey: 'accountMenu.notificationSettings', icon: Bell },
     { href: '/security', labelKey: 'accountMenu.loginPassword', icon: KeyRound },
+    { href: '/hilfe', labelKey: 'accountMenu.help', icon: CircleHelp },
   ],
   [{ labelKey: 'accountMenu.logOut', icon: LogOut, action: 'logout' }],
 ];
 
-function resolveAccountLabel(user: AuthUser | null, tenantName: string | null) {
+function resolveWorkspaceLabel(user: AuthUser | null, tenantName: string | null) {
   if (tenantName?.trim()) return tenantName.trim();
   if (user?.companies?.[0]?.name?.trim()) return user.companies[0].name.trim();
-  if (user?.name?.trim()) return user.name.trim();
-  return user?.email ?? 'Operion';
+  return 'Operion';
+}
+
+function currentLanguageCode() {
+  if (i18n.language.startsWith('en')) return 'en';
+  if (i18n.language.startsWith('tr')) return 'tr';
+  return 'de';
 }
 
 export function AccountMenu() {
@@ -81,7 +89,8 @@ export function AccountMenu() {
   const [user] = useState<AuthUser | null>(() => getUser());
   const [tenantName, setTenantName] = useState<string | null>(null);
 
-  const accountLabel = useMemo(() => resolveAccountLabel(user, tenantName), [tenantName, user]);
+  const workspaceLabel = useMemo(() => resolveWorkspaceLabel(user, tenantName), [tenantName, user]);
+  const userInitial = user?.name?.charAt(0)?.toUpperCase() ?? 'U';
 
   useEffect(() => {
     let cancelled = false;
@@ -141,16 +150,19 @@ export function AccountMenu() {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex max-w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-gray-50"
+        className="flex max-w-full items-center gap-2 rounded-lg border border-gray-200 px-2 py-1.5 text-left transition-colors hover:bg-gray-50"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={t('accountMenu.openMenu')}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 text-gray-400">
-          <ImageIcon className="h-4 w-4" aria-hidden />
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0b2342] text-sm font-semibold text-white">
+          {userInitial}
         </span>
         <span className="hidden min-w-0 sm:block">
-          <span className="block truncate text-sm font-semibold text-gray-900">{accountLabel}</span>
+          <span className="block truncate text-sm font-semibold text-gray-900">
+            {user?.name ?? t('accountMenu.userProfile')}
+          </span>
+          <span className="block truncate text-xs text-gray-500">{workspaceLabel}</span>
         </span>
         <ChevronDown
           className={cn('hidden h-4 w-4 shrink-0 text-gray-500 transition sm:block', open && 'rotate-180')}
@@ -161,13 +173,33 @@ export function AccountMenu() {
       {open ? (
         <div
           role="menu"
-          className="absolute left-0 top-full z-50 mt-2 w-[min(100vw-2rem,320px)] overflow-hidden rounded-xl border border-gray-200 bg-white py-2 shadow-xl"
+          className="absolute right-0 top-full z-50 mt-2 w-[min(100vw-2rem,320px)] overflow-hidden rounded-xl border border-gray-200 bg-white py-2 shadow-xl"
         >
-          <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-gray-300 bg-gray-50 text-gray-400">
-              <ImageIcon className="h-4 w-4" aria-hidden />
-            </span>
-            <p className="truncate text-sm font-semibold text-gray-900">{accountLabel}</p>
+          <div className="border-b border-gray-100 px-4 py-3">
+            <p className="truncate text-sm font-semibold text-gray-900">{user?.name ?? 'User'}</p>
+            <p className="truncate text-xs capitalize text-gray-500">
+              {user?.role?.replace('_', ' ') ?? ''}
+            </p>
+            <p className="mt-1 truncate text-xs text-gray-400">{workspaceLabel}</p>
+          </div>
+
+          <div className="border-b border-gray-100 px-4 py-3">
+            <label className="flex items-center gap-2 text-xs font-medium text-gray-600">
+              <Globe className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+              {t('accountMenu.language')}
+            </label>
+            <select
+              value={currentLanguageCode()}
+              onChange={(event) => {
+                void i18n.changeLanguage(event.target.value);
+              }}
+              className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-800 outline-none"
+              aria-label={t('language.label')}
+            >
+              <option value="de">{t('language.german')}</option>
+              <option value="en">{t('language.english')}</option>
+              <option value="tr">{t('language.turkish')}</option>
+            </select>
           </div>
 
           {visibleSections.map((section, sectionIndex) => (

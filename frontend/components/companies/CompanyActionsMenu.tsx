@@ -9,10 +9,16 @@ import { cn } from '@/lib/utils';
 interface CompanyActionsMenuProps {
   canImport: boolean;
   onImport: () => void;
-  onExport: () => void;
+  onExport?: () => void;
+  showExport?: boolean;
 }
 
-export function CompanyActionsMenu({ canImport, onImport, onExport }: CompanyActionsMenuProps) {
+export function CompanyActionsMenu({
+  canImport,
+  onImport,
+  onExport,
+  showExport = true,
+}: CompanyActionsMenuProps) {
   const { t } = useTranslation('common');
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -67,20 +73,22 @@ export function CompanyActionsMenu({ canImport, onImport, onExport }: CompanyAct
               <Upload className="h-4 w-4 text-slate-400" />
             </button>
           ) : null}
-          <button
-            type="button"
-            className={cn(
-              'flex w-full items-center justify-between px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50',
-              canImport && 'border-t border-slate-100',
-            )}
-            onClick={() => {
-              setOpen(false);
-              onExport();
-            }}
-          >
-            <span>{t('companies.export.menuLabel', { defaultValue: 'Export Data' })}</span>
-            <CloudDownload className="h-4 w-4 text-slate-400" />
-          </button>
+          {showExport ? (
+            <button
+              type="button"
+              className={cn(
+                'flex w-full items-center justify-between px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50',
+                canImport && 'border-t border-slate-100',
+              )}
+              onClick={() => {
+                setOpen(false);
+                onExport?.();
+              }}
+            >
+              <span>{t('companies.export.menuLabel', { defaultValue: 'Export Data' })}</span>
+              <CloudDownload className="h-4 w-4 text-slate-400" />
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Building2, Plus } from 'lucide-react';
+import { Building2, Plus, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
@@ -94,10 +94,15 @@ export default function CompaniesPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleExport()}>
+            <Download className="mr-2 h-4 w-4" />
+            {t('common.exportCsv')}
+          </Button>
           <CompanyActionsMenu
             canImport={canImport}
             onImport={() => setImportOpen(true)}
             onExport={() => void handleExport()}
+            showExport={false}
           />
           <Button asChild className="w-full sm:w-auto">
             <Link href="/companies/new">

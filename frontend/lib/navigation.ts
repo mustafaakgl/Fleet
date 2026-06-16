@@ -49,6 +49,8 @@ export type NavGroup = {
   id: string;
   labelKey: string;
   items: NavEntry[];
+  collapsible?: boolean;
+  defaultExpanded?: boolean;
 };
 
 export function isNavSection(entry: NavEntry): entry is NavSection {
@@ -161,59 +163,111 @@ function item(key: keyof typeof ALL_ITEMS): NavItem {
   return ALL_ITEMS[key];
 }
 
-function group(id: string, labelKey: string, entries: NavEntry[]): NavGroup {
-  return { id, labelKey, items: entries };
+function group(
+  id: string,
+  labelKey: string,
+  entries: NavEntry[],
+  options?: { collapsible?: boolean; defaultExpanded?: boolean },
+): NavGroup {
+  return { id, labelKey, items: entries, ...options };
 }
+
+const VEHICLES_SECTION_BRIEF: NavSection = {
+  id: 'vehicles',
+  labelKey: 'nav.vehicles',
+  icon: Truck,
+  items: [...VEHICLES_SECTION_BASE],
+};
+
+const REMINDERS_HUB_ITEM: NavItem = {
+  href: '/reminders/service',
+  labelKey: 'nav.reminders',
+  icon: Bell,
+};
 
 /** Office-first: daily work surfaced at the top, master data grouped below. */
 const OFFICE_NAV: NavGroup[] = [
-  group('daily', 'nav.group.daily', [
-    item('dashboard'),
-    item('officeQueue'),
-    item('fleetFuelAnalytics'),
-    item('assignments'),
-    item('liveTracking'),
-    item('requests'),
-  ]),
-  group('fleet', 'nav.group.fleet', [
-    item('drivers'),
-    VEHICLES_SECTION,
-    item('companies'),
-    item('serviceHistory'),
-    REMINDERS_SECTION,
-    item('messenger'),
-  ]),
-  group('compliance', 'nav.group.compliance', [
-    item('documents'),
-    CHECKS_SECTION,
-    item('fines'),
-    item('workSessions'),
-  ]),
+  group(
+    'heute',
+    'nav.group.heute',
+    [
+      item('dashboard'),
+      item('officeQueue'),
+      item('assignments'),
+      item('liveTracking'),
+      REMINDERS_HUB_ITEM,
+      item('messenger'),
+    ],
+    { collapsible: false, defaultExpanded: true },
+  ),
+  group(
+    'flotte',
+    'nav.group.flotte',
+    [
+      item('drivers'),
+      VEHICLES_SECTION,
+      item('companies'),
+      item('documents'),
+      item('serviceHistory'),
+    ],
+    { collapsible: true, defaultExpanded: true },
+  ),
+  group(
+    'verwaltung',
+    'nav.group.verwaltung',
+    [
+      CHECKS_SECTION,
+      REMINDERS_SECTION,
+      item('fines'),
+      item('workSessions'),
+      item('fleetFuelAnalytics'),
+      item('requests'),
+    ],
+    { collapsible: true, defaultExpanded: false },
+  ),
 ];
 
-/** Default operational layout (admin, boss, accounting). */
+/** Heute / Flotte / Verwaltung layout for admin-style roles. */
 const DEFAULT_NAV: NavGroup[] = [
-  group('overview', 'nav.group.overview', [
-    item('dashboard'),
-    item('assignments'),
-    item('liveTracking'),
-  ]),
-  group('master', 'nav.group.master', [
-    item('drivers'),
-    VEHICLES_SECTION_FULL,
-    item('companies'),
-    item('documents'),
-    item('serviceHistory'),
-    REMINDERS_SECTION,
-    item('messenger'),
-  ]),
-  group('operations', 'nav.group.operations', [
-    item('fleetFuelAnalytics'),
-    item('requests'),
-    CHECKS_SECTION,
-    item('fines'),
-    item('workSessions'),
-  ]),
+  group(
+    'heute',
+    'nav.group.heute',
+    [
+      item('dashboard'),
+      item('assignments'),
+      item('liveTracking'),
+      REMINDERS_HUB_ITEM,
+      item('messenger'),
+    ],
+    { collapsible: false, defaultExpanded: true },
+  ),
+  group(
+    'flotte',
+    'nav.group.flotte',
+    [
+      item('drivers'),
+      VEHICLES_SECTION_BRIEF,
+      item('companies'),
+      item('documents'),
+      item('serviceHistory'),
+    ],
+    { collapsible: true, defaultExpanded: true },
+  ),
+  group(
+    'verwaltung',
+    'nav.group.verwaltung',
+    [
+      CHECKS_SECTION,
+      REMINDERS_SECTION,
+      item('fines'),
+      item('workSessions'),
+      item('fleetFuelAnalytics'),
+      item('fleetTripHistory'),
+      item('costs'),
+      item('requests'),
+    ],
+    { collapsible: true, defaultExpanded: false },
+  ),
 ];
 
 const PRIVACY_ITEM: NavItem = {
@@ -253,21 +307,13 @@ export function getNavigationForRole(role: Role): NavGroup[] {
       : DEFAULT_NAV.map((group) => ({ ...group, items: [...group.items] }));
 
   if (role === 'admin' || role === 'boss') {
-    const complianceGroup = groups.find((group) => group.id === 'compliance');
-    if (complianceGroup) {
+    const verwaltungGroup = groups.find((g) => g.id === 'verwaltung');
+    if (verwaltungGroup) {
       if (role === 'admin') {
-        complianceGroup.items.unshift(GETTING_STARTED_ITEM);
-        complianceGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+        verwaltungGroup.items.unshift(GETTING_STARTED_ITEM);
+        verwaltungGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
       }
-      complianceGroup.items.push(AUDIT_ITEM);
-    } else {
-      const operationsGroup = groups.find((group) => group.id === 'operations');
-      if (operationsGroup) {
-        if (role === 'admin') {
-          operationsGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
-        }
-        operationsGroup.items.push(AUDIT_ITEM);
-      }
+      verwaltungGroup.items.push(AUDIT_ITEM);
     }
   }
 

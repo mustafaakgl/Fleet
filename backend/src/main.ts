@@ -11,6 +11,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import {
@@ -26,6 +27,7 @@ async function bootstrap() {
   });
   app.enableShutdownHooks();
 
+  app.use(helmet());
   app.use(cookieParser());
 
   app.setGlobalPrefix('api/v1');
@@ -51,7 +53,7 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: true,
     }),
   );
 

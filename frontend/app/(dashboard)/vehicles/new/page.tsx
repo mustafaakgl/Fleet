@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { vehiclesApi } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 import type { Vehicle } from '@/lib/types';
 
 const schema = z.object({
@@ -62,6 +63,7 @@ export default function NewVehiclePage() {
       };
 
       const vehicle = await vehiclesApi.create(payload);
+      showToast({ message: t('form.createVehicleSuccess'), type: 'success' });
       router.push(`/vehicles/${vehicle.id}`);
     } catch {
       setServerError(t('form.createVehicleError'));

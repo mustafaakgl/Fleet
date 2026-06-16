@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 import {
   AssignmentStatus,
   CalendarSource,
@@ -33,6 +34,56 @@ import { photoUrlForVehicleBrand, VEHICLE_BRAND_PHOTOS } from '../src/vehicles/v
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
 const SEED_TENANT_ID = 'default-tenant';
+
+type SeedPasswordKey =
+  | 'admin'
+  | 'boss'
+  | 'accounting'
+  | 'office'
+  | 'driver'
+  | 'dhlCustomer'
+  | 'amazonCustomer';
+
+type SeedPasswords = Record<SeedPasswordKey, string>;
+
+function assertSeedAllowed(): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Seeding is disabled in production.');
+  }
+}
+
+function resolveSeedPassword(envVar: string): string {
+  const value = process.env[envVar]?.trim();
+  if (value) {
+    return value;
+  }
+  return randomBytes(16).toString('base64url');
+}
+
+function loadSeedPasswords(): SeedPasswords {
+  const passwords: SeedPasswords = {
+    admin: resolveSeedPassword('SEED_ADMIN_PASSWORD'),
+    boss: resolveSeedPassword('SEED_BOSS_PASSWORD'),
+    accounting: resolveSeedPassword('SEED_ACCOUNTING_PASSWORD'),
+    office: resolveSeedPassword('SEED_OFFICE_PASSWORD'),
+    driver: resolveSeedPassword('SEED_DRIVER_PASSWORD'),
+    dhlCustomer: resolveSeedPassword('SEED_DHL_CUSTOMER_PASSWORD'),
+    amazonCustomer: resolveSeedPassword('SEED_AMAZON_CUSTOMER_PASSWORD'),
+  };
+
+  if (process.env.SEED_SILENT !== 'true') {
+    console.info('[seed] Generated or loaded credentials:');
+    console.info(`  admin@fleet.com: ${passwords.admin}`);
+    console.info(`  boss@fleet.com: ${passwords.boss}`);
+    console.info(`  accounting@fleet.com: ${passwords.accounting}`);
+    console.info(`  office@fleet.com: ${passwords.office}`);
+    console.info(`  driver@fleet.com: ${passwords.driver}`);
+    console.info(`  dhl.customer@fleet.com: ${passwords.dhlCustomer}`);
+    console.info(`  amazon.customer@fleet.com: ${passwords.amazonCustomer}`);
+  }
+
+  return passwords;
+}
 
 function startOfDay(date = new Date()): Date {
   const d = new Date(date);
@@ -765,6 +816,9 @@ async function upsertReminder(params: {
 }
 
 async function main(): Promise<void> {
+  assertSeedAllowed();
+  const seedPasswords = loadSeedPasswords();
+
   await prisma.tenant.upsert({
     where: { id: SEED_TENANT_ID },
     update: {},
@@ -783,35 +837,35 @@ async function main(): Promise<void> {
   const adminUser = await upsertUser({
     fullName: 'Fleet Admin',
     email: 'admin@fleet.com',
-    password: 'admin123',
+    password: seedPasswords.admin,
     role: UserRole.admin,
   });
 
   const bossUser = await upsertUser({
     fullName: 'Fleet Boss',
     email: 'boss@fleet.com',
-    password: 'boss123',
+    password: seedPasswords.boss,
     role: UserRole.boss,
   });
 
   const accountingUser = await upsertUser({
     fullName: 'Fleet Accounting',
     email: 'accounting@fleet.com',
-    password: 'accounting123',
+    password: seedPasswords.accounting,
     role: UserRole.accounting,
   });
 
   const officeUser = await upsertUser({
     fullName: 'Fleet Office',
     email: 'office@fleet.com',
-    password: 'office123',
+    password: seedPasswords.office,
     role: UserRole.office,
   });
 
   const driverQaUser = await upsertUser({
     fullName: 'Ilker Cukur',
     email: 'driver@fleet.com',
-    password: 'driver123',
+    password: seedPasswords.driver,
     role: UserRole.driver,
     status: UserStatus.active,
     language: 'tr',
@@ -1198,14 +1252,14 @@ async function main(): Promise<void> {
   const dhlCustomerUser = await upsertUser({
     fullName: 'DHL Customer',
     email: 'dhl.customer@fleet.com',
-    password: 'customer123',
+    password: seedPasswords.dhlCustomer,
     role: UserRole.customer,
   });
 
   const amazonCustomerUser = await upsertUser({
     fullName: 'Amazon Customer',
     email: 'amazon.customer@fleet.com',
-    password: 'customer123',
+    password: seedPasswords.amazonCustomer,
     role: UserRole.customer,
   });
 

@@ -12,6 +12,7 @@ import { getUser } from '@/lib/auth';
 import { BRAND_BTN_PRIMARY, BRAND_FOCUS, BRAND_LINK } from '@/lib/brand-colors';
 import type { DueSoonUnit } from '@/lib/custom-vehicle-reminders';
 import { remindersApi, vehiclesApi } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 import { COMMON_VEHICLE_RENEWAL_TYPES, type VehicleRenewalKind } from '@/lib/vehicle-reminders';
 import type { Vehicle } from '@/lib/types';
 import { FLEET_FILTER_INPUT, FLEET_FILTER_SELECT } from '@/lib/fleet-table';
@@ -106,8 +107,10 @@ export function AddVehicleReminderPage() {
         renewalKind,
       });
       if (redirectToList) {
+        showToast({ message: t('vehicleReminders.create.saveSuccess'), type: 'success' });
         router.push('/reminders/vehicle');
       } else {
+        showToast({ message: t('vehicleReminders.create.saveAndAddSuccess'), type: 'success' });
         setVehicleId('');
         setRenewalKind('');
         setComment('');

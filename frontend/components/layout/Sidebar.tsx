@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, ChevronDown, CircleHelp, LogOut, Menu, X } from 'lucide-react';
+import { Building2, ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { OperionLogo } from '@/components/brand/OperionLogo';
@@ -37,6 +37,32 @@ export function Sidebar() {
   const isFleetOps = Boolean(user?.fleet_ops);
   const navScrollRef = useRef<HTMLElement>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setExpandedGroups((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const group of navGroups) {
+        if (next[group.id] === undefined) {
+          next[group.id] = group.defaultExpanded ?? group.id === 'heute';
+          changed = true;
+        }
+        if (group.collapsible !== false) {
+          const groupActive = group.items.some((entry) =>
+            isNavSection(entry)
+              ? isNavSectionActive(pathname, entry)
+              : isNavItemActive(pathname, entry.href),
+          );
+          if (groupActive && !next[group.id]) {
+            next[group.id] = true;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [pathname, navGroups]);
 
   useEffect(() => {
     setExpandedSections((current) => {
@@ -66,6 +92,14 @@ export function Sidebar() {
 
     return () => window.cancelAnimationFrame(frame);
   }, [pathname, expandedSections, tabletCollapsed, mobileOpen, navGroups]);
+
+  function toggleGroup(groupId: string, groupActive: boolean, collapsible?: boolean) {
+    if (collapsible === false) return;
+    setExpandedGroups((current) => {
+      const isOpen = current[groupId] ?? groupActive;
+      return { ...current, [groupId]: !isOpen };
+    });
+  }
 
   function toggleSection(sectionId: string, sectionActive: boolean) {
     setExpandedSections((current) => {
@@ -233,21 +267,53 @@ export function Sidebar() {
           ref={navScrollRef}
           className="scrollbar-hide flex-1 space-y-4 overflow-y-auto overscroll-contain px-2.5 py-3"
         >
-          {navGroups.map((group) => (
+          {navGroups.map((group) => {
+            const groupActive = group.items.some((entry) =>
+              isNavSection(entry)
+                ? isNavSectionActive(pathname, entry)
+                : isNavItemActive(pathname, entry.href),
+            );
+            const groupExpanded = group.collapsible === false
+              ? true
+              : (expandedGroups[group.id] ?? group.defaultExpanded ?? group.id === 'heute');
+
+            return (
             <div key={group.id}>
-              <p
-                className={cn(
-                  'mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-200/45',
-                  tabletCollapsed ? 'hidden lg:block' : 'block',
-                )}
-              >
-                {t(group.labelKey)}
-              </p>
+              {group.collapsible === false ? (
+                <p
+                  className={cn(
+                    'mb-1 px-3 text-xs font-medium text-blue-200/55',
+                    tabletCollapsed ? 'hidden lg:block' : 'block',
+                  )}
+                >
+                  {t(group.labelKey)}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.id, groupActive, group.collapsible)}
+                  className={cn(
+                    'mb-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-xs font-medium text-blue-200/55 hover:bg-white/5',
+                    tabletCollapsed ? 'hidden lg:flex' : 'flex',
+                  )}
+                >
+                  <span>{t(group.labelKey)}</span>
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 transition-transform',
+                      groupExpanded ? 'rotate-0' : '-rotate-90',
+                    )}
+                  />
+                </button>
+              )}
+              {groupExpanded ? (
               <div className="space-y-0.5">
                 {group.items.map((entry) => renderNavEntry(entry))}
               </div>
+              ) : null}
             </div>
-          ))}
+            );
+          })}
         </nav>
 
         <div className={cn('space-y-0.5 border-t px-2.5 pb-4 pt-3', SIDEBAR_BORDER)}>
@@ -258,12 +324,6 @@ export function Sidebar() {
               <Building2 className="h-4 w-4 shrink-0 opacity-90" />,
               pathname === '/admin/tenants',
             )}
-          {renderFooterLink(
-            '/hilfe',
-            t('nav.help'),
-            <CircleHelp className="h-4 w-4 shrink-0 opacity-90" />,
-            pathname === '/hilfe',
-          )}
           <button
             onClick={handleLogout}
             className={cn(
