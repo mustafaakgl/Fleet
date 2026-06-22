@@ -1,0 +1,7 @@
+# QA reports
+
+Generated exploratory test reports are written here as timestamped markdown
+files (for example `report_documents_2026-06-22_141530.md`).
+
+This folder is intentionally kept in version control via this placeholder; the
+generated `.md` reports themselves are git-ignored.

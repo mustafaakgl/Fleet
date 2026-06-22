@@ -1,0 +1,72 @@
+[
+  {
+    "test_file": "tests/smoke.spec.ts",
+    "test_title": "Smoke > home page responds without a server error",
+    "scenario_ids": ["TM-001"],
+    "mapping_confidence": "low",
+    "notes": "Basic reachability smoke; only partial overlap with the logout/back regression scenario."
+  },
+  {
+    "test_file": "tests/access-control.spec.ts",
+    "test_title": "Access Control (auth) > unauthenticated user is redirected from /dashboard to login",
+    "scenario_ids": ["TM-002"],
+    "mapping_confidence": "high",
+    "notes": "Explicit direct-URL protection coverage for a protected dashboard route."
+  },
+  {
+    "test_file": "tests/access-control.spec.ts",
+    "test_title": "Access Control (auth) > unauthenticated user is redirected from /documents to login",
+    "scenario_ids": ["TM-002", "TM-057"],
+    "mapping_confidence": "medium",
+    "notes": "Direct URL protection for the documents area; partial auth and documents security coverage."
+  },
+  {
+    "test_file": "tests/access-control.spec.ts",
+    "test_title": "Access Control (auth) > unauthenticated user is redirected from /driver/documents to login",
+    "scenario_ids": ["TM-002"],
+    "mapping_confidence": "medium",
+    "notes": "Covers protected-route behavior for the driver documents surface."
+  },
+  {
+    "test_file": "tests/documents.rbac.spec.ts",
+    "test_title": "Documents RBAC > driver role should NOT access the admin documents page",
+    "scenario_ids": ["TM-003", "TM-060"],
+    "mapping_confidence": "high",
+    "notes": "Driver/admin route denial; explicit auth RBAC plus documents RBAC coverage."
+  },
+  {
+    "test_file": "tests/documents.rbac.spec.ts",
+    "test_title": "Documents RBAC > office role should NOT access the driver portal documents page",
+    "scenario_ids": ["TM-004", "TM-060"],
+    "mapping_confidence": "medium",
+    "notes": "Office/driver-portal denial; partial office finance-route auth concern plus documents RBAC."
+  },
+  {
+    "test_file": "tests/documents.rbac.spec.ts",
+    "test_title": "Documents RBAC > office role should NOT see private driver salary/medical documents",
+    "scenario_ids": ["TM-050", "TM-060"],
+    "mapping_confidence": "high",
+    "notes": "Blocked until private document selector and seed data exist."
+  },
+  {
+    "test_file": "tests/documents.rbac.spec.ts",
+    "test_title": "Documents RBAC > direct-ID document access should be blocked when not authorized",
+    "scenario_ids": ["TM-051", "TM-060"],
+    "mapping_confidence": "high",
+    "notes": "Blocked until document detail route and known unauthorized document id exist."
+  },
+  {
+    "test_file": "tests/documents.rbac.spec.ts",
+    "test_title": "Documents RBAC > tenant_a user should NOT access a tenant_b document",
+    "scenario_ids": ["TM-051", "TM-063"],
+    "mapping_confidence": "medium",
+    "notes": "Cross-tenant unauthorized access check; requires seeded tenant_b document id."
+  },
+  {
+    "test_file": "tests/smoke.spec.ts",
+    "test_title": "Smoke > login page is reachable",
+    "scenario_ids": ["TM-007"],
+    "mapping_confidence": "low",
+    "notes": "Basic auth entry-point and form-render coverage only; does not exercise full happy/sad-path validation."
+  }
+]

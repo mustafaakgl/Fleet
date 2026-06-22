@@ -1,0 +1,27 @@
+# Local environment variables (never commit secrets)
+.env
+
+# Python virtual environment
+.venv/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Generated QA reports
+reports/*.md
+
+# Playwright e2e (Phase 7A): secrets, auth states, and artifacts
+e2e/.env.e2e
+e2e/.auth/
+e2e/test-results/
+e2e/playwright-report/
+e2e/node_modules/
+
+# Playwright evidence (Phase 7B): raw artifacts only.
+# reports/evidence_report.md stays trackable (reports/*.md is the report rule).
+evidence/*.json
+evidence/*.log
