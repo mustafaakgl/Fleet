@@ -1,5 +1,7 @@
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   AssignmentStatus,
   CalendarSource,
@@ -101,6 +103,87 @@ function atTime(date: Date, hour: number, minute = 0): Date {
   const d = new Date(date);
   d.setHours(hour, minute, 0, 0);
   return d;
+}
+
+// --- Pilot roster import (Mai 2026) -----------------------------------------
+type PilotAbsenceCode = 'FT' | 'UT' | 'KT';
+
+interface PilotRow {
+  department: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  ft: number[];
+  ut: number[];
+  kt: number[];
+}
+
+function splitSemicolonLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ';' && !inQuotes) {
+      cells.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
+
+function splitGermanName(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: parts[0] };
+  }
+  // CSV uses "Nachname Vorname" (last name first).
+  const [lastName, ...rest] = parts;
+  return { firstName: rest.join(' '), lastName };
+}
+
+function parsePilotRoster(): PilotRow[] {
+  const csvPath = join(__dirname, 'data', 'pilot-may-2026.csv');
+  const content = readFileSync(csvPath, 'utf8');
+  const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  // First line is the header.
+  return lines.slice(1).map((line) => {
+    const cells = splitSemicolonLine(line);
+    const department = cells[0].trim();
+    const fullName = cells[1].trim();
+    const { firstName, lastName } = splitGermanName(fullName);
+    const ft: number[] = [];
+    const ut: number[] = [];
+    const kt: number[] = [];
+    for (let day = 1; day <= 31; day += 1) {
+      const code = (cells[1 + day] ?? '').trim() as PilotAbsenceCode | '';
+      if (code === 'FT') ft.push(day);
+      else if (code === 'UT') ut.push(day);
+      else if (code === 'KT') kt.push(day);
+    }
+    return { department, fullName, firstName, lastName, ft, ut, kt };
+  });
+}
+
+function mayDate(day: number): Date {
+  // Pilot calendar is May 2026 (month index 4), stored at UTC midnight.
+  return new Date(Date.UTC(2026, 4, day));
+}
+
+function slugifyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
 }
 
 async function upsertUser(params: {
@@ -1024,6 +1107,110 @@ async function main(): Promise<void> {
   for (const driver of drivers) {
     const record = await upsertDriver(driver);
     driversByName.set(driver.key, record);
+  }
+
+  // --- Pilot company roster + Mai 2026 attendance ---------------------------
+  // The demo drivers above already cover 9 of the pilot employees (matched by
+  // name below); the remaining pilot staff are imported here from the CSV the
+  // pilot company provided, and the real Mai 2026 absences (FT/UT/KT) are
+  // written to the calendar so the demo reflects production data.
+  const pilotRows = parsePilotRoster();
+  // Maps a CSV "Nachname Vorname" entry to an already-seeded driver key.
+  const pilotNameToExistingKey: Record<string, string> = {
+    'Cukur Ilker': 'Ilker Cukur',
+    'Scharein Thomas': 'Thomas Scharein',
+    'Diallo Sita': 'Sita Diallo',
+    'Dudiak Andrii': 'Andrii Dudiak',
+    'Feyzula Nesrin': 'Nesrin Feyzula',
+    'Baldeh Saidou': 'Baldeh Saidou',
+    'Kalisch Mario': 'Kalisch Mario',
+    'Gundrum Andreas': 'Gundrum Andreas',
+    'Özdemir Hakan': 'Ozdemir Hakan',
+  };
+
+  const pilotDriverByName = new Map<string, Awaited<ReturnType<typeof upsertDriver>>>();
+  let pilotEmployeeSeq = drivers.length + 1;
+  for (const row of pilotRows) {
+    const existingKey = pilotNameToExistingKey[row.fullName];
+    const existing = existingKey ? driversByName.get(existingKey) : undefined;
+    if (existing) {
+      pilotDriverByName.set(row.fullName, existing);
+      continue;
+    }
+    const employeeNumber = `DRV-${String(pilotEmployeeSeq).padStart(3, '0')}`;
+    pilotEmployeeSeq += 1;
+    const record = await upsertDriver({
+      id: `drv_pilot_${slugifyName(row.fullName)}`,
+      employeeNumber,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      status: DriverStatus.active,
+      riskLevel: RiskLevel.green,
+      notes: `Abteilung: ${row.department}`,
+    });
+    pilotDriverByName.set(row.fullName, record);
+    driversByName.set(row.fullName, record);
+  }
+
+  for (const row of pilotRows) {
+    const driver = pilotDriverByName.get(row.fullName);
+    if (!driver) {
+      continue;
+    }
+
+    // FT = Feiertag (public holiday) — calendar marker only, no leave request.
+    for (const day of row.ft) {
+      await upsertCalendarEvent({
+        driverId: driver.id,
+        date: mayDate(day),
+        status: CalendarStatus.FT,
+        source: CalendarSource.manual,
+      });
+    }
+
+    // UT = Urlaub (vacation).
+    if (row.ut.length > 0) {
+      const vacationRequest = await upsertRequest({
+        driverId: driver.id,
+        type: RequestType.vacation,
+        startDate: mayDate(row.ut[0]),
+        endDate: mayDate(row.ut[row.ut.length - 1]),
+        reason: 'Urlaub (Pilot Mai 2026)',
+        status: RequestStatus.approved,
+        approvedById: officeUser.id,
+      });
+      for (const day of row.ut) {
+        await upsertCalendarEvent({
+          driverId: driver.id,
+          date: mayDate(day),
+          status: CalendarStatus.UT,
+          source: CalendarSource.leave,
+          requestId: vacationRequest.id,
+        });
+      }
+    }
+
+    // KT = Krank (sick leave).
+    if (row.kt.length > 0) {
+      const sickRequest = await upsertRequest({
+        driverId: driver.id,
+        type: RequestType.sick_leave,
+        startDate: mayDate(row.kt[0]),
+        endDate: mayDate(row.kt[row.kt.length - 1]),
+        reason: 'Krank (Pilot Mai 2026)',
+        status: RequestStatus.approved,
+        approvedById: officeUser.id,
+      });
+      for (const day of row.kt) {
+        await upsertCalendarEvent({
+          driverId: driver.id,
+          date: mayDate(day),
+          status: CalendarStatus.KT,
+          source: CalendarSource.leave,
+          requestId: sickRequest.id,
+        });
+      }
+    }
   }
 
   const vehicles = [
