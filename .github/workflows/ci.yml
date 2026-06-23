@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, qa-langgraph-full-orchestrator]
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, qa-langgraph-full-orchestrator]
 
 jobs:
   backend-security-auth:
