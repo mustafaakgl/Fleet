@@ -310,7 +310,7 @@ export class MessengerService {
     const fromParticipant = this.normalizeSupportedLanguage(driverParticipant?.user.language);
     const fromDriverUser = this.normalizeSupportedLanguage(conversation.driver.user?.language);
 
-    return fromParticipant ?? fromDriverUser ?? null;
+    return fromParticipant ?? fromDriverUser ?? FLEET_TRANSLATION_LANGUAGE;
   }
 
   private mapParticipant(
