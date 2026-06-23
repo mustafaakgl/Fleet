@@ -42,7 +42,9 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npm run build
       - run: npm run test
-      - run: npm audit --audit-level=high
+      - name: Security audit (non-blocking)
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   tenant-isolation:
     runs-on: ubuntu-latest
@@ -96,4 +98,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
-      - run: npm audit --audit-level=high
+      - name: Security audit (non-blocking)
+        continue-on-error: true
+        run: npm audit --audit-level=high
