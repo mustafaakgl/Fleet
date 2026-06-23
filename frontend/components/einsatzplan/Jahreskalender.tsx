@@ -1018,21 +1018,8 @@ export function Jahreskalender() {
                           if (entry.status) return;
                           openContextMenu(event, { year: selectedYear, monthIndex, day });
                         }}
-                        onClick={() => {
-                          if (entry.status) {
-                            closeContextMenu();
-                            setSelectedDay({ year: selectedYear, monthIndex, day, entry });
-                            setPendingAbsenceSelection(null);
-                            return;
-                          }
-
-                          setSelectedDay(null);
-                          setPendingAbsenceSelection(null);
-                          setSelectedAbsenceTypeId(null);
-                        }}
-                        onMouseDown={(event) => {
+                        onClick={(event) => {
                           if (entry.source === 'manual' && entry.eventId && isLiveDriver) {
-                            if (event.button !== 0) return;
                             openContextMenu(
                               event,
                               {
@@ -1045,8 +1032,14 @@ export function Jahreskalender() {
                             );
                             return;
                           }
-                          if (entry.status) return;
-                          if (event.button !== 0) return;
+
+                          if (entry.status) {
+                            closeContextMenu();
+                            setSelectedDay({ year: selectedYear, monthIndex, day, entry });
+                            setPendingAbsenceSelection(null);
+                            return;
+                          }
+
                           openContextMenu(event, { year: selectedYear, monthIndex, day });
                         }}
                         className={`${CALENDAR_DAY_CELL_HOVER} ${
