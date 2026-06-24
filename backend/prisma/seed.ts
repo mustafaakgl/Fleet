@@ -28,6 +28,7 @@ import {
   TransportRequestStatus,
   UserRole,
   UserStatus,
+  VehicleCategory,
   VehicleStatus,
   CompanyUserRole,
 } from '@prisma/client';
@@ -338,6 +339,8 @@ async function upsertVehicle(params: {
   model: string;
   year?: number;
   status?: VehicleStatus;
+  category?: VehicleCategory;
+  initialOdometerKm?: number;
   tuvExpiryDate?: Date;
   spExpiryDate?: Date;
   insuranceExpiryDate?: Date;
@@ -359,6 +362,8 @@ async function upsertVehicle(params: {
       model: params.model,
       year: params.year,
       status: params.status ?? VehicleStatus.active,
+      category: params.category ?? VehicleCategory.truck,
+      initialOdometerKm: params.initialOdometerKm,
       tuvExpiryDate: params.tuvExpiryDate,
       spExpiryDate: params.spExpiryDate,
       insuranceExpiryDate: params.insuranceExpiryDate,
@@ -375,6 +380,8 @@ async function upsertVehicle(params: {
       model: params.model,
       year: params.year,
       status: params.status ?? VehicleStatus.active,
+      category: params.category ?? VehicleCategory.truck,
+      initialOdometerKm: params.initialOdometerKm,
       tuvExpiryDate: params.tuvExpiryDate,
       spExpiryDate: params.spExpiryDate,
       insuranceExpiryDate: params.insuranceExpiryDate,
@@ -1213,104 +1220,94 @@ async function main(): Promise<void> {
     }
   }
 
-  const vehicles = [
-    {
-      id: 'veh_ap_101',
-      plateNumber: 'AP-101',
-      internalCode: 'VH-101',
-      brand: 'Mercedes-Benz',
-      model: 'Actros 1845',
-      year: 2021,
-      status: VehicleStatus.active,
-      tuvExpiryDate: addDays(today, 28),
-      spExpiryDate: addDays(today, 90),
-      insuranceExpiryDate: addDays(today, 250),
-    },
-    {
-      id: 'veh_ap_102',
-      plateNumber: 'AP-102',
-      internalCode: 'VH-102',
-      brand: 'MAN',
-      model: 'TGX 18.510',
-      year: 2020,
-      status: VehicleStatus.active,
-      tuvExpiryDate: addDays(today, 130),
-      spExpiryDate: addDays(today, 22),
-      insuranceExpiryDate: addDays(today, 210),
-    },
-    {
-      id: 'veh_ap_103',
-      plateNumber: 'AP-103',
-      internalCode: 'VH-103',
-      brand: 'Scania',
-      model: 'R450',
-      year: 2022,
-      status: VehicleStatus.active,
-      tuvExpiryDate: addDays(today, 320),
-      spExpiryDate: addDays(today, 260),
-      insuranceExpiryDate: addDays(today, 18),
-    },
-    {
-      id: 'veh_ap_104',
-      plateNumber: 'AP-104',
-      internalCode: 'VH-104',
-      brand: 'Volvo',
-      model: 'FH 500',
-      year: 2019,
-      status: VehicleStatus.maintenance,
-      tuvExpiryDate: addDays(today, 75),
-      spExpiryDate: addDays(today, 110),
-      insuranceExpiryDate: addDays(today, 170),
-    },
-    {
-      id: 'veh_ap_105',
-      plateNumber: 'AP-105',
-      internalCode: 'VH-105',
-      brand: 'DAF',
-      model: 'XF 480',
-      year: 2021,
-      status: VehicleStatus.active,
-      tuvExpiryDate: addDays(today, 190),
-      spExpiryDate: addDays(today, 200),
-      insuranceExpiryDate: addDays(today, 280),
-    },
-    {
-      id: 'veh_b_sg_1540',
-      plateNumber: 'B-SG 1540',
-      internalCode: 'VH-106',
-      brand: 'Iveco',
-      model: 'S-WAY',
-      year: 2020,
-      status: VehicleStatus.active,
-      tuvExpiryDate: addDays(today, 60),
-      spExpiryDate: addDays(today, 145),
-      insuranceExpiryDate: addDays(today, 330),
-    },
-    {
-      id: 'veh_b_sg_1553',
-      plateNumber: 'B-SG 1553',
-      internalCode: 'VH-107',
-      brand: 'Renault',
-      model: 'T High',
-      year: 2018,
-      status: VehicleStatus.active,
-      tuvExpiryDate: addDays(today, 15),
-      spExpiryDate: addDays(today, 14),
-      insuranceExpiryDate: addDays(today, 120),
-    },
-    {
-      id: 'veh_b_tk_710',
-      plateNumber: 'B-TK 710',
-      internalCode: 'VH-108',
-      brand: 'Ford',
-      model: 'Transit',
-      year: 2022,
-      status: VehicleStatus.active,
-      tuvExpiryDate: addDays(today, 280),
-      spExpiryDate: addDays(today, 240),
-      insuranceExpiryDate: addDays(today, 355),
-    },
-  ] as const;
+  // Real pilot fleet (Bearbeitungsstand: 15.06.2026).
+  // Source: "Aktueller Kilometerstand je Kennzeichen".
+  // Kilometerstand stored as initialOdometerKm; Gesamtmasse/Typ captured in notes.
+  const pilotFleet: Array<{
+    plate: string;
+    km: number;
+    brand: string;
+    model: string;
+    grossWeightKg: number;
+    type: string;
+  }> = [
+    { plate: 'B-SG 1540', km: 117381, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1541', km: 139339, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1544', km: 112679, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1556', km: 291265, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1557', km: 164369, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1567', km: 162520, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1569', km: 155271, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1570', km: 131971, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1571', km: 145347, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1572', km: 175420, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1573', km: 122796, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1576', km: 154931, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1577', km: 124220, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1584', km: 149518, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1587', km: 166443, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1590', km: 223607, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1594', km: 152463, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1596', km: 276971, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1597', km: 123252, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1598', km: 115688, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1722', km: 183921, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'BA geschl. Kasten' },
+    { plate: 'B-SG 1733', km: 179722, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1734', km: 214580, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1735', km: 294493, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1736', km: 186783, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1737', km: 237081, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1738', km: 223542, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1740', km: 184121, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1742', km: 155528, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1743', km: 185595, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1745', km: 152660, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 1749', km: 309934, brand: 'MAN', model: 'TGM 15.290', grossWeightKg: 15000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 7022', km: 125365, brand: 'MAN', model: 'TGL 7.190', grossWeightKg: 7490, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 7027', km: 117608, brand: 'MAN', model: 'TGL 7.190', grossWeightKg: 7490, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 7029', km: 138689, brand: 'MAN', model: 'TGL 7.190', grossWeightKg: 7490, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 7030', km: 150925, brand: 'MAN', model: 'TGL 7.190', grossWeightKg: 7490, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 7031', km: 111680, brand: 'MAN', model: 'TGL 7.190', grossWeightKg: 7490, type: 'LKW geschl. Kasten' },
+    { plate: 'B-TK 710', km: 231983, brand: 'MAN', model: 'TGL 7.190', grossWeightKg: 7490, type: 'BA geschl. Kasten' },
+    { plate: 'B-TK 810', km: 231306, brand: 'MAN', model: 'TGL 7.190', grossWeightKg: 7490, type: 'BA geschl. Kasten' },
+    { plate: 'B-SG 9074', km: 258397, brand: 'MAN', model: 'TGX 18.470', grossWeightKg: 18000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 9071', km: 181565, brand: 'Mercedes-Benz', model: 'Antos 1830', grossWeightKg: 18000, type: 'LKW geschl. Kasten' },
+    { plate: 'B-SG 9073', km: 179062, brand: 'Mercedes-Benz', model: 'Atego 1221', grossWeightKg: 11990, type: 'BA geschl. Kasten' },
+  ];
+
+  // A couple of vehicles are intentionally not "active" so the dashboard/status
+  // filters have data to show.
+  const maintenancePlates = new Set(['B-SG 1556']);
+  const brokenPlates = new Set(['B-SG 1735']);
+
+  const vehicles = pilotFleet.map((entry, index) => {
+    const seq = index + 1;
+    const status = maintenancePlates.has(entry.plate)
+      ? VehicleStatus.maintenance
+      : brokenPlates.has(entry.plate)
+        ? VehicleStatus.broken
+        : VehicleStatus.active;
+    // Spread expiry dates deterministically so TÜV/SP/insurance reminders and
+    // colour thresholds still demo across the fleet.
+    const tuvOffset = ((seq * 37) % 360) - 20;
+    const spOffset = ((seq * 53) % 330) - 15;
+    const insuranceOffset = ((seq * 29) % 360) + 10;
+    return {
+      id: `veh_${slugifyName(entry.plate)}`,
+      plateNumber: entry.plate,
+      internalCode: `VH-${String(seq).padStart(3, '0')}`,
+      brand: entry.brand,
+      model: entry.model,
+      year: 2017 + (seq % 7),
+      status,
+      category: VehicleCategory.truck,
+      initialOdometerKm: entry.km,
+      tuvExpiryDate: addDays(today, tuvOffset),
+      spExpiryDate: addDays(today, spOffset),
+      insuranceExpiryDate: addDays(today, insuranceOffset),
+      notes: `${entry.type} · zul. Gesamtmasse ${entry.grossWeightKg} kg`,
+    };
+  });
 
   const vehiclesByPlate = new Map<string, Awaited<ReturnType<typeof upsertVehicle>>>();
   for (const vehicle of vehicles) {
@@ -1418,13 +1415,15 @@ async function main(): Promise<void> {
   const kalisch = driversByName.get('Kalisch Mario');
   const michalski = driversByName.get('Michalski Mateusz');
 
-  const ap101 = vehiclesByPlate.get('AP-101');
-  const ap102 = vehiclesByPlate.get('AP-102');
-  const ap103 = vehiclesByPlate.get('AP-103');
-  const ap104 = vehiclesByPlate.get('AP-104');
-  const ap105 = vehiclesByPlate.get('AP-105');
+  // Reference vehicles for assignments/handovers/documents below.
+  // Mapped onto real pilot plates (the previous AP-### demo plates were removed).
+  const ap101 = vehiclesByPlate.get('B-SG 1544');
+  const ap102 = vehiclesByPlate.get('B-SG 1556');
+  const ap103 = vehiclesByPlate.get('B-SG 1557');
+  const ap104 = vehiclesByPlate.get('B-SG 1567');
+  const ap105 = vehiclesByPlate.get('B-SG 1569');
   const bsg1540 = vehiclesByPlate.get('B-SG 1540');
-  const bsg1553 = vehiclesByPlate.get('B-SG 1553');
+  const bsg1553 = vehiclesByPlate.get('B-SG 1541');
   const btk710 = vehiclesByPlate.get('B-TK 710');
 
   const dhl = companiesByName.get('DHL');
@@ -1662,30 +1661,15 @@ async function main(): Promise<void> {
     });
   }
 
-  await upsertVehicle({
-    plateNumber: 'AP-101',
-    internalCode: 'VH-101',
-    brand: 'Mercedes-Benz',
-    model: 'Actros 1845',
-    year: 2021,
-    status: VehicleStatus.active,
-    tuvExpiryDate: addDays(today, 28),
-    spExpiryDate: addDays(today, 90),
-    insuranceExpiryDate: addDays(today, 250),
-    currentDriverId: ilker.id,
+  // Link a couple of drivers to their currently assigned pilot vehicles.
+  await prisma.vehicle.update({
+    where: { id: ap101.id },
+    data: { currentDriverId: ilker.id },
   });
 
-  await upsertVehicle({
-    plateNumber: 'AP-102',
-    internalCode: 'VH-102',
-    brand: 'MAN',
-    model: 'TGX 18.510',
-    year: 2020,
-    status: VehicleStatus.active,
-    tuvExpiryDate: addDays(today, 130),
-    spExpiryDate: addDays(today, 22),
-    insuranceExpiryDate: addDays(today, 210),
-    currentDriverId: thomas.id,
+  await prisma.vehicle.update({
+    where: { id: ap102.id },
+    data: { currentDriverId: thomas.id },
   });
 
   const assignmentData = [
@@ -1961,8 +1945,8 @@ async function main(): Promise<void> {
     ownerType: DocumentOwnerType.vehicle,
     ownerId: ap101.id,
     documentType: 'TUV',
-    fileName: 'ap-101-tuv.pdf',
-    fileUrl: 'https://cdn.fleet.local/docs/vehicles/ap-101-tuv.pdf',
+    fileName: 'b-sg-1544-tuv.pdf',
+    fileUrl: 'https://cdn.fleet.local/docs/vehicles/b-sg-1544-tuv.pdf',
     expiryDate: addDays(today, 28),
     status: DocumentStatus.expiring_soon,
     uploadedById: officeUser.id,
@@ -1972,8 +1956,8 @@ async function main(): Promise<void> {
     ownerType: DocumentOwnerType.vehicle,
     ownerId: ap102.id,
     documentType: 'SP',
-    fileName: 'ap-102-sp.pdf',
-    fileUrl: 'https://cdn.fleet.local/docs/vehicles/ap-102-sp.pdf',
+    fileName: 'b-sg-1556-sp.pdf',
+    fileUrl: 'https://cdn.fleet.local/docs/vehicles/b-sg-1556-sp.pdf',
     expiryDate: addDays(today, -5),
     status: DocumentStatus.expired,
     uploadedById: officeUser.id,
@@ -1983,8 +1967,8 @@ async function main(): Promise<void> {
     ownerType: DocumentOwnerType.vehicle,
     ownerId: ap103.id,
     documentType: 'Insurance',
-    fileName: 'ap-103-insurance.pdf',
-    fileUrl: 'https://cdn.fleet.local/docs/vehicles/ap-103-insurance.pdf',
+    fileName: 'b-sg-1557-insurance.pdf',
+    fileUrl: 'https://cdn.fleet.local/docs/vehicles/b-sg-1557-insurance.pdf',
     expiryDate: addDays(today, 18),
     status: DocumentStatus.expiring_soon,
     uploadedById: officeUser.id,
@@ -2381,7 +2365,7 @@ async function main(): Promise<void> {
     targetId: ap101.id,
     reminderType: ReminderType.tuv_expiry,
     title: 'TUV expiry reminder',
-    description: 'AP-101 TUV due date is approaching.',
+    description: 'B-SG 1544 TUV due date is approaching.',
     dueDate: addDays(today, 28),
     notifyBeforeDays: 14,
   });
@@ -2401,7 +2385,7 @@ async function main(): Promise<void> {
     targetId: ap103.id,
     reminderType: ReminderType.insurance_expiry,
     title: 'Insurance expiry reminder',
-    description: 'AP-103 insurance expires soon.',
+    description: 'B-SG 1557 insurance expires soon.',
     dueDate: addDays(today, 18),
     notifyBeforeDays: 10,
   });
@@ -2438,7 +2422,7 @@ async function main(): Promise<void> {
 
   const serviceRecords = [
     {
-      vehicleId: 'veh_ap_101',
+      vehicleId: ap101.id,
       date: addDays(today, -42),
       serviceType: 'Periodic Maintenance',
       repairCompany: 'Berlin Truck Service GmbH',
@@ -2447,7 +2431,7 @@ async function main(): Promise<void> {
       notes: 'Full inspection + oil change.',
     },
     {
-      vehicleId: 'veh_ap_101',
+      vehicleId: ap101.id,
       date: addDays(today, -10),
       serviceType: 'Brake Inspection',
       repairCompany: 'Nord Werkstatt AG',
@@ -2455,7 +2439,7 @@ async function main(): Promise<void> {
       mileageKm: 145100,
     },
     {
-      vehicleId: 'veh_ap_102',
+      vehicleId: ap102.id,
       date: addDays(today, -28),
       serviceType: 'Tire Replacement',
       repairCompany: 'Berlin Truck Service GmbH',
@@ -2463,7 +2447,7 @@ async function main(): Promise<void> {
       mileageKm: 119900,
     },
     {
-      vehicleId: 'veh_ap_104',
+      vehicleId: ap104.id,
       date: addDays(today, -3),
       serviceType: 'Engine Diagnostics',
       repairCompany: 'Mercedes Service Berlin',
@@ -2472,7 +2456,7 @@ async function main(): Promise<void> {
       notes: 'Awaiting parts for clutch repair.',
     },
     {
-      vehicleId: 'veh_b_sg_1540',
+      vehicleId: bsg1540.id,
       date: addDays(today, -65),
       serviceType: 'TÜV Inspection',
       repairCompany: 'TÜV Süd',
@@ -2480,7 +2464,7 @@ async function main(): Promise<void> {
       mileageKm: 134000,
     },
     {
-      vehicleId: 'veh_b_sg_1553',
+      vehicleId: bsg1553.id,
       date: addDays(today, -7),
       serviceType: 'Oil Change',
       repairCompany: 'Renault Werkstatt Hannover',
@@ -2498,7 +2482,7 @@ async function main(): Promise<void> {
       driverId: 'drv_ilker_cukur',
       date: today,
       submittedAt: atTime(today, 6, 30),
-      vehiclePlate: 'AP-101',
+      vehiclePlate: 'B-SG 1544',
       companyName: 'DHL',
       status: 'confirmed' as const,
     },
@@ -2506,7 +2490,7 @@ async function main(): Promise<void> {
       driverId: 'drv_thomas_scharein',
       date: today,
       submittedAt: atTime(today, 6, 45),
-      vehiclePlate: 'AP-102',
+      vehiclePlate: 'B-SG 1556',
       companyName: 'Amazon',
       status: 'waiting_for_review' as const,
     },
