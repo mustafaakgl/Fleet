@@ -1,4 +1,5 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsDateString, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListFleetTripsQueryDto {
   @IsOptional()
@@ -16,4 +17,17 @@ export class ListFleetTripsQueryDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  limit?: number;
 }

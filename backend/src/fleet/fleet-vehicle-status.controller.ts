@@ -3,7 +3,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { OPERATIONAL_ROLES, OPERATIONAL_WRITE_ROLES } from '../common/utils/permissions';
 import { OdometerCorrectionDto } from './dto/odometer-correction.dto';
 import { FleetVehicleStatusService } from './fleet-vehicle-status.service';
 
@@ -40,6 +40,7 @@ export class FleetVehicleStatusController {
   }
 
   @Post(':vehicleId/odometer-correction')
+  @Roles(...OPERATIONAL_WRITE_ROLES)
   correctOdometer(@Param('vehicleId') vehicleId: string, @Body() dto: OdometerCorrectionDto) {
     return this.vehicleStatus.applyOdometerCorrection(vehicleId, dto);
   }

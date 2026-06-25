@@ -22,6 +22,23 @@ export type FleetTripSummary = Pick<
   | 'updatedAt'
 >;
 
+export type FleetTripSummaryWithRelations = FleetTripSummary & {
+  driver: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
+  vehicle: {
+    id: string;
+    plateNumber: string;
+    brand: string;
+    model: string;
+  };
+  route: {
+    assignmentId: string;
+  } | null;
+};
+
 export type FleetTripLocationPointDto = {
   recordedAt: string;
   lat: number;

@@ -3,11 +3,13 @@ import {
   Body,
   Controller,
   Delete,
+  FileTypeValidator,
   Get,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
-  ParseFilePipeBuilder,
+  ParseFilePipe,
   Patch,
   Post,
   Query,
@@ -16,13 +18,14 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
-import { RequiresWrite } from '../common/decorators/requires-write.decorator';
+import { ApiConsumes } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { diskStorage } from 'multer';
-import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { RequiresWrite } from '../common/decorators/requires-write.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -30,19 +33,20 @@ import { CSV_IMPORT_ROLES, OPERATIONAL_ROLES } from '../common/utils/permissions
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { DocumentsService } from './documents.service';
-import {
-  DOCUMENT_UPLOAD_ABSOLUTE_DIR,
-} from '../storage/local-storage.service';
+import { DOCUMENT_UPLOAD_ABSOLUTE_DIR } from '../storage/local-storage.service';
 import { StorageService } from '../storage/storage.service';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
-  'image/jpg',
   'image/png',
-  'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
+const ALLOWED_MIME_TYPE_PATTERN = new RegExp(
+  `^(${ALLOWED_MIME_TYPES.map((type) => type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`,
+);
 
 const DOCUMENT_UPLOAD_INTERCEPTOR = FileInterceptor('file', {
   storage: diskStorage({
@@ -62,7 +66,7 @@ const DOCUMENT_UPLOAD_INTERCEPTOR = FileInterceptor('file', {
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       cb(
         new BadRequestException(
-          'Unsupported file type. Allowed types: PDF, JPG, JPEG, PNG, WEBP.',
+          'Unsupported file type. Allowed types: PDF, JPEG, PNG, DOC, DOCX.',
         ) as Error,
         false,
       );
@@ -78,6 +82,12 @@ type UploadedDocumentFile = {
   mimetype: string;
   size: number;
 };
+
+function sanitizeOriginalFilename(originalName: string): string {
+  const baseName = originalName.replace(/\\/g, '/').split('/').pop() ?? 'file';
+  const sanitized = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return sanitized.length > 0 ? sanitized : 'file';
+}
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
@@ -151,7 +161,11 @@ export class DocumentsController {
 
   @Post()
   @RequiresWrite()
-  async createDocument(@Body() dto: CreateDocumentDto, @CurrentUser('id') userId?: string, @Query('uploadedById') uploadedById?: string) {
+  async createDocument(
+    @Body() dto: CreateDocumentDto,
+    @CurrentUser('id') userId?: string,
+    @Query('uploadedById') uploadedById?: string,
+  ) {
     const finalUploadedById = userId ?? uploadedById;
     const created = await this.documentsService.createDocument(dto, finalUploadedById);
     return this.documentsService.mapDocumentToClient(created);
@@ -173,17 +187,18 @@ export class DocumentsController {
   @Post('upload')
   @RequiresWrite()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiConsumes('multipart/form-data')
   @UseInterceptors(DOCUMENT_UPLOAD_INTERCEPTOR)
   async uploadDocument(
     @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addMaxSizeValidator({
-          maxSize: MAX_FILE_SIZE_BYTES,
-        })
-        .build({
-          fileIsRequired: true,
-          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
-        }),
+      new ParseFilePipe({
+        validators: [
+          new FileTypeValidator({ fileType: ALLOWED_MIME_TYPE_PATTERN }),
+          new MaxFileSizeValidator({ maxSize: MAX_FILE_SIZE_BYTES }),
+        ],
+        fileIsRequired: true,
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+      }),
     )
     file: UploadedDocumentFile,
     @Body('ownerType') ownerType: string,
@@ -198,6 +213,8 @@ export class DocumentsController {
       throw new BadRequestException('file is required');
     }
 
+    const safeOriginalName = sanitizeOriginalFilename(file.originalname);
+
     const created = await this.documentsService.createUploadedDocument(
       {
         ownerType,
@@ -207,7 +224,7 @@ export class DocumentsController {
         notes,
       },
       {
-        originalName: file.originalname,
+        originalName: safeOriginalName,
         storedFileName: file.filename,
         fileUrl: this.storageService.buildStoredPath('documents', file.filename),
       },
@@ -222,18 +239,19 @@ export class DocumentsController {
   @Post(':id/replace-upload')
   @RequiresWrite()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiConsumes('multipart/form-data')
   @UseInterceptors(DOCUMENT_UPLOAD_INTERCEPTOR)
   async replaceUploadDocument(
     @Param('id') id: string,
     @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addMaxSizeValidator({
-          maxSize: MAX_FILE_SIZE_BYTES,
-        })
-        .build({
-          fileIsRequired: true,
-          errorHttpStatusCode: HttpStatus.BAD_REQUEST,
-        }),
+      new ParseFilePipe({
+        validators: [
+          new FileTypeValidator({ fileType: ALLOWED_MIME_TYPE_PATTERN }),
+          new MaxFileSizeValidator({ maxSize: MAX_FILE_SIZE_BYTES }),
+        ],
+        fileIsRequired: true,
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+      }),
     )
     file: UploadedDocumentFile,
     @Body('documentType') documentType?: string,
@@ -246,6 +264,8 @@ export class DocumentsController {
       throw new BadRequestException('file is required');
     }
 
+    const safeOriginalName = sanitizeOriginalFilename(file.originalname);
+
     const replaced = await this.documentsService.replaceDocumentWithUpload(
       id,
       {
@@ -254,7 +274,7 @@ export class DocumentsController {
         notes,
       },
       {
-        originalName: file.originalname,
+        originalName: safeOriginalName,
         storedFileName: file.filename,
         fileUrl: this.storageService.buildStoredPath('documents', file.filename),
       },
@@ -273,7 +293,12 @@ export class DocumentsController {
   }
 
   @Post(':id/replace')
-  replaceDocument(@Param('id') id: string, @Body() dto: UpdateDocumentDto, @CurrentUser('id') userId?: string, @Query('uploadedById') uploadedById?: string) {
+  replaceDocument(
+    @Param('id') id: string,
+    @Body() dto: UpdateDocumentDto,
+    @CurrentUser('id') userId?: string,
+    @Query('uploadedById') uploadedById?: string,
+  ) {
     const finalUploadedById = userId ?? uploadedById;
     return this.documentsService.replaceDocument(id, dto, finalUploadedById);
   }

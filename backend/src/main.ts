@@ -13,7 +13,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import {
   DOCUMENT_UPLOAD_RELATIVE_DIR,
   VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR,
@@ -57,7 +57,7 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new PrismaExceptionFilter());
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   const documentsRoot = join(process.cwd(), DOCUMENT_UPLOAD_RELATIVE_DIR);
   const vehiclePhotosRoot = join(process.cwd(), VEHICLE_PHOTO_UPLOAD_RELATIVE_DIR);

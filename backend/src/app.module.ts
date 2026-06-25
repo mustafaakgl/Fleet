@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -52,10 +53,12 @@ import { ThrottlerAuditFilter } from './common/filters/throttler-audit.filter';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 import { ApiVersionInterceptor } from './common/interceptors/api-version.interceptor';
+import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { WriteRoleGuard } from './common/guards/write-role.guard';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
@@ -126,6 +129,10 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     {
       provide: APP_INTERCEPTOR,
       useClass: ApiVersionInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
     },
     {
       provide: APP_FILTER,

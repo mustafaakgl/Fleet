@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   Assignment,
   AssignmentStatus,
@@ -507,7 +507,7 @@ export class AssignmentsService {
     const expectedDailyRevenue =
       dto.expected_daily_revenue ?? toDecimalNumber(company?.defaultDailyRevenue ?? null) ?? undefined;
 
-    const created = await this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const conflict = await this.validateAvailability(tx, {
         driverId: dto.driver_id,
         vehicleId,
@@ -516,6 +516,24 @@ export class AssignmentsService {
         endTime: dto.end_time,
       });
       if (conflict) throw new BadRequestException(conflict);
+
+      const { start, end } = this.getDayRange(workDate);
+
+      // Reminder: enforce this at DB level too (partial unique index on active assignments per vehicle/time window).
+      const activeVehicleAssignment = await tx.assignment.findFirst({
+        where: {
+          vehicleId,
+          workDate: { gte: start, lt: end },
+          status: { in: ACTIVE_ASSIGNMENT_STATUSES },
+          startTime: { lt: dto.end_time },
+          endTime: { gt: dto.start_time },
+        },
+        select: { id: true },
+      });
+
+      if (activeVehicleAssignment) {
+        throw new ConflictException('Vehicle is already assigned');
+      }
 
       const assignment = await tx.assignment.create({
         data: {
@@ -538,6 +556,12 @@ export class AssignmentsService {
         include: clientInclude,
       });
 
+      await tx.vehicle.update({
+        where: { id: vehicleId },
+        // Schema does not currently have an "assigned" status; keep status unchanged and pin current driver atomically.
+        data: { currentDriverId: dto.driver_id, status: VehicleStatus.active },
+      });
+
       await tx.calendarEvent.create({
         data: {
           driverId: dto.driver_id,
@@ -549,6 +573,8 @@ export class AssignmentsService {
       });
 
       return assignment;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     await this.companyEmailsService.updateEmailStatusAfterAssignmentChange(

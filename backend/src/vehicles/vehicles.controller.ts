@@ -17,14 +17,17 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
+import { ApiQuery } from '@nestjs/swagger';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
+import { ListVehiclesQueryDto } from './dto/list-vehicles-query.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import {
   CreateVehicleEquipmentDto,
@@ -48,18 +51,12 @@ export class VehiclesController {
   ) {}
 
   @Get()
-  listVehicles(
-    @Query('status') status?: string,
-    @Query('search') search?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.vehiclesService.list({
-      status,
-      search,
-      page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 50,
-    });
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'sortBy', required: false, type: String, example: 'plateNumber' })
+  @ApiQuery({ name: 'sortOrder', required: false, type: String, enum: ['asc', 'desc'] })
+  listVehicles(@Query() paginationDto: PaginationDto, @Query() query: ListVehiclesQueryDto) {
+    return this.vehiclesService.list({ ...query, ...paginationDto });
   }
 
   @Get(':id/photo')

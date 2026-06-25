@@ -16,7 +16,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { OPERATIONAL_ROLES, OPERATIONAL_WRITE_ROLES } from '../common/utils/permissions';
 import { DOCUMENT_UPLOAD_ABSOLUTE_DIR } from '../storage/local-storage.service';
 import { CreateFuelEntryDto } from './dto/create-fuel-entry.dto';
 import { CreateFuelEntryOfficeDto } from './dto/create-fuel-entry-office.dto';
@@ -129,6 +129,7 @@ export class FleetFuelController {
   }
 
   @Post()
+  @Roles(...OPERATIONAL_WRITE_ROLES)
   create(@Body() dto: CreateFuelEntryOfficeDto) {
     return this.fleetFuel.createFuelEntry(dto);
   }

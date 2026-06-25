@@ -703,6 +703,7 @@ model Vehicle {
   initialOdometerKm       Decimal?  @db.Decimal(12, 3)
   odometerCorrectedKm     Decimal?  @db.Decimal(12, 3)
   odometerCorrectedAt     DateTime?
+  deletedAt              DateTime?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 

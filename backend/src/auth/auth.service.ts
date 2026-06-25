@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -23,6 +24,16 @@ import { MfaService } from './mfa.service';
 import { TenantAccessService } from '../tenant/tenant-access.service';
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const ACCESS_TOKEN_TTL = '15m';
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface JwtPayload {
+  sub: string;
+  email: string;
+  role: string;
+  tenantId: string;
+  fleetOps: boolean;
+}
 
 interface AuthUserPayload {
   id: string;
@@ -41,6 +52,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly configService: ConfigService,
     private readonly auditService: AuditService,
     private readonly mailService: MailService,
     private readonly onboarding: OnboardingService,
@@ -63,6 +75,43 @@ export class AuthService {
     } catch (error) {
       console.warn('Audit log failed:', error);
     }
+  }
+
+  private hashRefreshToken(rawToken: string): string {
+    return createHash('sha256').update(rawToken).digest('hex');
+  }
+
+  private async issueRefreshToken(
+    userId: string,
+    context?: { ipAddress?: string; userAgent?: string },
+  ): Promise<{ token: string; tokenId: string; expiresAt: Date }> {
+    const token = randomBytes(48).toString('base64url');
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+    const created = await this.prisma.unscoped.refreshToken.create({
+      data: {
+        userId,
+        tokenHash: this.hashRefreshToken(token),
+        expiresAt,
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+      },
+      select: { id: true },
+    });
+
+    return { token, tokenId: created.id, expiresAt };
+  }
+
+  private async signAccessToken(payload: JwtPayload): Promise<string> {
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    if (!jwtSecret) {
+      throw new UnauthorizedException('JWT secret is not configured');
+    }
+
+    return this.jwt.signAsync(payload, {
+      secret: jwtSecret,
+      expiresIn: ACCESS_TOKEN_TTL,
+    });
   }
 
   private async buildAuthUserPayload(user: {
@@ -136,6 +185,7 @@ export class AuthService {
   ): Promise<
     | {
         accessToken: string;
+        refreshToken: string;
         user: AuthUserPayload;
         mfa_required?: false;
       }
@@ -201,13 +251,15 @@ export class AuthService {
       };
     }
 
-    const accessToken = await this.jwt.signAsync({
+    const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
       tenantId: user.tenantId,
       fleetOps: isFleetOpsEmail(user.email),
-    });
+    };
+    const accessToken = await this.signAccessToken(payload);
+    const refresh = await this.issueRefreshToken(user.id, context);
 
     await this.safeAuditLog({
       actorUserId: user.id,
@@ -222,8 +274,73 @@ export class AuthService {
 
     return {
       accessToken,
+      refreshToken: refresh.token,
       user: await this.buildAuthUserPayload(user),
       mfa_required: false,
+    };
+  }
+
+  async refreshTokens(
+    refreshToken: string,
+    context?: { ipAddress?: string; userAgent?: string },
+  ): Promise<{ accessToken: string; refreshToken: string; user: AuthUserPayload }> {
+    const tokenHash = this.hashRefreshToken(refreshToken);
+    const existing = await this.prisma.unscoped.refreshToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            role: true,
+            language: true,
+            status: true,
+            tenantId: true,
+          },
+        },
+      },
+    });
+
+    if (!existing || existing.revokedAt) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (existing.expiresAt.getTime() <= Date.now()) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    if (!existing.user || existing.user.status !== 'active') {
+      throw new UnauthorizedException('User not found');
+    }
+
+    await this.assertTenantActiveForAuth(existing.user.tenantId, {
+      genericError: true,
+      email: existing.user.email,
+      userId: existing.user.id,
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+
+    const nextRefresh = await this.issueRefreshToken(existing.user.id, context);
+
+    await this.prisma.unscoped.refreshToken.update({
+      where: { id: existing.id },
+      data: { revokedAt: new Date(), replacedById: nextRefresh.tokenId },
+    });
+
+    const accessToken = await this.signAccessToken({
+      sub: existing.user.id,
+      email: existing.user.email,
+      role: existing.user.role,
+      tenantId: existing.user.tenantId,
+      fleetOps: isFleetOpsEmail(existing.user.email),
+    });
+
+    return {
+      accessToken,
+      refreshToken: nextRefresh.token,
+      user: await this.buildAuthUserPayload(existing.user),
     };
   }
 
@@ -247,7 +364,7 @@ export class AuthService {
       userAgent: context?.userAgent,
     });
 
-    const accessToken = await this.jwt.signAsync({
+    const accessToken = await this.signAccessToken({
       sub: user.id,
       email: user.email,
       role: user.role,
@@ -299,7 +416,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid session');
     });
 
-    const accessToken = await this.jwt.signAsync({
+    const accessToken = await this.signAccessToken({
       sub: user.id,
       email: user.email,
       role: user.role,

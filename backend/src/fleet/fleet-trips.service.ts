@@ -20,6 +20,7 @@ import type {
   FleetTripDetail,
   FleetTripLocationPointDto,
   FleetTripSummary,
+  FleetTripSummaryWithRelations,
 } from './core/fleet-trips.types';
 import type { ListFleetTripsQueryDto } from './dto/list-fleet-trips.query';
 import { FleetTripProcessingService } from './fleet-trip-processing.service';
@@ -119,14 +120,59 @@ export class FleetTripsService {
     };
   }
 
-  async listTrips(query: ListFleetTripsQueryDto): Promise<FleetTripSummary[]> {
+  async listTrips(query: ListFleetTripsQueryDto): Promise<FleetTripSummaryWithRelations[]> {
     const where = this.buildListWhere(query);
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 500;
+
     const trips = await this.prisma.fleetTrip.findMany({
       where,
       orderBy: { startedAt: 'desc' },
-      take: 500,
+      skip: (page - 1) * limit,
+      take: limit,
+      select: {
+        id: true,
+        vehicleId: true,
+        driverId: true,
+        source: true,
+        startedAt: true,
+        endedAt: true,
+        distanceKm: true,
+        durationS: true,
+        avgSpeedKmh: true,
+        maxSpeedKmh: true,
+        idleS: true,
+        score: true,
+        hasDataGap: true,
+        status: true,
+        assignmentId: true,
+        workSessionId: true,
+        createdAt: true,
+        updatedAt: true,
+        driver: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        vehicle: {
+          select: {
+            id: true,
+            plateNumber: true,
+            brand: true,
+            model: true,
+          },
+        },
+      },
     });
-    return trips.map((trip) => this.serializeTrip(trip));
+
+    return trips.map((trip) => ({
+      ...this.serializeTrip(trip),
+      driver: trip.driver,
+      vehicle: trip.vehicle,
+      route: trip.assignmentId ? { assignmentId: trip.assignmentId } : null,
+    }));
   }
 
   async listTripsForDriver(userId: string, query: ListFleetTripsQueryDto): Promise<FleetTripSummary[]> {
