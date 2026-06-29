@@ -137,7 +137,19 @@ export class AuthController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async refresh(
+    @Body('refreshToken') refreshToken: string | undefined,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const bodyToken = refreshToken?.trim();
+    if (bodyToken) {
+      return this.auth.refreshTokens(bodyToken, {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? undefined,
+      });
+    }
+
     const rawToken = this.readRefreshCookie(req);
     if (!rawToken) {
       this.refreshTokens.clearCookie(res);
@@ -169,10 +181,19 @@ export class AuthController {
   @SkipThrottle()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const rawToken = this.readRefreshCookie(req);
-    if (rawToken) {
-      await this.refreshTokens.revoke(rawToken);
+  async logout(
+    @Body('refreshToken') refreshToken: string | undefined,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const bodyToken = refreshToken?.trim();
+    const cookieToken = this.readRefreshCookie(req);
+
+    if (bodyToken) {
+      await this.refreshTokens.revoke(bodyToken);
+    }
+    if (cookieToken && cookieToken !== bodyToken) {
+      await this.refreshTokens.revoke(cookieToken);
     }
     this.refreshTokens.clearCookie(res);
     return { success: true };

@@ -26,6 +26,7 @@
   "nav.serviceHistory": "Service History",
   "nav.requests": "Requests",
   "nav.reminders": "Reminders",
+  "nav.notifications": "Notifications",
   "nav.licenseChecks": "License checks",
   "nav.fines": "Traffic fines",
   "nav.costs": "Vehicle costs",

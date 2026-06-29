@@ -35,6 +35,12 @@ interface JwtPayload {
   fleetOps: boolean;
 }
 
+interface RefreshJwtPayload {
+  sub: string;
+  purpose: 'refresh';
+  tokenId: string;
+}
+
 interface AuthUserPayload {
   id: string;
   email: string;
@@ -81,12 +87,32 @@ export class AuthService {
     return createHash('sha256').update(rawToken).digest('hex');
   }
 
-  private async issueRefreshToken(
+  private getJwtSecretOrThrow(): string {
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    if (!jwtSecret) {
+      throw new UnauthorizedException('JWT secret is not configured');
+    }
+
+    return jwtSecret;
+  }
+
+  async generateRefreshToken(
     userId: string,
     context?: { ipAddress?: string; userAgent?: string },
   ): Promise<{ token: string; tokenId: string; expiresAt: Date }> {
-    const token = randomBytes(48).toString('base64url');
+    const tokenId = randomBytes(16).toString('hex');
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+    const token = await this.jwt.signAsync(
+      {
+        sub: userId,
+        purpose: 'refresh' as const,
+        tokenId,
+      } satisfies RefreshJwtPayload,
+      {
+        secret: this.getJwtSecretOrThrow(),
+        expiresIn: '7d',
+      },
+    );
 
     const created = await this.prisma.unscoped.refreshToken.create({
       data: {
@@ -100,6 +126,22 @@ export class AuthService {
     });
 
     return { token, tokenId: created.id, expiresAt };
+  }
+
+  private async verifyRefreshTokenSignature(refreshToken: string): Promise<RefreshJwtPayload> {
+    try {
+      const payload = await this.jwt.verifyAsync<RefreshJwtPayload>(refreshToken, {
+        secret: this.getJwtSecretOrThrow(),
+      });
+
+      if (payload.purpose !== 'refresh' || !payload.sub || !payload.tokenId) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      return payload;
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   private async signAccessToken(payload: JwtPayload): Promise<string> {
@@ -259,7 +301,7 @@ export class AuthService {
       fleetOps: isFleetOpsEmail(user.email),
     };
     const accessToken = await this.signAccessToken(payload);
-    const refresh = await this.issueRefreshToken(user.id, context);
+    const refresh = await this.generateRefreshToken(user.id, context);
 
     await this.safeAuditLog({
       actorUserId: user.id,
@@ -306,6 +348,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
+    await this.verifyRefreshTokenSignature(refreshToken);
+
     if (existing.expiresAt.getTime() <= Date.now()) {
       throw new UnauthorizedException('Refresh token expired');
     }
@@ -322,7 +366,7 @@ export class AuthService {
       userAgent: context?.userAgent,
     });
 
-    const nextRefresh = await this.issueRefreshToken(existing.user.id, context);
+    const nextRefresh = await this.generateRefreshToken(existing.user.id, context);
 
     await this.prisma.unscoped.refreshToken.update({
       where: { id: existing.id },

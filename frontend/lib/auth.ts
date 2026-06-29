@@ -2,8 +2,10 @@ import { AuthUser } from './types';
 import { jwtDecode } from 'jwt-decode';
 
 const TOKEN_KEY = 'accessToken';
+const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_KEY = 'user';
 const LEGACY_TOKEN_KEY = 'fleet_access_token';
+const LEGACY_REFRESH_TOKEN_KEY = 'fleet_refresh_token';
 const LEGACY_USER_KEY = 'fleet_user';
 const SKIP_AUTO_LOGIN_KEY = 'fleet_skip_auto_login';
 
@@ -29,9 +31,20 @@ export function saveAuth(token: string, user: AuthUser): void {
   localStorage.setItem(LEGACY_USER_KEY, JSON.stringify(normalizedUser));
 }
 
+export function saveRefreshToken(refreshToken: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  localStorage.setItem(LEGACY_REFRESH_TOKEN_KEY, refreshToken);
+}
+
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(LEGACY_TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY) ?? localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY);
 }
 
 export function getUser(): AuthUser | null {
@@ -91,8 +104,10 @@ export function getPostLoginPath(role: AuthUser['role'] | string): string {
 export function clearAuth(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
 }
 
@@ -122,12 +137,18 @@ export function updateLocalUser(partial: Partial<AuthUser>): void {
 
 /** Clear session, revoke the server-side refresh token, and redirect to login. */
 export function performLogout(redirectTo = '/login?manual=1'): void {
+  const refreshToken = getRefreshToken();
   clearAuth();
   markManualLoginRequired();
   if (typeof window !== 'undefined') {
     const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
     // Fire-and-forget: revoke the refresh cookie server-side before navigating.
-    void fetch(`${base}/auth/logout`, { method: 'POST', credentials: 'include' })
+    void fetch(`${base}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
+    })
       .catch(() => undefined)
       .finally(() => {
         window.location.assign(redirectTo);

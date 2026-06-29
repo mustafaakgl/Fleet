@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { clearAuth, markManualLoginRequired, saveAuth } from './auth';
+import { clearAuth, markManualLoginRequired, saveAuth, saveRefreshToken, getRefreshToken } from './auth';
 import type {
   AuthResponse,
   MfaSetupResponse,
@@ -95,18 +95,26 @@ api.interceptors.request.use((config) => {
 // ─── Response interceptor: handle 401/403 ──────────────────────────────────
 let refreshPromise: Promise<string | null> | null = null;
 
-/** Attempts to refresh the session via the httpOnly refresh cookie. */
+function persistAuthResponse(response: AuthResponse): AuthResponse {
+  const token = response.accessToken ?? response.access_token;
+  if (token && response.user) {
+    saveAuth(token, { ...response.user, name: response.user.name ?? response.user.email });
+  }
+
+  const refreshToken = response.refreshToken ?? response.refresh_token;
+  if (refreshToken) {
+    saveRefreshToken(refreshToken);
+  }
+
+  return response;
+}
+
+/** Attempts to refresh the session via the stored refresh token or cookie fallback. */
 async function tryRefreshSession(): Promise<string | null> {
   if (!refreshPromise) {
-    refreshPromise = axios
-      .post<AuthResponse>(`${BASE_URL}/auth/refresh`, undefined, { withCredentials: true })
-      .then((res) => {
-        const token = res.data.accessToken ?? res.data.access_token ?? null;
-        if (token && res.data.user) {
-          saveAuth(token, { ...res.data.user, name: res.data.user.name ?? res.data.user.email });
-        }
-        return token;
-      })
+    refreshPromise = authApi
+      .refresh()
+      .then((res) => res.accessToken ?? res.access_token ?? null)
       .catch(() => null)
       .finally(() => {
         refreshPromise = null;
@@ -200,9 +208,12 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
 
 export const authApi = {
   signIn: (email: string, password: string) =>
-    api.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data),
+    api.post<AuthResponse>('/auth/login', { email, password }).then((r) => persistAuthResponse(r.data)),
 
-  refresh: () => api.post<AuthResponse>('/auth/refresh').then((r) => r.data),
+  refresh: () =>
+    api
+      .post<AuthResponse>('/auth/refresh', { refreshToken: getRefreshToken() ?? undefined })
+      .then((r) => persistAuthResponse(r.data)),
 
   logout: () => api.post<{ success: boolean }>('/auth/logout').then((r) => r.data),
 
@@ -234,7 +245,7 @@ export const authApi = {
   oidcLoginUrl: () => `${BASE_URL}/auth/oidc/login`,
 
   oidcExchange: (code: string) =>
-    api.post<AuthResponse>('/auth/oidc/exchange', { code }).then((r) => r.data),
+    api.post<AuthResponse>('/auth/oidc/exchange', { code }).then((r) => persistAuthResponse(r.data)),
 
   requestPasswordReset: (userId: string) =>
     api
@@ -279,7 +290,7 @@ export const authApi = {
   verifyMfaLogin: (mfaToken: string, code: string) =>
     api
       .post<AuthResponse>('/auth/mfa/verify-login', { mfa_token: mfaToken, code })
-      .then((r) => r.data),
+      .then((r) => persistAuthResponse(r.data)),
 
   mfaStatus: () => api.get<MfaStatus>('/auth/mfa/status').then((r) => r.data),
 
@@ -1081,22 +1092,12 @@ export const remindersApi = {
 
 export const notificationsApi = {
   list: (status?: string) =>
-    api.get<Array<{
-      id: string;
-      title: string;
-      message: string;
-      type: string;
-      priority: 'low' | 'medium' | 'high' | 'critical';
-      status: 'unread' | 'read';
-      relatedEntityType?: string | null;
-      relatedEntityId?: string | null;
-      createdAt: string;
-    }>>('/notifications', { params: status ? { status } : undefined }).then((r) => r.data),
+    api.get<Notification[]>('/notifications', { params: status ? { status } : undefined }).then((r) => r.data),
 
   getUnreadCount: () =>
     api.get<{ count: number }>('/notifications/unread-count').then((r) => r.data),
 
-  markRead: (id: string) => api.post(`/notifications/${id}/read`).then((r) => r.data),
+  markRead: (id: string) => api.patch(`/notifications/${id}`).then((r) => r.data),
 
   markAllRead: () => api.post('/notifications/read-all').then((r) => r.data),
 };

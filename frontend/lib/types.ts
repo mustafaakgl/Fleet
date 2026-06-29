@@ -25,6 +25,7 @@ export interface AuthUser {
 export interface AuthResponse {
   accessToken?: string;
   access_token?: string;
+  refreshToken?: string;
   refresh_token?: string;
   expires_in?: number;
   mfa_required?: boolean;
@@ -970,11 +971,16 @@ export interface Reminder {
 
 export interface Notification {
   id: string;
+  userId: string;
   title: string;
   message: string;
   type: string;
-  is_read: boolean;
-  created_at: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'unread' | 'read';
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────

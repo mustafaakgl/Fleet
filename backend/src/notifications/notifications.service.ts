@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { NotificationSseService } from './notification-sse.service';
@@ -146,6 +147,23 @@ export class NotificationsService {
     });
   }
 
+  async listNotificationsForRole(role: UserRole, userId: string, status?: string) {
+    if (role !== 'admin') {
+      return this.listMyNotifications(userId, status);
+    }
+
+    const where: Record<string, unknown> = {};
+    if (status) {
+      where.status = this.ensureStatus(status);
+    }
+
+    const db = this.prisma as any;
+    return db.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async markAsRead(notificationId: string, userId: string) {
     const db = this.prisma as any;
     const notification = await db.notification.findUnique({ where: { id: notificationId } });
@@ -154,6 +172,23 @@ export class NotificationsService {
     }
 
     if (notification.userId !== userId) {
+      throw new ForbiddenException('Cannot mark another user\'s notification as read');
+    }
+
+    return db.notification.update({
+      where: { id: notificationId },
+      data: { status: 'read' as NotificationStatus },
+    });
+  }
+
+  async markAsReadForRole(notificationId: string, userId: string, role: UserRole) {
+    const db = this.prisma as any;
+    const notification = await db.notification.findUnique({ where: { id: notificationId } });
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    if (role !== 'admin' && notification.userId !== userId) {
       throw new ForbiddenException('Cannot mark another user\'s notification as read');
     }
 
@@ -181,6 +216,21 @@ export class NotificationsService {
     const count = await db.notification.count({
       where: {
         userId,
+        status: 'unread',
+      },
+    });
+
+    return { count };
+  }
+
+  async getUnreadCountForRole(role: UserRole, userId: string) {
+    if (role !== 'admin') {
+      return this.getUnreadCount(userId);
+    }
+
+    const db = this.prisma as any;
+    const count = await db.notification.count({
+      where: {
         status: 'unread',
       },
     });

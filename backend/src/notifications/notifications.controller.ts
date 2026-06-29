@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Param, Post, Query, Sse, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Param, Patch, Post, Query, Sse, UseGuards } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -8,6 +8,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { NotificationSseService } from './notification-sse.service';
 import { NotificationsService } from './notifications.service';
+import type { UserRole } from '@prisma/client';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
@@ -26,18 +27,31 @@ export class NotificationsController {
   }
 
   @Get()
-  listMyNotifications(@CurrentUser('id') userId: string, @Query('status') status?: string) {
-    return this.notificationsService.listMyNotifications(userId, status);
+  listMyNotifications(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+    @Query('status') status?: string,
+  ) {
+    return this.notificationsService.listNotificationsForRole(role, userId, status);
   }
 
   @Get('unread-count')
-  getUnreadCount(@CurrentUser('id') userId: string) {
-    return this.notificationsService.getUnreadCount(userId);
+  getUnreadCount(@CurrentUser('id') userId: string, @CurrentUser('role') role: UserRole) {
+    return this.notificationsService.getUnreadCountForRole(role, userId);
+  }
+
+  @Patch(':id')
+  markAsRead(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') role: UserRole,
+  ) {
+    return this.notificationsService.markAsReadForRole(id, userId, role);
   }
 
   @Post(':id/read')
-  markAsRead(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.notificationsService.markAsRead(id, userId);
+  markAsReadLegacy(@Param('id') id: string, @CurrentUser('id') userId: string, @CurrentUser('role') role: UserRole) {
+    return this.notificationsService.markAsReadForRole(id, userId, role);
   }
 
   @Post('read-all')

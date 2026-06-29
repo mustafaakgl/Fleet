@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import './globals.css';
 import { GlobalToaster } from '@/components/ui/global-toaster';
 import { I18nProvider } from '@/components/providers/I18nProvider';
+import { QueryProvider } from '@/components/providers/QueryProvider';
 import { LANG_STORAGE_KEY, resolveLanguage } from '@/src/language';
 
 export const metadata: Metadata = {
@@ -22,10 +23,12 @@ export default async function RootLayout({
   return (
     <html lang={language} className="h-full" suppressHydrationWarning>
       <body className="min-h-full">
-        <I18nProvider initialLanguage={language}>
-          {children}
-          <GlobalToaster />
-        </I18nProvider>
+        <QueryProvider>
+          <I18nProvider initialLanguage={language}>
+            {children}
+            <GlobalToaster />
+          </I18nProvider>
+        </QueryProvider>
       </body>
     </html>
   );

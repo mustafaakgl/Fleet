@@ -15,7 +15,6 @@ import {
   CreditCard,
   Droplets,
   FileText,
-  IdCard,
   LayoutDashboard,
   ListTodo,
   LogOut,
@@ -34,9 +33,11 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { OperionLogo } from '@/components/brand/OperionLogo';
 import { getUser, performLogout } from '@/lib/auth';
+import { notificationsApi } from '@/lib/api';
 import {
   getNavigationForRole,
   isNavItemActive,
@@ -65,6 +66,7 @@ const NAV_ITEMS: RoleNavItem[] = [
   { label: 'nav.liveTracking', href: '/live-tracking', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
   { label: 'nav.reminders', href: '/reminders/service', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.messenger', href: '/messenger', icon: MessageSquare, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.notifications', href: '/notifications', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.drivers', href: '/drivers', icon: Users, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.vehicles.list', href: '/vehicles', icon: Truck, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.vehicles.assignments', href: '/vehicles/assignments', icon: Truck, roles: ['admin', 'boss', 'accounting', 'office'] },
@@ -111,6 +113,14 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const [user] = useState<AuthUser | null>(() => getUser());
+  const unreadNotificationsQuery = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: () => notificationsApi.getUnreadCount(),
+    enabled: Boolean(user),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const unreadNotifications = unreadNotificationsQuery.data?.count ?? 0;
 
   const role = useMemo<SidebarRole>(() => {
     const currentRole = user?.role;
@@ -134,11 +144,11 @@ export function Sidebar() {
 
     return baseGroups
       .map((group) => {
-        const filteredEntries = group.items.flatMap((entry) => {
+        const filteredEntries = group.items.flatMap((entry): NavEntry[] => {
           if (isNavSection(entry)) {
             const sectionItems = entry.items.filter((item) => allowedHrefs.has(item.href));
             if (sectionItems.length === 0) return [];
-            return [{ ...entry, items: sectionItems }];
+            return [{ ...entry, items: sectionItems } as NavSection];
           }
 
           return allowedHrefs.has(entry.href) ? [entry] : [];
@@ -225,6 +235,7 @@ export function Sidebar() {
   function renderNavItem(item: NavItem, nested = false) {
     const Icon = item.icon;
     const isActive = isNavItemActive(pathname, item.href);
+    const showNotificationBadge = item.href === '/notifications' && unreadNotifications > 0;
 
     return (
       <Link
@@ -241,8 +252,13 @@ export function Sidebar() {
         )}
       >
         {Icon ? <Icon className="h-4 w-4 shrink-0 text-current" /> : null}
-        <span className={cn(tabletCollapsed && !nested ? 'hidden lg:inline' : 'inline')}>
-          {t(item.labelKey)}
+        <span className={cn('flex min-w-0 flex-1 items-center gap-2', tabletCollapsed && !nested ? 'hidden lg:flex' : 'flex')}>
+          <span className="truncate">{t(item.labelKey)}</span>
+          {showNotificationBadge ? (
+            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-blue-700">
+              {unreadNotifications > 99 ? '99+' : unreadNotifications}
+            </span>
+          ) : null}
         </span>
       </Link>
     );
