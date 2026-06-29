@@ -14,7 +14,7 @@ type BannerTone = 'info' | 'success' | 'warning' | 'action';
 function toneClass(tone: BannerTone): string {
   if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
   if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900';
-  if (tone === 'action') return 'border-[#1a4d7a]/20 bg-blue-50 text-[#1a4d7a]';
+  if (tone === 'action') return 'border-brand-primary/20 bg-blue-50 text-brand-primary';
   return 'border-slate-200 bg-slate-50 text-slate-700';
 }
 
@@ -101,7 +101,7 @@ export function DriverDayStatusBanner() {
       )}
       <div>
         <p className="font-medium">{message}</p>
-        {ctaLabel ? <p className="mt-1 text-xs font-semibold text-[#1a4d7a]">{ctaLabel}</p> : null}
+        {ctaLabel ? <p className="mt-1 text-xs font-semibold text-brand-primary">{ctaLabel}</p> : null}
       </div>
     </div>
   );

@@ -155,7 +155,7 @@ export function AccountMenu() {
         aria-haspopup="menu"
         aria-label={t('accountMenu.openMenu')}
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0b2342] text-sm font-semibold text-white">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-primary text-sm font-semibold text-white">
           {userInitial}
         </span>
         <span className="hidden min-w-0 sm:block">

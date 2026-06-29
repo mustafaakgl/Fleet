@@ -390,10 +390,10 @@ export function MessengerPage() {
     <div className={FLEET_PAGE}>
       <div className={FLEET_PAGE_HEADER}>
         <div className={FLEET_PAGE_HEADER_TITLE}>
-          <MessageSquare className="h-5 w-5 shrink-0 text-[#1a4d7a] sm:h-6 sm:w-6" />
+          <MessageSquare className="h-5 w-5 shrink-0 text-brand-primary sm:h-6 sm:w-6" />
           <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{t('messenger.title')}</h1>
           {unreadCount.total > 0 ? (
-            <span className="shrink-0 rounded-full bg-[#1a4d7a] px-2.5 py-0.5 text-xs font-semibold text-white">
+            <span className="shrink-0 rounded-full bg-brand-primary px-2.5 py-0.5 text-xs font-semibold text-white">
               {t('messenger.unread', { count: unreadCount.total })}
             </span>
           ) : null}
@@ -441,7 +441,7 @@ export function MessengerPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <p className="text-2xl font-semibold text-[#1a4d7a]">{stats.unreadTotal}</p>
+              <p className="text-2xl font-semibold text-brand-primary">{stats.unreadTotal}</p>
             </CardContent>
           </Card>
           <Card className={FLEET_LIST_CARD}>

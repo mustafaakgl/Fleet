@@ -45,25 +45,25 @@ export function DriverPendingTasksCard() {
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         {counts.handovers > 0 ? (
-          <Link href="/driver/handover" className="flex items-center gap-2 text-slate-700 hover:text-[#1a4d7a]">
+          <Link href="/driver/handover" className="flex items-center gap-2 text-slate-700 hover:text-brand-primary">
             <Camera className="h-4 w-4" />
             {t('driverPortal.pending.handover', { count: counts.handovers })}
           </Link>
         ) : null}
         {counts.messages > 0 ? (
-          <Link href="/driver/messages" className="flex items-center gap-2 text-slate-700 hover:text-[#1a4d7a]">
+          <Link href="/driver/messages" className="flex items-center gap-2 text-slate-700 hover:text-brand-primary">
             <MessageSquare className="h-4 w-4" />
             {t('driverPortal.pending.messages', { count: counts.messages })}
           </Link>
         ) : null}
         {counts.notifications > 0 ? (
-          <Link href="/driver/notifications" className="flex items-center gap-2 text-slate-700 hover:text-[#1a4d7a]">
+          <Link href="/driver/notifications" className="flex items-center gap-2 text-slate-700 hover:text-brand-primary">
             <Bell className="h-4 w-4" />
             {t('driverPortal.pending.notifications', { count: counts.notifications })}
           </Link>
         ) : null}
         {counts.requests > 0 ? (
-          <Link href="/driver/requests" className="flex items-center gap-2 text-slate-700 hover:text-[#1a4d7a]">
+          <Link href="/driver/requests" className="flex items-center gap-2 text-slate-700 hover:text-brand-primary">
             <FileText className="h-4 w-4" />
             {t('driverPortal.pending.requests', { count: counts.requests })}
           </Link>

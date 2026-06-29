@@ -92,7 +92,7 @@ export function RecentMessagesWidget() {
         {hasConversations ? (
           <Link
             href="/messenger"
-            className="inline-flex items-center gap-1 text-sm font-medium text-[#1a4d7a] hover:underline"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-primary hover:underline"
           >
             {t('dashboard.recentMessages.viewAll')}
             <ChevronRight className="h-4 w-4" />
@@ -103,7 +103,7 @@ export function RecentMessagesWidget() {
       <Card className="rounded-lg border-slate-200 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 pb-2 pt-4">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <MessageSquare className="h-4 w-4 text-[#1a4d7a]" />
+            <MessageSquare className="h-4 w-4 text-brand-primary" />
             {subtitle}
           </CardTitle>
         </CardHeader>
@@ -132,10 +132,10 @@ export function RecentMessagesWidget() {
                       href={`/messenger?conversation=${conversation.id}`}
                       className={cn(
                         'flex items-start gap-3 py-3 transition hover:bg-slate-50',
-                        unread && 'bg-[#e8f0f8]/40',
+                        unread && 'bg-surface/40',
                       )}
                     >
-                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1a4d7a] text-xs font-semibold text-white">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary text-xs font-semibold text-white">
                         {initials}
                       </span>
                       <div className="min-w-0 flex-1">
@@ -167,7 +167,7 @@ export function RecentMessagesWidget() {
                             </span>
                           ) : null}
                           {unread ? (
-                            <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-[#1a4d7a] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-brand-primary px-1.5 py-0.5 text-[10px] font-bold text-white">
                               {conversation.unreadCount}
                             </span>
                           ) : null}
@@ -183,7 +183,7 @@ export function RecentMessagesWidget() {
           {hasConversations ? (
             <Link
               href="/messenger"
-              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-[#1a4d7a] hover:underline"
+              className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-brand-primary hover:underline"
             >
               <MessageSquare className="h-4 w-4" />
               {t('nav.messenger')}

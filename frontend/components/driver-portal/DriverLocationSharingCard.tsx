@@ -81,10 +81,10 @@ export function DriverLocationSharingCard() {
         : 'text-slate-600 bg-slate-50 border-slate-200';
 
   return (
-    <Card className="overflow-hidden border-[#1a4d7a]/15">
+    <Card className="overflow-hidden border-brand-primary/15">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <MapPinned className="h-5 w-5 text-[#1a4d7a]" />
+          <MapPinned className="h-5 w-5 text-brand-primary" />
           {t('driverPortal.location.title')}
         </CardTitle>
       </CardHeader>
@@ -125,7 +125,7 @@ export function DriverLocationSharingCard() {
           {needsConsent ? (
             <Button
               type="button"
-              className="bg-[#1a4d7a] hover:bg-[#163a5c]"
+              className="bg-brand-primary hover:bg-brand-primary"
               disabled={busy || !canShareToday}
               onClick={() => void grantConsent()}
             >
@@ -137,7 +137,7 @@ export function DriverLocationSharingCard() {
           {!needsConsent && !sharingActive ? (
             <Button
               type="button"
-              className="bg-[#1a4d7a] hover:bg-[#163a5c]"
+              className="bg-brand-primary hover:bg-brand-primary"
               disabled={busy || !canShareToday}
               onClick={() => void startSharing()}
             >

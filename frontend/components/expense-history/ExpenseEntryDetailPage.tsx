@@ -74,7 +74,7 @@ function displayText(value?: string | null): string {
 }
 
 function vehicleStatusDot(status?: Vehicle['status']) {
-  if (status === 'active') return 'bg-[#1a4d7a]';
+  if (status === 'active') return 'bg-brand-primary';
   if (status === 'maintenance') return 'bg-orange-500';
   if (status === 'broken') return 'bg-red-500';
   return 'bg-slate-400';
@@ -284,7 +284,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
               <button
                 type="button"
                 onClick={() => void openAuthenticatedDocument(doc.id, doc.fileName)}
-                className="text-[#1a4d7a] hover:underline"
+                className="text-brand-primary hover:underline"
               >
                 {doc.fileName}
               </button>
@@ -345,7 +345,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
           <div>
             <Link
               href="/service-history"
-              className="inline-flex items-center gap-1 text-sm font-medium text-[#1a4d7a] hover:underline"
+              className="inline-flex items-center gap-1 text-sm font-medium text-brand-primary hover:underline"
             >
               <ArrowLeft className="h-4 w-4" />
               {t('expenseHistory.title')}
@@ -362,7 +362,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
             <Button
               type="button"
               variant="outline"
-              className={cn('gap-2', watched && 'border-[#1a4d7a] bg-[#e8f0f8] text-[#0b2342]')}
+              className={cn('gap-2', watched && 'border-brand-primary bg-surface text-brand-primary')}
               onClick={() => toggleWatch(entryId)}
             >
               <Bell className="h-4 w-4" />
@@ -384,7 +384,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
                 </Button>
                 <Button
                   type="button"
-                  className="bg-[#1a4d7a] text-white hover:bg-[#0b2342]"
+                  className="bg-brand-primary text-white hover:bg-brand-primary"
                   onClick={() => void saveChanges()}
                   disabled={saving}
                 >
@@ -414,7 +414,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
                     <span className={cn('inline-block h-2 w-2 rounded-full', vehicleStatusDot(vehicle?.status))} />
                     <Link
                       href={`/vehicles/${record.vehicle_id}`}
-                      className="font-semibold text-[#1a4d7a] hover:underline"
+                      className="font-semibold text-brand-primary hover:underline"
                     >
                       {record.vehicle_plate}
                     </Link>
@@ -457,7 +457,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
                 label={t('expenseHistory.colDate')}
                 editing={editing}
                 view={
-                  <span className="text-[#1a4d7a] underline decoration-[#1a4d7a]/40 underline-offset-2">
+                  <span className="text-brand-primary underline decoration-brand-primary/40 underline-offset-2">
                     {formatExpenseDate(record.date, i18n.language)}
                   </span>
                 }
@@ -583,7 +583,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
                   value={form.notes}
                   onChange={(event) => updateForm('notes', event.target.value)}
                   rows={4}
-                  className="flex min-h-[96px] w-full max-w-2xl rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#1a4d7a]"
+                  className="flex min-h-[96px] w-full max-w-2xl rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-primary"
                 />
               </DetailFieldRow>
 

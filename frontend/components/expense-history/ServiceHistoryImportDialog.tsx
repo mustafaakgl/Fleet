@@ -78,7 +78,7 @@ export function ServiceHistoryImportDialog({
           <a
             href="/samples/service-records.csv"
             download
-            className="inline-flex items-center gap-2 text-sm font-medium text-[#1a4d7a] hover:underline"
+            className="inline-flex items-center gap-2 text-sm font-medium text-brand-primary hover:underline"
           >
             <Download className="h-4 w-4" />
             {t('serviceHistory.import.downloadSample')}

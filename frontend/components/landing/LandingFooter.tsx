@@ -42,7 +42,7 @@ export function LandingFooter() {
   ];
 
   return (
-    <footer id="contact" className="bg-[#002B5C] text-white">
+    <footer id="contact" className="bg-brand-primary text-white">
       <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-1">

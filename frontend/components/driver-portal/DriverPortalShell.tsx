@@ -26,7 +26,7 @@ export function DriverPortalShell({ children, hideHeader, hideNav }: DriverPorta
             <div className="flex min-w-0 items-center gap-3">
               <MyFleetLogo height={36} href={null} />
               <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#1a4d7a]">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-primary">
                   <Navigation className="h-3.5 w-3.5" />
                   {t('driverPortal.title')}
                 </p>

@@ -12,7 +12,7 @@ export function DriverPageBack({ href = '/driver', label }: DriverPageBackProps)
   return (
     <Link
       href={href}
-      className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-[#1a4d7a] hover:underline"
+      className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand-primary hover:underline"
     >
       <ArrowLeft className="h-4 w-4" />
       {label}

@@ -284,7 +284,7 @@ export function Benutzerverwaltung() {
         <button
           type="button"
           onClick={openCreateDrawer}
-          className="inline-flex items-center gap-2 rounded-md border border-[#163a5c] bg-[#1a4d7a] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0b2342]"
+          className="inline-flex items-center gap-2 rounded-md border border-brand-primary bg-brand-primary px-3 py-2 text-sm font-semibold text-white hover:bg-brand-primary"
         >
           <UserPlus className="h-4 w-4" />
           {t('usersAdmin.create')}
@@ -518,7 +518,7 @@ export function Benutzerverwaltung() {
               <button type="button" onClick={closeDrawer} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                 {t('usersAdmin.cancel')}
               </button>
-              <button type="button" onClick={saveUser} disabled={saving} className="rounded-md bg-[#1a4d7a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b2342] disabled:opacity-50">
+              <button type="button" onClick={saveUser} disabled={saving} className="rounded-md bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary disabled:opacity-50">
                 {saving
                   ? t('usersAdmin.saving')
                   : drawerMode === 'invite'

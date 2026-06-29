@@ -472,7 +472,7 @@ export function VehicleRemindersPage() {
                           FLEET_TABLE_ROW_CLICKABLE,
                           'border-l-4',
                           rowAccentClass(row.status),
-                          isSelected && 'bg-[#e8f0f8]/60',
+                          isSelected && 'bg-surface/60',
                         )}
                         onClick={() => setSelectedRow(row)}
                       >
@@ -498,7 +498,7 @@ export function VehicleRemindersPage() {
                                 row.status === 'overdue' && 'bg-red-500',
                                 row.status === 'due_soon' && 'bg-orange-500',
                                 row.status === 'snoozed' && 'bg-slate-400',
-                                row.status === 'upcoming' && 'bg-[#1a4d7a]',
+                                row.status === 'upcoming' && 'bg-brand-primary',
                               )}
                             />
                             {statusLabel(row.status, t)}

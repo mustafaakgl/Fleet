@@ -68,7 +68,7 @@ export function MessengerComposer({
             )}
             title={t('messenger.autoTranslateTo')}
           >
-            <Languages className="h-3.5 w-3.5 shrink-0 text-[#1a4d7a]" aria-hidden />
+            <Languages className="h-3.5 w-3.5 shrink-0 text-brand-primary" aria-hidden />
             {driverLanguage
               ? t('messenger.autoTranslateDriver', { lang: driverLanguage.toUpperCase() })
               : t('messenger.driverLanguageUnknown')}

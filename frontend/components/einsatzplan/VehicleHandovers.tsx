@@ -210,7 +210,7 @@ export function VehicleHandovers() {
             type="date"
             value={dateFilter}
             onChange={(event) => setDateFilter(event.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-primary"
           />
         </div>
 
@@ -227,7 +227,7 @@ export function VehicleHandovers() {
             value={driverQuery}
             onChange={(event) => setDriverQuery(event.target.value)}
             placeholder={t('handover.searchDriver')}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-primary"
           />
         </div>
 
@@ -244,7 +244,7 @@ export function VehicleHandovers() {
             value={vehicleQuery}
             onChange={(event) => setVehicleQuery(event.target.value)}
             placeholder={t('handover.searchVehicle')}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-primary"
           />
         </div>
 
@@ -259,7 +259,7 @@ export function VehicleHandovers() {
             id="handover-status"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as TableStatusFilter)}
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#1a4d7a]"
+            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-brand-primary"
           >
             <option value="all">{t('handover.filterAll')}</option>
             <option value="completed">{t('handover.filterCompleted')}</option>
@@ -462,7 +462,7 @@ export function VehicleHandovers() {
                 type="button"
                 onClick={handleMarkCompleted}
                 disabled={!canEdit || selected.status === 'completed'}
-                className="rounded-md border border-[#163a5c] px-3 py-2 text-sm font-medium text-[#1a4d7a] hover:bg-[#e8f0f8] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md border border-brand-primary px-3 py-2 text-sm font-medium text-brand-primary hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('handover.markCompleted')}
               </button>

@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
+import { NotificationSseService } from './notification-sse.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 
 type NotificationType =
@@ -50,6 +51,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pushNotifications: PushNotificationsService,
+    private readonly sse: NotificationSseService,
   ) {}
 
   private ensureType(value: string): NotificationType {
@@ -110,6 +112,23 @@ export class NotificationsService {
         ...(data.relatedEntityId ? { relatedEntityId: data.relatedEntityId } : {}),
       },
     });
+
+    void this.getUnreadCount(data.userId).then(({ count }) => {
+      this.sse.emit(data.userId, {
+        type: 'new_notification',
+        unreadCount: count,
+        notification: {
+          id: notification.id,
+          title: notification.title,
+          message: notification.message,
+          type: notification.type,
+          priority: notification.priority,
+          createdAt: notification.createdAt,
+          relatedEntityType: notification.relatedEntityType ?? null,
+          relatedEntityId: notification.relatedEntityId ?? null,
+        },
+      });
+    }).catch(() => { /* sse emit is best-effort */ });
 
     return notification;
   }

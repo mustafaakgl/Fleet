@@ -102,7 +102,7 @@ export function InlineSearchSelect({
                     }}
                     className={cn(
                       'flex w-full px-3 py-2 text-left text-sm hover:bg-slate-50',
-                      option.value === value && 'bg-[#e8f0f8] font-medium text-[#1a4d7a]',
+                      option.value === value && 'bg-surface font-medium text-brand-primary',
                     )}
                   >
                     {option.label}

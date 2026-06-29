@@ -229,7 +229,7 @@ export function AddServiceReminderPage() {
                 type="checkbox"
                 checked={manualOverride}
                 onChange={(event) => setManualOverride(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1a4d7a] focus:ring-[#1a4d7a]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
               />
               <span className="text-[13px] text-slate-700">{t('serviceReminders.create.manualOverride')}</span>
             </label>
@@ -252,7 +252,7 @@ export function AddServiceReminderPage() {
                 type="checkbox"
                 checked={notifications}
                 onChange={(event) => setNotifications(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1a4d7a] focus:ring-[#1a4d7a]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
               />
               <span className="text-[13px] font-medium text-slate-700">{t('serviceReminders.create.notifications')}</span>
             </label>

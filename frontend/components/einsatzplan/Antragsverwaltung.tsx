@@ -86,7 +86,7 @@ export function Antragsverwaltung() {
 
   return (
     <div className="space-y-4 print:space-y-2" id="antragsverwaltung-print">
-      <div className="rounded-lg border border-[#d4e3f2] bg-[#e8f0f8] px-4 py-3 text-xs text-[#0b2342]">
+      <div className="rounded-lg border border-surface-border bg-surface px-4 py-3 text-xs text-brand-primary">
         {t('antrag.banner')}
       </div>
 
@@ -187,7 +187,7 @@ export function Antragsverwaltung() {
                   const isSelected = selectedRowId === row.id;
                   const isCancelled = row.status === 'storniert';
                   const baseRowClass = isSelected
-                    ? 'bg-[#e8f0f8]'
+                    ? 'bg-surface'
                     : index % 2 === 0
                     ? 'bg-white'
                     : 'bg-slate-50/60';
@@ -197,7 +197,7 @@ export function Antragsverwaltung() {
                     <tr
                       key={row.id}
                       onClick={() => setSelectedRowId(row.id)}
-                      className={`${baseRowClass} hover:bg-[#e8f0f8]/60 ${cancelledClass}`}
+                      className={`${baseRowClass} hover:bg-surface/60 ${cancelledClass}`}
                     >
                       <td className="border border-slate-200 px-3 py-2">{row.antragsdatum}</td>
                       <td className="border border-slate-200 px-3 py-2">{row.antragsart}</td>
@@ -205,7 +205,7 @@ export function Antragsverwaltung() {
                       <td className="border border-slate-200 px-3 py-2">
                         <div>{row.driverName}</div>
                         {row.source === 'request_auto' && (
-                          <span className="inline-flex rounded border border-[#d4e3f2] bg-[#e8f0f8] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a4d7a]">
+                          <span className="inline-flex rounded border border-surface-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-brand-primary">
                             {t('antrag.autoFromRequest')}
                           </span>
                         )}

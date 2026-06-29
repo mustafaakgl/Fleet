@@ -25,7 +25,7 @@ export const SOURCE_MARKER_COLORS: Record<LocationSourceType, string> = {
 
 export function sourceBadgeClass(source: LocationSourceType | null | undefined): string {
   if (source === 'telematics') {
-    return 'bg-[#e8f0f8] text-[#1a4d7a] border border-[#1a4d7a]/20';
+    return 'bg-surface text-brand-primary border border-brand-primary/20';
   }
   if (source === 'mobile') {
     return 'bg-emerald-50 text-emerald-700 border border-emerald-200';

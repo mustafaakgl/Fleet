@@ -136,7 +136,7 @@ export function LandingHeader() {
             >
               <button
                 type="button"
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-[#002B5C]"
+                className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-brand-primary"
               >
                 {t(menu.labelKey)}
                 <ChevronDown className="h-4 w-4" />
@@ -164,7 +164,7 @@ export function LandingHeader() {
                               <li key={link.labelKey + link.href}>
                                 <a
                                   href={link.href}
-                                  className="block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-[#0066CC]"
+                                  className="block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 transition hover:bg-blue-50 hover:text-brand-primary"
                                 >
                                   {t(link.labelKey)}
                                 </a>
@@ -184,7 +184,7 @@ export function LandingHeader() {
             <a
               key={link.labelKey}
               href={link.href}
-              className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-[#002B5C]"
+              className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-brand-primary"
             >
               {t(link.labelKey)}
             </a>
@@ -195,14 +195,14 @@ export function LandingHeader() {
           <LanguageSwitcher />
           <a
             href="tel:+493012345678"
-            className="flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-[#002B5C]"
+            className="flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-brand-primary"
           >
             <Phone className="h-4 w-4" />
             +49 30 1234 5678
           </a>
           <Link
             href={LOGIN_HREF}
-            className="rounded-full bg-[#0066CC] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#0052a3]"
+            className="rounded-full bg-brand-primary px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-primary"
           >
             {t('nav.requestDemo')}
           </Link>
@@ -257,7 +257,7 @@ export function LandingHeader() {
             ))}
             <Link
               href={LOGIN_HREF}
-              className="mt-2 rounded-full bg-[#0066CC] px-5 py-3 text-center text-sm font-bold text-white"
+              className="mt-2 rounded-full bg-brand-primary px-5 py-3 text-center text-sm font-bold text-white"
               onClick={() => setMobileOpen(false)}
             >
               {t('nav.requestDemo')}

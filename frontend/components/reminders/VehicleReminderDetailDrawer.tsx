@@ -17,7 +17,7 @@ import { FLEET_SIDE_DRAWER } from '@/lib/fleet-table';
 import { cn, formatDate } from '@/lib/utils';
 
 function vehicleStatusDot(status: VehicleReminderRow['vehicleStatus']) {
-  if (status === 'active') return 'bg-[#1a4d7a]';
+  if (status === 'active') return 'bg-brand-primary';
   if (status === 'maintenance') return 'bg-orange-500';
   if (status === 'broken') return 'bg-red-500';
   return 'bg-slate-400';
@@ -183,7 +183,7 @@ export function VehicleReminderDetailDrawer({
               <span
                 className={cn(
                   'h-2 w-2 rounded-full',
-                  row.notificationsActive ? 'bg-[#1a4d7a]' : 'bg-slate-400',
+                  row.notificationsActive ? 'bg-brand-primary' : 'bg-slate-400',
                 )}
               />
               {row.notificationsActive

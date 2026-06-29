@@ -139,12 +139,12 @@ const statusAccentClasses: Record<Exclude<CalendarStatus, ''>, string> = {
   FT: 'bg-pink-400',
   UT: 'bg-emerald-500',
   KT: 'bg-red-500',
-  AT: 'bg-[#1a4d7a]',
+  AT: 'bg-brand-primary',
   PENDING_UT: 'bg-amber-500',
   APPROVED_UT: 'bg-emerald-700',
   SU: 'bg-violet-500',
   PU: 'bg-violet-500',
-  SCH: 'bg-[#1a4d7a]',
+  SCH: 'bg-brand-primary',
   BH: 'bg-slate-500',
   KA: 'bg-violet-500',
   SA: 'bg-violet-500',
@@ -159,12 +159,12 @@ const statusTextClasses: Record<Exclude<CalendarStatus, ''>, string> = {
   FT: 'text-pink-700',
   UT: 'text-emerald-700',
   KT: 'text-red-700',
-  AT: 'text-[#1a4d7a]',
+  AT: 'text-brand-primary',
   PENDING_UT: 'text-amber-700',
   APPROVED_UT: 'text-emerald-800',
   SU: 'text-violet-700',
   PU: 'text-violet-700',
-  SCH: 'text-[#1a4d7a]',
+  SCH: 'text-brand-primary',
   BH: 'text-slate-700',
   KA: 'text-violet-700',
   SA: 'text-violet-700',
@@ -846,7 +846,7 @@ export function Jahreskalender() {
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d4e3f2] bg-[#e8f0f8] text-sm font-bold text-[#1a4d7a]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-surface-border bg-surface text-sm font-bold text-brand-primary">
               {getInitials(selectedDriver.name)}
             </div>
 
@@ -862,7 +862,7 @@ export function Jahreskalender() {
                   setSelectedDay(null);
                   setPendingAbsenceSelection(null);
                 }}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-primary focus:outline-none"
               >
                 {driverOptions.map((driver) => (
                   <option key={driver.id} value={driver.id}>
@@ -943,7 +943,7 @@ export function Jahreskalender() {
                 setSelectedDay(null);
                 setPendingAbsenceSelection(null);
               }}
-              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#1a4d7a] focus:outline-none"
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-brand-primary focus:outline-none"
             >
               {yearOptions.map((year) => (
                 <option key={year} value={year}>
@@ -1086,7 +1086,7 @@ export function Jahreskalender() {
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-pink-400" />{t('jk.legendFT')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-500" />{t('jk.legendUT')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-red-500" />{t('jk.legendKT')}</div>
-            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-[#1a4d7a]" />{t('jk.legendAT')}</div>
+            <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-brand-primary" />{t('jk.legendAT')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-amber-500" />{t('jk.legendPending')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm bg-emerald-700" />{t('jk.legendApproved')}</div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm border border-slate-200 bg-white" />{t('jk.legendEmpty')}</div>

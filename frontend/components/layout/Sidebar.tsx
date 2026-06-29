@@ -2,7 +2,37 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, ChevronDown, LogOut, Menu, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bell,
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  ClipboardCheck,
+  ClipboardList,
+  Clock,
+  CreditCard,
+  Droplets,
+  FileText,
+  IdCard,
+  LayoutDashboard,
+  ListTodo,
+  LogOut,
+  MapPinned,
+  Menu,
+  MessageSquare,
+  Rocket,
+  Route,
+  Scale,
+  ScrollText,
+  Shield,
+  Truck,
+  Upload,
+  Users,
+  Wrench,
+  X,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { OperionLogo } from '@/components/brand/OperionLogo';
@@ -19,11 +49,61 @@ import {
 import type { AuthUser, Role } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 
-const SIDEBAR_BG = 'bg-[#0b2342]';
-const SIDEBAR_BORDER = 'border-[#163a5c]';
+type SidebarRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
+
+type RoleNavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  roles: SidebarRole[];
+};
+
+const NAV_ITEMS: RoleNavItem[] = [
+  { label: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.officeQueue', href: '/office/queue', icon: ListTodo, roles: ['office'] },
+  { label: 'nav.assignments', href: '/assignments', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.liveTracking', href: '/live-tracking', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.reminders', href: '/reminders/service', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.messenger', href: '/messenger', icon: MessageSquare, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.drivers', href: '/drivers', icon: Users, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.vehicles.list', href: '/vehicles', icon: Truck, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.vehicles.assignments', href: '/vehicles/assignments', icon: Truck, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.fleetTripHistory', href: '/fleet-analytics/trips', icon: Route, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.companies', href: '/companies', icon: Building2, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.documents', href: '/documents', icon: FileText, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.service.history', href: '/service-history', icon: Wrench, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.section.checks', href: '/license-checks', icon: ClipboardCheck, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.departureChecks', href: '/departure-checks', icon: ClipboardCheck, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.defects', href: '/defects', icon: AlertTriangle, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.reminders.vehicle', href: '/reminders/vehicle', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.reminders.contact', href: '/reminders/contact', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.accidents', href: '/accidents', icon: AlertTriangle, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.cargoDamage', href: '/cargo-damage', icon: AlertTriangle, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.fines', href: '/fines', icon: Scale, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.workSessions', href: '/work-sessions', icon: Clock, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.fleetFuelAnalytics', href: '/fleet-analytics/fuel', icon: Droplets, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.requests', href: '/requests', icon: ClipboardList, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.costs', href: '/costs', icon: CreditCard, roles: ['admin', 'boss', 'accounting'] },
+  { label: 'nav.gettingStarted', href: '/getting-started', icon: Rocket, roles: ['admin'] },
+  { label: 'nav.privacy', href: '/privacy', icon: Shield, roles: ['admin'] },
+  { label: 'nav.import', href: '/import', icon: Upload, roles: ['admin'] },
+  { label: 'nav.billing', href: '/billing', icon: CreditCard, roles: ['admin'] },
+  { label: 'nav.audit', href: '/audit', icon: ScrollText, roles: ['admin', 'boss'] },
+];
+
+const navConfig: Record<SidebarRole, RoleNavItem[]> = {
+  admin: NAV_ITEMS.filter((item) => item.roles.includes('admin')),
+  boss: NAV_ITEMS.filter((item) => item.roles.includes('boss')),
+  accounting: NAV_ITEMS.filter((item) => item.roles.includes('accounting')),
+  office: NAV_ITEMS.filter((item) => item.roles.includes('office')),
+  driver: NAV_ITEMS.filter((item) => item.roles.includes('driver')),
+};
+
+const SIDEBAR_BG = 'bg-[#1E293B]';
+const SIDEBAR_BORDER = 'border-slate-700';
 const NAV_ROW = 'flex min-h-[40px] items-center gap-2.5 rounded-md px-3 text-[13px] leading-5 transition-colors';
-const NAV_IDLE = 'text-blue-100/80 hover:bg-white/10 hover:text-white';
-const NAV_ACTIVE = 'bg-[#1a4d7a] text-white shadow-sm';
+const NAV_IDLE = 'text-slate-100 hover:bg-slate-700';
+const NAV_ACTIVE = 'bg-blue-600 text-white rounded-md';
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -32,8 +112,42 @@ export function Sidebar() {
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const [user] = useState<AuthUser | null>(() => getUser());
 
-  const role = (user?.role ?? 'office') as Role;
-  const navGroups = useMemo(() => getNavigationForRole(role), [role]);
+  const role = useMemo<SidebarRole>(() => {
+    const currentRole = user?.role;
+    if (
+      currentRole === 'admin' ||
+      currentRole === 'boss' ||
+      currentRole === 'accounting' ||
+      currentRole === 'office' ||
+      currentRole === 'driver'
+    ) {
+      return currentRole;
+    }
+    return 'office';
+  }, [user?.role]);
+
+  const allowedNavItems = useMemo(() => navConfig[role], [role]);
+  const allowedHrefs = useMemo(() => new Set(allowedNavItems.map((item) => item.href)), [allowedNavItems]);
+
+  const navGroups = useMemo(() => {
+    const baseGroups = getNavigationForRole(role as Role);
+
+    return baseGroups
+      .map((group) => {
+        const filteredEntries = group.items.flatMap((entry) => {
+          if (isNavSection(entry)) {
+            const sectionItems = entry.items.filter((item) => allowedHrefs.has(item.href));
+            if (sectionItems.length === 0) return [];
+            return [{ ...entry, items: sectionItems }];
+          }
+
+          return allowedHrefs.has(entry.href) ? [entry] : [];
+        });
+
+        return { ...group, items: filteredEntries };
+      })
+      .filter((group) => group.items.length > 0);
+  }, [role, allowedHrefs]);
   const isFleetOps = Boolean(user?.fleet_ops);
   const navScrollRef = useRef<HTMLElement>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
@@ -126,7 +240,7 @@ export function Sidebar() {
           isActive ? NAV_ACTIVE : NAV_IDLE,
         )}
       >
-        {Icon ? <Icon className="h-4 w-4 shrink-0 opacity-90" /> : null}
+        {Icon ? <Icon className="h-4 w-4 shrink-0 text-current" /> : null}
         <span className={cn(tabletCollapsed && !nested ? 'hidden lg:inline' : 'inline')}>
           {t(item.labelKey)}
         </span>
@@ -152,13 +266,13 @@ export function Sidebar() {
             sectionActive ? NAV_ACTIVE : NAV_IDLE,
           )}
         >
-          <SectionIcon className="h-4 w-4 shrink-0 opacity-90" />
+          <SectionIcon className="h-4 w-4 shrink-0 text-current" />
           <span className={cn('flex-1 text-left', tabletCollapsed ? 'hidden lg:inline' : 'inline')}>
             {t(section.labelKey)}
           </span>
           <ChevronDown
             className={cn(
-              'h-3.5 w-3.5 shrink-0 text-blue-200/50 transition-transform',
+              'h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform',
               tabletCollapsed ? 'hidden lg:block' : 'block',
               showChildren ? 'rotate-0' : '-rotate-90',
             )}
@@ -191,7 +305,7 @@ export function Sidebar() {
                     className={cn(
                       'absolute top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full',
                       item.nested ? 'left-[2.35rem]' : 'left-[1.22rem]',
-                      isActive ? 'bg-white' : 'bg-blue-200/35',
+                      isActive ? 'bg-white' : 'bg-slate-400',
                     )}
                     aria-hidden
                   />
@@ -240,12 +354,12 @@ export function Sidebar() {
             type="button"
             onClick={() => setTabletCollapsed((current) => !current)}
             className={cn(
-              'absolute right-1 z-10 hidden rounded-md border p-1.5 text-blue-100/80 hover:bg-white/10 md:inline-flex lg:hidden',
+              'absolute right-1 z-10 hidden rounded-md border p-1.5 text-slate-100 hover:bg-slate-700 md:inline-flex lg:hidden',
               SIDEBAR_BORDER,
             )}
             aria-label="Toggle sidebar"
           >
-            <Menu className="h-4 w-4" />
+            <Menu className="h-4 w-4 text-current" />
           </button>
           <div
             className={cn(
@@ -282,7 +396,7 @@ export function Sidebar() {
               {group.collapsible === false ? (
                 <p
                   className={cn(
-                    'mb-1 px-3 text-xs font-medium text-blue-200/55',
+                    'mb-1 px-3 text-xs font-medium text-slate-400',
                     tabletCollapsed ? 'hidden lg:block' : 'block',
                   )}
                 >
@@ -293,7 +407,7 @@ export function Sidebar() {
                   type="button"
                   onClick={() => toggleGroup(group.id, groupActive, group.collapsible)}
                   className={cn(
-                    'mb-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-xs font-medium text-blue-200/55 hover:bg-white/5',
+                    'mb-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:bg-slate-700',
                     tabletCollapsed ? 'hidden lg:flex' : 'flex',
                   )}
                 >
@@ -321,18 +435,18 @@ export function Sidebar() {
             renderFooterLink(
               '/admin/tenants',
               t('nav.fleetOps'),
-              <Building2 className="h-4 w-4 shrink-0 opacity-90" />,
+              <Building2 className="h-4 w-4 shrink-0 text-current" />,
               pathname === '/admin/tenants',
             )}
           <button
             onClick={handleLogout}
             className={cn(
               NAV_ROW,
-              'w-full font-medium text-blue-100/80 hover:bg-red-500/15 hover:text-red-100',
+              'w-full font-medium text-slate-100 hover:bg-slate-700',
               tabletCollapsed ? 'md:justify-center lg:justify-start' : '',
             )}
           >
-            <LogOut className="h-4 w-4 shrink-0 opacity-90" />
+            <LogOut className="h-4 w-4 shrink-0 text-current" />
             <span className={cn(tabletCollapsed ? 'hidden lg:inline' : 'inline')}>{t('nav.logout')}</span>
           </button>
         </div>
@@ -360,12 +474,12 @@ export function Sidebar() {
           'fixed left-4 top-4 z-50 rounded-md border p-2 shadow-md lg:hidden',
           SIDEBAR_BG,
           SIDEBAR_BORDER,
-          'text-blue-100',
+          'text-slate-100',
         )}
         onClick={() => setMobileOpen(true)}
         aria-label={t('nav.openMenu')}
       >
-        <Menu className="h-5 w-5" />
+        <Menu className="h-5 w-5 text-current" />
       </button>
 
       {mobileOpen ? (
@@ -374,11 +488,11 @@ export function Sidebar() {
           <aside className={cn('relative z-50 flex h-screen w-64 flex-col shadow-xl', SIDEBAR_BG)}>
             <button
               type="button"
-              className="absolute right-4 top-4 rounded-md p-1 text-blue-100/80 hover:bg-white/10"
+              className="absolute right-4 top-4 rounded-md p-1 text-slate-100 hover:bg-slate-700"
               onClick={() => setMobileOpen(false)}
               aria-label={t('common.close')}
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5 text-current" />
             </button>
             {renderNavContent()}
           </aside>

@@ -74,15 +74,15 @@ export function AbsenceTypeModal({
         <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
           <div className="flex flex-wrap gap-2">
             <button type="button" className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Plus className="h-4 w-4 text-[#1a4d7a]" />
+              <Plus className="h-4 w-4 text-brand-primary" />
               Abwesenheitstyp hinzufügen
             </button>
             <button type="button" className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Trash2 className="h-4 w-4 text-[#1a4d7a]" />
+              <Trash2 className="h-4 w-4 text-brand-primary" />
               Abwesenheitstyp löschen
             </button>
             <button type="button" className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <RefreshCw className="h-4 w-4 text-[#1a4d7a]" />
+              <RefreshCw className="h-4 w-4 text-brand-primary" />
               Aktualisieren
             </button>
           </div>
@@ -110,7 +110,7 @@ export function AbsenceTypeModal({
                     className={cn(
                       'cursor-pointer',
                       FLEET_RAW_TR,
-                      selected ? 'bg-[#e8f0f8]' : 'bg-white',
+                      selected ? 'bg-surface' : 'bg-white',
                     )}
                   >
                     <td className={FLEET_RAW_TD_PRIMARY}>{absenceType.bezeichnung}</td>
@@ -140,7 +140,7 @@ export function AbsenceTypeModal({
             type="button"
             onClick={onApply}
             disabled={!selectedTypeId}
-            className="rounded-md bg-[#1a4d7a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b2342] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-brand-primary px-4 py-2 text-sm font-semibold text-white hover:bg-brand-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             Übernehmen
           </button>

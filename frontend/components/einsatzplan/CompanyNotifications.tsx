@@ -69,7 +69,7 @@ function badgeClass(status: EmailStatus) {
     case 'Not Prepared':
       return 'border-slate-300 bg-slate-100 text-slate-700';
     case 'Draft Ready':
-      return 'border-[#d4e3f2] bg-[#e8f0f8] text-[#1a4d7a]';
+      return 'border-surface-border bg-surface text-brand-primary';
     case 'Sent':
       return 'border-emerald-200 bg-emerald-100 text-emerald-700';
     case 'Failed':
@@ -376,7 +376,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
                           type="button"
                           disabled={isBusy}
                           onClick={() => void generateCompanyEmailDraft(row)}
-                          className="rounded-md border border-[#163a5c] px-2 py-1 text-xs font-medium text-[#1a4d7a] hover:bg-[#e8f0f8] disabled:opacity-50"
+                          className="rounded-md border border-brand-primary px-2 py-1 text-xs font-medium text-brand-primary hover:bg-surface disabled:opacity-50"
                         >
                           {t('compNotif.generateDraft')}
                         </button>

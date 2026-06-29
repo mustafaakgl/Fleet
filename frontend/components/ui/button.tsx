@@ -8,10 +8,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500',
+        // WCAG AA: white on blue-700 is ~6.7:1, exceeding the 4.5:1 minimum for normal text.
+        default: 'bg-blue-700 text-white hover:bg-blue-800 focus-visible:ring-blue-700',
         destructive: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
         outline: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50',
-        secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200',
+        // WCAG AA: gray-900 on white is ~17:1, exceeding the 4.5:1 minimum for normal text.
+        secondary: 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50',
         ghost: 'text-gray-700 hover:bg-gray-100',
         link: 'text-blue-600 underline-offset-4 hover:underline',
         success: 'bg-green-600 text-white hover:bg-green-700',

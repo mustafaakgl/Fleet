@@ -89,7 +89,7 @@ export function DriverWorkSessionCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Clock className="h-4 w-4 text-[#1a4d7a]" />
+          <Clock className="h-4 w-4 text-brand-primary" />
           {t('driverPortal.profile.workSessionTitle')}
         </CardTitle>
         <p className="text-sm text-slate-600">{t('driverPortal.profile.workSessionHint')}</p>

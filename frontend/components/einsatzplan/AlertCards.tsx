@@ -7,7 +7,7 @@ interface AlertCardsProps {
 const toneStyles: Record<AlertItem['tone'], string> = {
   warning: 'border-amber-200 bg-amber-50',
   danger: 'border-rose-200 bg-rose-50',
-  info: 'border-[#d4e3f2] bg-[#e8f0f8]',
+  info: 'border-surface-border bg-surface',
   success: 'border-emerald-200 bg-emerald-50',
 };
 

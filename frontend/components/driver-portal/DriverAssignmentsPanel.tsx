@@ -55,7 +55,7 @@ export function DriverAssignmentsPanel() {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Truck className="h-5 w-5 text-[#1a4d7a]" />
+          <Truck className="h-5 w-5 text-brand-primary" />
           {t('driverPortal.assignments.title')}
         </CardTitle>
       </CardHeader>

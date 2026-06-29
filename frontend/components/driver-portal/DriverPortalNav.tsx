@@ -47,7 +47,7 @@ export function DriverPortalNav() {
               href={tab.href}
               className={cn(
                 'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition',
-                active ? 'text-[#1a4d7a]' : 'text-slate-500 hover:text-slate-700',
+                active ? 'text-brand-primary' : 'text-slate-500 hover:text-slate-700',
               )}
             >
               <Icon className={cn('h-5 w-5', active && 'stroke-[2.5px]')} />

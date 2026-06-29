@@ -121,8 +121,8 @@ export function RevenueSummary() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={t('revenue.today')} value={currency(todayRevenue)} tone="text-[#1a4d7a]" />
-        <MetricCard label={t('revenue.tomorrow')} value={currency(tomorrowForecast)} tone="text-[#0b2342]" />
+        <MetricCard label={t('revenue.today')} value={currency(todayRevenue)} tone="text-brand-primary" />
+        <MetricCard label={t('revenue.tomorrow')} value={currency(tomorrowForecast)} tone="text-brand-primary" />
         <MetricCard label={t('revenue.monthly')} value={currency(monthlyRevenue)} tone="text-slate-900" />
         <MetricCard
           label={t('revenue.lost')}

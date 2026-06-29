@@ -21,7 +21,7 @@ import { FLEET_SIDE_DRAWER } from '@/lib/fleet-table';
 import { cn, formatDate } from '@/lib/utils';
 
 function vehicleStatusDot(status: ServiceReminderRow['vehicleStatus']) {
-  if (status === 'active') return 'bg-[#1a4d7a]';
+  if (status === 'active') return 'bg-brand-primary';
   if (status === 'maintenance') return 'bg-orange-500';
   if (status === 'broken') return 'bg-red-500';
   return 'bg-slate-400';
@@ -161,7 +161,7 @@ export function ServiceReminderDetailDrawer({
           </DetailField>
 
           <DetailField label={t('serviceReminders.colServiceTask')}>
-            <span className="font-medium text-[#1a4d7a]">{row.serviceTask}</span>
+            <span className="font-medium text-brand-primary">{row.serviceTask}</span>
           </DetailField>
 
           <DetailField label={t('serviceReminders.colStatus')}>

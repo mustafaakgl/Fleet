@@ -141,7 +141,7 @@ function priorityBadgeClass(priority: RepairPriorityClass): string {
 }
 
 function priorityDotClass(priority: RepairPriorityClass): string {
-  if (priority === 'scheduled') return 'bg-[#1a4d7a]';
+  if (priority === 'scheduled') return 'bg-brand-primary';
   if (priority === 'non_scheduled') return 'bg-amber-500';
   if (priority === 'emergency') return 'bg-red-500';
   return 'bg-slate-400';
@@ -747,7 +747,7 @@ export function ExpenseHistoryPage() {
                                 vehicleId: row.vehicle_id,
                                 task: primaryTask,
                               })}
-                              className="text-slate-400 hover:text-[#1a4d7a]"
+                              className="text-slate-400 hover:text-brand-primary"
                               title={t('serviceHistory.openReminder')}
                               onClick={(event) => event.stopPropagation()}
                             >

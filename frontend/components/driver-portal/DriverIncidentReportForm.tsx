@@ -132,7 +132,7 @@ export function DriverIncidentReportForm({
         />
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {success ? <p className="text-sm text-emerald-700">{t('driverPortal.incident.success')}</p> : null}
-        <Button type="submit" className="w-full bg-[#1a4d7a] hover:bg-[#163a5c]" disabled={busy}>
+        <Button type="submit" className="w-full bg-brand-primary hover:bg-brand-primary" disabled={busy}>
           {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           {t('driverPortal.incident.submit')}
         </Button>

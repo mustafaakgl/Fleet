@@ -109,7 +109,7 @@ export function MessengerConversationList({
                     className={cn(
                       'w-full rounded-lg border px-3 py-2.5 text-left transition-all duration-150',
                       active
-                        ? 'border-[#1a4d7a]/30 border-l-[3px] border-l-[#1a4d7a] bg-[#e8f0f8]/80 shadow-sm'
+                        ? 'border-brand-primary/30 border-l-[3px] border-l-brand-primary bg-surface/80 shadow-sm'
                         : 'border-transparent border-l-[3px] border-l-transparent hover:border-slate-200 hover:bg-slate-50',
                     )}
                   >
@@ -117,7 +117,7 @@ export function MessengerConversationList({
                       <span
                         className={cn(
                           'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                          active ? 'bg-[#1a4d7a] text-white' : 'bg-slate-200 text-slate-600',
+                          active ? 'bg-brand-primary text-white' : 'bg-slate-200 text-slate-600',
                         )}
                       >
                         {initials}
@@ -151,7 +151,7 @@ export function MessengerConversationList({
                             </span>
                           ) : null}
                           {conversation.unreadCount > 0 ? (
-                            <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-[#1a4d7a] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-brand-primary px-1.5 py-0.5 text-[10px] font-bold text-white">
                               {conversation.unreadCount}
                             </span>
                           ) : null}

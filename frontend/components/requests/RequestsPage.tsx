@@ -36,7 +36,7 @@ const TAB_KEY: Record<RequestTab, string> = {
 function requestStatusBadgeClass(status: string): string {
   switch (status) {
     case 'Pending':
-      return 'bg-[#e8f0f8] text-[#1a4d7a] ring-1 ring-inset ring-[#d4e3f2]';
+      return 'bg-surface text-brand-primary ring-1 ring-inset ring-surface-border';
     case 'Approved':
       return 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-100';
     case 'Rejected':
@@ -152,7 +152,7 @@ export function RequestsPage() {
                   FLEET_TAB_ITEM,
                   'inline-flex items-center gap-2 px-2 sm:px-3',
                   isActive
-                    ? 'border-[#1a4d7a] text-[#0b2342]'
+                    ? 'border-brand-primary text-brand-primary'
                     : 'border-transparent text-slate-500 hover:text-slate-700',
                 )}
               >
@@ -160,7 +160,7 @@ export function RequestsPage() {
                 <span
                   className={cn(
                     'inline-flex min-w-[1.375rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none',
-                    isActive ? 'bg-[#1a4d7a] text-white' : 'bg-slate-100 text-slate-600',
+                    isActive ? 'bg-brand-primary text-white' : 'bg-slate-100 text-slate-600',
                   )}
                 >
                   {count}

@@ -273,7 +273,7 @@ export function ServiceRemindersPage() {
         <div className={FLEET_PAGE_HEADER_ACTIONS}>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1a4d7a] hover:underline"
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-primary hover:underline"
           >
             <Sparkles className="h-4 w-4" />
             {t('serviceReminders.enableForecasting')}
@@ -299,7 +299,7 @@ export function ServiceRemindersPage() {
                 FLEET_TAB_ITEM,
                 'inline-flex items-center gap-2 px-2 sm:px-3',
                 tab === item.id
-                  ? 'border-[#1a4d7a] text-[#0b2342]'
+                  ? 'border-brand-primary text-brand-primary'
                   : 'border-transparent text-slate-500 hover:text-slate-700',
               )}
             >
@@ -308,7 +308,7 @@ export function ServiceRemindersPage() {
                 className={cn(
                   'inline-flex min-w-[1.375rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none',
                   tab === item.id
-                    ? 'bg-[#1a4d7a] text-white'
+                    ? 'bg-brand-primary text-white'
                     : 'bg-slate-100 text-slate-600',
                   item.tone === 'orange' && tab !== item.id && 'text-orange-600',
                   item.tone === 'red' && tab !== item.id && 'text-red-600',
@@ -475,7 +475,7 @@ export function ServiceRemindersPage() {
                         className={cn(
                           FLEET_TABLE_ROW_CLICKABLE,
                           row.status === 'overdue' && 'border-l-4 border-l-red-500',
-                          isSelected && 'bg-[#e8f0f8]/60',
+                          isSelected && 'bg-surface/60',
                         )}
                         onClick={() => setSelectedRow(row)}
                       >
@@ -502,7 +502,7 @@ export function ServiceRemindersPage() {
                                 row.status === 'overdue' && 'bg-red-500',
                                 row.status === 'due_soon' && 'bg-orange-500',
                                 row.status === 'snoozed' && 'bg-slate-400',
-                                row.status === 'scheduled' && 'bg-[#1a4d7a]',
+                                row.status === 'scheduled' && 'bg-brand-primary',
                               )}
                             />
                             {statusLabel(row.status, t)}
@@ -584,7 +584,7 @@ function StatCard({
         className={cn(
           'mt-1 text-2xl font-semibold text-slate-900',
           tone === 'orange' && 'text-orange-600',
-          tone === 'brand' && 'text-[#1a4d7a]',
+          tone === 'brand' && 'text-brand-primary',
           tone === 'red' && 'text-red-600',
         )}
       >

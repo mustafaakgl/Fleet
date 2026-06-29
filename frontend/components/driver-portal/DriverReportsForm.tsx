@@ -216,7 +216,7 @@ export function DriverReportsForm() {
             />
             {accidentError ? <p className="text-sm text-red-600">{accidentError}</p> : null}
             {accidentSuccess ? <p className="text-sm text-emerald-700">{t('driverPortal.reports.accidentSuccess')}</p> : null}
-            <Button type="submit" className="w-full bg-[#1a4d7a] hover:bg-[#163a5c]" disabled={accidentBusy}>
+            <Button type="submit" className="w-full bg-brand-primary hover:bg-brand-primary" disabled={accidentBusy}>
               {accidentBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {t('driverPortal.reports.submitAccident')}
             </Button>
@@ -280,7 +280,7 @@ export function DriverReportsForm() {
             />
             {cargoError ? <p className="text-sm text-red-600">{cargoError}</p> : null}
             {cargoSuccess ? <p className="text-sm text-emerald-700">{t('driverPortal.reports.cargoSuccess')}</p> : null}
-            <Button type="submit" className="w-full bg-[#1a4d7a] hover:bg-[#163a5c]" disabled={cargoBusy}>
+            <Button type="submit" className="w-full bg-brand-primary hover:bg-brand-primary" disabled={cargoBusy}>
               {cargoBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {t('driverPortal.reports.submitCargo')}
             </Button>

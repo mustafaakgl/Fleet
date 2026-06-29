@@ -115,7 +115,7 @@ export function LiveTrackingSidebar({
                   'rounded-full px-3 py-1 text-xs font-medium transition-colors',
                   sourceFilter === filter.value
                     ? filter.value === 'telematics'
-                      ? 'bg-[#1a4d7a] text-white'
+                      ? 'bg-brand-primary text-white'
                       : filter.value === 'mobile'
                         ? 'bg-emerald-600 text-white'
                         : 'bg-slate-700 text-white'

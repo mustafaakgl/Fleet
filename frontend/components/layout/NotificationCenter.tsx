@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ import { criticalAlertHref, storedNotificationIncidentHref } from '@/lib/inciden
 import { cn } from '@/lib/utils';
 import type { DashboardCriticalAlert } from '@/lib/types';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useNotificationStream } from '@/hooks/useNotificationStream';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type NotificationType =
@@ -162,7 +163,39 @@ export function NotificationCenter() {
   >([]);
   const [readIds, setReadIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<OfficeNotifFilter>('action');
+  const [sseUnreadCount, setSseUnreadCount] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSseEvent = useCallback(
+    (event: Parameters<typeof useNotificationStream>[0]['onEvent'] extends (e: infer E) => void ? E : never) => {
+      setSseUnreadCount(event.unreadCount);
+
+      if (event.type === 'new_notification' && event.notification) {
+        const incoming = event.notification;
+        setStoredNotifications((prev) => {
+          if (prev.some((n) => n.id === incoming.id)) return prev;
+          return [
+            {
+              id: incoming.id,
+              userId: '',
+              title: incoming.title,
+              message: incoming.message,
+              type: incoming.type,
+              priority: incoming.priority as 'low' | 'medium' | 'high' | 'critical',
+              status: 'unread' as const,
+              createdAt: incoming.createdAt,
+              relatedEntityType: incoming.relatedEntityType ?? null,
+              relatedEntityId: incoming.relatedEntityId ?? null,
+            },
+            ...prev,
+          ];
+        });
+      }
+    },
+    [],
+  );
+
+  useNotificationStream({ onEvent: handleSseEvent, enabled: !!user });
 
   useEffect(() => {
     let cancelled = false;
@@ -323,7 +356,7 @@ export function NotificationCenter() {
     return notificationsWithStatus.filter((item) => matchesOfficeFilter(item.type, filter));
   }, [filter, isOffice, notificationsWithStatus]);
 
-  const unreadCount = filteredNotifications.filter((item) => item.status === 'unread').length;
+  const unreadCount = sseUnreadCount ?? filteredNotifications.filter((item) => item.status === 'unread').length;
 
   const officeFilters: { id: OfficeNotifFilter; labelKey: string }[] = [
     { id: 'action', labelKey: 'notifications.filter.action' },

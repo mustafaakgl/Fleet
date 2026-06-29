@@ -84,7 +84,7 @@ export function GettingStartedPill() {
   return (
     <Link
       href="/getting-started"
-      className="group flex items-center justify-between gap-4 rounded-xl bg-[#2f5f1f] px-4 py-3 text-white shadow-sm transition hover:bg-[#274f19]"
+      className="group flex items-center justify-between gap-4 rounded-xl bg-brand-secondary px-4 py-3 text-white shadow-sm transition hover:bg-brand-secondary"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span className="text-sm font-semibold sm:text-base">{t('nav.gettingStarted')}</span>

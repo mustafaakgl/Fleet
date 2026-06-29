@@ -2,12 +2,12 @@ export function FleetDashboardPreview() {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-blue-950/10">
       <div className="flex">
-        <div className="hidden w-14 shrink-0 flex-col gap-3 border-r border-slate-100 bg-[#002B5C] p-3 sm:flex">
+        <div className="hidden w-14 shrink-0 flex-col gap-3 border-r border-slate-100 bg-brand-primary p-3 sm:flex">
           {['D', 'Dr', 'V', 'P', 'M'].map((icon, i) => (
             <div
               key={icon}
               className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${
-                i === 0 ? 'bg-[#0066CC] text-white' : 'text-blue-200'
+                i === 0 ? 'bg-brand-primary text-white' : 'text-blue-200'
               }`}
             >
               {icon}

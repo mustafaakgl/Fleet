@@ -63,7 +63,7 @@ function MessageBubble({
         className={cn(
           'rounded-2xl px-3 py-2 text-[13px] leading-relaxed shadow-sm',
           own
-            ? 'rounded-br-md bg-[#1a4d7a] text-white'
+            ? 'rounded-br-md bg-brand-primary text-white'
             : 'rounded-bl-md border border-slate-200 bg-white text-slate-900',
         )}
       >
@@ -202,7 +202,7 @@ export function MessengerChatPanel({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1a4d7a] text-xs font-semibold text-white">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary text-xs font-semibold text-white">
             {initials}
           </span>
           <div className="min-w-0 flex-1">

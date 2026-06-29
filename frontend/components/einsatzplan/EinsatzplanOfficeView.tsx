@@ -73,7 +73,7 @@ export function EinsatzplanOfficeView() {
   ];
 
   return (
-    <div className="space-y-5 bg-[#f5f7fb]">
+    <div className="space-y-5 bg-surface">
       <div className="rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="flex items-stretch gap-1 overflow-x-auto border-b border-slate-300 bg-slate-100 p-2">
           {tabs.map((tab) => {

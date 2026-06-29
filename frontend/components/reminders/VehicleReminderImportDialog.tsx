@@ -121,7 +121,7 @@ export function VehicleReminderImportDialog({
             <a
               href="data:text/csv;charset=utf-8,vehicle_plate%2Crenewal_type%2Cdue_date%2Cdue_soon_threshold%2Cdue_soon_unit%2Cnotifications%2Ccomment%0AABC123%2Cinspection%2C2026-12-01%2C3%2Cweeks%2Ctrue%2C"
               download="vehicle-reminders-sample.csv"
-              className="inline-flex items-center gap-2 text-sm font-medium text-[#1a4d7a] hover:underline"
+              className="inline-flex items-center gap-2 text-sm font-medium text-brand-primary hover:underline"
             >
               <Download className="h-4 w-4" />
               {t('vehicleReminders.import.downloadSample')}
@@ -210,7 +210,7 @@ export function VehicleReminderImportDialog({
             </Button>
             <Button
               type="button"
-              className="bg-[#1a4d7a] hover:bg-[#163a5c]"
+              className="bg-brand-primary hover:bg-brand-primary"
               disabled={!csvFile || loading}
               onClick={() => void handleImportData()}
             >

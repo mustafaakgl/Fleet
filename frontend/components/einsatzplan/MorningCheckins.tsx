@@ -47,7 +47,7 @@ function statusPill(status: MorningCheckin['status']) {
     case 'Confirmed':
       return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'Added to Einsatzplan':
-      return 'bg-[#e8f0f8] text-[#1a4d7a] border-[#d4e3f2]';
+      return 'bg-surface text-brand-primary border-surface-border';
     case 'Waiting for Review':
       return 'bg-amber-100 text-amber-700 border-amber-200';
     case 'Missing Vehicle Plate':
@@ -213,7 +213,7 @@ export function MorningCheckins() {
             type="button"
             onClick={() => setAutoAddEnabled((prev) => !prev)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              autoAddEnabled ? 'bg-[#1a4d7a]' : 'bg-slate-300'
+              autoAddEnabled ? 'bg-brand-primary' : 'bg-slate-300'
             }`}
             aria-pressed={autoAddEnabled}
           >
@@ -232,7 +232,7 @@ export function MorningCheckins() {
         <SummaryCard label={t('checkins.waiting')} value={summary.waiting} tone="text-amber-700" />
         <SummaryCard label={t('checkins.missingVehicle')} value={summary.missingVehicle} tone="text-orange-700" />
         <SummaryCard label={t('checkins.missingCompany')} value={summary.missingCompany} tone="text-orange-700" />
-        <SummaryCard label={t('checkins.added')} value={summary.added} tone="text-[#1a4d7a]" />
+        <SummaryCard label={t('checkins.added')} value={summary.added} tone="text-brand-primary" />
       </div>
 
       <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
@@ -284,7 +284,7 @@ export function MorningCheckins() {
                         <button
                           type="button"
                           onClick={() => handleAdd(checkin.id)}
-                          className="rounded-md border border-[#163a5c] px-2 py-1 text-xs font-medium text-[#1a4d7a] hover:bg-[#e8f0f8]"
+                          className="rounded-md border border-brand-primary px-2 py-1 text-xs font-medium text-brand-primary hover:bg-surface"
                         >
                           {t('checkins.addToPlan')}
                         </button>
@@ -408,7 +408,7 @@ export function MorningCheckins() {
                 onClick={() => {
                   if (selectedCheckin) void handleAdd(selectedCheckin.id);
                 }}
-                className="rounded-md border border-[#163a5c] px-3 py-2 text-sm font-medium text-[#1a4d7a] hover:bg-[#e8f0f8]"
+                className="rounded-md border border-brand-primary px-3 py-2 text-sm font-medium text-brand-primary hover:bg-surface"
               >
                 {t('checkins.addToPlan')}
               </button>

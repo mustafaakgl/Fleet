@@ -205,7 +205,7 @@ export function AddVehicleReminderPage() {
                 type="checkbox"
                 checked={notifications}
                 onChange={(event) => setNotifications(event.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1a4d7a] focus:ring-[#1a4d7a]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
               />
               <span className="text-[13px] font-medium text-slate-700">{t('vehicleReminders.create.notifications')}</span>
             </label>
@@ -243,7 +243,7 @@ export function AddVehicleReminderPage() {
               placeholder={t('vehicleReminders.create.commentPlaceholder')}
               rows={4}
               className={cn(
-                'min-h-[6rem] w-full resize-y rounded-md border border-slate-200 px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-400 focus:border-[#1a4d7a] focus:outline-none focus:ring-1 focus:ring-[#1a4d7a]',
+                'min-h-[6rem] w-full resize-y rounded-md border border-slate-200 px-3 py-2 text-[13px] text-slate-800 placeholder:text-slate-400 focus:border-brand-primary focus:outline-none focus:ring-1 focus:ring-brand-primary',
               )}
             />
           </div>

@@ -65,7 +65,7 @@ type KpiFilter = 'all' | 'available' | 'vacation' | 'sick' | 'planned' | 'open';
 
 const KIND_BAR: Record<RowKind, string> = {
   open: 'border-l-4 border-l-amber-400',
-  planned: 'border-l-4 border-l-[#1a4d7a]',
+  planned: 'border-l-4 border-l-brand-primary',
   unavailable: 'border-l-4 border-l-slate-300',
 };
 
@@ -735,7 +735,7 @@ export function Tagesplanung({
           </p>
           <div className="h-1.5 w-full max-w-xs flex-1 overflow-hidden rounded-full bg-slate-200">
             <div
-              className={cn('h-full rounded-full transition-all', progressPercent === 100 ? 'bg-emerald-500' : 'bg-[#1a4d7a]')}
+              className={cn('h-full rounded-full transition-all', progressPercent === 100 ? 'bg-emerald-500' : 'bg-brand-primary')}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -848,7 +848,7 @@ export function Tagesplanung({
                             ? 'bg-amber-50 text-amber-700'
                             : row.assignment.status === 'In Progress'
                             ? 'bg-amber-100 text-amber-700'
-                            : 'bg-[#e8f0f8] text-[#1a4d7a]'
+                            : 'bg-surface text-brand-primary'
                         }`}
                       >
                         {!editable
@@ -1327,7 +1327,7 @@ function SummaryCard({
       className={cn(
         'rounded-lg border bg-white p-3 text-left shadow-sm transition',
         active
-          ? 'border-[#1a4d7a] ring-2 ring-[#1a4d7a]/25'
+          ? 'border-brand-primary ring-2 ring-brand-primary/25'
           : 'border-slate-200 hover:border-slate-300 hover:shadow',
       )}
     >

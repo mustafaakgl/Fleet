@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
+import { TableRowSkeleton } from '@/components/ui/SkeletonLoader';
 import { EmptyState } from '@/components/ui/empty-state';
 import { VehicleActionsMenu } from '@/components/vehicles/VehicleActionsMenu';
 import { VehicleImportDialog } from '@/components/vehicles/VehicleImportDialog';
@@ -190,18 +190,7 @@ export default function VehiclesPage() {
 
       <Card className={FLEET_LIST_CARD}>
         {loading ? (
-          <div className="space-y-2 p-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div key={`vehicle-skeleton-${index}`} className="grid grid-cols-6 gap-2">
-                <Skeleton className="h-8" />
-                <Skeleton className="h-9" />
-                <Skeleton className="h-9" />
-                <Skeleton className="h-9" />
-                <Skeleton className="h-9" />
-                <Skeleton className="h-9" />
-              </div>
-            ))}
-          </div>
+          <TableRowSkeleton rows={5} />
         ) : error ? (
           <div className="p-4">
             <EmptyState
