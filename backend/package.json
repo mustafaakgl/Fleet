@@ -8,18 +8,16 @@
   "scripts": {
     "start": "node --env-file=.env dist/main.js",
     "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
-    "dev:gateway": "ts-node-dev --respawn --transpile-only src/telematics-gateway/main.ts",
     "build": "tsc -p tsconfig.json",
     "postinstall": "prisma generate",
     "prestart:dev": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "telematics:sim": "node scripts/telematics-sim.mjs",
-    "codec8:sim": "node scripts/codec8-sim.mjs",
     "verify:smtp": "ts-node scripts/verify-smtp.ts",
     "verify:stripe": "ts-node scripts/verify-stripe.ts",
     "verify:s3": "ts-node scripts/verify-s3.ts",
-    "test": "node -r ts-node/register/transpile-only --test src/tenant/tenant-scoped-models.spec.ts src/tenant/tenant-access.service.spec.ts src/tenant/tenant-prisma.extension.spec.ts src/vehicle-handovers/handover-photo-validation.util.spec.ts src/vehicle-handovers/handover-photo.util.spec.ts src/fleet/core/fleet-trip-locations.util.spec.ts src/fleet/core/fleet-trip-processing.util.spec.ts src/fleet/core/fleet-driving-events.util.spec.ts src/fleet/core/fleet-fuel-consumption.util.spec.ts src/fleet/core/fleet-fuel-estimation.util.spec.ts src/fleet/core/fleet-odometer.util.spec.ts src/fleet/core/fleet-maintenance.util.spec.ts src/tracking/tracking.service.spec.ts src/tachograph/ddd/ddd-parser.spec.ts"
+    "test": "node -r ts-node/register/transpile-only --test src/tenant/tenant-scoped-models.spec.ts src/tenant/tenant-access.service.spec.ts src/tenant/tenant-prisma.extension.spec.ts src/vehicle-handovers/handover-photo-validation.util.spec.ts src/vehicle-handovers/handover-photo.util.spec.ts src/fleet/core/fleet-trip-locations.util.spec.ts src/fleet/core/fleet-trip-processing.util.spec.ts src/fleet/core/fleet-driving-events.util.spec.ts src/fleet/core/fleet-fuel-consumption.util.spec.ts src/fleet/core/fleet-fuel-estimation.util.spec.ts src/fleet/core/fleet-odometer.util.spec.ts src/fleet/core/fleet-maintenance.util.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1062.0",

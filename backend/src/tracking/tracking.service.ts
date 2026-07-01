@@ -5,13 +5,12 @@ import {
   FleetDrivingEventType,
   FleetTelemetrySource,
   FleetTripStatus,
+  DriverStatus,
   LocationSource,
   LocationTrackingStatus,
   Prisma,
-  UserRole,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
-import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { IngestTelemetryDto } from './dto/ingest-telemetry.dto';
 import type { SubmitLocationDto } from './dto/submit-location.dto';
@@ -46,95 +45,50 @@ const OFFLINE_THRESHOLD_SEC = 30 * 60;
 const DEFAULT_HISTORY_LIMIT = 500;
 const MAX_HISTORY_LIMIT = 5000;
 const DEFAULT_HISTORY_LOOKBACK_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_TELEMETRY_HISTORY_LIMIT = 1000;
-const MAX_TELEMETRY_HISTORY_LIMIT = 2000;
-const TELEMETRY_HISTORY_LOOKBACK_MS = 24 * 60 * 60 * 1000;
-const TELEMETRY_HISTORY_THROTTLE_MS = 60 * 1000;
 const MAX_SHARING_SESSION_MS = 12 * 60 * 60 * 1000;
-const LOW_BATTERY_VOLTAGE_THRESHOLD = 11.8;
-const NOTIFICATION_DEDUPE_WINDOW_MS = 30 * 60 * 1000;
+const VEHICLE_HEALTH_STALE_MINUTES = 30;
+const DRIVER_SCORE_WINDOW_DAYS = 30;
 
-const NOTIFICATION_OPERATIONAL_ROLES: UserRole[] = [
-  UserRole.admin,
-  UserRole.boss,
-  UserRole.accounting,
-  UserRole.office,
-];
-
-type NotificationTrigger = {
-  tenantId: string;
-  title: string;
-  message: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  relatedEntityType: string;
-  relatedEntityId: string;
+const DRIVER_EVENT_WEIGHTS: Record<FleetDrivingEventType, number> = {
+  [FleetDrivingEventType.speeding]: 2,
+  [FleetDrivingEventType.harsh_accel]: 3,
+  [FleetDrivingEventType.harsh_brake]: 3,
+  [FleetDrivingEventType.harsh_corner]: 4,
+  [FleetDrivingEventType.crash]: 25,
 };
 
-type TelematicsHealthStatus = 'ok' | 'warn' | 'critical';
+type TelematicsHealthStatus = 'healthy' | 'warning' | 'critical' | 'offline';
 
 type TelematicsVehicleHealthRow = {
   vehicleId: string;
   plateNumber: string;
+  brand: string;
+  model: string;
+  driverName: string | null;
   health: TelematicsHealthStatus;
-  latest: {
-    rpm: number | null;
-    fuelLevelPct: number | null;
-    coolantTemp: number | null;
-    voltage: number | null;
-    odometerKm: number | null;
-    ignition: boolean | null;
-    recordedAt: string | null;
-  };
-  openDtcCount: number;
-};
-
-type TelematicsOpenDtcRow = {
-  plateNumber: string;
-  code: string;
-  description: string | null;
-  severity: DtcSeverity;
-  occurredAt: string;
+  ignition: boolean | null;
+  rpm: number | null;
+  fuelLevelPct: number | null;
+  coolantTemp: number | null;
+  voltage: number | null;
+  odometerKm: number | null;
+  activeDtcCount: number;
+  criticalDtcCount: number;
+  topDtcCodes: string[];
+  lastTelemetryAt: string | null;
 };
 
 type TelematicsDriverScoreRow = {
   driverId: string;
-  name: string;
+  driverName: string;
+  driverStatus: DriverStatus;
+  distanceKm: number;
+  totalEvents: number;
+  weightedEvents: number;
+  eventRatePer100Km: number;
   score: number;
-  harshCount: number;
-  overspeedCount: number;
-};
-
-type DriverEventCounts = {
-  harshCount: number;
-  overspeedCount: number;
-  crashCount: number;
-};
-
-type TelematicsMetric =
-  | 'speedKmh'
-  | 'rpm'
-  | 'fuelLevelPct'
-  | 'coolantTemp'
-  | 'voltage'
-  | 'odometerKm';
-
-type TelematicsVehicleHistoryParams = {
-  from?: string;
-  to?: string;
-  metric?: TelematicsMetric;
-  limit?: number;
-};
-
-type TelematicsHistoryPayload = {
-  tenantId: string;
-  vehicleId: string;
-  recordedAt: Date;
-  speedKmh: number | null;
-  rpm: number | null;
-  fuelLevelPct: Prisma.Decimal | null;
-  coolantTemp: Prisma.Decimal | null;
-  voltage: Prisma.Decimal | null;
-  odometerKm: Prisma.Decimal | null;
+  riskLevel: 'low' | 'medium' | 'high';
+  breakdown: Record<FleetDrivingEventType, number>;
 };
 
 type ResolvedDriver = {
@@ -150,7 +104,6 @@ export class TrackingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-    private readonly notificationsService: NotificationsService,
   ) {}
 
   async grantLocationConsent(driverId: string) {
@@ -323,7 +276,7 @@ export class TrackingService {
       ? this.parseRecordedAt(dto.recordedAt)
       : new Date();
 
-    const ingestResult = await this.prisma.unscoped.$transaction(async (tx) => {
+    return this.prisma.unscoped.$transaction(async (tx) => {
       const { tenantId, vehicleId } = await this.resolveTelemetryVehicleContext(tx, dto);
       const driverId = await this.resolveDriverIdForVehicleTodayWithClient(tx, vehicleId);
 
@@ -332,14 +285,6 @@ export class TrackingService {
           'No active driver assignment found for this vehicle today',
         );
       }
-
-      const vehicle = await tx.vehicle.findUnique({
-        where: { id: vehicleId },
-        select: { plateNumber: true },
-      });
-
-      const plateNumber = vehicle?.plateNumber ?? vehicleId;
-      const notificationTriggers: NotificationTrigger[] = [];
 
       const locationData = {
         tenantId,
@@ -370,11 +315,6 @@ export class TrackingService {
         },
       });
 
-      const fuelLevelPct = this.toDecimalOrNull(dto.fuelLevelPct);
-      const coolantTemp = this.toDecimalOrNull(dto.coolantTemp);
-      const voltage = this.toDecimalOrNull(dto.voltage);
-      const odometerKm = this.toDecimalOrNull(dto.odometerKm);
-
       await tx.vehicleTelemetryLatest.upsert({
         where: { vehicleId },
         create: {
@@ -382,34 +322,21 @@ export class TrackingService {
           tenantId,
           ignition: dto.ignition ?? false,
           rpm: dto.rpm ?? null,
-          fuelLevelPct,
-          coolantTemp,
-          voltage,
-          odometerKm,
+          fuelLevelPct: this.toDecimalOrNull(dto.fuelLevelPct),
+          coolantTemp: this.toDecimalOrNull(dto.coolantTemp),
+          voltage: this.toDecimalOrNull(dto.voltage),
+          odometerKm: this.toDecimalOrNull(dto.odometerKm),
           recordedAt,
         },
         update: {
           ignition: dto.ignition ?? false,
           rpm: dto.rpm ?? null,
-          fuelLevelPct,
-          coolantTemp,
-          voltage,
-          odometerKm,
+          fuelLevelPct: this.toDecimalOrNull(dto.fuelLevelPct),
+          coolantTemp: this.toDecimalOrNull(dto.coolantTemp),
+          voltage: this.toDecimalOrNull(dto.voltage),
+          odometerKm: this.toDecimalOrNull(dto.odometerKm),
           recordedAt,
         },
-      });
-
-      // TODO(telematics-history): consider retention and partitioning as volume grows.
-      await this.maybePersistTelemetryHistory(tx, {
-        tenantId,
-        vehicleId,
-        recordedAt,
-        speedKmh: this.speedMpsToKmh(dto.speedMps),
-        rpm: dto.rpm ?? null,
-        fuelLevelPct,
-        coolantTemp,
-        voltage,
-        odometerKm,
       });
 
       if (dto.dtc?.length) {
@@ -423,37 +350,6 @@ export class TrackingService {
               item.severity === 'critical' ? DtcSeverity.critical : DtcSeverity.medium,
             occurredAt: recordedAt,
           })),
-        });
-
-        const criticalCodes = Array.from(
-          new Set(
-            dto.dtc
-              .filter((item) => item.severity === 'critical')
-              .map((item) => item.code.trim())
-              .filter((code) => code.length > 0),
-          ),
-        );
-
-        for (const code of criticalCodes) {
-          notificationTriggers.push({
-            tenantId,
-            title: `Kritik ariza: ${code} / ${plateNumber}`,
-            message: `Arac ${plateNumber} icin kritik DTC kodu acildi (${code}).`,
-            priority: 'critical',
-            relatedEntityType: 'telematics_critical_dtc',
-            relatedEntityId: `${vehicleId}:${code}`,
-          });
-        }
-      }
-
-      if (dto.voltage !== undefined && dto.voltage < LOW_BATTERY_VOLTAGE_THRESHOLD) {
-        notificationTriggers.push({
-          tenantId,
-          title: `Dusuk aku voltaji / ${plateNumber}`,
-          message: `Arac ${plateNumber} aku voltaji ${dto.voltage.toFixed(1)}V seviyesine dustu.`,
-          priority: 'high',
-          relatedEntityType: 'telematics_low_voltage',
-          relatedEntityId: vehicleId,
         });
       }
 
@@ -480,18 +376,6 @@ export class TrackingService {
             threshold: new Prisma.Decimal(event.threshold ?? event.value),
           })),
         });
-
-        const hasOverspeed = dto.events.some((event) => event.type === 'speeding');
-        if (hasOverspeed) {
-          notificationTriggers.push({
-            tenantId,
-            title: `Asiri hiz olayi / ${plateNumber}`,
-            message: `Arac ${plateNumber} icin asiri hiz olayi algilandi.`,
-            priority: 'low',
-            relatedEntityType: 'telematics_overspeed',
-            relatedEntityId: vehicleId,
-          });
-        }
       }
 
       return {
@@ -502,77 +386,28 @@ export class TrackingService {
         tripId,
         source: LocationSource.telematics,
         recordedAt: recordedAt.toISOString(),
-        notificationTriggers,
       };
     });
-
-    await this.dispatchTelemetryNotifications(ingestResult.notificationTriggers);
-
-    return {
-      accepted: ingestResult.accepted,
-      tenantId: ingestResult.tenantId,
-      vehicleId: ingestResult.vehicleId,
-      driverId: ingestResult.driverId,
-      tripId: ingestResult.tripId,
-      source: ingestResult.source,
-      recordedAt: ingestResult.recordedAt,
-    };
-  }
-
-  private async dispatchTelemetryNotifications(triggers: NotificationTrigger[]): Promise<void> {
-    if (triggers.length === 0) {
-      return;
-    }
-
-    for (const trigger of triggers) {
-      // Dedupe by tenant + related entity within a short time window to prevent spam.
-      const dedupeCutoff = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
-      const existing = await this.prisma.unscoped.notification.findFirst({
-        where: {
-          tenantId: trigger.tenantId,
-          type: 'system',
-          relatedEntityType: trigger.relatedEntityType,
-          relatedEntityId: trigger.relatedEntityId,
-          createdAt: { gte: dedupeCutoff },
-        },
-        select: { id: true },
-      });
-
-      if (existing) {
-        continue;
-      }
-
-      const users = await this.prisma.unscoped.user.findMany({
-        where: {
-          tenantId: trigger.tenantId,
-          status: 'active',
-          role: { in: NOTIFICATION_OPERATIONAL_ROLES },
-        },
-        select: { id: true },
-      });
-
-      for (const user of users) {
-        await this.notificationsService.createNotification({
-          tenantId: trigger.tenantId,
-          userId: user.id,
-          title: trigger.title,
-          message: trigger.message,
-          type: 'system',
-          priority: trigger.priority,
-          relatedEntityType: trigger.relatedEntityType,
-          relatedEntityId: trigger.relatedEntityId,
-        });
-      }
-    }
   }
 
   async getTelematicsVehicleHealth() {
+    const now = new Date();
+    const staleCutoff = new Date(now.getTime() - VEHICLE_HEALTH_STALE_MINUTES * 60 * 1000);
+
     const [vehicles, dtcs] = await Promise.all([
       this.prisma.vehicle.findMany({
         where: { deletedAt: null },
         select: {
           id: true,
           plateNumber: true,
+          brand: true,
+          model: true,
+          currentDriver: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
           telemetryLatest: {
             select: {
               ignition: true,
@@ -592,22 +427,15 @@ export class TrackingService {
         select: {
           vehicleId: true,
           code: true,
-          description: true,
           severity: true,
           occurredAt: true,
-          vehicle: {
-            select: {
-              plateNumber: true,
-            },
-          },
         },
-        orderBy: { occurredAt: 'desc' },
       }),
     ]);
 
     const dtcByVehicle = new Map<
       string,
-      Array<{ code: string; description: string | null; severity: DtcSeverity; occurredAt: Date }>
+      Array<{ code: string; severity: DtcSeverity; occurredAt: Date }>
     >();
     for (const dtc of dtcs) {
       const rows = dtcByVehicle.get(dtc.vehicleId) ?? [];
@@ -617,212 +445,213 @@ export class TrackingService {
 
     const items: TelematicsVehicleHealthRow[] = vehicles.map((vehicle) => {
       const vehicleDtcs = dtcByVehicle.get(vehicle.id) ?? [];
-      const hasCritical = vehicleDtcs.some((dtc) => dtc.severity === DtcSeverity.critical);
-      const openDtcCount = vehicleDtcs.length;
+      const criticalDtcCount = vehicleDtcs.filter((dtc) => dtc.severity === DtcSeverity.critical).length;
+      const activeDtcCount = vehicleDtcs.length;
 
       const telemetry = vehicle.telemetryLatest;
-      const fuelLevelPct = telemetry?.fuelLevelPct ? this.decimalToNumber(telemetry.fuelLevelPct) : null;
+      const fuelLevel = telemetry?.fuelLevelPct ? this.decimalToNumber(telemetry.fuelLevelPct) : null;
       const coolantTemp = telemetry?.coolantTemp ? this.decimalToNumber(telemetry.coolantTemp) : null;
       const voltage = telemetry?.voltage ? this.decimalToNumber(telemetry.voltage) : null;
-      const odometerKm = telemetry?.odometerKm ? this.decimalToNumber(telemetry.odometerKm) : null;
 
-      let health: TelematicsHealthStatus = 'ok';
-      if (hasCritical) {
+      let health: TelematicsHealthStatus = 'healthy';
+      if (!telemetry || telemetry.recordedAt < staleCutoff) {
+        health = 'offline';
+      } else if (
+        criticalDtcCount > 0
+        || (coolantTemp !== null && coolantTemp >= 110)
+        || (voltage !== null && voltage < 11.8)
+      ) {
         health = 'critical';
-      } else if (openDtcCount > 0) {
-        health = 'warn';
+      } else if (
+        activeDtcCount > 0
+        || (fuelLevel !== null && fuelLevel <= 15)
+        || (coolantTemp !== null && coolantTemp >= 100)
+        || (voltage !== null && voltage < 12.2)
+      ) {
+        health = 'warning';
       }
+
+      const topDtcCodes = vehicleDtcs
+        .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+        .slice(0, 3)
+        .map((dtc) => dtc.code);
 
       return {
         vehicleId: vehicle.id,
         plateNumber: vehicle.plateNumber,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        driverName: vehicle.currentDriver
+          ? `${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`.trim()
+          : null,
         health,
-        latest: {
-          rpm: telemetry?.rpm ?? null,
-          fuelLevelPct,
-          coolantTemp,
-          voltage,
-          odometerKm,
-          ignition: telemetry?.ignition ?? null,
-          recordedAt: telemetry?.recordedAt.toISOString() ?? null,
-        },
-        openDtcCount,
+        ignition: telemetry?.ignition ?? null,
+        rpm: telemetry?.rpm ?? null,
+        fuelLevelPct: fuelLevel,
+        coolantTemp,
+        voltage,
+        odometerKm: telemetry?.odometerKm ? this.decimalToNumber(telemetry.odometerKm) : null,
+        activeDtcCount,
+        criticalDtcCount,
+        topDtcCodes,
+        lastTelemetryAt: telemetry?.recordedAt.toISOString() ?? null,
       };
     });
 
     const summary = {
-      ok: items.filter((item) => item.health === 'ok').length,
-      warn: items.filter((item) => item.health === 'warn').length,
+      totalVehicles: items.length,
+      healthy: items.filter((item) => item.health === 'healthy').length,
+      warning: items.filter((item) => item.health === 'warning').length,
       critical: items.filter((item) => item.health === 'critical').length,
+      offline: items.filter((item) => item.health === 'offline').length,
+      activeDtcTotal: items.reduce((acc, item) => acc + item.activeDtcCount, 0),
     };
 
-    const openDtcs: TelematicsOpenDtcRow[] = dtcs.map((dtc) => ({
-      plateNumber: dtc.vehicle.plateNumber,
-      code: dtc.code,
-      description: dtc.description,
-      severity: dtc.severity,
-      occurredAt: dtc.occurredAt.toISOString(),
-    }));
-
     return {
+      generatedAt: now.toISOString(),
+      staleAfterMinutes: VEHICLE_HEALTH_STALE_MINUTES,
       summary,
-      vehicles: items,
-      openDtcs,
+      items,
     };
   }
 
   async getTelematicsDriverScores() {
-    const [tripScoreRows, eventRows] = await Promise.all([
+    const now = new Date();
+    const since = new Date(now.getTime() - DRIVER_SCORE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const [tripDistanceRows, eventRows] = await Promise.all([
       this.prisma.fleetTrip.groupBy({
         by: ['driverId'],
         where: {
-          score: { not: null },
+          startedAt: { gte: since },
+          status: FleetTripStatus.closed,
         },
-        _avg: { score: true },
+        _sum: { distanceKm: true },
       }),
       this.prisma.fleetDrivingEvent.groupBy({
         by: ['driverId', 'type'],
-        where: {
-          type: {
-            in: [
-              FleetDrivingEventType.speeding,
-              FleetDrivingEventType.harsh_accel,
-              FleetDrivingEventType.harsh_brake,
-              FleetDrivingEventType.harsh_corner,
-              FleetDrivingEventType.crash,
-            ],
-          },
-        },
+        where: { occurredAt: { gte: since } },
         _count: { _all: true },
       }),
     ]);
 
     const driverIds = new Set<string>();
-    const tripScoreByDriver = new Map<string, number>();
+    const distanceByDriver = new Map<string, number>();
 
-    for (const row of tripScoreRows) {
+    for (const row of tripDistanceRows) {
       driverIds.add(row.driverId);
-      const score = row._avg.score ? this.decimalToNumber(row._avg.score) : null;
-      if (score !== null) {
-        tripScoreByDriver.set(row.driverId, Number(score.toFixed(1)));
-      }
+      const distance = row._sum.distanceKm ? this.decimalToNumber(row._sum.distanceKm) : 0;
+      distanceByDriver.set(row.driverId, distance);
     }
 
-    const eventByDriver = new Map<string, DriverEventCounts>();
+    const eventByDriver = new Map<string, Record<FleetDrivingEventType, number>>();
     for (const row of eventRows) {
       driverIds.add(row.driverId);
       const current = eventByDriver.get(row.driverId) ?? {
-        harshCount: 0,
-        overspeedCount: 0,
-        crashCount: 0,
+        [FleetDrivingEventType.speeding]: 0,
+        [FleetDrivingEventType.harsh_accel]: 0,
+        [FleetDrivingEventType.harsh_brake]: 0,
+        [FleetDrivingEventType.harsh_corner]: 0,
+        [FleetDrivingEventType.crash]: 0,
       };
-
-      if (row.type === FleetDrivingEventType.speeding) {
-        current.overspeedCount += row._count._all;
-      }
-      if (
-        row.type === FleetDrivingEventType.harsh_accel
-        || row.type === FleetDrivingEventType.harsh_brake
-        || row.type === FleetDrivingEventType.harsh_corner
-      ) {
-        current.harshCount += row._count._all;
-      }
-      if (row.type === FleetDrivingEventType.crash) {
-        current.crashCount += row._count._all;
-      }
-
+      current[row.type] = row._count._all;
       eventByDriver.set(row.driverId, current);
     }
 
     if (driverIds.size === 0) {
       return {
-        fleetAverage: 0,
-        drivers: [] as TelematicsDriverScoreRow[],
+        generatedAt: now.toISOString(),
+        periodDays: DRIVER_SCORE_WINDOW_DAYS,
+        summary: {
+          totalDrivers: 0,
+          averageScore: 0,
+          totalEvents: 0,
+          totalDistanceKm: 0,
+          distribution: {
+            excellent: 0,
+            good: 0,
+            watchlist: 0,
+            critical: 0,
+          },
+        },
+        items: [] as TelematicsDriverScoreRow[],
       };
     }
 
     const drivers = await this.prisma.driver.findMany({
       where: {
         id: { in: Array.from(driverIds) },
+        status: { not: DriverStatus.terminated },
       },
       select: {
         id: true,
         firstName: true,
         lastName: true,
+        status: true,
       },
     });
 
     const items: TelematicsDriverScoreRow[] = drivers.map((driver) => {
-      const eventCounts = eventByDriver.get(driver.id) ?? {
-        harshCount: 0,
-        overspeedCount: 0,
-        crashCount: 0,
+      const breakdown = eventByDriver.get(driver.id) ?? {
+        [FleetDrivingEventType.speeding]: 0,
+        [FleetDrivingEventType.harsh_accel]: 0,
+        [FleetDrivingEventType.harsh_brake]: 0,
+        [FleetDrivingEventType.harsh_corner]: 0,
+        [FleetDrivingEventType.crash]: 0,
       };
 
-      const scoreFromTrips = tripScoreByDriver.get(driver.id);
-      const score =
-        scoreFromTrips
-        ?? this.deriveScoreFromEventCounts(eventCounts.overspeedCount, eventCounts.harshCount, eventCounts.crashCount);
+      const distanceKm = distanceByDriver.get(driver.id) ?? 0;
+      const totalEvents = Object.values(breakdown).reduce((acc, value) => acc + value, 0);
+      const weightedEvents = (Object.keys(breakdown) as FleetDrivingEventType[]).reduce(
+        (acc, key) => acc + breakdown[key] * DRIVER_EVENT_WEIGHTS[key],
+        0,
+      );
+
+      const normalizedDistance = Math.max(distanceKm, 100);
+      const penaltyPer100Km = (weightedEvents / normalizedDistance) * 100;
+      const rawScore = 100 - penaltyPer100Km * 2.5;
+      const score = Math.max(0, Math.min(100, Number(rawScore.toFixed(1))));
+
+      let riskLevel: 'low' | 'medium' | 'high' = 'high';
+      if (score >= 85) {
+        riskLevel = 'low';
+      } else if (score >= 70) {
+        riskLevel = 'medium';
+      }
 
       return {
         driverId: driver.id,
-        name: `${driver.firstName} ${driver.lastName}`.trim(),
+        driverName: `${driver.firstName} ${driver.lastName}`.trim(),
+        driverStatus: driver.status,
+        distanceKm: Number(distanceKm.toFixed(1)),
+        totalEvents,
+        weightedEvents,
+        eventRatePer100Km: distanceKm > 0 ? Number(((totalEvents / distanceKm) * 100).toFixed(2)) : 0,
         score,
-        harshCount: eventCounts.harshCount,
-        overspeedCount: eventCounts.overspeedCount,
+        riskLevel,
+        breakdown,
       };
-    }).sort((a, b) => b.score - a.score);
+    }).sort((a, b) => a.score - b.score);
 
-    const fleetAverage =
-      items.length > 0
-        ? Number((items.reduce((sum, row) => sum + row.score, 0) / items.length).toFixed(1))
-        : 0;
-
-    return {
-      fleetAverage,
-      drivers: items,
-    };
-  }
-
-  async getTelematicsVehicleHistory(
-    vehicleId: string,
-    query: TelematicsVehicleHistoryParams,
-    currentUserId: string,
-  ) {
-    await this.assertVehicleExists(vehicleId);
-    const { from, to, limit, metric } = this.resolveTelematicsHistoryQuery(query);
-
-    const where: Prisma.VehicleTelemetryHistoryWhereInput = {
-      vehicleId,
-      recordedAt: { gte: from, lte: to },
+    const scoreSum = items.reduce((acc, item) => acc + item.score, 0);
+    const summary = {
+      totalDrivers: items.length,
+      averageScore: items.length > 0 ? Number((scoreSum / items.length).toFixed(1)) : 0,
+      totalEvents: items.reduce((acc, item) => acc + item.totalEvents, 0),
+      totalDistanceKm: Number(items.reduce((acc, item) => acc + item.distanceKm, 0).toFixed(1)),
+      distribution: {
+        excellent: items.filter((item) => item.score >= 90).length,
+        good: items.filter((item) => item.score >= 75 && item.score < 90).length,
+        watchlist: items.filter((item) => item.score >= 60 && item.score < 75).length,
+        critical: items.filter((item) => item.score < 60).length,
+      },
     };
 
-    if (metric) {
-      Object.assign(where, { [metric]: { not: null } });
-    }
-
-    const rows = await this.prisma.vehicleTelemetryHistory.findMany({
-      where,
-      orderBy: { recordedAt: 'asc' },
-      take: limit,
-    });
-
-    await this.logHistoryViewed(currentUserId, 'vehicle', vehicleId, { from, to, limit });
-
     return {
-      vehicleId,
-      from: from.toISOString(),
-      to: to.toISOString(),
-      metric: metric ?? null,
-      points: rows.map((row) => ({
-        recordedAt: row.recordedAt.toISOString(),
-        speedKmh: row.speedKmh,
-        rpm: row.rpm,
-        fuelLevelPct: row.fuelLevelPct ? this.decimalToNumber(row.fuelLevelPct) : null,
-        coolantTemp: row.coolantTemp ? this.decimalToNumber(row.coolantTemp) : null,
-        voltage: row.voltage ? this.decimalToNumber(row.voltage) : null,
-        odometerKm: row.odometerKm ? this.decimalToNumber(row.odometerKm) : null,
-      })),
+      generatedAt: now.toISOString(),
+      periodDays: DRIVER_SCORE_WINDOW_DAYS,
+      summary,
+      items,
     };
   }
 
@@ -1439,95 +1268,6 @@ export class TrackingService {
     return { tenantId: device.tenantId, vehicleId: resolvedVehicleId };
   }
 
-  private async maybePersistTelemetryHistory(
-    tx: Prisma.TransactionClient,
-    payload: TelematicsHistoryPayload,
-  ): Promise<void> {
-    const previous = await tx.vehicleTelemetryHistory.findFirst({
-      where: { vehicleId: payload.vehicleId },
-      orderBy: { recordedAt: 'desc' },
-      select: {
-        recordedAt: true,
-        speedKmh: true,
-        rpm: true,
-        fuelLevelPct: true,
-        coolantTemp: true,
-        voltage: true,
-        odometerKm: true,
-      },
-    });
-
-    if (!previous) {
-      await tx.vehicleTelemetryHistory.create({ data: payload });
-      return;
-    }
-
-    const elapsedMs = Math.abs(payload.recordedAt.getTime() - previous.recordedAt.getTime());
-    if (elapsedMs >= TELEMETRY_HISTORY_THROTTLE_MS) {
-      await tx.vehicleTelemetryHistory.create({ data: payload });
-      return;
-    }
-
-    if (!this.hasMeaningfulTelemetryHistoryChange(previous, payload)) {
-      return;
-    }
-
-    await tx.vehicleTelemetryHistory.create({ data: payload });
-  }
-
-  private hasMeaningfulTelemetryHistoryChange(
-    previous: {
-      speedKmh: number | null;
-      rpm: number | null;
-      fuelLevelPct: Prisma.Decimal | null;
-      coolantTemp: Prisma.Decimal | null;
-      voltage: Prisma.Decimal | null;
-      odometerKm: Prisma.Decimal | null;
-    },
-    next: TelematicsHistoryPayload,
-  ): boolean {
-    const speedChanged = this.hasNumericDiff(previous.speedKmh, next.speedKmh, 2);
-    const rpmChanged = this.hasNumericDiff(previous.rpm, next.rpm, 50);
-    const fuelChanged = this.hasNumericDiff(
-      previous.fuelLevelPct ? this.decimalToNumber(previous.fuelLevelPct) : null,
-      next.fuelLevelPct ? this.decimalToNumber(next.fuelLevelPct) : null,
-      0.5,
-    );
-    const coolantChanged = this.hasNumericDiff(
-      previous.coolantTemp ? this.decimalToNumber(previous.coolantTemp) : null,
-      next.coolantTemp ? this.decimalToNumber(next.coolantTemp) : null,
-      1,
-    );
-    const voltageChanged = this.hasNumericDiff(
-      previous.voltage ? this.decimalToNumber(previous.voltage) : null,
-      next.voltage ? this.decimalToNumber(next.voltage) : null,
-      0.1,
-    );
-    const odometerChanged = this.hasNumericDiff(
-      previous.odometerKm ? this.decimalToNumber(previous.odometerKm) : null,
-      next.odometerKm ? this.decimalToNumber(next.odometerKm) : null,
-      0.05,
-    );
-
-    return speedChanged || rpmChanged || fuelChanged || coolantChanged || voltageChanged || odometerChanged;
-  }
-
-  private hasNumericDiff(
-    previous: number | null,
-    next: number | null,
-    threshold: number,
-  ): boolean {
-    if (previous === null && next === null) {
-      return false;
-    }
-
-    if (previous === null || next === null) {
-      return true;
-    }
-
-    return Math.abs(previous - next) >= threshold;
-  }
-
   private async findOrCreateDeviceTrip(
     tx: Prisma.TransactionClient,
     params: { tenantId: string; vehicleId: string; driverId: string; startedAt: Date },
@@ -1605,15 +1345,6 @@ export class TrackingService {
       case 'crash':
         return FleetDrivingEventType.crash;
     }
-  }
-
-  private deriveScoreFromEventCounts(
-    overspeedCount: number,
-    harshCount: number,
-    crashCount: number,
-  ): number {
-    const raw = 100 - overspeedCount * 2 - harshCount * 3 - crashCount * 8;
-    return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
   }
 
   private toDecimalOrNull(value: number | undefined): Prisma.Decimal | null {
@@ -1759,36 +1490,6 @@ export class TrackingService {
     }
 
     return { from, to, limit };
-  }
-
-  private resolveTelematicsHistoryQuery(
-    query: TelematicsVehicleHistoryParams,
-  ): { from: Date; to: Date; limit: number; metric?: TelematicsMetric } {
-    const limit = Math.min(query.limit ?? DEFAULT_TELEMETRY_HISTORY_LIMIT, MAX_TELEMETRY_HISTORY_LIMIT);
-    const now = new Date();
-
-    let from: Date;
-    let to: Date;
-
-    if (query.from && query.to) {
-      from = this.parseHistoryDate(query.from, 'from');
-      to = this.parseHistoryDate(query.to, 'to');
-    } else if (query.from) {
-      from = this.parseHistoryDate(query.from, 'from');
-      to = now;
-    } else if (query.to) {
-      to = this.parseHistoryDate(query.to, 'to');
-      from = new Date(to.getTime() - TELEMETRY_HISTORY_LOOKBACK_MS);
-    } else {
-      from = new Date(now.getTime() - TELEMETRY_HISTORY_LOOKBACK_MS);
-      to = now;
-    }
-
-    if (from.getTime() > to.getTime()) {
-      throw new BadRequestException('from must be less than or equal to to');
-    }
-
-    return { from, to, limit, metric: query.metric };
   }
 
   private parseHistoryDate(value: string, field: 'from' | 'to'): Date {

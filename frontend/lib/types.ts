@@ -196,30 +196,6 @@ export interface PaginatedVehicles {
   data: Vehicle[];
 }
 
-export type DeviceModel = 'FMC130' | 'FMC650';
-export type DeviceStatus = 'online' | 'offline' | 'never';
-
-export interface DeviceRow {
-  id: string;
-  imei: string;
-  model: DeviceModel;
-  vehicleId: string | null;
-  plateNumber: string | null;
-  lastSeenAt: string | null;
-  status: DeviceStatus;
-}
-
-export interface CreateDevicePayload {
-  imei: string;
-  model: DeviceModel;
-  vehicleId?: string;
-}
-
-export interface UpdateDevicePayload {
-  model?: DeviceModel;
-  vehicleId?: string | null;
-}
-
 // ─── Company ─────────────────────────────────────────────────────────────────
 
 export interface Company {
@@ -503,110 +479,70 @@ export type FleetDrivingEventType =
   | 'harsh_corner'
   | 'crash';
 
-export type TelematicsVehicleHealthStatus = 'ok' | 'warn' | 'critical';
+export type TelematicsVehicleHealthStatus = 'healthy' | 'warning' | 'critical' | 'offline';
 
 export interface TelematicsVehicleHealthItem {
   vehicleId: string;
   plateNumber: string;
+  brand: string;
+  model: string;
+  driverName: string | null;
   health: TelematicsVehicleHealthStatus;
-  latest: {
-    rpm: number | null;
-    fuelLevelPct: number | null;
-    coolantTemp: number | null;
-    voltage: number | null;
-    odometerKm: number | null;
-    ignition: boolean | null;
-    recordedAt: string | null;
-  };
-  openDtcCount: number;
-}
-
-export interface TelematicsOpenDtcItem {
-  plateNumber: string;
-  code: string;
-  description: string | null;
-  severity: 'medium' | 'critical';
-  occurredAt: string;
-}
-
-export interface TelematicsVehicleHealthResponse {
-  summary: {
-    ok: number;
-    warn: number;
-    critical: number;
-  };
-  vehicles: TelematicsVehicleHealthItem[];
-  openDtcs: TelematicsOpenDtcItem[];
-}
-
-export interface TelematicsDriverScoreItem {
-  driverId: string;
-  name: string;
-  score: number;
-  harshCount: number;
-  overspeedCount: number;
-}
-
-export interface TelematicsDriverScoresResponse {
-  fleetAverage: number;
-  drivers: TelematicsDriverScoreItem[];
-}
-
-export interface TelemetryHistoryPoint {
-  recordedAt: string;
-  speedKmh: number | null;
+  ignition: boolean | null;
   rpm: number | null;
   fuelLevelPct: number | null;
   coolantTemp: number | null;
   voltage: number | null;
   odometerKm: number | null;
+  activeDtcCount: number;
+  criticalDtcCount: number;
+  topDtcCodes: string[];
+  lastTelemetryAt: string | null;
 }
 
-export interface TelemetryHistoryResponse {
-  vehicleId: string;
-  from: string;
-  to: string;
-  metric: 'speedKmh' | 'rpm' | 'fuelLevelPct' | 'coolantTemp' | 'voltage' | 'odometerKm' | null;
-  points: TelemetryHistoryPoint[];
-}
-
-export interface TachographDddFileRow {
-  id: string;
-  fileType: string;
-  capturedAt: string;
-  storedPath?: string | null;
-  sizeBytes?: number | null;
-  createdAt: string;
-  vehicle?: { id: string; plateNumber: string } | null;
-  driver?: { id: string; firstName: string; lastName: string } | null;
-}
-
-export interface TachographDddUploadResponse {
-  file: TachographDddFileRow;
-  parsed: {
-    ok: boolean;
-    fileType: 'card' | 'vu' | 'unknown';
-    driverCardNo?: string;
-    vehicleVin?: string;
-    activities: Array<{ state: 'driving' | 'rest' | 'work' | 'available'; startedAt: string; durationS: number }>;
-    events: Array<{
-      type: 'overspeed' | 'fault' | 'event';
-      occurredAt: string;
-      code?: string;
-      speedKph?: number;
-      durationS?: number;
-      severity?: 'medium' | 'critical';
-    }>;
-    dailyTotals: Array<{
-      date: string;
-      drivingS: number;
-      restS: number;
-      workS: number;
-      availableS: number;
-    }>;
-    warnings: string[];
+export interface TelematicsVehicleHealthResponse {
+  generatedAt: string;
+  staleAfterMinutes: number;
+  summary: {
+    totalVehicles: number;
+    healthy: number;
+    warning: number;
+    critical: number;
+    offline: number;
+    activeDtcTotal: number;
   };
-  infringementsCreated: number;
+  items: TelematicsVehicleHealthItem[];
+}
+
+export interface TelematicsDriverScoreItem {
+  driverId: string;
+  driverName: string;
+  driverStatus: DriverStatus;
+  distanceKm: number;
+  totalEvents: number;
+  weightedEvents: number;
+  eventRatePer100Km: number;
+  score: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  breakdown: Record<FleetDrivingEventType, number>;
+}
+
+export interface TelematicsDriverScoresResponse {
+  generatedAt: string;
+  periodDays: number;
+  summary: {
+    totalDrivers: number;
+    averageScore: number;
+    totalEvents: number;
+    totalDistanceKm: number;
+    distribution: {
+      excellent: number;
+      good: number;
+      watchlist: number;
+      critical: number;
+    };
+  };
+  items: TelematicsDriverScoreItem[];
 }
 
 export interface FleetTripSummary {
