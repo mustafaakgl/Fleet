@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TrackingController } from './tracking.controller';
+import { DeviceIngestApiKeyGuard } from './guards/device-ingest-api-key.guard';
 import { TrackingService } from './tracking.service';
 
 @Module({
   imports: [PrismaModule, AuditModule],
   controllers: [TrackingController],
-  providers: [TrackingService],
+  providers: [TrackingService, DeviceIngestApiKeyGuard],
   exports: [TrackingService],
 })
 export class TrackingModule {}

@@ -78,6 +78,14 @@ export class ImportService {
         const statusRaw = pickField(row, ['status']) || 'active';
         const status = DRIVER_STATUS_VALUES.has(statusRaw) ? (statusRaw as DriverStatus) : 'active';
 
+        if (!licenseNumber || !licenseExpiry) {
+          result.errors.push({
+            row: rowNumber,
+            message: 'license_number and license_expiry_date are required',
+          });
+          continue;
+        }
+
         if (employeeNumber) {
           const existing = await this.prisma.driver.findFirst({
             where: { employeeNumber },
@@ -96,8 +104,8 @@ export class ImportService {
             employee_number: employeeNumber || undefined,
             email: email || undefined,
             phone: phone || undefined,
-            license_number: licenseNumber || undefined,
-            license_expiry_date: licenseExpiry || undefined,
+            license_number: licenseNumber,
+            license_expiry_date: licenseExpiry,
             status,
           },
           actorUserId,

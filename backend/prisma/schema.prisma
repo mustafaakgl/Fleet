@@ -373,6 +373,33 @@ enum FleetDrivingEventType {
   speeding
   harsh_accel
   harsh_brake
+  harsh_corner
+  crash
+}
+
+enum DeviceModel {
+  FMC130
+  FMC650
+}
+
+enum DtcSeverity {
+  medium
+  critical
+}
+
+enum TachoWorkState {
+  driving
+  rest
+  work
+  available
+}
+
+enum TachoInfringementType {
+  daily_driving_exceeded
+  insufficient_daily_rest
+  insufficient_break
+  exceeded_weekly_driving
+  exceeded_two_week_driving
 }
 
 enum LocationTrackingStatus {
@@ -431,6 +458,13 @@ model Tenant {
   fleetDrivingEvents    FleetDrivingEvent[]
   fleetFuelEntries      FleetFuelEntry[]
   fleetMaintenanceRules FleetMaintenanceRule[]
+  devices               Device[]
+  vehicleTelemetryLatest VehicleTelemetryLatest[]
+  vehicleDtcs           VehicleDtc[]
+  tachoActivities       TachoActivity[]
+  tachoRemaining        TachoRemaining[]
+  tachoInfringements    TachoInfringement[]
+  dddFiles              DddFile[]
 }
 
 model TenantSubscription {
@@ -614,6 +648,10 @@ model Driver {
   fleetTrips            FleetTrip[]
   fleetDrivingEvents    FleetDrivingEvent[]
   fleetFuelEntries      FleetFuelEntry[]
+  tachoActivities       TachoActivity[]
+  tachoRemaining        TachoRemaining?
+  tachoInfringements    TachoInfringement[]
+  dddFiles              DddFile[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -723,11 +761,148 @@ model Vehicle {
   fleetTrips        FleetTrip[]
   fleetFuelEntries  FleetFuelEntry[]
   fleetMaintenanceRules FleetMaintenanceRule[]
+  devices           Device[]
+  telemetryLatest   VehicleTelemetryLatest?
+  dtcs              VehicleDtc[]
+  tachoActivities   TachoActivity[]
+  tachoInfringements TachoInfringement[]
+  dddFiles          DddFile[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
   @@unique([tenantId, vin])
   @@index([tenantId])
+}
+
+model Device {
+  id         String      @id @default(cuid())
+  tenantId   String      @default("default-tenant")
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  imei       String
+  model      DeviceModel
+  vehicleId  String?
+  vehicle    Vehicle?    @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  lastSeenAt DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([tenantId, imei])
+  @@index([tenantId])
+  @@index([vehicleId])
+  @@map("devices")
+}
+
+model VehicleTelemetryLatest {
+  vehicleId      String    @id
+  tenantId       String    @default("default-tenant")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  ignition       Boolean   @default(false)
+  rpm            Int?
+  fuelLevelPct   Decimal?  @db.Decimal(5, 2)
+  coolantTemp    Decimal?  @db.Decimal(5, 1)
+  voltage        Decimal?  @db.Decimal(4, 1)
+  odometerKm     Decimal?  @db.Decimal(12, 3)
+  recordedAt     DateTime
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@map("vehicle_telemetry_latest")
+}
+
+model VehicleDtc {
+  id          String      @id @default(cuid())
+  tenantId    String      @default("default-tenant")
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId   String
+  vehicle     Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  code        String
+  description String?
+  severity    DtcSeverity @default(medium)
+  occurredAt  DateTime
+  clearedAt   DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([tenantId])
+  @@index([vehicleId, occurredAt])
+  @@map("vehicle_dtc")
+}
+
+model TachoActivity {
+  id          String         @id @default(cuid())
+  tenantId    String         @default("default-tenant")
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId   String
+  vehicle     Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driverId    String?
+  driver      Driver?        @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  driverCardNo String?
+  workState   TachoWorkState
+  startedAt   DateTime
+  endedAt     DateTime?
+  durationS   Int?
+  createdAt   DateTime       @default(now())
+
+  @@index([tenantId])
+  @@index([vehicleId, startedAt])
+  @@index([driverId, startedAt])
+  @@map("tacho_activities")
+}
+
+model TachoRemaining {
+  driverId              String   @id
+  tenantId              String   @default("default-tenant")
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driver                Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  remainingDriveTodayS  Int
+  remainingDriveWeekS   Int
+  drivenTodayS          Int
+  drivenWeekS           Int
+  drivenTwoWeekS        Int
+  nextBreakInS          Int?
+  updatedAt             DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("tacho_remaining")
+}
+
+model TachoInfringement {
+  id             String                @id @default(cuid())
+  tenantId       String                @default("default-tenant")
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId       String
+  driver         Driver                @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicleId      String?
+  vehicle        Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  type           TachoInfringementType
+  severity       DtcSeverity           @default(medium)
+  occurredAt     DateTime
+  penaltyEstEur  Decimal?              @db.Decimal(8, 2)
+  resolved       Boolean               @default(false)
+  createdAt      DateTime              @default(now())
+
+  @@index([tenantId])
+  @@index([driverId, occurredAt])
+  @@map("tacho_infringements")
+}
+
+model DddFile {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("default-tenant")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId   String?
+  vehicle     Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId    String?
+  driver      Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  fileType    String
+  capturedAt  DateTime
+  storedPath  String?
+  sizeBytes   Int?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([capturedAt])
+  @@map("ddd_files")
 }
 
 model Company {

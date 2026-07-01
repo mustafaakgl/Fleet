@@ -17,6 +17,8 @@ export function countEventsByType(
     speeding: events.filter((event) => event.type === 'speeding').length,
     harsh_accel: events.filter((event) => event.type === 'harsh_accel').length,
     harsh_brake: events.filter((event) => event.type === 'harsh_brake').length,
+    harsh_corner: events.filter((event) => event.type === 'harsh_corner').length,
+    crash: events.filter((event) => event.type === 'crash').length,
   };
 }
 
@@ -65,6 +67,8 @@ export function computeDriverScoreFromTrips(
       speeding: acc.speeding + trip.events.speeding,
       harsh_accel: acc.harsh_accel + trip.events.harsh_accel,
       harsh_brake: acc.harsh_brake + trip.events.harsh_brake,
+      harsh_corner: acc.harsh_corner + trip.events.harsh_corner,
+      crash: acc.crash + trip.events.crash,
     }),
     {
       distanceKm: 0,
@@ -73,6 +77,8 @@ export function computeDriverScoreFromTrips(
       speeding: 0,
       harsh_accel: 0,
       harsh_brake: 0,
+      harsh_corner: 0,
+      crash: 0,
     },
   );
 

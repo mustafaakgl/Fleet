@@ -74,7 +74,7 @@ export class CreateDriverDto {
     example: '+4915112345678',
   })
   @IsOptional()
-  @IsPhoneNumber('any')
+  @IsPhoneNumber()
   phone?: string;
 
   @ApiProperty({ description: 'Driver license number', example: 'B1234-56789' })

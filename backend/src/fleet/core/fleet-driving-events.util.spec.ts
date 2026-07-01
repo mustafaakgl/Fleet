@@ -70,13 +70,13 @@ describe('fleet-driver-score.util', () => {
         distanceKm: 50,
         durationS: 3600,
         idleS: 100,
-        events: { speeding: 1, harsh_accel: 0, harsh_brake: 0 },
+        events: { speeding: 1, harsh_accel: 0, harsh_brake: 0, harsh_corner: 0, crash: 0 },
       },
       {
         distanceKm: 50,
         durationS: 3600,
         idleS: 100,
-        events: { speeding: 0, harsh_accel: 1, harsh_brake: 1 },
+        events: { speeding: 0, harsh_accel: 1, harsh_brake: 1, harsh_corner: 0, crash: 0 },
       },
     ]);
 

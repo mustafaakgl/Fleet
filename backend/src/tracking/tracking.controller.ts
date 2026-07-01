@@ -1,23 +1,26 @@
 import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { IngestTelemetryDto } from './dto/ingest-telemetry.dto';
 import { IngestTelematicsDto } from './dto/ingest-telematics.dto';
 import { LiveTrackingQueryDto } from './dto/live-tracking-query.dto';
 import { LocationHistoryQueryDto } from './dto/location-history-query.dto';
+import { DeviceIngestApiKeyGuard } from './guards/device-ingest-api-key.guard';
 import { TrackingService } from './tracking.service';
 
 @Controller('tracking')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)
 export class TrackingController {
   constructor(private readonly trackingService: TrackingService) {}
 
   @Get('live/stream')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   async streamLiveTracking(
     @Query() query: LiveTrackingQueryDto,
     @Req() req: Request,
@@ -56,6 +59,7 @@ export class TrackingController {
   }
 
   @Get('live')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   getLiveTracking(@Query() query: LiveTrackingQueryDto) {
     return this.trackingService.getLiveTracking({
       staleAfterSec: query.staleAfterSec ?? 300,
@@ -65,17 +69,39 @@ export class TrackingController {
   }
 
   @Post('telematics/ingest')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @RequiresWrite()
   ingestTelematics(@Body() dto: IngestTelematicsDto) {
     return this.trackingService.ingestTelematicsLocation(dto);
   }
 
+  @Post('telematics/telemetry')
+  @Public()
+  @UseGuards(DeviceIngestApiKeyGuard)
+  ingestTelemetry(@Body() dto: IngestTelemetryDto) {
+    return this.trackingService.ingestTelemetry(dto);
+  }
+
+  @Get('telematics/vehicle-health')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  getVehicleHealth() {
+    return this.trackingService.getTelematicsVehicleHealth();
+  }
+
+  @Get('telematics/driver-scores')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  getDriverScores() {
+    return this.trackingService.getTelematicsDriverScores();
+  }
+
   @Get('drivers/:driverId/latest')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   getDriverLatest(@Param('driverId') driverId: string) {
     return this.trackingService.getDriverLatest(driverId);
   }
 
   @Get('drivers/:driverId/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   getDriverHistory(
     @Param('driverId') driverId: string,
     @Query() query: LocationHistoryQueryDto,
@@ -89,6 +115,7 @@ export class TrackingController {
   }
 
   @Get('vehicles/:vehicleId/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   getVehicleHistory(
     @Param('vehicleId') vehicleId: string,
     @Query() query: LocationHistoryQueryDto,

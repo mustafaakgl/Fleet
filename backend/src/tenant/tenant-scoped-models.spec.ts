@@ -25,4 +25,10 @@ describe('TENANT_SCOPED_MODELS', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('FleetFuelEntry'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('FleetMaintenanceRule'), true);
   });
+
+  it('includes telematics device models for tenant isolation', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('Device'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('VehicleTelemetryLatest'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('VehicleDtc'), true);
+  });
 });

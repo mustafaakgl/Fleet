@@ -37,6 +37,9 @@ export const TENANT_SCOPED_MODELS = new Set([
   'FleetDrivingEvent',
   'FleetFuelEntry',
   'FleetMaintenanceRule',
+  'Device',
+  'VehicleTelemetryLatest',
+  'VehicleDtc',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

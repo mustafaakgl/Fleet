@@ -1,13 +1,17 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AssignmentStatus,
-  DriverStatus,
+  DtcSeverity,
+  FleetDrivingEventType,
+  FleetTelemetrySource,
+  FleetTripStatus,
   LocationSource,
   LocationTrackingStatus,
   Prisma,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { IngestTelemetryDto } from './dto/ingest-telemetry.dto';
 import type { SubmitLocationDto } from './dto/submit-location.dto';
 import type {
   LiveTrackingItem,
@@ -41,6 +45,46 @@ const DEFAULT_HISTORY_LIMIT = 500;
 const MAX_HISTORY_LIMIT = 5000;
 const DEFAULT_HISTORY_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const MAX_SHARING_SESSION_MS = 12 * 60 * 60 * 1000;
+
+type TelematicsHealthStatus = 'ok' | 'warn' | 'critical';
+
+type TelematicsVehicleHealthRow = {
+  vehicleId: string;
+  plateNumber: string;
+  health: TelematicsHealthStatus;
+  latest: {
+    rpm: number | null;
+    fuelLevelPct: number | null;
+    coolantTemp: number | null;
+    voltage: number | null;
+    odometerKm: number | null;
+    ignition: boolean | null;
+    recordedAt: string | null;
+  };
+  openDtcCount: number;
+};
+
+type TelematicsOpenDtcRow = {
+  plateNumber: string;
+  code: string;
+  description: string | null;
+  severity: DtcSeverity;
+  occurredAt: string;
+};
+
+type TelematicsDriverScoreRow = {
+  driverId: string;
+  name: string;
+  score: number;
+  harshCount: number;
+  overspeedCount: number;
+};
+
+type DriverEventCounts = {
+  harshCount: number;
+  overspeedCount: number;
+  crashCount: number;
+};
 
 type ResolvedDriver = {
   id: string;
@@ -219,6 +263,343 @@ export class TrackingService {
       vehicleId: dto.vehicleId,
       source: LocationSource.telematics,
       recordedAt: recordedAt.toISOString(),
+    };
+  }
+
+  async ingestTelemetry(dto: IngestTelemetryDto) {
+    const recordedAt = dto.recordedAt
+      ? this.parseRecordedAt(dto.recordedAt)
+      : new Date();
+
+    return this.prisma.unscoped.$transaction(async (tx) => {
+      const { tenantId, vehicleId } = await this.resolveTelemetryVehicleContext(tx, dto);
+      const driverId = await this.resolveDriverIdForVehicleTodayWithClient(tx, vehicleId);
+
+      if (!driverId) {
+        throw new BadRequestException(
+          'No active driver assignment found for this vehicle today',
+        );
+      }
+
+      const locationData = {
+        tenantId,
+        latitude: new Prisma.Decimal(dto.latitude),
+        longitude: new Prisma.Decimal(dto.longitude),
+        speedMps: dto.speedMps ?? null,
+        headingDeg: dto.headingDeg ?? null,
+        accuracyM: null,
+        altitudeM: null,
+        recordedAt,
+        source: LocationSource.telematics,
+        vehicleId,
+      };
+
+      await tx.driverLocationLatest.upsert({
+        where: { driverId },
+        create: {
+          driverId,
+          ...locationData,
+        },
+        update: locationData,
+      });
+
+      await tx.driverLocationHistory.create({
+        data: {
+          driverId,
+          ...locationData,
+        },
+      });
+
+      await tx.vehicleTelemetryLatest.upsert({
+        where: { vehicleId },
+        create: {
+          vehicleId,
+          tenantId,
+          ignition: dto.ignition ?? false,
+          rpm: dto.rpm ?? null,
+          fuelLevelPct: this.toDecimalOrNull(dto.fuelLevelPct),
+          coolantTemp: this.toDecimalOrNull(dto.coolantTemp),
+          voltage: this.toDecimalOrNull(dto.voltage),
+          odometerKm: this.toDecimalOrNull(dto.odometerKm),
+          recordedAt,
+        },
+        update: {
+          ignition: dto.ignition ?? false,
+          rpm: dto.rpm ?? null,
+          fuelLevelPct: this.toDecimalOrNull(dto.fuelLevelPct),
+          coolantTemp: this.toDecimalOrNull(dto.coolantTemp),
+          voltage: this.toDecimalOrNull(dto.voltage),
+          odometerKm: this.toDecimalOrNull(dto.odometerKm),
+          recordedAt,
+        },
+      });
+
+      if (dto.dtc?.length) {
+        await tx.vehicleDtc.createMany({
+          data: dto.dtc.map((item) => ({
+            tenantId,
+            vehicleId,
+            code: item.code.trim(),
+            description: item.description?.trim() || null,
+            severity:
+              item.severity === 'critical' ? DtcSeverity.critical : DtcSeverity.medium,
+            occurredAt: recordedAt,
+          })),
+        });
+      }
+
+      let tripId: string | null = null;
+      if (dto.events?.length) {
+        const trip = await this.findOrCreateDeviceTrip(tx, {
+          tenantId,
+          vehicleId,
+          driverId,
+          startedAt: recordedAt,
+        });
+        tripId = trip.id;
+
+        await tx.fleetDrivingEvent.createMany({
+          data: dto.events.map((event) => ({
+            tenantId,
+            tripId: trip.id,
+            driverId,
+            type: this.mapTelemetryEventType(event.type),
+            occurredAt: recordedAt,
+            latitude: new Prisma.Decimal(dto.latitude),
+            longitude: new Prisma.Decimal(dto.longitude),
+            value: new Prisma.Decimal(event.value),
+            threshold: new Prisma.Decimal(event.threshold ?? event.value),
+          })),
+        });
+      }
+
+      return {
+        accepted: true,
+        tenantId,
+        vehicleId,
+        driverId,
+        tripId,
+        source: LocationSource.telematics,
+        recordedAt: recordedAt.toISOString(),
+      };
+    });
+  }
+
+  async getTelematicsVehicleHealth() {
+    const [vehicles, dtcs] = await Promise.all([
+      this.prisma.vehicle.findMany({
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          plateNumber: true,
+          telemetryLatest: {
+            select: {
+              ignition: true,
+              rpm: true,
+              fuelLevelPct: true,
+              coolantTemp: true,
+              voltage: true,
+              odometerKm: true,
+              recordedAt: true,
+            },
+          },
+        },
+        orderBy: { plateNumber: 'asc' },
+      }),
+      this.prisma.vehicleDtc.findMany({
+        where: { clearedAt: null },
+        select: {
+          vehicleId: true,
+          code: true,
+          description: true,
+          severity: true,
+          occurredAt: true,
+          vehicle: {
+            select: {
+              plateNumber: true,
+            },
+          },
+        },
+        orderBy: { occurredAt: 'desc' },
+      }),
+    ]);
+
+    const dtcByVehicle = new Map<
+      string,
+      Array<{ code: string; description: string | null; severity: DtcSeverity; occurredAt: Date }>
+    >();
+    for (const dtc of dtcs) {
+      const rows = dtcByVehicle.get(dtc.vehicleId) ?? [];
+      rows.push(dtc);
+      dtcByVehicle.set(dtc.vehicleId, rows);
+    }
+
+    const items: TelematicsVehicleHealthRow[] = vehicles.map((vehicle) => {
+      const vehicleDtcs = dtcByVehicle.get(vehicle.id) ?? [];
+      const hasCritical = vehicleDtcs.some((dtc) => dtc.severity === DtcSeverity.critical);
+      const openDtcCount = vehicleDtcs.length;
+
+      const telemetry = vehicle.telemetryLatest;
+      const fuelLevelPct = telemetry?.fuelLevelPct ? this.decimalToNumber(telemetry.fuelLevelPct) : null;
+      const coolantTemp = telemetry?.coolantTemp ? this.decimalToNumber(telemetry.coolantTemp) : null;
+      const voltage = telemetry?.voltage ? this.decimalToNumber(telemetry.voltage) : null;
+      const odometerKm = telemetry?.odometerKm ? this.decimalToNumber(telemetry.odometerKm) : null;
+
+      let health: TelematicsHealthStatus = 'ok';
+      if (hasCritical) {
+        health = 'critical';
+      } else if (openDtcCount > 0) {
+        health = 'warn';
+      }
+
+      return {
+        vehicleId: vehicle.id,
+        plateNumber: vehicle.plateNumber,
+        health,
+        latest: {
+          rpm: telemetry?.rpm ?? null,
+          fuelLevelPct,
+          coolantTemp,
+          voltage,
+          odometerKm,
+          ignition: telemetry?.ignition ?? null,
+          recordedAt: telemetry?.recordedAt.toISOString() ?? null,
+        },
+        openDtcCount,
+      };
+    });
+
+    const summary = {
+      ok: items.filter((item) => item.health === 'ok').length,
+      warn: items.filter((item) => item.health === 'warn').length,
+      critical: items.filter((item) => item.health === 'critical').length,
+    };
+
+    const openDtcs: TelematicsOpenDtcRow[] = dtcs.map((dtc) => ({
+      plateNumber: dtc.vehicle.plateNumber,
+      code: dtc.code,
+      description: dtc.description,
+      severity: dtc.severity,
+      occurredAt: dtc.occurredAt.toISOString(),
+    }));
+
+    return {
+      summary,
+      vehicles: items,
+      openDtcs,
+    };
+  }
+
+  async getTelematicsDriverScores() {
+    const [tripScoreRows, eventRows] = await Promise.all([
+      this.prisma.fleetTrip.groupBy({
+        by: ['driverId'],
+        where: {
+          score: { not: null },
+        },
+        _avg: { score: true },
+      }),
+      this.prisma.fleetDrivingEvent.groupBy({
+        by: ['driverId', 'type'],
+        where: {
+          type: {
+            in: [
+              FleetDrivingEventType.speeding,
+              FleetDrivingEventType.harsh_accel,
+              FleetDrivingEventType.harsh_brake,
+              FleetDrivingEventType.harsh_corner,
+              FleetDrivingEventType.crash,
+            ],
+          },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const driverIds = new Set<string>();
+    const tripScoreByDriver = new Map<string, number>();
+
+    for (const row of tripScoreRows) {
+      driverIds.add(row.driverId);
+      const score = row._avg.score ? this.decimalToNumber(row._avg.score) : null;
+      if (score !== null) {
+        tripScoreByDriver.set(row.driverId, Number(score.toFixed(1)));
+      }
+    }
+
+    const eventByDriver = new Map<string, DriverEventCounts>();
+    for (const row of eventRows) {
+      driverIds.add(row.driverId);
+      const current = eventByDriver.get(row.driverId) ?? {
+        harshCount: 0,
+        overspeedCount: 0,
+        crashCount: 0,
+      };
+
+      if (row.type === FleetDrivingEventType.speeding) {
+        current.overspeedCount += row._count._all;
+      }
+      if (
+        row.type === FleetDrivingEventType.harsh_accel
+        || row.type === FleetDrivingEventType.harsh_brake
+        || row.type === FleetDrivingEventType.harsh_corner
+      ) {
+        current.harshCount += row._count._all;
+      }
+      if (row.type === FleetDrivingEventType.crash) {
+        current.crashCount += row._count._all;
+      }
+
+      eventByDriver.set(row.driverId, current);
+    }
+
+    if (driverIds.size === 0) {
+      return {
+        fleetAverage: 0,
+        drivers: [] as TelematicsDriverScoreRow[],
+      };
+    }
+
+    const drivers = await this.prisma.driver.findMany({
+      where: {
+        id: { in: Array.from(driverIds) },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+
+    const items: TelematicsDriverScoreRow[] = drivers.map((driver) => {
+      const eventCounts = eventByDriver.get(driver.id) ?? {
+        harshCount: 0,
+        overspeedCount: 0,
+        crashCount: 0,
+      };
+
+      const scoreFromTrips = tripScoreByDriver.get(driver.id);
+      const score =
+        scoreFromTrips
+        ?? this.deriveScoreFromEventCounts(eventCounts.overspeedCount, eventCounts.harshCount, eventCounts.crashCount);
+
+      return {
+        driverId: driver.id,
+        name: `${driver.firstName} ${driver.lastName}`.trim(),
+        score,
+        harshCount: eventCounts.harshCount,
+        overspeedCount: eventCounts.overspeedCount,
+      };
+    }).sort((a, b) => b.score - a.score);
+
+    const fleetAverage =
+      items.length > 0
+        ? Number((items.reduce((sum, row) => sum + row.score, 0) / items.length).toFixed(1))
+        : 0;
+
+    return {
+      fleetAverage,
+      drivers: items,
     };
   }
 
@@ -757,8 +1138,15 @@ export class TrackingService {
   }
 
   private async resolveDriverIdForVehicleToday(vehicleId: string): Promise<string | null> {
+    return this.resolveDriverIdForVehicleTodayWithClient(this.prisma, vehicleId);
+  }
+
+  private async resolveDriverIdForVehicleTodayWithClient(
+    client: Prisma.TransactionClient | PrismaService,
+    vehicleId: string,
+  ): Promise<string | null> {
     const { start, end } = this.todayRange();
-    const assignments = await this.prisma.assignment.findMany({
+    const assignments = await client.assignment.findMany({
       where: {
         vehicleId,
         workDate: { gte: start, lt: end },
@@ -778,6 +1166,149 @@ export class TrackingService {
     }
 
     return assignments.find((assignment) => assignment.driverId)?.driverId ?? null;
+  }
+
+  private async resolveTelemetryVehicleContext(
+    tx: Prisma.TransactionClient,
+    dto: IngestTelemetryDto,
+  ): Promise<{ tenantId: string; vehicleId: string }> {
+    const directVehicle = await tx.vehicle.findUnique({
+      where: { id: dto.vehicleId },
+      select: { id: true, tenantId: true },
+    });
+
+    if (!directVehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    if (!dto.imei?.trim()) {
+      return { tenantId: directVehicle.tenantId, vehicleId: directVehicle.id };
+    }
+
+    const normalizedImei = dto.imei.trim();
+    const device = await tx.device.findUnique({
+      where: {
+        tenantId_imei: {
+          tenantId: directVehicle.tenantId,
+          imei: normalizedImei,
+        },
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        vehicleId: true,
+      },
+    });
+
+    if (!device) {
+      throw new NotFoundException('Device not found for tenant and IMEI');
+    }
+
+    const resolvedVehicleId = device.vehicleId ?? directVehicle.id;
+
+    await tx.device.update({
+      where: { id: device.id },
+      data: {
+        lastSeenAt: new Date(),
+      },
+    });
+
+    return { tenantId: device.tenantId, vehicleId: resolvedVehicleId };
+  }
+
+  private async findOrCreateDeviceTrip(
+    tx: Prisma.TransactionClient,
+    params: { tenantId: string; vehicleId: string; driverId: string; startedAt: Date },
+  ) {
+    const activeTrip = await tx.fleetTrip.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        vehicleId: params.vehicleId,
+        driverId: params.driverId,
+        source: FleetTelemetrySource.device,
+        status: FleetTripStatus.active,
+      },
+      orderBy: { startedAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (activeTrip) {
+      return activeTrip;
+    }
+
+    const assignmentId = await this.resolveAssignmentIdForTripContext(tx, params.driverId, params.vehicleId);
+
+    return tx.fleetTrip.create({
+      data: {
+        tenantId: params.tenantId,
+        vehicleId: params.vehicleId,
+        driverId: params.driverId,
+        source: FleetTelemetrySource.device,
+        startedAt: params.startedAt,
+        status: FleetTripStatus.active,
+        assignmentId,
+      },
+      select: { id: true },
+    });
+  }
+
+  private async resolveAssignmentIdForTripContext(
+    tx: Prisma.TransactionClient,
+    driverId: string,
+    vehicleId: string,
+  ): Promise<string | null> {
+    const { start, end } = this.todayRange();
+    const assignments = await tx.assignment.findMany({
+      where: {
+        driverId,
+        vehicleId,
+        workDate: { gte: start, lt: end },
+        status: { in: TRACKABLE_ASSIGNMENT_STATUSES },
+      },
+      select: { id: true, status: true },
+    });
+
+    for (const status of ASSIGNMENT_STATUS_PRIORITY) {
+      const match = assignments.find((assignment) => assignment.status === status);
+      if (match) {
+        return match.id;
+      }
+    }
+
+    return null;
+  }
+
+  private mapTelemetryEventType(
+    type: 'speeding' | 'harsh_accel' | 'harsh_brake' | 'harsh_corner' | 'crash',
+  ): FleetDrivingEventType {
+    switch (type) {
+      case 'speeding':
+        return FleetDrivingEventType.speeding;
+      case 'harsh_accel':
+        return FleetDrivingEventType.harsh_accel;
+      case 'harsh_brake':
+        return FleetDrivingEventType.harsh_brake;
+      case 'harsh_corner':
+        return FleetDrivingEventType.harsh_corner;
+      case 'crash':
+        return FleetDrivingEventType.crash;
+    }
+  }
+
+  private deriveScoreFromEventCounts(
+    overspeedCount: number,
+    harshCount: number,
+    crashCount: number,
+  ): number {
+    const raw = 100 - overspeedCount * 2 - harshCount * 3 - crashCount * 8;
+    return Math.max(0, Math.min(100, Number(raw.toFixed(1))));
+  }
+
+  private toDecimalOrNull(value: number | undefined): Prisma.Decimal | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    return new Prisma.Decimal(value);
   }
 
   private mapLocationSource(source: LocationSource): 'mobile' | 'telematics' {

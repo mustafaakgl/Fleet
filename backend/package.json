@@ -13,6 +13,7 @@
     "prestart:dev": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "telematics:sim": "node scripts/telematics-sim.mjs",
     "verify:smtp": "ts-node scripts/verify-smtp.ts",
     "verify:stripe": "ts-node scripts/verify-stripe.ts",
     "verify:s3": "ts-node scripts/verify-s3.ts",

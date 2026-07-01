@@ -23,7 +23,7 @@ import { ListVehiclesQueryDto } from './dto/list-vehicles-query.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 
 type VehicleWithCurrentDriver = Vehicle & {
-  currentDriver: { id: string; firstName: string; lastName: string } | null;
+  currentDriver?: { id: string; firstName: string; lastName: string } | null;
 };
 
 function toClientVehicle(row: VehicleWithCurrentDriver) {

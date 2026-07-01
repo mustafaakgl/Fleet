@@ -19,7 +19,6 @@ import {
   saveContactProfileByEmail,
   splitContactFullName,
   type ContactProfile,
-  type ContactUserAccess,
 } from '@/lib/contact-profile-storage';
 import { isPasswordStrong } from '@/lib/password-policy';
 import type { User, UserRole } from '@/lib/types';

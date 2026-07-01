@@ -31,6 +31,7 @@ import {
   Users,
   Wrench,
   X,
+  Cpu,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -73,6 +74,7 @@ const NAV_ITEMS: RoleNavItem[] = [
   { label: 'nav.fleetTripHistory', href: '/fleet-analytics/trips', icon: Route, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.telematics.driverScores', href: '/telematics/driver-scores', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.telematics.vehicleHealth', href: '/telematics/vehicle-health', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
+  { label: 'nav.devices', href: '/devices', icon: Cpu, roles: ['admin', 'boss', 'office'] },
   { label: 'nav.tachograph.remainingDrivingTime', href: '/tachograph/remaining-driving-time', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.tachograph.infringements', href: '/tachograph/infringements', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.tachograph.dddArchive', href: '/tachograph/ddd-archive', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },

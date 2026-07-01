@@ -16,6 +16,8 @@ const EVENT_COLORS: Record<FleetDrivingEvent['type'], string> = {
   speeding: '#dc2626',
   harsh_accel: '#ea580c',
   harsh_brake: '#ca8a04',
+  harsh_corner: '#7c3aed',
+  crash: '#b91c1c',
 };
 
 interface FleetTripRouteMapProps {
@@ -57,6 +59,10 @@ function FleetTripRouteMapCanvas({ locationPoints, drivingEvents }: FleetTripRou
         return t('fleetTrips.eventHarshAccel', 'Sert hızlanma');
       case 'harsh_brake':
         return t('fleetTrips.eventHarshBrake', 'Sert fren');
+      case 'harsh_corner':
+        return t('fleetTrips.eventHarshCorner', 'Sert viraj');
+      case 'crash':
+        return t('fleetTrips.eventCrash', 'Kaza');
       default:
         return type;
     }

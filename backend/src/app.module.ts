@@ -49,6 +49,8 @@ import { FleetModule } from './fleet/fleet.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { StorageModule } from './storage/storage.module';
+import { TachographModule } from './tachograph/tachograph.module';
+import { DevicesModule } from './devices/devices.module';
 import { ThrottlerAuditFilter } from './common/filters/throttler-audit.filter';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
@@ -108,6 +110,8 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     DepartureCheckModule,
     FineManagementModule,
     FleetModule,
+    TachographModule,
+    DevicesModule,
     HealthModule,
     MetricsModule,
     StorageModule,

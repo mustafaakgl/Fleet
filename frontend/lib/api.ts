@@ -13,6 +13,9 @@ import type {
   Vehicle,
   VehicleDetail,
   PaginatedVehicles,
+  DeviceRow,
+  CreateDevicePayload,
+  UpdateDevicePayload,
   Assignment,
   AssignmentWritePayload,
   PaginatedAssignments,
@@ -63,6 +66,10 @@ import type {
   PaginatedCustomerAssignments,
   CustomerPortalMe,
   CustomerAssignmentMessage,
+  TachographDddFileRow,
+  TachographDddUploadResponse,
+  TelematicsVehicleHealthResponse,
+  TelematicsDriverScoresResponse,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -701,6 +708,21 @@ export const vehiclesApi = {
 
   removeEquipment: (vehicleId: string, equipmentId: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/vehicles/${vehicleId}/equipment/${equipmentId}`).then((r) => r.data),
+};
+
+export const devicesApi = {
+  list: () => api.get<DeviceRow[]>('/devices').then((r) => r.data),
+
+  listUnassigned: () => api.get<DeviceRow[]>('/devices/unassigned').then((r) => r.data),
+
+  create: (payload: CreateDevicePayload) =>
+    api.post<DeviceRow>('/devices', payload).then((r) => r.data),
+
+  update: (id: string, payload: UpdateDevicePayload) =>
+    api.patch<DeviceRow>(`/devices/${id}`, payload).then((r) => r.data),
+
+  remove: (id: string) =>
+    api.delete<{ id: string; deleted: boolean }>(`/devices/${id}`).then((r) => r.data),
 };
 
 export interface VehicleEquipmentItem {
@@ -1741,6 +1763,38 @@ export interface LiveTrackingQueryParams {
 export const trackingApi = {
   getLive: (params?: LiveTrackingQueryParams) =>
     api.get<LiveTrackingItem[]>('/tracking/live', { params }).then((r) => r.data),
+};
+
+export const telematicsApi = {
+  getVehicleHealth: () =>
+    api.get<TelematicsVehicleHealthResponse>('/tracking/telematics/vehicle-health').then((r) => r.data),
+
+  getDriverScores: () =>
+    api.get<TelematicsDriverScoresResponse>('/tracking/telematics/driver-scores').then((r) => r.data),
+};
+
+export const tachographApi = {
+  listDddFiles: () =>
+    api.get<TachographDddFileRow[]>('/tachograph/ddd/files').then((r) => r.data),
+
+  uploadDddFile: (params: {
+    file: File;
+    vehicleId: string;
+    capturedAt?: string;
+  }) => {
+    const formData = new FormData();
+    formData.append('file', params.file);
+    formData.append('vehicleId', params.vehicleId);
+    if (params.capturedAt) {
+      formData.append('capturedAt', params.capturedAt);
+    }
+
+    return api
+      .post<TachographDddUploadResponse>('/tachograph/ddd/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data);
+  },
 };
 
 // ─── Driver portal (web) ─────────────────────────────────────────────────────

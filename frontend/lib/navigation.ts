@@ -25,6 +25,7 @@ import {
   Euro,
   Droplets,
   Route,
+  Cpu,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -116,6 +117,11 @@ const ALL_ITEMS: Record<string, NavItem> = {
     labelKey: 'nav.telematics.vehicleHealth',
     icon: Wrench,
   },
+  devices: {
+    href: '/devices',
+    labelKey: 'nav.devices',
+    icon: Cpu,
+  },
   tachoRemaining: {
     href: '/tachograph/remaining-driving-time',
     labelKey: 'nav.tachograph.remainingDrivingTime',
@@ -150,18 +156,6 @@ const VEHICLES_SECTION: NavSection = {
   icon: Truck,
   items: [
     ...VEHICLES_SECTION_BASE,
-  ],
-};
-
-/** Full layout (admin, boss, accounting): includes vehicle costs. */
-const VEHICLES_SECTION_FULL: NavSection = {
-  id: 'vehicles',
-  labelKey: 'nav.vehicles',
-  icon: Truck,
-  items: [
-    ...VEHICLES_SECTION_BASE,
-    { href: '/costs', labelKey: 'nav.costs' },
-    { href: '/fleet-analytics/trips', labelKey: 'nav.fleetTripHistory' },
   ],
 };
 
@@ -209,6 +203,7 @@ const TELEMATIK_ITEMS: NavEntry[] = [
   item('fleetFuelAnalytics'),
   item('telematicsDriverScores'),
   item('telematicsVehicleHealth'),
+  item('devices'),
 ];
 
 /** Tachograph (FMC650) verileri — uyum / compliance. */

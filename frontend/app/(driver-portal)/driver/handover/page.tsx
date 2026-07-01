@@ -59,7 +59,7 @@ export default function DriverHandoverPage() {
       }
       setInventoryQuantities(nextInventory);
     }
-  }, [handover?.id]);
+  }, [handover]);
 
   const loadHandover = useCallback(async () => {
     if (!vehicleId) {

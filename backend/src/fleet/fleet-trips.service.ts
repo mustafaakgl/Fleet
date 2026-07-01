@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   AssignmentStatus,
+  FleetDrivingEventType,
   FleetTelemetrySource,
   FleetTripStatus,
   Prisma,
@@ -404,7 +405,7 @@ export class FleetTripsService {
     }>;
     drivingEvents: Array<{
       id: string;
-      type: 'speeding' | 'harsh_accel' | 'harsh_brake';
+      type: FleetDrivingEventType;
       occurredAt: Date;
       latitude: Prisma.Decimal;
       longitude: Prisma.Decimal;

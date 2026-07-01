@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { FleetTripStatus, Prisma } from '@prisma/client';
+import { FleetDrivingEventType, FleetTripStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   computeDriverScoreFromTrips,
@@ -88,7 +88,7 @@ export class FleetDriverScoreService {
       durationS: number | null;
       idleS: number | null;
       score: Prisma.Decimal | null;
-      drivingEvents: Array<{ type: 'speeding' | 'harsh_accel' | 'harsh_brake' }>;
+      drivingEvents: Array<{ type: FleetDrivingEventType }>;
     }>,
   ): FleetDriverScoreResponse {
     const tripSummaries = trips.map((trip) => {
@@ -114,6 +114,8 @@ export class FleetDriverScoreService {
         speeding: acc.speeding + trip.events.speeding,
         harsh_accel: acc.harsh_accel + trip.events.harsh_accel,
         harsh_brake: acc.harsh_brake + trip.events.harsh_brake,
+        harsh_corner: acc.harsh_corner + trip.events.harsh_corner,
+        crash: acc.crash + trip.events.crash,
       }),
       {
         distanceKm: 0,
@@ -122,6 +124,8 @@ export class FleetDriverScoreService {
         speeding: 0,
         harsh_accel: 0,
         harsh_brake: 0,
+        harsh_corner: 0,
+        crash: 0,
       },
     );
 
@@ -147,6 +151,8 @@ export class FleetDriverScoreService {
         speeding: totals.speeding,
         harsh_accel: totals.harsh_accel,
         harsh_brake: totals.harsh_brake,
+        harsh_corner: totals.harsh_corner,
+        crash: totals.crash,
       },
       trips: tripSummaries.map(({ durationS: _durationS, idleS: _idleS, ...trip }) => trip),
     };
