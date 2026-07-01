@@ -328,17 +328,19 @@ export default function FleetFuelAnalyticsPage() {
                     })
                   )}
                 </TableBody>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={entries.length === 0}
-                    onClick={() => downloadFuelEntriesCsv(entries)}
-                  >
-                    <Download className="mr-1.5 h-4 w-4" />
-                    {t('common.exportCsv', 'CSV exportieren')}
-                  </Button>
               </Table>
+              <div className="flex justify-end p-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={entries.length === 0}
+                  onClick={() => downloadFuelEntriesCsv(entries)}
+                >
+                  <Download className="mr-1.5 h-4 w-4" />
+                  {t('common.exportCsv', 'CSV exportieren')}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

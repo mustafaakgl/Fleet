@@ -106,6 +106,36 @@ const ALL_ITEMS: Record<string, NavItem> = {
     labelKey: 'nav.fleetTripHistory',
     icon: Route,
   },
+  telematicsDriverScores: {
+    href: '/telematics/driver-scores',
+    labelKey: 'nav.telematics.driverScores',
+    icon: IdCard,
+  },
+  telematicsVehicleHealth: {
+    href: '/telematics/vehicle-health',
+    labelKey: 'nav.telematics.vehicleHealth',
+    icon: Wrench,
+  },
+  tachoRemaining: {
+    href: '/tachograph/remaining-driving-time',
+    labelKey: 'nav.tachograph.remainingDrivingTime',
+    icon: Clock,
+  },
+  tachoInfringements: {
+    href: '/tachograph/infringements',
+    labelKey: 'nav.tachograph.infringements',
+    icon: AlertTriangle,
+  },
+  tachoDdd: {
+    href: '/tachograph/ddd-archive',
+    labelKey: 'nav.tachograph.dddArchive',
+    icon: FileText,
+  },
+  tachoCompliance: {
+    href: '/tachograph/compliance',
+    labelKey: 'nav.tachograph.compliance',
+    icon: ClipboardCheck,
+  },
 };
 
 const VEHICLES_SECTION_BASE: NavItem[] = [
@@ -120,7 +150,6 @@ const VEHICLES_SECTION: NavSection = {
   icon: Truck,
   items: [
     ...VEHICLES_SECTION_BASE,
-    { href: '/fleet-analytics/trips', labelKey: 'nav.fleetTripHistory' },
   ],
 };
 
@@ -173,6 +202,23 @@ function group(
   return { id, labelKey, items: entries, ...options };
 }
 
+/** Telematik cihazlardan (FMC130/FMC650) gelen veriler. */
+const TELEMATIK_ITEMS: NavEntry[] = [
+  item('liveTracking'),
+  item('fleetTripHistory'),
+  item('fleetFuelAnalytics'),
+  item('telematicsDriverScores'),
+  item('telematicsVehicleHealth'),
+];
+
+/** Tachograph (FMC650) verileri — uyum / compliance. */
+const TACHOGRAPH_ITEMS: NavEntry[] = [
+  item('tachoRemaining'),
+  item('tachoInfringements'),
+  item('tachoDdd'),
+  item('tachoCompliance'),
+];
+
 const VEHICLES_SECTION_BRIEF: NavSection = {
   id: 'vehicles',
   labelKey: 'nav.vehicles',
@@ -195,7 +241,6 @@ const OFFICE_NAV: NavGroup[] = [
       item('dashboard'),
       item('officeQueue'),
       item('assignments'),
-      item('liveTracking'),
       REMINDERS_HUB_ITEM,
       item('messenger'),
       item('notifications'),
@@ -214,6 +259,8 @@ const OFFICE_NAV: NavGroup[] = [
     ],
     { collapsible: true, defaultExpanded: true },
   ),
+  group('telematik', 'nav.group.telematik', TELEMATIK_ITEMS, { collapsible: true, defaultExpanded: true }),
+  group('tachograph', 'nav.group.tachograph', TACHOGRAPH_ITEMS, { collapsible: true, defaultExpanded: false }),
   group(
     'verwaltung',
     'nav.group.verwaltung',
@@ -222,7 +269,6 @@ const OFFICE_NAV: NavGroup[] = [
       REMINDERS_SECTION,
       item('fines'),
       item('workSessions'),
-      item('fleetFuelAnalytics'),
       item('requests'),
     ],
     { collapsible: true, defaultExpanded: false },
@@ -237,7 +283,6 @@ const DEFAULT_NAV: NavGroup[] = [
     [
       item('dashboard'),
       item('assignments'),
-      item('liveTracking'),
       REMINDERS_HUB_ITEM,
       item('messenger'),
       item('notifications'),
@@ -256,6 +301,8 @@ const DEFAULT_NAV: NavGroup[] = [
     ],
     { collapsible: true, defaultExpanded: true },
   ),
+  group('telematik', 'nav.group.telematik', TELEMATIK_ITEMS, { collapsible: true, defaultExpanded: true }),
+  group('tachograph', 'nav.group.tachograph', TACHOGRAPH_ITEMS, { collapsible: true, defaultExpanded: false }),
   group(
     'verwaltung',
     'nav.group.verwaltung',
@@ -264,8 +311,6 @@ const DEFAULT_NAV: NavGroup[] = [
       REMINDERS_SECTION,
       item('fines'),
       item('workSessions'),
-      item('fleetFuelAnalytics'),
-      item('fleetTripHistory'),
       item('costs'),
       item('requests'),
     ],
