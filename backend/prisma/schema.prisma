@@ -460,6 +460,7 @@ model Tenant {
   fleetMaintenanceRules FleetMaintenanceRule[]
   devices               Device[]
   vehicleTelemetryLatest VehicleTelemetryLatest[]
+  vehicleTelemetryHistory VehicleTelemetryHistory[]
   vehicleDtcs           VehicleDtc[]
   tachoActivities       TachoActivity[]
   tachoRemaining        TachoRemaining[]
@@ -763,6 +764,7 @@ model Vehicle {
   fleetMaintenanceRules FleetMaintenanceRule[]
   devices           Device[]
   telemetryLatest   VehicleTelemetryLatest?
+  telemetryHistory  VehicleTelemetryHistory[]
   dtcs              VehicleDtc[]
   tachoActivities   TachoActivity[]
   tachoInfringements TachoInfringement[]
@@ -808,6 +810,25 @@ model VehicleTelemetryLatest {
 
   @@index([tenantId])
   @@map("vehicle_telemetry_latest")
+}
+
+model VehicleTelemetryHistory {
+  id            String    @id @default(cuid())
+  tenantId      String    @default("default-tenant")
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId     String
+  vehicle       Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  recordedAt    DateTime
+  speedKmh      Int?
+  rpm           Int?
+  fuelLevelPct  Decimal?  @db.Decimal(5, 2)
+  coolantTemp   Decimal?  @db.Decimal(5, 1)
+  voltage       Decimal?  @db.Decimal(4, 1)
+  odometerKm    Decimal?  @db.Decimal(12, 3)
+
+  @@index([tenantId])
+  @@index([vehicleId, recordedAt])
+  @@map("vehicle_telemetry_history")
 }
 
 model VehicleDtc {

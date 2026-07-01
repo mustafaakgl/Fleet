@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { USE_MOCK_FLEET_DATA } from '@/lib/fleet-data-config';
 import { hydrateFleetData } from '@/lib/fleet-hydration';
 import {
@@ -1405,57 +1405,40 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const value = useMemo<FleetDataContextValue>(
-    () => ({
-      drivers,
-      calendarStatuses,
-      requests,
-      assignments,
-      morningCheckins,
-      transportRequests,
-      companyEmailDrafts,
-      driverAssignmentHistory,
-      vehicleAssignmentHistory,
-      companyAssignmentHistory,
-      approveRequest,
-      rejectRequest,
-      cancelRequest,
-      moveRequestToNeedsReview,
-      updateCalendarFromRequest,
-      getDriverAvailability,
-      getCalendarStatusEntry,
-      calculateDailyRevenue,
-      calculateMonthlyRevenue,
-      updateAssignment,
-      completeAssignment,
-      cancelAssignment,
-      validateMorningCheckin,
-      addCheckinToEinsatzplan,
-      rejectMorningCheckin,
-      updateMorningCheckin,
-      approveTransportRequest,
-      rejectTransportRequest,
-      getAssignmentById,
-      isHydrating,
-      hydrateError,
-      refetchHydrate,
-    }),
-    [
-      assignments,
-      calendarStatuses,
-      companyAssignmentHistory,
-      companyEmailDrafts,
-      driverAssignmentHistory,
-      drivers,
-      hydrateError,
-      isHydrating,
-      morningCheckins,
-      refetchHydrate,
-      requests,
-      transportRequests,
-      vehicleAssignmentHistory,
-    ],
-  );
+  const value: FleetDataContextValue = {
+    drivers,
+    calendarStatuses,
+    requests,
+    assignments,
+    morningCheckins,
+    transportRequests,
+    companyEmailDrafts,
+    driverAssignmentHistory,
+    vehicleAssignmentHistory,
+    companyAssignmentHistory,
+    approveRequest,
+    rejectRequest,
+    cancelRequest,
+    moveRequestToNeedsReview,
+    updateCalendarFromRequest,
+    getDriverAvailability,
+    getCalendarStatusEntry,
+    calculateDailyRevenue,
+    calculateMonthlyRevenue,
+    updateAssignment,
+    completeAssignment,
+    cancelAssignment,
+    validateMorningCheckin,
+    addCheckinToEinsatzplan,
+    rejectMorningCheckin,
+    updateMorningCheckin,
+    approveTransportRequest,
+    rejectTransportRequest,
+    getAssignmentById,
+    isHydrating,
+    hydrateError,
+    refetchHydrate,
+  };
 
   return (
     <FleetDataContext.Provider value={value}>

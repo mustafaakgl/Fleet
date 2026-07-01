@@ -11,6 +11,7 @@ import { IngestTelemetryDto } from './dto/ingest-telemetry.dto';
 import { IngestTelematicsDto } from './dto/ingest-telematics.dto';
 import { LiveTrackingQueryDto } from './dto/live-tracking-query.dto';
 import { LocationHistoryQueryDto } from './dto/location-history-query.dto';
+import { TelematicsVehicleHistoryQueryDto } from './dto/telematics-vehicle-history-query.dto';
 import { DeviceIngestApiKeyGuard } from './guards/device-ingest-api-key.guard';
 import { TrackingService } from './tracking.service';
 
@@ -92,6 +93,25 @@ export class TrackingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   getDriverScores() {
     return this.trackingService.getTelematicsDriverScores();
+  }
+
+  @Get('telematics/vehicles/:vehicleId/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  getTelematicsVehicleHistory(
+    @Param('vehicleId') vehicleId: string,
+    @Query() query: TelematicsVehicleHistoryQueryDto,
+    @CurrentUser('id') currentUserId: string,
+  ) {
+    return this.trackingService.getTelematicsVehicleHistory(
+      vehicleId,
+      {
+        from: query.from,
+        to: query.to,
+        metric: query.metric,
+        limit: query.limit,
+      },
+      currentUserId,
+    );
   }
 
   @Get('drivers/:driverId/latest')

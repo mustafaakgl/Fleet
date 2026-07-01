@@ -3,12 +3,23 @@
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ChevronLeft, Pencil, Upload } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { vehiclesApi, documentsApi, serviceRecordsApi, type VehicleEquipmentItem } from '@/lib/api';
-import type { VehicleDetail, Document, ServiceRecord } from '@/lib/types';
+import { vehiclesApi, documentsApi, serviceRecordsApi, telematicsApi, type VehicleEquipmentItem } from '@/lib/api';
+import type { VehicleDetail, Document, ServiceRecord, TelemetryHistoryPoint } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 import {
   FLEET_TABLE,
@@ -31,6 +42,16 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 
 const VEHICLE_DOCUMENT_TYPES = ['TUV', 'SP', 'Registration', 'Insurance', 'Service Report'] as const;
+const SPEED_LIMIT_KMH = 90;
+const LOW_BATTERY_VOLTAGE = 11.8;
+
+type TelemetryRange = '1h' | '6h' | '24h';
+
+const TELEMETRY_RANGE_HOURS: Record<TelemetryRange, number> = {
+  '1h': 1,
+  '6h': 6,
+  '24h': 24,
+};
 
 interface VehicleAssignmentRow {
   id: string;
@@ -108,6 +129,41 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadDocError, setUploadDocError] = useState<string | null>(null);
+  const [telemetryRange, setTelemetryRange] = useState<TelemetryRange>('6h');
+
+  const telemetryWindow = useMemo(() => {
+    const to = new Date();
+    const from = new Date(to.getTime() - TELEMETRY_RANGE_HOURS[telemetryRange] * 60 * 60 * 1000);
+    return {
+      from: from.toISOString(),
+      to: to.toISOString(),
+    };
+  }, [telemetryRange]);
+
+  const telemetryHistoryQuery = useQuery({
+    queryKey: ['vehicle-telemetry-history', id, telemetryRange],
+    queryFn: () =>
+      telematicsApi.getVehicleTelemetryHistory(id, {
+        from: telemetryWindow.from,
+        to: telemetryWindow.to,
+        limit: telemetryRange === '24h' ? 2000 : 1200,
+      }),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+
+  const telemetryPoints = useMemo(() => telemetryHistoryQuery.data?.points ?? [], [telemetryHistoryQuery.data]);
+  const telemetryChartData = useMemo(
+    () =>
+      telemetryPoints.map((point) => ({
+        ...point,
+        shortTime: new Intl.DateTimeFormat(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date(point.recordedAt)),
+      })),
+    [telemetryPoints],
+  );
 
   useEffect(() => {
     vehiclesApi
@@ -370,6 +426,78 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               }
             />
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card id="telemetry">
+        <CardHeader className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle>{t('vehicleDetail.telemetry.title')}</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              {(['1h', '6h', '24h'] as TelemetryRange[]).map((range) => (
+                <Button
+                  key={range}
+                  variant={telemetryRange === range ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTelemetryRange(range)}
+                >
+                  {t(`vehicleDetail.telemetry.range.${range}`)}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <p className="text-sm text-slate-500">{t('vehicleDetail.telemetry.subtitle')}</p>
+        </CardHeader>
+        <CardContent>
+          {telemetryHistoryQuery.isLoading ? (
+            <p className="text-sm text-slate-500">{t('common.loading')}</p>
+          ) : telemetryHistoryQuery.error ? (
+            <p className="text-sm text-red-600">{t('vehicleDetail.telemetry.loadError')}</p>
+          ) : telemetryChartData.length === 0 ? (
+            <p className="text-sm text-slate-500">{t('vehicleDetail.telemetry.empty')}</p>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              <TelemetryMiniChart
+                title={t('vehicleDetail.telemetry.chart.speed')}
+                unit="km/h"
+                data={telemetryChartData}
+                dataKey="speedKmh"
+                stroke="#2563eb"
+                referenceValue={SPEED_LIMIT_KMH}
+                referenceLabel={t('vehicleDetail.telemetry.ref.speedLimit')}
+              />
+              <TelemetryMiniChart
+                title={t('vehicleDetail.telemetry.chart.rpm')}
+                unit="rpm"
+                data={telemetryChartData}
+                dataKey="rpm"
+                stroke="#6366f1"
+              />
+              <TelemetryMiniChart
+                title={t('vehicleDetail.telemetry.chart.coolant')}
+                unit="C"
+                data={telemetryChartData}
+                dataKey="coolantTemp"
+                stroke="#f97316"
+              />
+              <TelemetryMiniChart
+                title={t('vehicleDetail.telemetry.chart.voltage')}
+                unit="V"
+                data={telemetryChartData}
+                dataKey="voltage"
+                stroke="#10b981"
+                referenceValue={LOW_BATTERY_VOLTAGE}
+                referenceLabel={t('vehicleDetail.telemetry.ref.lowVoltage')}
+              />
+              <TelemetryMiniChart
+                title={t('vehicleDetail.telemetry.chart.fuel')}
+                unit="%"
+                data={telemetryChartData}
+                dataKey="fuelLevelPct"
+                stroke="#0ea5e9"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -885,6 +1013,70 @@ function InfoItem({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs uppercase tracking-wide text-gray-500">{label}</dt>
       <dd className="text-sm font-medium text-gray-900">{value}</dd>
+    </div>
+  );
+}
+
+type TelemetryChartRow = TelemetryHistoryPoint & { shortTime: string };
+
+function TelemetryMiniChart({
+  title,
+  unit,
+  data,
+  dataKey,
+  stroke,
+  referenceValue,
+  referenceLabel,
+}: {
+  title: string;
+  unit: string;
+  data: TelemetryChartRow[];
+  dataKey: 'speedKmh' | 'rpm' | 'fuelLevelPct' | 'coolantTemp' | 'voltage';
+  stroke: string;
+  referenceValue?: number;
+  referenceLabel?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <p className="mb-2 text-sm font-semibold text-slate-900">{title}</p>
+      <div className="h-44">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <XAxis dataKey="shortTime" tick={{ fontSize: 10, fill: '#64748b' }} minTickGap={16} />
+            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={42} />
+            <Tooltip
+              formatter={(value) => [value == null ? '-' : `${value} ${unit}`, title]}
+              labelFormatter={(_, payload) => {
+                const row = payload?.[0]?.payload as TelemetryChartRow | undefined;
+                return row?.recordedAt ? new Date(row.recordedAt).toLocaleString() : '';
+              }}
+              contentStyle={{ fontSize: 12, borderRadius: 8 }}
+            />
+            {referenceValue !== undefined ? (
+              <ReferenceLine
+                y={referenceValue}
+                stroke="#ef4444"
+                strokeDasharray="4 4"
+                label={{
+                  value: referenceLabel,
+                  position: 'insideTopRight',
+                  fill: '#ef4444',
+                  fontSize: 10,
+                }}
+              />
+            ) : null}
+            <Line
+              type="monotone"
+              dataKey={dataKey}
+              stroke={stroke}
+              strokeWidth={2}
+              dot={false}
+              connectNulls
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

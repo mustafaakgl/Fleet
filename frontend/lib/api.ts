@@ -70,6 +70,7 @@ import type {
   TachographDddUploadResponse,
   TelematicsVehicleHealthResponse,
   TelematicsDriverScoresResponse,
+  TelemetryHistoryResponse,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -1771,6 +1772,19 @@ export const telematicsApi = {
 
   getDriverScores: () =>
     api.get<TelematicsDriverScoresResponse>('/tracking/telematics/driver-scores').then((r) => r.data),
+
+  getVehicleTelemetryHistory: (
+    vehicleId: string,
+    params?: {
+      from?: string;
+      to?: string;
+      metric?: 'speedKmh' | 'rpm' | 'fuelLevelPct' | 'coolantTemp' | 'voltage' | 'odometerKm';
+      limit?: number;
+    },
+  ) =>
+    api
+      .get<TelemetryHistoryResponse>(`/tracking/telematics/vehicles/${vehicleId}/history`, { params })
+      .then((r) => r.data),
 };
 
 export const tachographApi = {

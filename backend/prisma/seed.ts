@@ -9,6 +9,7 @@ import {
   CompanyEmailStatus,
   DocumentOwnerType,
   DocumentStatus,
+  DeviceModel,
   DriverStatus,
   HandoverPhotoStatus,
   HandoverStatus,
@@ -427,6 +428,31 @@ async function upsertCompany(params: {
       contactPerson: params.contactPerson,
       defaultDailyRevenue: params.defaultDailyRevenue,
       notes: params.notes,
+    },
+  });
+}
+
+async function upsertDevice(params: {
+  imei: string;
+  model: DeviceModel;
+  vehicleId?: string | null;
+}) {
+  return prisma.device.upsert({
+    where: {
+      tenantId_imei: {
+        tenantId: SEED_TENANT_ID,
+        imei: params.imei,
+      },
+    },
+    update: {
+      model: params.model,
+      vehicleId: params.vehicleId ?? null,
+    },
+    create: {
+      tenantId: SEED_TENANT_ID,
+      imei: params.imei,
+      model: params.model,
+      vehicleId: params.vehicleId ?? null,
     },
   });
 }
@@ -1313,6 +1339,25 @@ async function main(): Promise<void> {
   for (const vehicle of vehicles) {
     const record = await upsertVehicle(vehicle);
     vehiclesByPlate.set(vehicle.plateNumber, record);
+  }
+
+  const telematicsSeedBindings = [
+    { imei: '359339080000001', model: DeviceModel.FMC130, plate: pilotFleet[0]?.plate },
+    { imei: '359339080000002', model: DeviceModel.FMC650, plate: pilotFleet[1]?.plate },
+    { imei: '359339080000003', model: DeviceModel.FMC130, plate: pilotFleet[2]?.plate },
+  ];
+
+  for (const binding of telematicsSeedBindings) {
+    const vehicle = binding.plate ? vehiclesByPlate.get(binding.plate) : null;
+    if (!vehicle) {
+      continue;
+    }
+
+    await upsertDevice({
+      imei: binding.imei,
+      model: binding.model,
+      vehicleId: vehicle.id,
+    });
   }
 
   const companies = [

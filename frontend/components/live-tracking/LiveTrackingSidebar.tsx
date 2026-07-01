@@ -195,6 +195,15 @@ export function LiveTrackingSidebar({
                     {t('liveTracking.openAssignment')}
                   </Link>
                 ) : null}
+                {item.vehicleId ? (
+                  <Link
+                    href={`/vehicles/${item.vehicleId}#telemetry`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-medium text-[#1a4d7a] hover:underline"
+                  >
+                    {t('liveTracking.openVehicleDetail')}
+                  </Link>
+                ) : null}
               </div>
             </button>
           ))

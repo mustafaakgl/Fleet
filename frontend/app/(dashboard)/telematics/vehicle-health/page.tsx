@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ShieldCheck, WifiOff, Wrench } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -183,7 +184,14 @@ export default function VehicleHealthPage() {
                 <TableBody className={FLEET_TABLE_BODY}>
                   {sortedItems.map((item: TelematicsVehicleHealthItem) => (
                     <TableRow key={item.vehicleId} className={FLEET_TABLE_ROW}>
-                      <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{item.plateNumber}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
+                        <Link
+                          href={`/vehicles/${item.vehicleId}#telemetry`}
+                          className="text-[#1a4d7a] hover:underline"
+                        >
+                          {item.plateNumber}
+                        </Link>
+                      </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
                         <Badge className={`border text-xs ${healthBadgeClass(item.health)}`}>
                           {t(statusKey(item.health))}

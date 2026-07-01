@@ -21,6 +21,7 @@ type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
 type NotificationStatus = 'unread' | 'read';
 
 type NotificationCreateInput = {
+  tenantId?: string;
   userId: string;
   title: string;
   message: string;
@@ -83,14 +84,20 @@ export class NotificationsService {
     const type = this.ensureType(data.type);
     const priority = data.priority ? this.ensurePriority(data.priority) : 'medium';
 
-    const user = await this.prisma.user.findUnique({ where: { id: data.userId }, select: { id: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { id: true, tenantId: true },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
+    const tenantId = data.tenantId ?? user.tenantId;
+
     const db = this.prisma as any;
     const notification = await db.notification.create({
       data: {
+        tenantId,
         userId: data.userId,
         title: data.title,
         message: data.message,
@@ -252,7 +259,7 @@ export class NotificationsService {
         id: { in: uniqueUserIds },
         status: 'active',
       },
-      select: { id: true },
+      select: { id: true, tenantId: true },
     });
 
     if (users.length === 0) {
@@ -262,6 +269,7 @@ export class NotificationsService {
     const db = this.prisma as any;
     await db.notification.createMany({
       data: users.map((user) => ({
+        tenantId: user.tenantId,
         userId: user.id,
         title: data.title,
         message: data.message,

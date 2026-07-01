@@ -552,6 +552,24 @@ export interface TelematicsDriverScoresResponse {
   drivers: TelematicsDriverScoreItem[];
 }
 
+export interface TelemetryHistoryPoint {
+  recordedAt: string;
+  speedKmh: number | null;
+  rpm: number | null;
+  fuelLevelPct: number | null;
+  coolantTemp: number | null;
+  voltage: number | null;
+  odometerKm: number | null;
+}
+
+export interface TelemetryHistoryResponse {
+  vehicleId: string;
+  from: string;
+  to: string;
+  metric: 'speedKmh' | 'rpm' | 'fuelLevelPct' | 'coolantTemp' | 'voltage' | 'odometerKm' | null;
+  points: TelemetryHistoryPoint[];
+}
+
 export interface TachographDddFileRow {
   id: string;
   fileType: string;

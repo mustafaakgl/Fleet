@@ -15,6 +15,11 @@ const NOTIFICATION_TYPES = [
 const NOTIFICATION_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
 
 export class CreateNotificationDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  tenantId?: string;
+
   @IsString()
   @IsNotEmpty()
   userId!: string;

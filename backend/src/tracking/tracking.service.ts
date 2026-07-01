@@ -8,8 +8,10 @@ import {
   LocationSource,
   LocationTrackingStatus,
   Prisma,
+  UserRole,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { IngestTelemetryDto } from './dto/ingest-telemetry.dto';
 import type { SubmitLocationDto } from './dto/submit-location.dto';
@@ -44,7 +46,29 @@ const OFFLINE_THRESHOLD_SEC = 30 * 60;
 const DEFAULT_HISTORY_LIMIT = 500;
 const MAX_HISTORY_LIMIT = 5000;
 const DEFAULT_HISTORY_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_TELEMETRY_HISTORY_LIMIT = 1000;
+const MAX_TELEMETRY_HISTORY_LIMIT = 2000;
+const TELEMETRY_HISTORY_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+const TELEMETRY_HISTORY_THROTTLE_MS = 60 * 1000;
 const MAX_SHARING_SESSION_MS = 12 * 60 * 60 * 1000;
+const LOW_BATTERY_VOLTAGE_THRESHOLD = 11.8;
+const NOTIFICATION_DEDUPE_WINDOW_MS = 30 * 60 * 1000;
+
+const NOTIFICATION_OPERATIONAL_ROLES: UserRole[] = [
+  UserRole.admin,
+  UserRole.boss,
+  UserRole.accounting,
+  UserRole.office,
+];
+
+type NotificationTrigger = {
+  tenantId: string;
+  title: string;
+  message: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  relatedEntityType: string;
+  relatedEntityId: string;
+};
 
 type TelematicsHealthStatus = 'ok' | 'warn' | 'critical';
 
@@ -86,6 +110,33 @@ type DriverEventCounts = {
   crashCount: number;
 };
 
+type TelematicsMetric =
+  | 'speedKmh'
+  | 'rpm'
+  | 'fuelLevelPct'
+  | 'coolantTemp'
+  | 'voltage'
+  | 'odometerKm';
+
+type TelematicsVehicleHistoryParams = {
+  from?: string;
+  to?: string;
+  metric?: TelematicsMetric;
+  limit?: number;
+};
+
+type TelematicsHistoryPayload = {
+  tenantId: string;
+  vehicleId: string;
+  recordedAt: Date;
+  speedKmh: number | null;
+  rpm: number | null;
+  fuelLevelPct: Prisma.Decimal | null;
+  coolantTemp: Prisma.Decimal | null;
+  voltage: Prisma.Decimal | null;
+  odometerKm: Prisma.Decimal | null;
+};
+
 type ResolvedDriver = {
   id: string;
   locationTrackingConsentAt: Date | null;
@@ -99,6 +150,7 @@ export class TrackingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async grantLocationConsent(driverId: string) {
@@ -271,7 +323,7 @@ export class TrackingService {
       ? this.parseRecordedAt(dto.recordedAt)
       : new Date();
 
-    return this.prisma.unscoped.$transaction(async (tx) => {
+    const ingestResult = await this.prisma.unscoped.$transaction(async (tx) => {
       const { tenantId, vehicleId } = await this.resolveTelemetryVehicleContext(tx, dto);
       const driverId = await this.resolveDriverIdForVehicleTodayWithClient(tx, vehicleId);
 
@@ -280,6 +332,14 @@ export class TrackingService {
           'No active driver assignment found for this vehicle today',
         );
       }
+
+      const vehicle = await tx.vehicle.findUnique({
+        where: { id: vehicleId },
+        select: { plateNumber: true },
+      });
+
+      const plateNumber = vehicle?.plateNumber ?? vehicleId;
+      const notificationTriggers: NotificationTrigger[] = [];
 
       const locationData = {
         tenantId,
@@ -310,6 +370,11 @@ export class TrackingService {
         },
       });
 
+      const fuelLevelPct = this.toDecimalOrNull(dto.fuelLevelPct);
+      const coolantTemp = this.toDecimalOrNull(dto.coolantTemp);
+      const voltage = this.toDecimalOrNull(dto.voltage);
+      const odometerKm = this.toDecimalOrNull(dto.odometerKm);
+
       await tx.vehicleTelemetryLatest.upsert({
         where: { vehicleId },
         create: {
@@ -317,21 +382,34 @@ export class TrackingService {
           tenantId,
           ignition: dto.ignition ?? false,
           rpm: dto.rpm ?? null,
-          fuelLevelPct: this.toDecimalOrNull(dto.fuelLevelPct),
-          coolantTemp: this.toDecimalOrNull(dto.coolantTemp),
-          voltage: this.toDecimalOrNull(dto.voltage),
-          odometerKm: this.toDecimalOrNull(dto.odometerKm),
+          fuelLevelPct,
+          coolantTemp,
+          voltage,
+          odometerKm,
           recordedAt,
         },
         update: {
           ignition: dto.ignition ?? false,
           rpm: dto.rpm ?? null,
-          fuelLevelPct: this.toDecimalOrNull(dto.fuelLevelPct),
-          coolantTemp: this.toDecimalOrNull(dto.coolantTemp),
-          voltage: this.toDecimalOrNull(dto.voltage),
-          odometerKm: this.toDecimalOrNull(dto.odometerKm),
+          fuelLevelPct,
+          coolantTemp,
+          voltage,
+          odometerKm,
           recordedAt,
         },
+      });
+
+      // TODO(telematics-history): consider retention and partitioning as volume grows.
+      await this.maybePersistTelemetryHistory(tx, {
+        tenantId,
+        vehicleId,
+        recordedAt,
+        speedKmh: this.speedMpsToKmh(dto.speedMps),
+        rpm: dto.rpm ?? null,
+        fuelLevelPct,
+        coolantTemp,
+        voltage,
+        odometerKm,
       });
 
       if (dto.dtc?.length) {
@@ -345,6 +423,37 @@ export class TrackingService {
               item.severity === 'critical' ? DtcSeverity.critical : DtcSeverity.medium,
             occurredAt: recordedAt,
           })),
+        });
+
+        const criticalCodes = Array.from(
+          new Set(
+            dto.dtc
+              .filter((item) => item.severity === 'critical')
+              .map((item) => item.code.trim())
+              .filter((code) => code.length > 0),
+          ),
+        );
+
+        for (const code of criticalCodes) {
+          notificationTriggers.push({
+            tenantId,
+            title: `Kritik ariza: ${code} / ${plateNumber}`,
+            message: `Arac ${plateNumber} icin kritik DTC kodu acildi (${code}).`,
+            priority: 'critical',
+            relatedEntityType: 'telematics_critical_dtc',
+            relatedEntityId: `${vehicleId}:${code}`,
+          });
+        }
+      }
+
+      if (dto.voltage !== undefined && dto.voltage < LOW_BATTERY_VOLTAGE_THRESHOLD) {
+        notificationTriggers.push({
+          tenantId,
+          title: `Dusuk aku voltaji / ${plateNumber}`,
+          message: `Arac ${plateNumber} aku voltaji ${dto.voltage.toFixed(1)}V seviyesine dustu.`,
+          priority: 'high',
+          relatedEntityType: 'telematics_low_voltage',
+          relatedEntityId: vehicleId,
         });
       }
 
@@ -371,6 +480,18 @@ export class TrackingService {
             threshold: new Prisma.Decimal(event.threshold ?? event.value),
           })),
         });
+
+        const hasOverspeed = dto.events.some((event) => event.type === 'speeding');
+        if (hasOverspeed) {
+          notificationTriggers.push({
+            tenantId,
+            title: `Asiri hiz olayi / ${plateNumber}`,
+            message: `Arac ${plateNumber} icin asiri hiz olayi algilandi.`,
+            priority: 'low',
+            relatedEntityType: 'telematics_overspeed',
+            relatedEntityId: vehicleId,
+          });
+        }
       }
 
       return {
@@ -381,8 +502,68 @@ export class TrackingService {
         tripId,
         source: LocationSource.telematics,
         recordedAt: recordedAt.toISOString(),
+        notificationTriggers,
       };
     });
+
+    await this.dispatchTelemetryNotifications(ingestResult.notificationTriggers);
+
+    return {
+      accepted: ingestResult.accepted,
+      tenantId: ingestResult.tenantId,
+      vehicleId: ingestResult.vehicleId,
+      driverId: ingestResult.driverId,
+      tripId: ingestResult.tripId,
+      source: ingestResult.source,
+      recordedAt: ingestResult.recordedAt,
+    };
+  }
+
+  private async dispatchTelemetryNotifications(triggers: NotificationTrigger[]): Promise<void> {
+    if (triggers.length === 0) {
+      return;
+    }
+
+    for (const trigger of triggers) {
+      // Dedupe by tenant + related entity within a short time window to prevent spam.
+      const dedupeCutoff = new Date(Date.now() - NOTIFICATION_DEDUPE_WINDOW_MS);
+      const existing = await this.prisma.unscoped.notification.findFirst({
+        where: {
+          tenantId: trigger.tenantId,
+          type: 'system',
+          relatedEntityType: trigger.relatedEntityType,
+          relatedEntityId: trigger.relatedEntityId,
+          createdAt: { gte: dedupeCutoff },
+        },
+        select: { id: true },
+      });
+
+      if (existing) {
+        continue;
+      }
+
+      const users = await this.prisma.unscoped.user.findMany({
+        where: {
+          tenantId: trigger.tenantId,
+          status: 'active',
+          role: { in: NOTIFICATION_OPERATIONAL_ROLES },
+        },
+        select: { id: true },
+      });
+
+      for (const user of users) {
+        await this.notificationsService.createNotification({
+          tenantId: trigger.tenantId,
+          userId: user.id,
+          title: trigger.title,
+          message: trigger.message,
+          type: 'system',
+          priority: trigger.priority,
+          relatedEntityType: trigger.relatedEntityType,
+          relatedEntityId: trigger.relatedEntityId,
+        });
+      }
+    }
   }
 
   async getTelematicsVehicleHealth() {
@@ -600,6 +781,48 @@ export class TrackingService {
     return {
       fleetAverage,
       drivers: items,
+    };
+  }
+
+  async getTelematicsVehicleHistory(
+    vehicleId: string,
+    query: TelematicsVehicleHistoryParams,
+    currentUserId: string,
+  ) {
+    await this.assertVehicleExists(vehicleId);
+    const { from, to, limit, metric } = this.resolveTelematicsHistoryQuery(query);
+
+    const where: Prisma.VehicleTelemetryHistoryWhereInput = {
+      vehicleId,
+      recordedAt: { gte: from, lte: to },
+    };
+
+    if (metric) {
+      Object.assign(where, { [metric]: { not: null } });
+    }
+
+    const rows = await this.prisma.vehicleTelemetryHistory.findMany({
+      where,
+      orderBy: { recordedAt: 'asc' },
+      take: limit,
+    });
+
+    await this.logHistoryViewed(currentUserId, 'vehicle', vehicleId, { from, to, limit });
+
+    return {
+      vehicleId,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      metric: metric ?? null,
+      points: rows.map((row) => ({
+        recordedAt: row.recordedAt.toISOString(),
+        speedKmh: row.speedKmh,
+        rpm: row.rpm,
+        fuelLevelPct: row.fuelLevelPct ? this.decimalToNumber(row.fuelLevelPct) : null,
+        coolantTemp: row.coolantTemp ? this.decimalToNumber(row.coolantTemp) : null,
+        voltage: row.voltage ? this.decimalToNumber(row.voltage) : null,
+        odometerKm: row.odometerKm ? this.decimalToNumber(row.odometerKm) : null,
+      })),
     };
   }
 
@@ -1216,6 +1439,95 @@ export class TrackingService {
     return { tenantId: device.tenantId, vehicleId: resolvedVehicleId };
   }
 
+  private async maybePersistTelemetryHistory(
+    tx: Prisma.TransactionClient,
+    payload: TelematicsHistoryPayload,
+  ): Promise<void> {
+    const previous = await tx.vehicleTelemetryHistory.findFirst({
+      where: { vehicleId: payload.vehicleId },
+      orderBy: { recordedAt: 'desc' },
+      select: {
+        recordedAt: true,
+        speedKmh: true,
+        rpm: true,
+        fuelLevelPct: true,
+        coolantTemp: true,
+        voltage: true,
+        odometerKm: true,
+      },
+    });
+
+    if (!previous) {
+      await tx.vehicleTelemetryHistory.create({ data: payload });
+      return;
+    }
+
+    const elapsedMs = Math.abs(payload.recordedAt.getTime() - previous.recordedAt.getTime());
+    if (elapsedMs >= TELEMETRY_HISTORY_THROTTLE_MS) {
+      await tx.vehicleTelemetryHistory.create({ data: payload });
+      return;
+    }
+
+    if (!this.hasMeaningfulTelemetryHistoryChange(previous, payload)) {
+      return;
+    }
+
+    await tx.vehicleTelemetryHistory.create({ data: payload });
+  }
+
+  private hasMeaningfulTelemetryHistoryChange(
+    previous: {
+      speedKmh: number | null;
+      rpm: number | null;
+      fuelLevelPct: Prisma.Decimal | null;
+      coolantTemp: Prisma.Decimal | null;
+      voltage: Prisma.Decimal | null;
+      odometerKm: Prisma.Decimal | null;
+    },
+    next: TelematicsHistoryPayload,
+  ): boolean {
+    const speedChanged = this.hasNumericDiff(previous.speedKmh, next.speedKmh, 2);
+    const rpmChanged = this.hasNumericDiff(previous.rpm, next.rpm, 50);
+    const fuelChanged = this.hasNumericDiff(
+      previous.fuelLevelPct ? this.decimalToNumber(previous.fuelLevelPct) : null,
+      next.fuelLevelPct ? this.decimalToNumber(next.fuelLevelPct) : null,
+      0.5,
+    );
+    const coolantChanged = this.hasNumericDiff(
+      previous.coolantTemp ? this.decimalToNumber(previous.coolantTemp) : null,
+      next.coolantTemp ? this.decimalToNumber(next.coolantTemp) : null,
+      1,
+    );
+    const voltageChanged = this.hasNumericDiff(
+      previous.voltage ? this.decimalToNumber(previous.voltage) : null,
+      next.voltage ? this.decimalToNumber(next.voltage) : null,
+      0.1,
+    );
+    const odometerChanged = this.hasNumericDiff(
+      previous.odometerKm ? this.decimalToNumber(previous.odometerKm) : null,
+      next.odometerKm ? this.decimalToNumber(next.odometerKm) : null,
+      0.05,
+    );
+
+    return speedChanged || rpmChanged || fuelChanged || coolantChanged || voltageChanged || odometerChanged;
+  }
+
+  private hasNumericDiff(
+    previous: number | null,
+    next: number | null,
+    threshold: number,
+  ): boolean {
+    if (previous === null && next === null) {
+      return false;
+    }
+
+    if (previous === null || next === null) {
+      return true;
+    }
+
+    return Math.abs(previous - next) >= threshold;
+  }
+
   private async findOrCreateDeviceTrip(
     tx: Prisma.TransactionClient,
     params: { tenantId: string; vehicleId: string; driverId: string; startedAt: Date },
@@ -1447,6 +1759,36 @@ export class TrackingService {
     }
 
     return { from, to, limit };
+  }
+
+  private resolveTelematicsHistoryQuery(
+    query: TelematicsVehicleHistoryParams,
+  ): { from: Date; to: Date; limit: number; metric?: TelematicsMetric } {
+    const limit = Math.min(query.limit ?? DEFAULT_TELEMETRY_HISTORY_LIMIT, MAX_TELEMETRY_HISTORY_LIMIT);
+    const now = new Date();
+
+    let from: Date;
+    let to: Date;
+
+    if (query.from && query.to) {
+      from = this.parseHistoryDate(query.from, 'from');
+      to = this.parseHistoryDate(query.to, 'to');
+    } else if (query.from) {
+      from = this.parseHistoryDate(query.from, 'from');
+      to = now;
+    } else if (query.to) {
+      to = this.parseHistoryDate(query.to, 'to');
+      from = new Date(to.getTime() - TELEMETRY_HISTORY_LOOKBACK_MS);
+    } else {
+      from = new Date(now.getTime() - TELEMETRY_HISTORY_LOOKBACK_MS);
+      to = now;
+    }
+
+    if (from.getTime() > to.getTime()) {
+      throw new BadRequestException('from must be less than or equal to to');
+    }
+
+    return { from, to, limit, metric: query.metric };
   }
 
   private parseHistoryDate(value: string, field: 'from' | 'to'): Date {
