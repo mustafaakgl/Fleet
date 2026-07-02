@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
+/**
+ * Extended loop verification — runs codec8 scenarios against gateway + DB checks.
+ */
+import { spawn, execSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -8,8 +11,13 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const backendDir = join(repoRoot, 'backend');
 const artifactsDir = mkdtempSync(join(tmpdir(), 'loop-verify-'));
+const fullMode = process.argv.includes('--full');
 
 const results = [];
+const telemetryEnv = {
+  TELEMATICS_IGNITION_OFF_DEBOUNCE_MS: '1000',
+};
+const loopVerifyPort = Number(process.env.LOOP_VERIFY_DEVICE_PORT || 15027);
 
 function log(line) {
   process.stdout.write(`${line}\n`);
@@ -20,7 +28,7 @@ function runCommand(step, command, args, options = {}) {
     const started = Date.now();
     const child = spawn(command, args, {
       cwd: options.cwd ?? repoRoot,
-      env: { ...process.env, ...options.env },
+      env: { ...process.env, ...telemetryEnv, ...options.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -160,31 +168,36 @@ function waitForPort(host, port, timeoutMs = 30_000) {
   });
 }
 
+function releasePort(port) {
+  try {
+    const pids = execSync(`lsof -ti tcp:${port}`, { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+    for (const pid of pids) {
+      try {
+        process.kill(Number(pid), 'SIGTERM');
+      } catch {
+        // ignore stale pid
+      }
+    }
+  } catch {
+    // port not in use
+  }
+}
+
 async function ensureGateway() {
   const host = '127.0.0.1';
-  const port = Number(process.env.DEVICE_PORT || 5027);
-
-  try {
-    await waitForPort(host, port, 1_000);
-    results.push({
-      step: 'gateway-start',
-      command: 'telematics-gateway (reused)',
-      code: 0,
-      elapsedMs: 0,
-      stdout: `reusing existing listener on ${host}:${port}`,
-      stderr: '',
-    });
-    return null;
-  } catch {
-    // continue to spawn
-  }
+  const port = loopVerifyPort;
+  releasePort(port);
+  await new Promise((resolve) => setTimeout(resolve, 300));
 
   const child = spawn(
     'npx',
     ['ts-node', '--transpile-only', 'src/telematics-gateway/main.ts'],
     {
       cwd: backendDir,
-      env: { ...process.env, DEVICE_PORT: String(port) },
+      env: { ...process.env, ...telemetryEnv, DEVICE_PORT: String(port) },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -222,19 +235,28 @@ async function runSimAndVerify(scenario, seed, count) {
       '359339080000101',
       '--count',
       String(count),
+      '--port',
+      String(loopVerifyPort),
     ],
-    { cwd: backendDir, inheritStdout: true },
+    { cwd: backendDir, inheritStdout: true, env: telemetryEnv },
   );
 
   writeFileSync(summaryPath, `${sim.stdout}\n`);
 
-  await runCommand(
-    `verify:${scenario}`,
-    'node',
-    ['scripts/verify-tacho-telematics.mjs', '--scenario', scenario, '--summary', summaryPath],
-    { cwd: backendDir, inheritStdout: true },
-  );
-}
+    await runCommand(
+      `verify:${scenario}`,
+      'node',
+      ['scripts/verify-tacho-telematics.mjs', '--scenario', scenario, '--summary', summaryPath],
+      { cwd: backendDir, inheritStdout: true, env: telemetryEnv },
+    );
+
+    if (scenario === 'normal') {
+      await runCommand('live-stream-smoke', 'node', ['scripts/live-stream-smoke.mjs'], {
+        cwd: backendDir,
+        inheritStdout: true,
+      });
+    }
+  }
 
 function printSummary() {
   log('\nloop:verify summary');
@@ -270,10 +292,10 @@ async function main() {
 
     results.push({
       step: 'redis-health',
-      command: 'skipped',
+      command: process.env.REDIS_URL ? 'configured' : 'inline-fallback',
       code: 0,
       elapsedMs: 0,
-      stdout: 'no redis service in docker-compose',
+      stdout: process.env.REDIS_URL ?? 'telemetry queue runs inline without REDIS_URL',
       stderr: '',
     });
 
@@ -286,6 +308,17 @@ async function main() {
 
     await runSimAndVerify('normal', 42, 5);
     await runSimAndVerify('burst-reconnect', 42, 30);
+    await runSimAndVerify('corrupt-frames', 42, 20);
+    await runSimAndVerify('fuel-theft', 42, 20);
+    await runSimAndVerify('dtc-storm', 42, 7);
+
+    const loadCount = fullMode ? 10_000 : 1_000;
+    const loadStarted = Date.now();
+    await runSimAndVerify('load', 42, loadCount);
+    const loadElapsed = Date.now() - loadStarted;
+    if (fullMode && loadElapsed > 90_000) {
+      throw new Error(`load scenario exceeded 90s budget: ${loadElapsed}ms`);
+    }
 
     await runCommand(
       'tenant-isolation-check',

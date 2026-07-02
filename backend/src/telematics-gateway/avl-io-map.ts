@@ -36,7 +36,7 @@ export const TELEMATICS_IO_MAP = {
     harshCorner: [246],
   },
   dtc: {
-    ids: [272, 385],
+    ids: [272, 385, 48],
   },
   thresholds: {
     overspeedKph: 90,
@@ -127,11 +127,17 @@ export function normalizeIoToTelemetry(io: ParsedAvlIo, speedKph: number): {
 
   const dtc: NormalizedTelemetryDtc = [];
   if (dtcRaw !== undefined && dtcRaw > 0) {
-    dtc.push({
-      code: `TELTONIKA-${dtcRaw.toString(16).toUpperCase()}`,
-      description: 'DTC code from Teltonika IO element',
-      severity: dtcRaw >= 0x8000 ? 'critical' : 'medium',
-    });
+    for (let bit = 0; bit < 16; bit += 1) {
+      const mask = 1 << bit;
+      if ((dtcRaw & mask) === 0) {
+        continue;
+      }
+      dtc.push({
+        code: `TELTONIKA-${mask.toString(16).toUpperCase()}`,
+        description: 'DTC code from Teltonika IO element',
+        severity: mask >= 0x8000 ? 'critical' : 'medium',
+      });
+    }
   }
 
   const ignition = ignitionRaw === undefined ? undefined : ignitionRaw > 0;
