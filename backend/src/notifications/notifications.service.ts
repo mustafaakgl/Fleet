@@ -15,7 +15,11 @@ type NotificationType =
   | 'company_email'
   | 'reminder'
   | 'system'
-  | 'tacho_signature_invalid';
+  | 'tacho_signature_invalid'
+  | 'device_silent'
+  | 'fuel_theft_suspected'
+  | 'telematics_coolant_high'
+  | 'telematics_voltage_low';
 
 type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
 
@@ -45,6 +49,10 @@ const NOTIFICATION_TYPES: NotificationType[] = [
   'reminder',
   'system',
   'tacho_signature_invalid',
+  'device_silent',
+  'fuel_theft_suspected',
+  'telematics_coolant_high',
+  'telematics_voltage_low',
 ];
 
 const NOTIFICATION_PRIORITIES: NotificationPriority[] = ['low', 'medium', 'high', 'critical'];
