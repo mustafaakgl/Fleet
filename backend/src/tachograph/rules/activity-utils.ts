@@ -5,6 +5,23 @@ export function sortActivities(activities: TachoActivityLike[]): TachoActivityLi
   return [...activities].sort((a, b) => a.startedAtMs - b.startedAtMs || a.endedAtMs - b.endedAtMs);
 }
 
+/** Truncate activity durations at a wall-clock instant (for live remaining counters). */
+export function clipActivitiesAt(activities: TachoActivityLike[], atMs: number): TachoActivityLike[] {
+  return sortActivities(activities)
+    .filter((activity) => activity.startedAtMs < atMs)
+    .map((activity) => {
+      if (activity.endedAtMs <= atMs) {
+        return activity;
+      }
+      const durationS = Math.max(0, Math.floor((atMs - activity.startedAtMs) / 1000));
+      return {
+        ...activity,
+        endedAtMs: atMs,
+        durationS,
+      };
+    });
+}
+
 export function filterActivitiesInRange(
   activities: TachoActivityLike[],
   range: EvaluationRange,

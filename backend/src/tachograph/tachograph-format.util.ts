@@ -29,3 +29,11 @@ export function parseInfringementEvidence(notes: string | null | undefined): Rec
     return null;
   }
 }
+
+export function parseAssignmentDurationSeconds(startTime: string, endTime: string): number {
+  const [sh, sm] = startTime.split(':').map((part) => Number(part));
+  const [eh, em] = endTime.split(':').map((part) => Number(part));
+  const startS = sh * 3600 + sm * 60;
+  const endS = eh * 3600 + em * 60;
+  return Math.max(0, endS - startS);
+}

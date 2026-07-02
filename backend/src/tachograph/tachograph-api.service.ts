@@ -17,13 +17,15 @@ import { WEEKLY_DRIVING } from './rules/constants';
 import { isoWeekKey, isoWeekStartMs } from './rules/time';
 import { isDriving, sumDrivingSeconds } from './rules/activity-utils';
 import { mapActivitiesToLike } from './tachograph-rules.runner';
-import { formatDurationS, parseInfringementEvidence } from './tachograph-format.util';
+import { computeDriverRemainingSnapshot } from './rules/remaining-driving';
+import { formatDurationS, parseAssignmentDurationSeconds, parseInfringementEvidence } from './tachograph-format.util';
 import { getInfringementMeta } from './tachograph-infringement-meta';
 
 const BADGE_CACHE_TTL_MS = 60_000;
 const STALE_DDD_DAYS = 7;
 const CARD_DOWNLOAD_GREEN_DAYS = 21;
 const CARD_DOWNLOAD_AMBER_DAYS = 28;
+const ACTIVE_ASSIGNMENT_STATUSES = ['planned', 'confirmed', 'in_progress'] as const;
 
 type BadgeCacheEntry = { expiresAt: number; value: TachographBadgesDto };
 
@@ -788,5 +790,174 @@ export class TachographApiService {
     }
 
     return lines;
+  }
+
+  async getRemainingDriving(tenantId: string) {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const activityFrom = new Date(nowMs - 14 * 24 * 3600 * 1000);
+
+    const [drivers, activities, lastDddByDriver, todayAssignments] = await Promise.all([
+      this.prisma.driver.findMany({
+        where: { tenantId, status: 'active' },
+        select: { id: true, firstName: true, lastName: true },
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      }),
+      this.prisma.tachoActivity.findMany({
+        where: {
+          tenantId,
+          driverId: { not: null },
+          startedAt: { gte: activityFrom },
+        },
+        select: {
+          id: true,
+          driverId: true,
+          startedAt: true,
+          endedAt: true,
+          durationS: true,
+          workState: true,
+        },
+        orderBy: { startedAt: 'asc' },
+      }),
+      this.prisma.dddFile.groupBy({
+        by: ['driverId'],
+        where: { tenantId, driverId: { not: null }, fileType: 'card' },
+        _max: { capturedAt: true },
+      }),
+      this.prisma.assignment.findMany({
+        where: {
+          tenantId,
+          workDate: { gte: todayStart, lt: new Date(todayStart.getTime() + 24 * 3600 * 1000) },
+          status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
+        },
+        select: {
+          id: true,
+          driverId: true,
+          startTime: true,
+          endTime: true,
+        },
+      }),
+    ]);
+
+    const activitiesByDriver = new Map<string, typeof activities>();
+    for (const row of activities) {
+      if (!row.driverId) continue;
+      const bucket = activitiesByDriver.get(row.driverId) ?? [];
+      bucket.push(row);
+      activitiesByDriver.set(row.driverId, bucket);
+    }
+
+    const lastDddMap = new Map(
+      lastDddByDriver
+        .filter((row) => row.driverId)
+        .map((row) => [row.driverId!, row._max.capturedAt]),
+    );
+
+    const plannedByDriver = new Map<string, { plannedTodayS: number; assignmentId: string }>();
+    for (const assignment of todayAssignments) {
+      const durationS = parseAssignmentDurationSeconds(assignment.startTime, assignment.endTime);
+      const existing = plannedByDriver.get(assignment.driverId);
+      if (existing) {
+        existing.plannedTodayS += durationS;
+      } else {
+        plannedByDriver.set(assignment.driverId, {
+          plannedTodayS: durationS,
+          assignmentId: assignment.id,
+        });
+      }
+    }
+
+    const driverRows = drivers.map((driver) => {
+      const driverActivities = activitiesByDriver.get(driver.id) ?? [];
+      const mapped = mapActivitiesToLike(
+        driverActivities.map((row) => ({ ...row, driverId: row.driverId! })),
+      );
+      const snapshot = computeDriverRemainingSnapshot(mapped, nowMs);
+      const lastDddAt = lastDddMap.get(driver.id) ?? null;
+      const daysSinceDdd = lastDddAt
+        ? Math.floor((nowMs - lastDddAt.getTime()) / (24 * 3600 * 1000))
+        : null;
+      const isStale =
+        !lastDddAt || nowMs - lastDddAt.getTime() > STALE_DDD_DAYS * 24 * 3600 * 1000;
+      const planned = plannedByDriver.get(driver.id);
+      const plannedTodayS = planned?.plannedTodayS ?? 0;
+      const exceedsRemaining =
+        plannedTodayS > 0 && plannedTodayS > snapshot.todayRemainingDrivingS;
+
+      return {
+        driverId: driver.id,
+        firstName: driver.firstName,
+        lastName: driver.lastName,
+        ...snapshot,
+        lastDddAt: lastDddAt?.toISOString() ?? null,
+        daysSinceDdd,
+        isStale,
+        plannedTodayS,
+        exceedsRemaining,
+        assignmentId: planned?.assignmentId ?? null,
+      };
+    });
+
+    driverRows.sort((a, b) => a.todayRemainingDrivingS - b.todayRemainingDrivingS);
+
+    const warnings = driverRows
+      .filter((row) => row.exceedsRemaining)
+      .map((row) => ({
+        driverId: row.driverId,
+        driverName: `${row.firstName} ${row.lastName}`,
+        plannedTodayS: row.plannedTodayS,
+        remainingDrivingS: row.todayRemainingDrivingS,
+        assignmentId: row.assignmentId,
+      }));
+
+    return {
+      generatedAt: now.toISOString(),
+      hasActivityData: activities.length > 0,
+      drivers: driverRows,
+      warnings,
+    };
+  }
+
+  async assignDddFile(tenantId: string, fileId: string, driverId: string, userId: string) {
+    const file = await this.prisma.dddFile.findFirst({
+      where: { id: fileId, tenantId },
+      select: { id: true, driverId: true, fileType: true },
+    });
+    if (!file) {
+      throw new NotFoundException('DDD file not found');
+    }
+    if (file.driverId) {
+      throw new ConflictException('DDD file already assigned to a driver');
+    }
+
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, tenantId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const updated = await this.prisma.dddFile.update({
+      where: { id: fileId },
+      data: { driverId },
+      include: {
+        vehicle: { select: { id: true, plateNumber: true } },
+        driver: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId: userId,
+      action: 'tacho_ddd_file_assigned',
+      entityType: 'DddFile',
+      entityId: fileId,
+      summary: `Assigned DDD file to ${driver.firstName} ${driver.lastName}`,
+      metadata: { driverId, fileType: file.fileType },
+    });
+
+    return updated;
   }
 }

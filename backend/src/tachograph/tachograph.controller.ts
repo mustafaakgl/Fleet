@@ -153,6 +153,42 @@ export class TachographController {
     return this.tachographApiService.acknowledgeInfringement(tenantId, id, userId, note ?? '');
   }
 
+  @Get('remaining')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  getRemaining(@CurrentUser('tenantId') tenantId?: string) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    return this.tachographApiService.getRemainingDriving(tenantId);
+  }
+
+  @Patch('ddd/files/:id/assign')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  @RequiresWrite()
+  @HttpCode(HttpStatus.OK)
+  assignDddFile(
+    @CurrentUser('tenantId') tenantId?: string,
+    @CurrentUser('id') userId?: string,
+    @Param('id') id?: string,
+    @Body('driverId') driverId?: string,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    if (!userId) {
+      throw new BadRequestException('userId missing in auth context');
+    }
+    if (!id) {
+      throw new BadRequestException('id is required');
+    }
+    if (!driverId) {
+      throw new BadRequestException('driverId is required');
+    }
+    return this.tachographApiService.assignDddFile(tenantId, id, driverId, userId);
+  }
+
   @Get('ddd/files')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...OPERATIONAL_ROLES)
