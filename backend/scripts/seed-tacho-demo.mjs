@@ -18,6 +18,7 @@ import 'dotenv/config';
 import {
   AssignmentStatus,
   DeviceModel,
+  FleetTelemetrySource,
   PrismaClient,
   TachoDownloadSubject,
   TachoWorkState,
@@ -265,6 +266,31 @@ async function main() {
   }
 
   await prisma.tachoActivity.deleteMany({ where: { tenantId: DEMO_TENANT_ID } });
+
+  await prisma.fleetDrivingEvent.deleteMany({
+    where: { tenantId: DEMO_TENANT_ID, trip: { vehicleId: vehicleA.id, source: FleetTelemetrySource.device } },
+  });
+  await prisma.fleetTrip.deleteMany({
+    where: {
+      tenantId: DEMO_TENANT_ID,
+      vehicleId: vehicleA.id,
+      source: FleetTelemetrySource.device,
+    },
+  });
+
+  await prisma.notification.deleteMany({
+    where: {
+      tenantId: DEMO_TENANT_ID,
+      type: {
+        in: [
+          'fuel_theft_suspected',
+          'telematics_coolant_high',
+          'telematics_voltage_low',
+          'device_silent',
+        ],
+      },
+    },
+  });
 
   const chainStart = addDays(today, -13);
   chainStart.setHours(6, 0, 0, 0);
