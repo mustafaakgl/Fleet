@@ -22,6 +22,8 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { TachographService } from './tachograph.service';
 import { TachoIngestTokenGuard } from './guards/tacho-ingest-token.guard';
+import { validateDddUpload } from './ddd/ddd-upload-validation.util';
+import { DddFileSource } from '@prisma/client';
 
 type UploadedDddFile = {
   originalname: string;
@@ -32,9 +34,16 @@ type UploadedDddFile = {
 const DDD_UPLOAD_INTERCEPTOR = FileInterceptor('file', {
   storage: memoryStorage(),
   limits: {
-    fileSize: 20 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024,
   },
 });
+
+function assertValidDddUpload(file: UploadedDddFile) {
+  const validation = validateDddUpload(file.originalname, file.size);
+  if (!validation.ok) {
+    throw new BadRequestException(validation.reason);
+  }
+}
 
 @Controller('tachograph')
 export class TachographController {
@@ -70,6 +79,7 @@ export class TachographController {
     if (!file?.buffer) {
       throw new BadRequestException('file is required');
     }
+    assertValidDddUpload(file);
     if (!vehicleId) {
       throw new BadRequestException('vehicleId is required');
     }
@@ -80,6 +90,7 @@ export class TachographController {
       vehicleId,
       fileName: file.originalname,
       capturedAt,
+      source: DddFileSource.manual,
     });
   }
 
@@ -98,6 +109,7 @@ export class TachographController {
     if (!file?.buffer) {
       throw new BadRequestException('file is required');
     }
+    assertValidDddUpload(file);
     if (!tenantId) {
       throw new BadRequestException('tenantId is required');
     }
@@ -110,6 +122,7 @@ export class TachographController {
       vehicleId,
       fileName: file.originalname,
       capturedAt,
+      source: DddFileSource.service,
     });
   }
 }

@@ -137,17 +137,6 @@ function createIngestHarness(options?: { deduped?: boolean }) {
     };
   };
 
-  const notificationsServiceMock = {
-    createNotification: async (input: {
-      userId: string;
-      relatedEntityType: string;
-      priority: string;
-    }) => {
-      capture.createdNotifications.push(input);
-      return { id: `n-${capture.createdNotifications.length}` };
-    },
-  };
-
   const auditServiceMock = {
     logAction: async () => undefined,
   };
@@ -155,7 +144,6 @@ function createIngestHarness(options?: { deduped?: boolean }) {
   const service = new TrackingService(
     prismaMock as never,
     auditServiceMock as never,
-    notificationsServiceMock as never,
   );
 
   return { service, capture };
@@ -251,6 +239,9 @@ describe('Tracking telematics read models', () => {
           {
             id: 'veh-1',
             plateNumber: '34ABC34',
+            brand: 'Mercedes',
+            model: 'Actros',
+            currentDriver: null,
             telemetryLatest: {
               ignition: true,
               rpm: 1700,
@@ -258,7 +249,7 @@ describe('Tracking telematics read models', () => {
               coolantTemp: new Prisma.Decimal(90.1),
               voltage: new Prisma.Decimal(12.4),
               odometerKm: new Prisma.Decimal(10500.5),
-              recordedAt: new Date('2026-06-12T10:00:00.000Z'),
+              recordedAt: new Date(),
             },
           },
         ],
@@ -268,15 +259,13 @@ describe('Tracking telematics read models', () => {
           {
             vehicleId: 'veh-1',
             code: 'P2002',
-            description: 'DPF efficiency below threshold',
             severity: DtcSeverity.critical,
-            occurredAt: new Date('2026-06-12T10:00:00.000Z'),
-            vehicle: { plateNumber: '34ABC34' },
+            occurredAt: new Date(),
           },
         ],
       },
       fleetTrip: {
-        groupBy: async () => [{ driverId: 'drv-1', _avg: { score: new Prisma.Decimal(88.4) } }],
+        groupBy: async () => [{ driverId: 'drv-1', _sum: { distanceKm: new Prisma.Decimal(420) } }],
       },
       fleetDrivingEvent: {
         groupBy: async () => [
@@ -285,27 +274,26 @@ describe('Tracking telematics read models', () => {
         ],
       },
       driver: {
-        findMany: async () => [{ id: 'drv-1', firstName: 'Ali', lastName: 'Yilmaz' }],
+        findMany: async () => [{ id: 'drv-1', firstName: 'Ali', lastName: 'Yilmaz', status: 'active' }],
       },
     };
 
     const service = new TrackingService(
       prismaMock as never,
       { logAction: async () => undefined } as never,
-      { createNotification: async () => ({ id: 'n1' }) } as never,
     );
 
     const vehicleHealth = await service.getTelematicsVehicleHealth();
-    assert.deepEqual(Object.keys(vehicleHealth).sort(), ['openDtcs', 'summary', 'vehicles']);
-    assert.equal(vehicleHealth.vehicles.length, 1);
-    assert.equal(vehicleHealth.vehicles[0]?.health, 'critical');
-    assert.equal(vehicleHealth.openDtcs[0]?.code, 'P2002');
+    assert.deepEqual(Object.keys(vehicleHealth).sort(), ['generatedAt', 'items', 'staleAfterMinutes', 'summary']);
+    assert.equal(vehicleHealth.items.length, 1);
+    assert.equal(vehicleHealth.items[0]?.health, 'critical');
+    assert.equal(vehicleHealth.items[0]?.topDtcCodes[0], 'P2002');
 
     const driverScores = await service.getTelematicsDriverScores();
-    assert.deepEqual(Object.keys(driverScores).sort(), ['drivers', 'fleetAverage']);
-    assert.equal(driverScores.drivers.length, 1);
-    assert.equal(driverScores.drivers[0]?.name, 'Ali Yilmaz');
-    assert.equal(typeof driverScores.fleetAverage, 'number');
+    assert.deepEqual(Object.keys(driverScores).sort(), ['generatedAt', 'items', 'periodDays', 'summary']);
+    assert.equal(driverScores.items.length, 1);
+    assert.equal(driverScores.items[0]?.driverName, 'Ali Yilmaz');
+    assert.equal(typeof driverScores.summary.averageScore, 'number');
   });
 
   it('smoke: processes sim-like payload and exposes baseline telematics fields', async () => {
@@ -329,6 +317,9 @@ describe('Tracking telematics read models', () => {
           {
             id: 'veh-1',
             plateNumber: '06SIM06',
+            brand: 'MAN',
+            model: 'TGX',
+            currentDriver: null,
             telemetryLatest: {
               ignition: true,
               rpm: 1900,
@@ -342,26 +333,25 @@ describe('Tracking telematics read models', () => {
         ],
       },
       vehicleDtc: { findMany: async () => [] },
-      fleetTrip: { groupBy: async () => [{ driverId: 'drv-1', _avg: { score: new Prisma.Decimal(92) } }] },
+      fleetTrip: { groupBy: async () => [{ driverId: 'drv-1', _sum: { distanceKm: new Prisma.Decimal(250) } }] },
       fleetDrivingEvent: {
         groupBy: async () => [{ driverId: 'drv-1', type: FleetDrivingEventType.speeding, _count: { _all: 1 } }],
       },
-      driver: { findMany: async () => [{ id: 'drv-1', firstName: 'Sim', lastName: 'Driver' }] },
+      driver: { findMany: async () => [{ id: 'drv-1', firstName: 'Sim', lastName: 'Driver', status: 'active' }] },
     };
 
     const readService = new TrackingService(
       readPrisma as never,
       { logAction: async () => undefined } as never,
-      { createNotification: async () => ({ id: 'n2' }) } as never,
     );
 
     const health = await readService.getTelematicsVehicleHealth();
     const scores = await readService.getTelematicsDriverScores();
 
-    assert.equal(typeof health.summary.ok, 'number');
-    assert.equal(typeof health.vehicles[0]?.latest.rpm, 'number');
-    assert.equal(typeof health.vehicles[0]?.latest.recordedAt, 'string');
-    assert.equal(typeof scores.fleetAverage, 'number');
-    assert.equal(typeof scores.drivers[0]?.score, 'number');
+    assert.equal(typeof health.summary.totalVehicles, 'number');
+    assert.equal(typeof health.items[0]?.rpm, 'number');
+    assert.equal(typeof health.items[0]?.lastTelemetryAt, 'string');
+    assert.equal(typeof scores.summary.averageScore, 'number');
+    assert.equal(typeof scores.items[0]?.score, 'number');
   });
 });
