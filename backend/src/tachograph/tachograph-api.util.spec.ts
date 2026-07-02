@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatDurationS, parseInfringementEvidence } from './tachograph-format.util';
+import { formatDurationS, parseAssignmentDurationSeconds, parseInfringementEvidence } from './tachograph-format.util';
 import { getInfringementMeta } from './tachograph-infringement-meta';
 
 describe('tachograph-format.util', () => {
   it('formats duration without decimal hours', () => {
     assert.equal(formatDurationS(9 * 3600 + 42 * 60), '9 h 42 min');
     assert.equal(formatDurationS(42), '42 s');
+  });
+
+  it('parses assignment HH:mm span for planned today seconds', () => {
+    assert.equal(parseAssignmentDurationSeconds('06:00', '18:00'), 12 * 3600);
+    assert.equal(parseAssignmentDurationSeconds('08:30', '12:00'), 3.5 * 3600);
   });
 
   it('parses infringement evidence JSON', () => {

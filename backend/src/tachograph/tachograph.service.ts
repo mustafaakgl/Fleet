@@ -160,9 +160,43 @@ export class TachographService {
       take: 200,
     });
 
+    const fileIds = rows.map((row) => row.id);
+    const periodRows =
+      fileIds.length > 0
+        ? await this.prisma.tachoActivity.groupBy({
+            by: ['dddFileId'],
+            where: { tenantId, dddFileId: { in: fileIds } },
+            _min: { startedAt: true },
+            _max: { endedAt: true },
+          })
+        : [];
+
+    const periodByFile = new Map(
+      periodRows
+        .filter((row) => row.dddFileId)
+        .map((row) => [
+          row.dddFileId!,
+          {
+            from: row._min.startedAt?.toISOString() ?? null,
+            to: row._max.endedAt?.toISOString() ?? null,
+          },
+        ]),
+    );
+
     return rows.map((row) => ({
-      ...row,
+      id: row.id,
+      fileType: row.fileType,
+      source: row.source,
+      capturedAt: row.capturedAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+      sizeBytes: row.sizeBytes,
+      sha256: row.sha256,
+      generation: row.generation,
+      signatureValid: row.signatureValid,
       skippedBlocks: Array.isArray(row.skippedBlocks) ? row.skippedBlocks : [],
+      coveredPeriod: periodByFile.get(row.id) ?? { from: null, to: null },
+      vehicle: row.vehicle,
+      driver: row.driver,
     }));
   }
 
