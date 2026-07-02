@@ -359,6 +359,13 @@ async function main() {
     cursor.setHours(6, 0, 0, 0);
   }
 
+  // Today: Driver A nearly exhausted daily allowance (<1h remaining → red radial)
+  const todayDriveStart = new Date(today);
+  todayDriveStart.setHours(6, 0, 0, 0);
+  rows.push(
+    activity(driverA.id, vehicleA.id, TachoWorkState.driving, todayDriveStart, 9 * 3600 + 15 * 60, 'CARD-DEMO-A'),
+  );
+
   await prisma.tachoActivity.createMany({ data: rows });
 
   const overdueLastDownload = addDays(today, -35);
@@ -463,6 +470,52 @@ async function main() {
       lastDownloadAt: staleCapturedAt,
       nextDueAt: addDays(today, -7),
       enabled: true,
+    },
+  });
+
+  await prisma.dddFile.upsert({
+    where: {
+      tenantId_sha256: {
+        tenantId: DEMO_TENANT_ID,
+        sha256: 'demo-unassigned-card-sha256',
+      },
+    },
+    update: { driverId: null, vehicleId: vehicleB.id },
+    create: {
+      tenantId: DEMO_TENANT_ID,
+      driverId: null,
+      vehicleId: vehicleB.id,
+      fileType: DddFileType.card,
+      source: DddFileSource.manual,
+      capturedAt: addDays(today, -3),
+      storedPath: 'uploads/tachograph-ddd/demo/unassigned-card.ddd',
+      sizeBytes: 2048,
+      sha256: 'demo-unassigned-card-sha256',
+      generation: 2,
+      signatureValid: true,
+    },
+  });
+
+  await prisma.dddFile.upsert({
+    where: {
+      tenantId_sha256: {
+        tenantId: DEMO_TENANT_ID,
+        sha256: 'demo-tampered-card-sha256',
+      },
+    },
+    update: { signatureValid: false, vehicleId: vehicleB.id },
+    create: {
+      tenantId: DEMO_TENANT_ID,
+      driverId: driverB.id,
+      vehicleId: vehicleB.id,
+      fileType: DddFileType.card,
+      source: DddFileSource.manual,
+      capturedAt: addDays(today, -2),
+      storedPath: 'uploads/tachograph-ddd/demo/tampered-card.ddd',
+      sizeBytes: 1536,
+      sha256: 'demo-tampered-card-sha256',
+      generation: 1,
+      signatureValid: false,
     },
   });
 
