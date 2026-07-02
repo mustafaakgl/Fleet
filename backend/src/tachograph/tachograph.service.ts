@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseDddBuffer } from './ddd/ddd-parser';
+import { parseDddBuffer, type ParsedDddEvent } from './ddd/ddd-parser';
 import {
   mapActivitiesToLike,
   mapParserEventsToCardEvents,
@@ -194,7 +194,7 @@ export class TachographService {
       durationS: number;
       workState: TachoWorkState;
     }>,
-    events: Array<{ type: 'overspeed' | 'fault' | 'event'; occurredAt: string; code?: string; durationS?: number; severity?: 'medium' | 'critical' }>,
+    events: ParsedDddEvent[],
   ): Promise<number> {
     const cardEvents = mapParserEventsToCardEvents(events);
     const unassignedCardEvents = cardEvents.filter(() => !driverId);
