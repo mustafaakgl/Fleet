@@ -555,6 +555,7 @@ model User {
   createdFines               Fine[] @relation("FineCreatedBy")
   fineStatusChanges          FineStatusLog[] @relation("FineStatusChangedByUser")
   refreshTokens              RefreshToken[]
+  acknowledgedTachoInfringements TachoInfringement[] @relation("TachoInfringementAcknowledgedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1950,14 +1951,19 @@ model TachoInfringement {
   vehicle    Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   dddFileId  String?
   dddFile    DddFile?              @relation(fields: [dddFileId], references: [id], onDelete: SetNull)
-  type       TachoInfringementType
-  severity   DtcSeverity
-  occurredAt DateTime
-  notes      String?
-  createdAt  DateTime              @default(now())
+  type                TachoInfringementType
+  severity            DtcSeverity
+  occurredAt          DateTime
+  notes               String?
+  acknowledgedAt      DateTime?
+  acknowledgedById    String?
+  acknowledgedBy      User?                 @relation("TachoInfringementAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+  acknowledgementNote String?
+  createdAt           DateTime              @default(now())
 
   @@unique([tenantId, driverId, type, occurredAt])
   @@index([tenantId])
+  @@index([tenantId, acknowledgedAt])
   @@index([driverId, occurredAt])
   @@index([dddFileId])
   @@map("tacho_infringements")

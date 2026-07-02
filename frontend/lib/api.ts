@@ -1753,6 +1753,59 @@ export const telematicsApi = {
     api.get<TelematicsDriverScoresResponse>('/tracking/telematics/driver-scores').then((r) => r.data),
 };
 
+export const tachographApi = {
+  getBadges: () => api.get<import('./types').TachographBadges>('/tachograph/badges').then((r) => r.data),
+
+  getComplianceOverview: (params?: { from?: string; to?: string }) =>
+    api
+      .get<import('./types').TachographComplianceOverview>('/tachograph/compliance/overview', { params })
+      .then((r) => r.data),
+
+  listInfringements: (params?: {
+    driverId?: string;
+    types?: string;
+    severity?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) =>
+    api
+      .get<import('./types').TachographInfringementListResponse>('/tachograph/infringements', { params })
+      .then((r) => r.data),
+
+  getInfringement: (id: string) =>
+    api
+      .get<import('./types').TachographInfringementDetail>(`/tachograph/infringements/${id}`)
+      .then((r) => r.data),
+
+  acknowledgeInfringement: (id: string, note: string) =>
+    api
+      .patch<import('./types').TachographInfringementItem>(`/tachograph/infringements/${id}/acknowledge`, {
+        note,
+      })
+      .then((r) => r.data),
+
+  listDddFiles: () =>
+    api.get<import('./types').DddFileListItem[]>('/tachograph/ddd/files').then((r) => r.data),
+
+  uploadDddFile: (payload: { file: File; vehicleId: string; capturedAt?: string }) => {
+    const form = new FormData();
+    form.append('file', payload.file);
+    form.append('vehicleId', payload.vehicleId);
+    if (payload.capturedAt) {
+      form.append('capturedAt', payload.capturedAt);
+    }
+    return api
+      .post<import('./types').DddUploadResponse>('/tachograph/ddd/upload', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60_000,
+      })
+      .then((r) => r.data);
+  },
+};
+
 // ─── Driver portal (web) ─────────────────────────────────────────────────────
 
 function driverMultipartHeaders() {

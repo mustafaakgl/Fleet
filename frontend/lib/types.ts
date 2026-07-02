@@ -1602,3 +1602,138 @@ export interface LiveTrackingItem {
   companyName: string | null;
   cargoName: string | null;
 }
+
+export type TachographBadges = {
+  openCriticalInfringements: number;
+  unacknowledgedInfringements: number;
+  overdueCardDownloads: number;
+  overdueVuDownloads: number;
+  activeCriticalDtcs: number;
+};
+
+export type TachographComplianceOverview = {
+  generatedAt: string;
+  range: { from: string; to: string };
+  hasDddFiles: boolean;
+  kpis: {
+    openInfringements: number;
+    overdueCardDownloads: number;
+    overdueVuDownloads: number;
+    fleetComplianceScorePct: number;
+    fleetComplianceTrendPct: number;
+  };
+  weeklyInfringementTrend: Array<{
+    weekKey: string;
+    weekStart: string;
+    medium: number;
+    critical: number;
+  }>;
+  driverMatrix: Array<{
+    driverId: string;
+    firstName: string;
+    lastName: string;
+    photoUrl: string | null;
+    cardDownload: {
+      lastAt: string | null;
+      daysSince: number | null;
+      status: 'green' | 'amber' | 'red' | 'unknown';
+    };
+    openInfringementCount: number;
+    driving28dS: number;
+    driving28dFormatted: string;
+    sparklineDrivingS: number[];
+    weeklyRemainingS: number;
+    weeklyRemainingFormatted: string;
+    weeklyRemainingStatus: 'ok' | 'warning' | 'critical';
+    lastActivityAt: string | null;
+    isEstimated: boolean;
+  }>;
+  vuDownloads: Array<{
+    vehicleId: string | null;
+    plateNumber: string;
+    lastDownloadAt: string | null;
+    daysSinceLastDownload: number;
+    intervalDays: number;
+    progressPct: number;
+    overdue: boolean;
+  }>;
+};
+
+export type TachographInfringementItem = {
+  id: string;
+  type: string;
+  typeLabelKey: string;
+  article: string;
+  severity: 'medium' | 'critical';
+  occurredAt: string;
+  acknowledgedAt: string | null;
+  status: 'open' | 'acknowledged';
+  driver: { id: string; firstName: string; lastName: string } | null;
+  vehicle: { id: string; plateNumber: string } | null;
+  dddFile: {
+    id: string;
+    fileType: string;
+    signatureValid: boolean | null;
+    capturedAt: string;
+  } | null;
+  evidence: Record<string, unknown> | null;
+};
+
+export type TachographInfringementListResponse = {
+  page: number;
+  limit: number;
+  total: number;
+  typeBreakdown: Array<{
+    type: string;
+    article: string;
+    labelKey: string;
+    count: number;
+    dominantSeverity: 'medium' | 'critical';
+  }>;
+  items: TachographInfringementItem[];
+};
+
+export type TachographInfringementDetail = TachographInfringementItem & {
+  acknowledgementNote: string | null;
+  acknowledgedAt: string | null;
+  acknowledgedBy: { id: string; fullName: string } | null;
+  evidenceFormatted: Array<{ label: string; value: string }>;
+  activityTimeline: Array<{
+    id: string;
+    workState: string;
+    startedAt: string;
+    endedAt: string;
+    durationS: number;
+    durationFormatted: string;
+  }>;
+  infringementWindow: { startMs: number; endMs: number };
+  dddFile: {
+    id: string;
+    fileType: string;
+    signatureValid: boolean | null;
+    capturedAt: string;
+    sha256: string;
+    source: string;
+  } | null;
+};
+
+export type DddFileListItem = {
+  id: string;
+  fileType: string;
+  capturedAt: string;
+  createdAt: string;
+  sizeBytes: number;
+  signatureValid: boolean | null;
+  vehicle: { id: string; plateNumber: string } | null;
+  driver: { id: string; firstName: string; lastName: string } | null;
+};
+
+export type DddUploadResponse = {
+  file: DddFileListItem;
+  parsed: {
+    activities: unknown[];
+    warnings: string[];
+  };
+  infringementsCreated: number;
+  deduplicated: boolean;
+};

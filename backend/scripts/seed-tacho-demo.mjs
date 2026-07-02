@@ -10,6 +10,8 @@
  * | Invalid 30min + 15min break order| Demo Driver B | 1 × insufficient_break              |
  * | ISO week boundary 56h+ driving   | Demo Driver A | 1 × exceeded_weekly_driving         |
  * | Overdue card download (>28 days) | Demo Driver A | schedule overdue (not infringement) |
+ * | Repeat offender (3× same type)   | Demo Driver B | 3 × insufficient_break (90d window) |
+ * | Stale driver (DDD >30 days)      | Demo Driver C | isEstimated in compliance matrix    |
  *
  * Totals when Faz 2 rule engine runs: daily_driving_exceeded=1, insufficient_break=1,
  * exceeded_weekly_driving=1 (3 infringements across 14-day chain).
@@ -22,6 +24,8 @@ import {
   PrismaClient,
   TachoDownloadSubject,
   TachoWorkState,
+  DddFileType,
+  DddFileSource,
 } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -376,10 +380,117 @@ async function main() {
     },
   });
 
+  // Repeat offender: 2 extra insufficient_break rows for driver B within 90 days (3rd from rule engine)
+  const repeatDates = [addDays(today, -60), addDays(today, -30)];
+  for (const occurredAt of repeatDates) {
+    occurredAt.setHours(8, 0, 0, 0);
+    await prisma.tachoInfringement.upsert({
+      where: {
+        tenantId_driverId_type_occurredAt: {
+          tenantId: DEMO_TENANT_ID,
+          driverId: driverB.id,
+          type: 'insufficient_break',
+          occurredAt,
+        },
+      },
+      update: {},
+      create: {
+        tenantId: DEMO_TENANT_ID,
+        driverId: driverB.id,
+        vehicleId: vehicleB.id,
+        type: 'insufficient_break',
+        severity: 'medium',
+        occurredAt,
+        notes: JSON.stringify({
+          rule: 'breaks',
+          article: 'Art. 7',
+          calculatedValues: { drivingS: 5 * 3600, thresholdS: 4.5 * 3600 },
+        }),
+      },
+    });
+  }
+
+  // Stale driver C: last DDD 35 days ago, no recent activities
+  const driverC = await prisma.driver.upsert({
+    where: {
+      tenantId_employeeNumber: {
+        tenantId: DEMO_TENANT_ID,
+        employeeNumber: 'TACHO-DEMO-C',
+      },
+    },
+    update: { firstName: 'Stale', lastName: 'Driver', status: 'active' },
+    create: {
+      id: 'tacho-demo-driver-c',
+      tenantId: DEMO_TENANT_ID,
+      employeeNumber: 'TACHO-DEMO-C',
+      firstName: 'Stale',
+      lastName: 'Driver',
+      status: 'active',
+    },
+  });
+
+  const staleCapturedAt = addDays(today, -35);
+  await prisma.dddFile.upsert({
+    where: {
+      tenantId_sha256: {
+        tenantId: DEMO_TENANT_ID,
+        sha256: 'demo-stale-driver-c-card-sha256',
+      },
+    },
+    update: { capturedAt: staleCapturedAt, driverId: driverC.id },
+    create: {
+      tenantId: DEMO_TENANT_ID,
+      driverId: driverC.id,
+      fileType: DddFileType.card,
+      source: DddFileSource.manual,
+      capturedAt: staleCapturedAt,
+      storedPath: 'uploads/tachograph-ddd/demo/stale-driver-c.ddd',
+      sizeBytes: 1024,
+      sha256: 'demo-stale-driver-c-card-sha256',
+      signatureValid: true,
+    },
+  });
+
+  await prisma.tachoDownloadSchedule.deleteMany({
+    where: { tenantId: DEMO_TENANT_ID, driverId: driverC.id },
+  });
+  await prisma.tachoDownloadSchedule.create({
+    data: {
+      tenantId: DEMO_TENANT_ID,
+      subject: TachoDownloadSubject.driver_card,
+      driverId: driverC.id,
+      intervalDays: 28,
+      lastDownloadAt: staleCapturedAt,
+      nextDueAt: addDays(today, -7),
+      enabled: true,
+    },
+  });
+
+  // Acknowledged samples for avg processing time KPI (≥5 closed)
+  const closedTargets = await prisma.tachoInfringement.findMany({
+    where: { tenantId: DEMO_TENANT_ID, acknowledgedAt: null },
+    orderBy: { occurredAt: 'asc' },
+    take: 6,
+    select: { id: true, occurredAt: true },
+  });
+
+  for (const target of closedTargets) {
+    const ackAt = addDays(target.occurredAt, 2);
+    ackAt.setHours(14, 0, 0, 0);
+    await prisma.tachoInfringement.update({
+      where: { id: target.id },
+      data: {
+        acknowledgedAt: ackAt,
+        acknowledgedById: creator.id,
+        acknowledgementNote: 'Demo seed acknowledgement for processing-time KPI.',
+      },
+    });
+  }
+
   process.stdout.write(
     `${JSON.stringify({
       tenantId: DEMO_TENANT_ID,
-      drivers: [driverA.id, driverB.id],
+      drivers: [driverA.id, driverB.id, driverC.id],
       vehicles: [vehicleA.id, vehicleB.id],
       devices: [IMEI_FMC130, IMEI_FMC650],
       tachoActivities: rows.length,

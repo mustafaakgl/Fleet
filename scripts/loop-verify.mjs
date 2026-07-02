@@ -268,7 +268,9 @@ function printSummary() {
     log(`${entry.step.padEnd(30)} ${status.padEnd(8)} ${entry.elapsedMs}`);
   }
 
-  log('playwright-e2e                 SKIPPED  (Faz 4\'te eklenecek)');
+  if (!results.some((entry) => entry.step === 'playwright-e2e')) {
+    log('playwright-e2e                 SKIPPED  (set SKIP_PLAYWRIGHT_E2E=0 to run)');
+  }
 
   const failed = results.find((entry) => entry.code !== 0);
   if (failed) {
@@ -288,6 +290,18 @@ async function main() {
   try {
     await runCommand('tsc', 'npx', ['tsc', '-p', 'tsconfig.json', '--noEmit'], { cwd: backendDir });
     await runCommand('npm-test', 'npm', ['test'], { cwd: backendDir, inheritStdout: true, inheritStderr: true });
+    await runCommand(
+      'frontend-tacho-unit',
+      'node',
+      [
+        '-r',
+        'ts-node/register/transpile-only',
+        '--test',
+        '../frontend/lib/tachograph-repeat.spec.ts',
+        '../frontend/lib/tachograph-evidence.spec.ts',
+      ],
+      { cwd: backendDir, inheritStdout: true, inheritStderr: true },
+    );
     await waitForPostgres();
 
     results.push({
@@ -326,6 +340,25 @@ async function main() {
       ['ts-node', '--transpile-only', 'scripts/tenant-isolation-check.ts'],
       { cwd: backendDir, inheritStdout: true, inheritStderr: true },
     );
+
+    const e2eDir = join(repoRoot, 'qa-agents', 'e2e');
+    if (process.env.SKIP_PLAYWRIGHT_E2E !== '1') {
+      await runCommand(
+        'playwright-e2e',
+        'npx',
+        ['playwright', 'test', 'tests/tacho-telematics', '--project=chromium'],
+        { cwd: e2eDir, inheritStdout: true, inheritStderr: true },
+      );
+    } else {
+      results.push({
+        step: 'playwright-e2e',
+        command: 'skipped',
+        code: 0,
+        elapsedMs: 0,
+        stdout: 'SKIP_PLAYWRIGHT_E2E=1',
+        stderr: '',
+      });
+    }
 
     printSummary();
   } catch (error) {

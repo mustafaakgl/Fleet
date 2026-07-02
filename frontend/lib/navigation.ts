@@ -208,10 +208,10 @@ const TELEMATIK_ITEMS: NavEntry[] = [
 
 /** Tachograph (FMC650) verileri — uyum / compliance. */
 const TACHOGRAPH_ITEMS: NavEntry[] = [
-  item('tachoRemaining'),
-  item('tachoInfringements'),
-  item('tachoDdd'),
   item('tachoCompliance'),
+  item('tachoInfringements'),
+  item('tachoRemaining'),
+  item('tachoDdd'),
 ];
 
 const VEHICLES_SECTION_BRIEF: NavSection = {

@@ -38,7 +38,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { OperionLogo } from '@/components/brand/OperionLogo';
 import { getUser, performLogout } from '@/lib/auth';
-import { notificationsApi } from '@/lib/api';
+import { notificationsApi, tachographApi } from '@/lib/api';
 import {
   getNavigationForRole,
   isNavItemActive,
@@ -144,6 +144,35 @@ export function Sidebar() {
     return 'office';
   }, [user?.role]);
 
+  const tachographBadgesQuery = useQuery({
+    queryKey: ['tachograph', 'badges'],
+    queryFn: () => tachographApi.getBadges(),
+    enabled: Boolean(user) && role !== 'driver',
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
+  const navBadgeForHref = useMemo(() => {
+    const badges = tachographBadgesQuery.data;
+    if (!badges) return new Map<string, { count: number; variant: 'red' | 'amber' }>();
+
+    const map = new Map<string, { count: number; variant: 'red' | 'amber' }>();
+    if (badges.openCriticalInfringements > 0) {
+      map.set('/tachograph/compliance', { count: badges.openCriticalInfringements, variant: 'red' });
+    }
+    if (badges.unacknowledgedInfringements > 0) {
+      map.set('/tachograph/infringements', { count: badges.unacknowledgedInfringements, variant: 'amber' });
+    }
+    const overdueDownloads = badges.overdueCardDownloads + badges.overdueVuDownloads;
+    if (overdueDownloads > 0) {
+      map.set('/tachograph/ddd-archive', { count: overdueDownloads, variant: 'amber' });
+    }
+    if (badges.activeCriticalDtcs > 0) {
+      map.set('/telematics/vehicle-health', { count: badges.activeCriticalDtcs, variant: 'red' });
+    }
+    return map;
+  }, [tachographBadgesQuery.data]);
+
   const allowedNavItems = useMemo(() => navConfig[role], [role]);
   const allowedHrefs = useMemo(() => new Set(allowedNavItems.map((item) => item.href)), [allowedNavItems]);
 
@@ -244,6 +273,7 @@ export function Sidebar() {
     const Icon = item.icon;
     const isActive = isNavItemActive(pathname, item.href);
     const showNotificationBadge = item.href === '/notifications' && unreadNotifications > 0;
+    const navBadge = navBadgeForHref.get(item.href);
 
     return (
       <Link
@@ -265,6 +295,16 @@ export function Sidebar() {
           {showNotificationBadge ? (
             <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-blue-700">
               {unreadNotifications > 99 ? '99+' : unreadNotifications}
+            </span>
+          ) : null}
+          {navBadge ? (
+            <span
+              className={cn(
+                'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+                navBadge.variant === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800',
+              )}
+            >
+              {navBadge.count > 99 ? '99+' : navBadge.count}
             </span>
           ) : null}
         </span>
@@ -313,6 +353,7 @@ export function Sidebar() {
             <span className="absolute bottom-1 left-[1.35rem] top-1 w-px bg-blue-200/20" aria-hidden />
             {section.items.map((item) => {
               const isActive = isNavItemActive(pathname, item.href);
+              const navBadge = navBadgeForHref.get(item.href);
               return (
                 <Link
                   key={item.href}
@@ -333,7 +374,19 @@ export function Sidebar() {
                     )}
                     aria-hidden
                   />
-                  {t(item.labelKey)}
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="truncate">{t(item.labelKey)}</span>
+                    {navBadge ? (
+                      <span
+                        className={cn(
+                          'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+                          navBadge.variant === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800',
+                        )}
+                      >
+                        {navBadge.count > 99 ? '99+' : navBadge.count}
+                      </span>
+                    ) : null}
+                  </span>
                 </Link>
               );
             })}

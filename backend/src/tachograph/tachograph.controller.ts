@@ -5,7 +5,10 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -21,9 +24,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { TachographService } from './tachograph.service';
+import { TachographApiService } from './tachograph-api.service';
 import { TachoIngestTokenGuard } from './guards/tacho-ingest-token.guard';
 import { validateDddUpload } from './ddd/ddd-upload-validation.util';
-import { DddFileSource } from '@prisma/client';
+import { DddFileSource, TachoInfringementType, DtcSeverity } from '@prisma/client';
 
 type UploadedDddFile = {
   originalname: string;
@@ -47,7 +51,107 @@ function assertValidDddUpload(file: UploadedDddFile) {
 
 @Controller('tachograph')
 export class TachographController {
-  constructor(private readonly tachographService: TachographService) {}
+  constructor(
+    private readonly tachographService: TachographService,
+    private readonly tachographApiService: TachographApiService,
+  ) {}
+
+  @Get('badges')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  getBadges(@CurrentUser('tenantId') tenantId?: string) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    return this.tachographApiService.getBadges(tenantId);
+  }
+
+  @Get('compliance/overview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  getComplianceOverview(
+    @CurrentUser('tenantId') tenantId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    return this.tachographApiService.getComplianceOverview(tenantId, from, to);
+  }
+
+  @Get('infringements')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  listInfringements(
+    @CurrentUser('tenantId') tenantId?: string,
+    @Query('driverId') driverId?: string,
+    @Query('types') types?: string,
+    @Query('severity') severity?: DtcSeverity,
+    @Query('status') status?: 'open' | 'acknowledged',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+
+    const parsedTypes = types
+      ? (types.split(',').filter(Boolean) as TachoInfringementType[])
+      : undefined;
+
+    return this.tachographApiService.listInfringements(tenantId, {
+      driverId,
+      types: parsedTypes,
+      severity,
+      status,
+      from,
+      to,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+    });
+  }
+
+  @Get('infringements/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  getInfringement(
+    @CurrentUser('tenantId') tenantId?: string,
+    @Param('id') id?: string,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    if (!id) {
+      throw new BadRequestException('id is required');
+    }
+    return this.tachographApiService.getInfringementDetail(tenantId, id);
+  }
+
+  @Patch('infringements/:id/acknowledge')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  @RequiresWrite()
+  @HttpCode(HttpStatus.OK)
+  acknowledgeInfringement(
+    @CurrentUser('tenantId') tenantId?: string,
+    @CurrentUser('id') userId?: string,
+    @Param('id') id?: string,
+    @Body('note') note?: string,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    if (!userId) {
+      throw new BadRequestException('userId missing in auth context');
+    }
+    if (!id) {
+      throw new BadRequestException('id is required');
+    }
+    return this.tachographApiService.acknowledgeInfringement(tenantId, id, userId, note ?? '');
+  }
 
   @Get('ddd/files')
   @UseGuards(JwtAuthGuard, RolesGuard)
