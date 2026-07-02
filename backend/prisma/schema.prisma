@@ -238,6 +238,7 @@ enum NotificationType {
   company_email
   reminder
   system
+  tacho_signature_invalid
 }
 
 enum NotificationPriority {
@@ -1868,6 +1869,9 @@ model DddFile {
   storedPath       String
   sizeBytes        Int
   sha256           String
+  generation       Int?
+  signatureValid   Boolean?
+  skippedBlocks    Json?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

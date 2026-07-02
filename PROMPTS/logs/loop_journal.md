@@ -9,3 +9,4 @@
 [2026-07-02] [faz1] [demo-seed] [seed-tacho-demo: 2 sürücü/araç/cihaz, 14g aktivite, idempotent]
 [2026-07-02] [faz1] [loop-verify] [npm run loop:verify yeşil x2; gateway child + tracking spec deterministik]
 [2026-07-02] [faz2a] [rules-engine] [561/2006 pure rules + specs + service integration; golden reference 3 ihlal]
+[2026-07-02] [faz2b] [ddd-parser] [Annex 1C parser + imza doğrulama + servis entegrasyonu; loop:verify yeşil 138 test; LEGAL-REVIEW: signature RSA-SHA256/ECDSA şeması, rules ISO week UTC]

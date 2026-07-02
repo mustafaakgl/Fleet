@@ -14,7 +14,8 @@ type NotificationType =
   | 'cargo_damage'
   | 'company_email'
   | 'reminder'
-  | 'system';
+  | 'system'
+  | 'tacho_signature_invalid';
 
 type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
 
@@ -43,6 +44,7 @@ const NOTIFICATION_TYPES: NotificationType[] = [
   'company_email',
   'reminder',
   'system',
+  'tacho_signature_invalid',
 ];
 
 const NOTIFICATION_PRIORITIES: NotificationPriority[] = ['low', 'medium', 'high', 'critical'];

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   DddFileSource,
   DtcSeverity,
@@ -10,7 +10,9 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseDddBuffer, type ParsedDddEvent } from './ddd/ddd-parser';
+import { NotificationsService } from '../notifications/notifications.service';
+import { parseDddBuffer, type DddGeneration, type ParsedDddEvent } from './ddd/ddd-parser';
+import type { DddParserPort } from './ddd/parser-port';
 import {
   mapActivitiesToLike,
   mapParserEventsToCardEvents,
@@ -31,7 +33,11 @@ type IngestDddMeta = {
 export class TachographService {
   private readonly logger = new Logger(TachographService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly dddParser?: DddParserPort,
+  ) {}
 
   async ingestDddFile(buffer: Buffer, meta: IngestDddMeta) {
     const sha256 = createHash('sha256').update(buffer).digest('hex');
@@ -57,9 +63,10 @@ export class TachographService {
       };
     }
 
-    const parsed = parseDddBuffer(buffer);
+    const parsed = this.parseBuffer(buffer);
     const driver = await this.resolveDriverFromCard(meta.tenantId, parsed.driverCardNo);
     const storedPath = await this.archiveDddFile(meta.tenantId, meta.fileName, buffer);
+    const signatureBlocksRuleEngine = parsed.signature.valid === false;
 
     const fileRecord = await this.prisma.$transaction(async (tx) => {
       const createdFile = await tx.dddFile.create({
@@ -74,10 +81,13 @@ export class TachographService {
           storedPath,
           sizeBytes: buffer.length,
           sha256,
+          generation: this.mapGeneration(parsed.generation),
+          signatureValid: parsed.signature.valid,
+          skippedBlocks: parsed.skippedBlocks,
         },
       });
 
-      if (parsed.activities.length > 0 && meta.vehicleId) {
+      if (!signatureBlocksRuleEngine && parsed.activities.length > 0 && meta.vehicleId) {
         const vehicleId = meta.vehicleId;
         await tx.tachoActivity.createMany({
           data: parsed.activities.map((activity) => {
@@ -97,30 +107,39 @@ export class TachographService {
             };
           }),
         });
-      } else if (parsed.activities.length > 0) {
+      } else if (!signatureBlocksRuleEngine && parsed.activities.length > 0) {
         this.logger.warn('Skipping TachoActivity writes: vehicleId is missing');
+      } else if (signatureBlocksRuleEngine) {
+        this.logger.warn('Skipping rule engine: DDD signature validation failed');
       }
 
-      const infringementsCreated = await this.buildInfringements(
-        tx,
-        meta.tenantId,
-        driver?.id,
-        meta.vehicleId,
-        createdFile.id,
-        parsed.activities.map((activity) => {
-          const startedAt = new Date(activity.startedAt);
-          return {
-            startedAt,
-            endedAt: new Date(startedAt.getTime() + activity.durationS * 1000),
-            durationS: activity.durationS,
-            workState: this.mapWorkState(activity.state),
-          };
-        }),
-        parsed.events,
-      );
+      let infringementsCreated = 0;
+      if (!signatureBlocksRuleEngine) {
+        infringementsCreated = await this.buildInfringements(
+          tx,
+          meta.tenantId,
+          driver?.id,
+          meta.vehicleId,
+          createdFile.id,
+          parsed.activities.map((activity) => {
+            const startedAt = new Date(activity.startedAt);
+            return {
+              startedAt,
+              endedAt: new Date(startedAt.getTime() + activity.durationS * 1000),
+              durationS: activity.durationS,
+              workState: this.mapWorkState(activity.state),
+            };
+          }),
+          parsed.events,
+        );
+      }
 
       return { createdFile, infringementsCreated };
     });
+
+    if (signatureBlocksRuleEngine) {
+      await this.notifySignatureInvalid(meta, fileRecord.createdFile.id, parsed.warnings);
+    }
 
     return {
       file: fileRecord.createdFile,
@@ -131,7 +150,7 @@ export class TachographService {
   }
 
   async listDddFiles(tenantId: string) {
-    return this.prisma.dddFile.findMany({
+    const rows = await this.prisma.dddFile.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -140,6 +159,52 @@ export class TachographService {
       },
       take: 200,
     });
+
+    return rows.map((row) => ({
+      ...row,
+      skippedBlocks: Array.isArray(row.skippedBlocks) ? row.skippedBlocks : [],
+    }));
+  }
+
+  private parseBuffer(buffer: Buffer) {
+    return this.dddParser?.parse(buffer) ?? parseDddBuffer(buffer);
+  }
+
+  private mapGeneration(generation: DddGeneration): number | null {
+    if (generation === 'unknown') {
+      return null;
+    }
+    return generation;
+  }
+
+  private async notifySignatureInvalid(
+    meta: IngestDddMeta,
+    dddFileId: string,
+    warnings: string[],
+  ): Promise<void> {
+    if (!meta.uploadedByUserId || !this.notifications) {
+      return;
+    }
+
+    try {
+      await this.notifications.createNotification({
+        tenantId: meta.tenantId,
+        userId: meta.uploadedByUserId,
+        title: 'Tachograph file signature invalid',
+        message: `Uploaded DDD file "${meta.fileName}" failed digital signature validation and was archived without compliance evaluation.`,
+        type: 'tacho_signature_invalid',
+        priority: 'high',
+        relatedEntityType: 'DddFile',
+        relatedEntityId: dddFileId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Failed to emit tacho_signature_invalid notification: ${message}`);
+    }
+
+    if (warnings.length > 0) {
+      this.logger.warn(`DDD signature warnings: ${warnings.join('; ')}`);
+    }
   }
 
   private async archiveDddFile(tenantId: string, fileName: string, buffer: Buffer): Promise<string> {
