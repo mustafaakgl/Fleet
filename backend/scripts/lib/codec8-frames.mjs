@@ -11,6 +11,9 @@ export function crc16Arc(buffer) {
   return crc & 0xffff;
 }
 
+/** Sim DTC IO id (1-byte Codec8); production devices may use 272/385 via Codec8 Extended. */
+const SIM_DTC_IO_ID = 48;
+
 /**
  * @param {object} state
  * @param {number} state.timestampMs
@@ -47,7 +50,7 @@ export function encodeRecord(state) {
   n2.writeUInt8(32, 1);
   n2.writeUInt16BE(Math.round(state.rpm), 2);
   if (hasDtc) {
-    n2.writeUInt8(272, 4);
+    n2.writeUInt8(SIM_DTC_IO_ID, 4);
     n2.writeUInt16BE(state.dtcRaw & 0xffff, 5);
   }
   ioParts.push(n2);

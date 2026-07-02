@@ -217,13 +217,18 @@ export function parseCodec8Frame(buffer: Buffer): ParsedFrame | null {
     throw new Error(`Unsupported codec id: 0x${codecId.toString(16)}`);
   }
 
-  const recordCount = data.readUInt8(1);
-  const recordCount2 = data.readUInt8(data.length - 1);
+  const isExtended = codecId === CODEC_8_EXT;
+  const recordCount = isExtended ? data.readUInt16BE(1) : data.readUInt8(1);
+  const recordCount2 = isExtended
+    ? data.readUInt16BE(data.length - 2)
+    : data.readUInt8(data.length - 1);
   if (recordCount !== recordCount2) {
     throw new Error(`Record count mismatch: ${recordCount} != ${recordCount2}`);
   }
 
-  const payload = data.subarray(2, data.length - 1);
+  const payload = isExtended
+    ? data.subarray(3, data.length - 2)
+    : data.subarray(2, data.length - 1);
   const records = parseRecords(payload, codecId, recordCount);
 
   const calculatedCrc = crc16Arc(data);

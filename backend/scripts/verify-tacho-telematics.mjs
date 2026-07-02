@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
-import { PrismaClient, LocationSource } from '@prisma/client';
+import { FleetTelemetrySource, FleetTripStatus, PrismaClient, LocationSource } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -61,16 +61,29 @@ async function main() {
   }
 
   const vehicleId = device.vehicleId;
-  const since = new Date(summary.startedAt);
+  const ingestSince = new Date(summary.startedAt);
+  const scenarioSince = new Date(summary.verifySince ?? summary.baseTs ?? summary.startedAt);
   const checks = [];
 
-  const locationCount = await prisma.driverLocationHistory.count({
-    where: {
-      vehicleId,
-      source: LocationSource.telematics,
-      receivedAt: { gte: since },
-    },
-  });
+  const locationDeadline =
+    summary.scenario === 'load' ? Date.now() + 10_000 : Date.now();
+  let locationCount = 0;
+  while (Date.now() <= locationDeadline) {
+    locationCount = await prisma.driverLocationHistory.count({
+      where: {
+        vehicleId,
+        source: LocationSource.telematics,
+        receivedAt: { gte: ingestSince },
+      },
+    });
+    if (locationCount >= summary.expectedLocationPoints) {
+      break;
+    }
+    if (summary.scenario !== 'load') {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
 
   checks.push({
     name: 'DriverLocationHistory',
@@ -79,6 +92,27 @@ async function main() {
     ok: locationCount === summary.expectedLocationPoints,
   });
 
+  if (summary.expectedDuplicateLocationPoints !== undefined) {
+    const duplicateGroups = await prisma.$queryRaw`
+      SELECT COUNT(*)::bigint AS cnt FROM (
+        SELECT 1
+        FROM "DriverLocationHistory"
+        WHERE "vehicleId" = ${vehicleId}
+          AND source = 'telematics'
+          AND "receivedAt" >= ${ingestSince}
+        GROUP BY "recordedAt", "latitude", "longitude"
+        HAVING COUNT(*) > 1
+      ) d
+    `;
+    const duplicateCount = Number(duplicateGroups[0]?.cnt ?? 0);
+    checks.push({
+      name: 'duplicateLocationPoints',
+      expected: summary.expectedDuplicateLocationPoints,
+      actual: duplicateCount,
+      ok: duplicateCount === summary.expectedDuplicateLocationPoints,
+    });
+  }
+
   const telemetryLatest = await prisma.vehicleTelemetryLatest.findUnique({
     where: { vehicleId },
     select: { recordedAt: true },
@@ -86,23 +120,29 @@ async function main() {
 
   const expectedRecordedAt = summary.expectedLastRecordedAt;
   const actualRecordedAt = telemetryLatest?.recordedAt?.toISOString() ?? null;
-  const freshnessOk = telemetryLatest
-    && expectedRecordedAt
-    && msDiff(telemetryLatest.recordedAt, expectedRecordedAt) <= 1_500;
+  const skipTelemetryLatest = summary.skipTelemetryLatestCheck === true;
+  const freshnessOk =
+    skipTelemetryLatest
+    || (telemetryLatest
+      && expectedRecordedAt
+      && msDiff(telemetryLatest.recordedAt, expectedRecordedAt) <= 1_500);
 
-  checks.push({
-    name: 'VehicleTelemetryLatest.recordedAt',
-    expected: expectedRecordedAt,
-    actual: actualRecordedAt,
-    ok: freshnessOk,
-  });
+  if (!skipTelemetryLatest) {
+    checks.push({
+      name: 'VehicleTelemetryLatest.recordedAt',
+      expected: expectedRecordedAt,
+      actual: actualRecordedAt,
+      ok: freshnessOk,
+    });
+  }
 
+  const activeDtcWhere = {
+    vehicleId,
+    clearedAt: null,
+    ...(summary.countTotalActiveDtc ? {} : { createdAt: { gte: ingestSince } }),
+  };
   const activeDtcCount = await prisma.vehicleDtc.count({
-    where: {
-      vehicleId,
-      clearedAt: null,
-      createdAt: { gte: since },
-    },
+    where: activeDtcWhere,
   });
 
   const expectedDtc = summary.expectedActiveDtcCount ?? summary.expectedActiveDtcDelta ?? 0;
@@ -113,13 +153,78 @@ async function main() {
     ok: activeDtcCount === expectedDtc,
   });
 
-  checks.push({
-    name: 'TelemetryQuarantine',
-    expected: 'skipped',
-    actual: 'skipped',
-    ok: true,
-    note: 'Table arrives in Faz 2C',
-  });
+  const quarantineExpected = summary.telemetryQuarantineExpected;
+  if (quarantineExpected !== undefined && quarantineExpected !== 'skipped') {
+    const quarantineCount = await prisma.telemetryQuarantine.count({
+      where: {
+        imei: summary.imei,
+        createdAt: { gte: ingestSince },
+      },
+    });
+    checks.push({
+      name: 'TelemetryQuarantine',
+      expected: quarantineExpected,
+      actual: quarantineCount,
+      ok: quarantineCount === quarantineExpected,
+    });
+  } else if (summary.scenario !== 'corrupt-frames') {
+    const count = await prisma.telemetryQuarantine.count({
+      where: { imei: summary.imei, createdAt: { gte: ingestSince } },
+    });
+    checks.push({
+      name: 'TelemetryQuarantine',
+      expected: 0,
+      actual: count,
+      ok: count === 0,
+    });
+  }
+
+  if (summary.expectedClosedTrips !== undefined) {
+    const debounceMs = Number(process.env.TELEMATICS_IGNITION_OFF_DEBOUNCE_MS ?? 5000);
+    const deadline = Date.now() + debounceMs + 6000;
+    let closedTrips = 0;
+
+    while (Date.now() <= deadline) {
+      closedTrips = await prisma.fleetTrip.count({
+        where: {
+          vehicleId,
+          source: FleetTelemetrySource.device,
+          status: FleetTripStatus.closed,
+          startedAt: { gte: scenarioSince },
+        },
+      });
+
+      if (closedTrips >= summary.expectedClosedTrips) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    checks.push({
+      name: 'closedDeviceTrips',
+      expected: summary.expectedClosedTrips,
+      actual: closedTrips,
+      ok: closedTrips === summary.expectedClosedTrips,
+    });
+  }
+
+  if (summary.expectedFuelTheftNotifications !== undefined) {
+    const notifications = await prisma.notification.count({
+      where: {
+        tenantId: device.tenantId,
+        type: 'fuel_theft_suspected',
+        relatedEntityId: vehicleId,
+        createdAt: { gte: ingestSince },
+      },
+    });
+    checks.push({
+      name: 'fuelTheftNotifications',
+      expected: summary.expectedFuelTheftNotifications,
+      actual: notifications,
+      ok: notifications >= summary.expectedFuelTheftNotifications,
+    });
+  }
 
   const report = {
     scenario: summary.scenario,

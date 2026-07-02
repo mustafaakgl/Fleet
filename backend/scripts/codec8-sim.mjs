@@ -118,11 +118,13 @@ function scenarioWindow(recordCount, intervalMs) {
 }
 
 function summaryEnvelope(args, body) {
+  const quarantineExpected =
+    body.scenario === 'corrupt-frames' ? body.corruptFramesSent ?? 0 : 0;
   return {
     ...body,
     seed: args.seed,
     imei: args.imei,
-    telemetryQuarantineExpected: 'skipped',
+    telemetryQuarantineExpected: quarantineExpected,
   };
 }
 
@@ -187,8 +189,15 @@ async function runNormal(args) {
     stepMotionState(motion, rng, args.intervalMs);
   }
 
+  if (records.length > 0) {
+    records[records.length - 1].ignition = false;
+    records[records.length - 1].speedKph = 0;
+    records[records.length - 1].rpm = 0;
+  }
+
   const sent = await sendRecords(socket, records, { batch: false });
-  await sleep(300);
+  const debounceMs = Number(process.env.TELEMATICS_IGNITION_OFF_DEBOUNCE_MS ?? 5000);
+  await sleep(debounceMs + 500);
   socket.destroy();
 
   return summaryEnvelope(args, {
@@ -199,6 +208,7 @@ async function runNormal(args) {
     corruptFramesSent: 0,
     expectedLocationPoints: sent,
     expectedActiveDtcCount: 0,
+    expectedClosedTrips: 1,
     ackRecords: session.getAckRecords(),
   });
 }
@@ -282,7 +292,6 @@ async function runCorruptFrames(args) {
     recordsAcceptedExpected: expectedAccepted,
     expectedLocationPoints: expectedAccepted,
     expectedActiveDtcCount: 0,
-    faz2cNote: corruptCount > 0 ? 'CRC rejects may not increment quarantine until Faz 2C' : null,
   });
 }
 
@@ -335,12 +344,14 @@ async function runFuelTheft(args) {
     ignition: false,
     expectedLocationPoints: records.length,
     expectedActiveDtcCount: 0,
+    expectedFuelTheftNotifications: 1,
+    skipTelemetryLatestCheck: true,
   });
 }
 
 async function runDtcStorm(args) {
   const route = motionRoute(args.seed + 4);
-  const dtcCodes = [0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0000, 0x0000];
+  const dtcCodes = [0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x0000, 0x0000];
   const labels = ['set-1', 'set-2', 'set-3', 'set-4', 'set-5', 'clear-1', 'clear-2'];
   const window = scenarioWindow(dtcCodes.length, 3000);
 
@@ -375,8 +386,45 @@ async function runDtcStorm(args) {
     dtcEvents: labels,
     recordsAcceptedExpected: 5,
     expectedActiveDtcCount: 5,
-    faz2cNote: 'DTC clear records do not clear VehicleDtc until Faz 2C ingest handles clears',
-    expectedLocationPoints: 5,
+    countTotalActiveDtc: true,
+    expectedLocationPoints: records.length,
+  });
+}
+
+async function runLoad(args) {
+  const rng = createSeededRng(args.seed);
+  const motion = createInitialMotionState(args.seed + 5);
+  const count = args.count;
+  const intervalMs = 20;
+  const window = scenarioWindow(count, intervalMs);
+
+  const socket = await createSessionSocket(args.host, args.port);
+  await loginAndWait(socket, args.imei);
+
+  const batchSize = 50;
+  let sent = 0;
+  for (let batch = 0; batch < Math.ceil(count / batchSize); batch += 1) {
+    const records = [];
+    for (let i = 0; i < batchSize && sent + i < count; i += 1) {
+      const index = sent + i;
+      records.push(recordFromMotion(motion, window.baseTs + index * intervalMs));
+      stepMotionState(motion, rng, intervalMs);
+    }
+    await sendRecords(socket, records, { batch: true });
+    sent += records.length;
+  }
+
+  await sleep(1500);
+  socket.destroy();
+
+  return summaryEnvelope(args, {
+    scenario: 'load',
+    ...window,
+    recordsSent: sent,
+    recordsAcceptedExpected: sent,
+    expectedLocationPoints: sent,
+    expectedActiveDtcCount: 0,
+    expectedDuplicateLocationPoints: 0,
   });
 }
 
@@ -388,6 +436,7 @@ const runners = {
   'corrupt-frames': runCorruptFrames,
   'fuel-theft': runFuelTheft,
   'dtc-storm': runDtcStorm,
+  load: runLoad,
 };
 
 const runner = runners[args.scenario];

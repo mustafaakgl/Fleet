@@ -37,5 +37,6 @@ describe('TENANT_SCOPED_MODELS', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('TachoActivity'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('TachoInfringement'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('TachoDownloadSchedule'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('TelemetryQuarantine'), true);
   });
 });

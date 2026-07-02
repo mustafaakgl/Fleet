@@ -239,6 +239,10 @@ enum NotificationType {
   reminder
   system
   tacho_signature_invalid
+  device_silent
+  fuel_theft_suspected
+  telematics_coolant_high
+  telematics_voltage_low
 }
 
 enum NotificationPriority {
@@ -485,6 +489,7 @@ model Tenant {
   tachoActivities       TachoActivity[]
   tachoInfringements    TachoInfringement[]
   tachoDownloadSchedules TachoDownloadSchedule[]
+  telemetryQuarantine   TelemetryQuarantine[]
 }
 
 model TenantSubscription {
@@ -847,6 +852,32 @@ model VehicleDtc {
   @@index([tenantId])
   @@index([vehicleId, occurredAt])
   @@map("vehicle_dtc")
+}
+
+model TelemetryQuarantine {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  imei      String?
+  rawHex    String
+  error     String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("telemetry_quarantine")
+}
+
+model TelemetryProcessedRecord {
+  id         String   @id @default(cuid())
+  imei       String
+  recordedAt DateTime
+  priority   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([imei, recordedAt, priority])
+  @@index([createdAt])
+  @@map("telemetry_processed_records")
 }
 
 model Company {
