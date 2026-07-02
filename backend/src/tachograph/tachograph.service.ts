@@ -1,5 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DtcSeverity } from '@prisma/client';
+import {
+  DddFileSource,
+  DtcSeverity,
+  Prisma,
+  TachoInfringementType,
+  TachoWorkState,
+} from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,14 +18,8 @@ type IngestDddMeta = {
   vehicleId?: string;
   fileName: string;
   capturedAt?: string;
+  source: DddFileSource;
 };
-
-type InfringementType =
-  | 'daily_driving_exceeded'
-  | 'insufficient_daily_rest'
-  | 'insufficient_break'
-  | 'exceeded_weekly_driving'
-  | 'exceeded_two_week_driving';
 
 @Injectable()
 export class TachographService {
@@ -27,66 +28,96 @@ export class TachographService {
   constructor(private readonly prisma: PrismaService) {}
 
   async ingestDddFile(buffer: Buffer, meta: IngestDddMeta) {
-    const db = this.prisma as any;
-    const parsed = parseDddBuffer(buffer);
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
     const capturedAt = meta.capturedAt ? new Date(meta.capturedAt) : new Date();
 
-    const driver = await this.resolveDriverFromCard(meta.tenantId, parsed.driverCardNo);
-
-    const storedPath = await this.archiveDddFile(meta.tenantId, meta.fileName, buffer);
-
-    const fileRecord = await db.dddFile.create({
-      data: {
-        tenantId: meta.tenantId,
-        vehicleId: meta.vehicleId,
-        driverId: driver?.id ?? null,
-        fileType: parsed.fileType,
-        capturedAt,
-        storedPath,
-        sizeBytes: buffer.length,
+    const existing = await this.prisma.dddFile.findUnique({
+      where: {
+        tenantId_sha256: {
+          tenantId: meta.tenantId,
+          sha256,
+        },
+      },
+      include: {
+        vehicle: { select: { id: true, plateNumber: true } },
+        driver: { select: { id: true, firstName: true, lastName: true } },
       },
     });
 
-    if (parsed.activities.length > 0 && meta.vehicleId) {
-      await db.tachoActivity.createMany({
-        data: parsed.activities.map((activity) => {
-          const startedAt = new Date(activity.startedAt);
-          const endedAt = new Date(startedAt.getTime() + activity.durationS * 1000);
-
-          return {
-            tenantId: meta.tenantId,
-            vehicleId: meta.vehicleId ?? 'unknown-vehicle',
-            driverId: driver?.id ?? null,
-            driverCardNo: parsed.driverCardNo ?? null,
-            workState: this.mapWorkState(activity.state),
-            startedAt,
-            endedAt,
-            durationS: activity.durationS,
-          };
-        }),
-      });
-    } else if (parsed.activities.length > 0) {
-      this.logger.warn('Skipping TachoActivity writes: vehicleId is missing');
+    if (existing) {
+      return {
+        file: existing,
+        deduplicated: true,
+      };
     }
 
-    const infringements = await this.buildInfringements(
-      meta.tenantId,
-      driver?.id,
-      meta.vehicleId,
-      parsed.dailyTotals,
-      parsed.events,
-    );
+    const parsed = parseDddBuffer(buffer);
+    const driver = await this.resolveDriverFromCard(meta.tenantId, parsed.driverCardNo);
+    const storedPath = await this.archiveDddFile(meta.tenantId, meta.fileName, buffer);
+
+    const fileRecord = await this.prisma.$transaction(async (tx) => {
+      const createdFile = await tx.dddFile.create({
+        data: {
+          tenantId: meta.tenantId,
+          vehicleId: meta.vehicleId,
+          driverId: driver?.id ?? null,
+          uploadedByUserId: meta.uploadedByUserId ?? null,
+          fileType: parsed.fileType,
+          source: meta.source,
+          capturedAt,
+          storedPath,
+          sizeBytes: buffer.length,
+          sha256,
+        },
+      });
+
+      if (parsed.activities.length > 0 && meta.vehicleId) {
+        const vehicleId = meta.vehicleId;
+        await tx.tachoActivity.createMany({
+          data: parsed.activities.map((activity) => {
+            const startedAt = new Date(activity.startedAt);
+            const endedAt = new Date(startedAt.getTime() + activity.durationS * 1000);
+
+            return {
+              tenantId: meta.tenantId,
+              dddFileId: createdFile.id,
+              vehicleId,
+              driverId: driver?.id ?? null,
+              driverCardNo: parsed.driverCardNo ?? null,
+              workState: this.mapWorkState(activity.state),
+              startedAt,
+              endedAt,
+              durationS: activity.durationS,
+            };
+          }),
+        });
+      } else if (parsed.activities.length > 0) {
+        this.logger.warn('Skipping TachoActivity writes: vehicleId is missing');
+      }
+
+      const infringementsCreated = await this.buildInfringements(
+        tx,
+        meta.tenantId,
+        driver?.id,
+        meta.vehicleId,
+        createdFile.id,
+        parsed.dailyTotals,
+        parsed.events,
+      );
+
+      return { createdFile, infringementsCreated };
+    });
 
     return {
-      file: fileRecord,
+      file: fileRecord.createdFile,
       parsed,
-      infringementsCreated: infringements,
+      infringementsCreated: fileRecord.infringementsCreated,
+      deduplicated: false,
     };
   }
 
   async listDddFiles(tenantId: string) {
-    const db = this.prisma as any;
-    return db.dddFile.findMany({
+    return this.prisma.dddFile.findMany({
       where: { tenantId },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -106,17 +137,17 @@ export class TachographService {
     return filePath;
   }
 
-  private mapWorkState(state: 'driving' | 'rest' | 'work' | 'available'): 'driving' | 'rest' | 'work' | 'available' {
+  private mapWorkState(state: 'driving' | 'rest' | 'work' | 'available'): TachoWorkState {
     switch (state) {
       case 'driving':
-        return 'driving';
+        return TachoWorkState.driving;
       case 'rest':
-        return 'rest';
+        return TachoWorkState.rest;
       case 'available':
-        return 'available';
+        return TachoWorkState.available;
       case 'work':
       default:
-        return 'work';
+        return TachoWorkState.work;
     }
   }
 
@@ -138,9 +169,11 @@ export class TachographService {
   }
 
   private async buildInfringements(
+    tx: Prisma.TransactionClient,
     tenantId: string,
     driverId: string | undefined,
     vehicleId: string | undefined,
+    dddFileId: string,
     dailyTotals: ParsedDddDailyTotal[],
     events: Array<{ type: 'overspeed' | 'fault' | 'event'; occurredAt: string; severity?: 'medium' | 'critical'; durationS?: number }>,
   ): Promise<number> {
@@ -150,7 +183,7 @@ export class TachographService {
     }
 
     const candidates: Array<{
-      type: InfringementType;
+      type: TachoInfringementType;
       occurredAt: Date;
       severity: DtcSeverity;
     }> = [];
@@ -159,7 +192,7 @@ export class TachographService {
       const occurredAt = new Date(row.date);
       if (row.drivingS > 9 * 3600) {
         candidates.push({
-          type: 'daily_driving_exceeded',
+          type: TachoInfringementType.daily_driving_exceeded,
           occurredAt,
           severity: row.drivingS > 10 * 3600 ? DtcSeverity.critical : DtcSeverity.medium,
         });
@@ -167,7 +200,7 @@ export class TachographService {
 
       if (row.restS > 0 && row.restS < 11 * 3600) {
         candidates.push({
-          type: 'insufficient_daily_rest',
+          type: TachoInfringementType.insufficient_daily_rest,
           occurredAt,
           severity: row.restS < 9 * 3600 ? DtcSeverity.critical : DtcSeverity.medium,
         });
@@ -186,7 +219,7 @@ export class TachographService {
         const [year, week] = weekKey.split('-').map((v) => Number(v));
         const occurredAt = this.isoWeekStart(year, week);
         candidates.push({
-          type: 'exceeded_weekly_driving',
+          type: TachoInfringementType.exceeded_weekly_driving,
           occurredAt,
           severity: drivingS > 60 * 3600 ? DtcSeverity.critical : DtcSeverity.medium,
         });
@@ -199,7 +232,7 @@ export class TachographService {
       if (total > 90 * 3600) {
         const [year, week] = twoWeekKeys[i].split('-').map((v) => Number(v));
         candidates.push({
-          type: 'exceeded_two_week_driving',
+          type: TachoInfringementType.exceeded_two_week_driving,
           occurredAt: this.isoWeekStart(year, week),
           severity: total > 96 * 3600 ? DtcSeverity.critical : DtcSeverity.medium,
         });
@@ -213,7 +246,7 @@ export class TachographService {
 
       if ((event.durationS ?? 0) >= 15 * 60) {
         candidates.push({
-          type: 'insufficient_break',
+          type: TachoInfringementType.insufficient_break,
           occurredAt: new Date(event.occurredAt),
           severity: event.severity === 'critical' ? DtcSeverity.critical : DtcSeverity.medium,
         });
@@ -223,13 +256,14 @@ export class TachographService {
     let created = 0;
 
     for (const candidate of candidates) {
-      const db = this.prisma as any;
-      const existing = await db.tachoInfringement.findFirst({
+      const existing = await tx.tachoInfringement.findUnique({
         where: {
-          tenantId,
-          driverId,
-          type: candidate.type,
-          occurredAt: candidate.occurredAt,
+          tenantId_driverId_type_occurredAt: {
+            tenantId,
+            driverId,
+            type: candidate.type,
+            occurredAt: candidate.occurredAt,
+          },
         },
         select: { id: true },
       });
@@ -238,11 +272,12 @@ export class TachographService {
         continue;
       }
 
-      await db.tachoInfringement.create({
+      await tx.tachoInfringement.create({
         data: {
           tenantId,
           driverId,
           vehicleId: vehicleId ?? null,
+          dddFileId,
           type: candidate.type,
           severity: candidate.severity,
           occurredAt: candidate.occurredAt,
