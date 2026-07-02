@@ -40,6 +40,10 @@ export const TENANT_SCOPED_MODELS = new Set([
   'Device',
   'VehicleTelemetryLatest',
   'VehicleDtc',
+  'DddFile',
+  'TachoActivity',
+  'TachoInfringement',
+  'TachoDownloadSchedule',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

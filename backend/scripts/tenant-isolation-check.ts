@@ -87,6 +87,23 @@ async function main() {
       }
     }
 
+    const totalDddFiles = await base.dddFile.count();
+    const scopedDddFilesA = await TenantContext.run(tenantA, () =>
+      scoped.dddFile.count(),
+    );
+    console.log(`DddFile total: ${totalDddFiles}, tenant A scoped: ${scopedDddFilesA}`);
+
+    if (tenantA !== tenantB) {
+      const crossDddFile = await TenantContext.run(tenantA, () =>
+        scoped.dddFile.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossDddFile) {
+        throw new Error('Isolation failure: tenant A context read tenant B ddd file');
+      }
+    }
+
     console.log('Tenant isolation check passed.');
   } finally {
     await base.$disconnect();
