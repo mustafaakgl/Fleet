@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DriverLicenseForm } from '@/components/license-checks/DriverLicenseForm';
 import { LicenseComplianceBadgePill } from '@/components/license-checks/LicenseComplianceBadge';
+import { DriverStoryCard } from '@/components/tachograph/DriverStoryCard';
 import {
   driversApi,
   documentsApi,
@@ -25,7 +26,7 @@ import type { Fine } from '@/lib/types';
 import { downloadBlob } from '@/lib/download-blob';
 import type { DriverDetail, Document, LeaveRequest } from '@/lib/types';
 import { getUser } from '@/lib/auth';
-import { canViewFinancials } from '@/lib/permissions';
+import { canViewFinancials, canViewOperationalTachograph } from '@/lib/permissions';
 import { useTranslation } from 'react-i18next';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import {
@@ -115,6 +116,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
   const [fines, setFines] = useState<Fine[]>([]);
   const [finesError, setFinesError] = useState<string | null>(null);
+  const showDriverStory = canViewOperationalTachograph(getUser()?.role ?? 'customer');
 
   useEffect(() => {
     const user = getUser();
@@ -390,6 +392,8 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </CardContent>
       </Card>
+
+      {showDriverStory ? <DriverStoryCard driverId={id} /> : null}
 
       <Card>
         <CardHeader>

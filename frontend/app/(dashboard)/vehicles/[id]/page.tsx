@@ -34,10 +34,11 @@ import { cn, formatDate, statusColor } from '@/lib/utils';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { ServiceRecordInlineField } from '@/components/service-records/ServiceRecordInlineField';
 import { VehicleHandoverHistory, type VehicleHandoverHistoryRow } from '@/components/vehicles/VehicleHandoverHistory';
+import { VehicleCostChart } from '@/components/vehicles/VehicleCostChart';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { EquipmentPhotoPreview } from '@/components/vehicles/EquipmentPhotoPreview';
 import { getUser } from '@/lib/auth';
-import { canEditServiceRecords } from '@/lib/permissions';
+import { canEditServiceRecords, canViewOperationalTachograph } from '@/lib/permissions';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 
@@ -92,6 +93,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { t } = useTranslation();
   const canEditServiceHistory = canEditServiceRecords(getUser()?.role ?? 'customer');
+  const showVehicleCosts = canViewOperationalTachograph(getUser()?.role ?? 'customer');
 
   const handleServiceRecordUpdated = useCallback((updated: ServiceRecord) => {
     setServiceRecords((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
@@ -428,6 +430,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </dl>
         </CardContent>
       </Card>
+
+      {showVehicleCosts ? <VehicleCostChart vehicleId={id} /> : null}
 
       <Card id="telemetry">
         <CardHeader className="space-y-3">

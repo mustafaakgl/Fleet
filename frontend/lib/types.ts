@@ -479,70 +479,141 @@ export type FleetDrivingEventType =
   | 'harsh_corner'
   | 'crash';
 
-export type TelematicsVehicleHealthStatus = 'healthy' | 'warning' | 'critical' | 'offline';
+export interface TelemetryHistoryPoint {
+  recordedAt: string;
+  speedKmh: number | null;
+  coolantTemp: number | null;
+  voltage: number | null;
+}
+
+export interface TelemetryHistoryResponse {
+  points: TelemetryHistoryPoint[];
+}
+
+export type TelematicsDeviceStatus = 'online' | 'offline' | 'silent';
+
+export interface TelematicsVehicleHealthDtc {
+  code: string;
+  description: string | null;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  occurredAt: string;
+}
+
+export interface TelematicsVehicleHealthTelemetry {
+  ignition: boolean;
+  rpm: number | null;
+  fuelLevelPct: number | null;
+  coolantTemp: number | null;
+  voltage: number | null;
+  odometerKm: number | null;
+  recordedAt: string;
+}
+
+export interface TelematicsMaintenanceStatus {
+  id: string;
+  name: string;
+  intervalKm: number | null;
+  intervalDays: number | null;
+  lastDoneAtKm: number | null;
+  lastDoneAtDate: string | null;
+  remainingKm: number | null;
+  remainingDays: number | null;
+  nextDueAtKm: number | null;
+  nextDueAtDate: string | null;
+  status: 'ok' | 'due_soon' | 'overdue' | 'unknown';
+}
 
 export interface TelematicsVehicleHealthItem {
   vehicleId: string;
   plateNumber: string;
   brand: string;
   model: string;
-  driverName: string | null;
-  health: TelematicsVehicleHealthStatus;
-  ignition: boolean | null;
-  rpm: number | null;
-  fuelLevelPct: number | null;
-  coolantTemp: number | null;
-  voltage: number | null;
-  odometerKm: number | null;
+  hasDevice: boolean;
+  deviceStatus: TelematicsDeviceStatus;
+  lastSeenAt: string | null;
+  telemetry: TelematicsVehicleHealthTelemetry | null;
+  activeDtcs: TelematicsVehicleHealthDtc[];
   activeDtcCount: number;
   criticalDtcCount: number;
-  topDtcCodes: string[];
-  lastTelemetryAt: string | null;
+  fuelDropFlag: boolean;
+  nextMaintenance: TelematicsMaintenanceStatus | null;
+  maintenanceDueSoon: boolean;
 }
 
 export interface TelematicsVehicleHealthResponse {
   generatedAt: string;
-  staleAfterMinutes: number;
   summary: {
-    totalVehicles: number;
-    healthy: number;
-    warning: number;
-    critical: number;
-    offline: number;
-    activeDtcTotal: number;
+    online: number;
+    devicesTotal: number;
+    activeCriticalDtc: number;
+    maintenanceDueSoon: number;
+    silentDevices: number;
+    hasAnyDevice: boolean;
   };
   items: TelematicsVehicleHealthItem[];
+}
+
+export interface TelematicsVehicleHealthSeries24h {
+  window: '24h';
+  generatedAt: string;
+  speed: Array<{ at: string; kmh: number | null }>;
+  coolant: Array<{ at: string; celsius: number | null; isEstimated: boolean }>;
+  voltage: Array<{ at: string; volts: number | null; isEstimated: boolean }>;
+  ignitionPeriods: Array<{ start: string; end: string }>;
+}
+
+export interface TelematicsVehicleHealthSeries7d {
+  window: '7d';
+  generatedAt: string;
+  fuelLevel: Array<{ at: string; pct: number | null; isEstimated: boolean }>;
+  refuelPoints: Array<{ at: string; liters: number; odometerKm: number | null }>;
+  suspiciousDrops: Array<{ at: string }>;
 }
 
 export interface TelematicsDriverScoreItem {
   driverId: string;
   driverName: string;
+  initials: string;
   driverStatus: DriverStatus;
+  score: number | null;
+  weeklyDelta: number | null;
+  weeklyScores: Array<number | null>;
+  insufficientData: boolean;
   distanceKm: number;
-  totalEvents: number;
-  weightedEvents: number;
-  eventRatePer100Km: number;
-  score: number;
-  riskLevel: 'low' | 'medium' | 'high';
-  breakdown: Record<FleetDrivingEventType, number>;
+  speedingPer100Km: number;
+  harshBrakePer100Km: number;
+  harshAccelPer100Km: number;
+  idleMinPerDay: number;
 }
 
 export interface TelematicsDriverScoresResponse {
   generatedAt: string;
+  from: string;
+  to: string;
   periodDays: number;
-  summary: {
-    totalDrivers: number;
-    averageScore: number;
-    totalEvents: number;
-    totalDistanceKm: number;
-    distribution: {
-      excellent: number;
-      good: number;
-      watchlist: number;
-      critical: number;
-    };
-  };
+  targetScore: number;
+  fleetTrend: Array<{ weekStart: string; averageScore: number | null }>;
   items: TelematicsDriverScoreItem[];
+}
+
+export interface TelematicsDriverTripItem {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  distanceKm: number;
+  durationS: number;
+  score: number | null;
+  eventCounts: Record<FleetDrivingEventType, number>;
+  locationPoints: FleetTripLocationPoint[];
+  drivingEvents: FleetDrivingEvent[];
+}
+
+export interface TelematicsDriverTripsResponse {
+  driverId: string;
+  driverName: string;
+  from: string;
+  to: string;
+  items: TelematicsDriverTripItem[];
 }
 
 export interface FleetTripSummary {
@@ -1768,6 +1839,55 @@ export type TachographRemainingResponse = {
     remainingDrivingS: number;
     assignmentId: string | null;
   }>;
+};
+
+export type TachographDashboardSummary = {
+  generatedAt: string;
+  complianceScorePct: number;
+  complianceScoreTrendDelta: number;
+  complianceScoreTrend: Array<{ weekStart: string; scorePct: number }>;
+  openCriticalCount: number;
+  driversOutOfTimeToday: number;
+  overdueDownloadsTotal: number;
+};
+
+export type TachographDriverStory = {
+  generatedAt: string;
+  driverId: string;
+  driverName: string;
+  weeks: Array<{
+    weekStart: string;
+    distanceKm: number;
+    score: number | null;
+    infringementEvents: Array<{
+      type: string;
+      severity: 'medium' | 'critical';
+      occurredAt: string;
+    }>;
+  }>;
+  weeksWithData: number;
+  openInfringementCount: number;
+  recentInfringements: Array<{
+    id: string;
+    type: string;
+    severity: 'medium' | 'critical';
+    occurredAt: string;
+    evidence: Record<string, unknown> | null;
+  }>;
+};
+
+export type VehicleMonthlyCostsResponse = {
+  generatedAt: string;
+  vehicleId: string;
+  months: Array<{
+    monthStart: string;
+    fuelEur: number;
+    serviceEur: number;
+    fineEur: number;
+  }>;
+  totalEur: number;
+  monthlyAverageEur: number;
+  serviceCostUnavailable: boolean;
 };
 
 export type DddUploadResponse = {

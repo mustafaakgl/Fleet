@@ -20,6 +20,11 @@ import { mapActivitiesToLike } from './tachograph-rules.runner';
 import { computeDriverRemainingSnapshot } from './rules/remaining-driving';
 import { formatDurationS, parseAssignmentDurationSeconds, parseInfringementEvidence } from './tachograph-format.util';
 import { getInfringementMeta } from './tachograph-infringement-meta';
+import {
+  computeDriverScoreFromTrips,
+  countEventsByType,
+} from '../fleet/core/fleet-driver-score.util';
+import { FleetTripStatus } from '@prisma/client';
 
 const BADGE_CACHE_TTL_MS = 60_000;
 const STALE_DDD_DAYS = 7;
@@ -959,5 +964,220 @@ export class TachographApiService {
     });
 
     return updated;
+  }
+
+  async getDashboardSummary(tenantId: string) {
+    const to = new Date();
+    const from = new Date(to.getTime() - 28 * 24 * 3600 * 1000);
+    const prevSpanMs = to.getTime() - from.getTime();
+    const prevFrom = new Date(from.getTime() - prevSpanMs);
+    const prevTo = new Date(from.getTime());
+
+    const drivers = await this.prisma.driver.findMany({
+      where: { tenantId, status: 'active' },
+      select: { id: true },
+    });
+    const driverIds = drivers.map((driver) => driver.id);
+
+    const [badges, compliance, complianceScoreTrend, remaining] = await Promise.all([
+      this.getBadges(tenantId),
+      this.computeFleetComplianceScore(tenantId, driverIds, from, to, prevFrom, prevTo),
+      this.buildWeeklyComplianceScoreTrend(tenantId, driverIds, 8),
+      this.getRemainingDriving(tenantId),
+    ]);
+
+    const driversOutOfTimeToday = remaining.drivers.filter(
+      (driver) => driver.todayRemainingDrivingS <= 0 || driver.exceedsRemaining,
+    ).length;
+
+    return {
+      generatedAt: to.toISOString(),
+      complianceScorePct: compliance.current,
+      complianceScoreTrendDelta: compliance.trend,
+      complianceScoreTrend,
+      openCriticalCount: badges.openCriticalInfringements,
+      driversOutOfTimeToday,
+      overdueDownloadsTotal: badges.overdueCardDownloads + badges.overdueVuDownloads,
+    };
+  }
+
+  async getDriverStory(tenantId: string, driverId: string, weeks = 12) {
+    const driver = await this.prisma.driver.findFirst({
+      where: { id: driverId, tenantId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const nowMs = Date.now();
+    const from = new Date(nowMs - weeks * 7 * 24 * 3600 * 1000);
+
+    const [trips, infringements, openInfringementCount, recentInfringements] =
+      await Promise.all([
+        this.prisma.fleetTrip.findMany({
+          where: {
+            tenantId,
+            driverId,
+            status: FleetTripStatus.closed,
+            startedAt: { gte: from },
+          },
+          select: {
+            startedAt: true,
+            distanceKm: true,
+            durationS: true,
+            idleS: true,
+            drivingEvents: { select: { type: true } },
+          },
+        }),
+        this.prisma.tachoInfringement.findMany({
+          where: { tenantId, driverId, occurredAt: { gte: from } },
+          select: {
+            type: true,
+            severity: true,
+            occurredAt: true,
+          },
+          orderBy: { occurredAt: 'asc' },
+        }),
+        this.prisma.tachoInfringement.count({
+          where: { tenantId, driverId, acknowledgedAt: null },
+        }),
+        this.prisma.tachoInfringement.findMany({
+          where: { tenantId, driverId },
+          orderBy: { occurredAt: 'desc' },
+          take: 3,
+          select: {
+            id: true,
+            type: true,
+            severity: true,
+            occurredAt: true,
+            notes: true,
+          },
+        }),
+      ]);
+
+    const weekBuckets = this.buildWeekBuckets(weeks, nowMs);
+    const tripsByWeek = new Map<number, typeof trips>();
+    for (const trip of trips) {
+      const weekIndex = weekBuckets.findIndex(
+        (bucket) =>
+          trip.startedAt.getTime() >= bucket.startMs && trip.startedAt.getTime() < bucket.endMs,
+      );
+      if (weekIndex < 0) continue;
+      const bucket = tripsByWeek.get(weekIndex) ?? [];
+      bucket.push(trip);
+      tripsByWeek.set(weekIndex, bucket);
+    }
+
+    const infringementsByWeek = new Map<number, typeof infringements>();
+    for (const row of infringements) {
+      const weekIndex = weekBuckets.findIndex(
+        (bucket) =>
+          row.occurredAt.getTime() >= bucket.startMs && row.occurredAt.getTime() < bucket.endMs,
+      );
+      if (weekIndex < 0) continue;
+      const bucket = infringementsByWeek.get(weekIndex) ?? [];
+      bucket.push(row);
+      infringementsByWeek.set(weekIndex, bucket);
+    }
+
+    const weeklySeries = weekBuckets.map((bucket, index) => {
+      const weekTrips = tripsByWeek.get(index) ?? [];
+      const distanceKm = weekTrips.reduce(
+        (sum, trip) => sum + (trip.distanceKm ? Number(trip.distanceKm) : 0),
+        0,
+      );
+      const tripInputs = weekTrips.map((trip) => ({
+        distanceKm: trip.distanceKm ? Number(trip.distanceKm) : 0,
+        durationS: trip.durationS ?? 0,
+        idleS: trip.idleS ?? 0,
+        events: countEventsByType(trip.drivingEvents),
+      }));
+      const score =
+        tripInputs.length > 0 && distanceKm >= 100
+          ? computeDriverScoreFromTrips(tripInputs)
+          : null;
+
+      const infringementEvents = (infringementsByWeek.get(index) ?? []).map((row) => ({
+        type: row.type,
+        severity: row.severity,
+        occurredAt: row.occurredAt.toISOString(),
+      }));
+
+      return {
+        weekStart: new Date(bucket.startMs).toISOString(),
+        distanceKm: Number(distanceKm.toFixed(1)),
+        score,
+        infringementEvents,
+      };
+    });
+
+    const weeksWithData = weeklySeries.filter(
+      (week) => week.distanceKm > 0 || week.infringementEvents.length > 0,
+    ).length;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      driverId: driver.id,
+      driverName: `${driver.firstName} ${driver.lastName}`.trim(),
+      weeks: weeklySeries,
+      weeksWithData,
+      openInfringementCount,
+      recentInfringements: recentInfringements.map((row) => ({
+        id: row.id,
+        type: row.type,
+        severity: row.severity,
+        occurredAt: row.occurredAt.toISOString(),
+        evidence: parseInfringementEvidence(row.notes),
+      })),
+    };
+  }
+
+  private buildWeekBuckets(weeks: number, nowMs: number) {
+    return Array.from({ length: weeks }, (_, index) => {
+      const offset = weeks - 1 - index;
+      const startMs = isoWeekStartMs(nowMs - offset * 7 * 24 * 3600 * 1000);
+      const endMs = startMs + 7 * 24 * 3600 * 1000;
+      return { startMs, endMs };
+    });
+  }
+
+  private async buildWeeklyComplianceScoreTrend(
+    tenantId: string,
+    driverIds: string[],
+    weeks: number,
+  ): Promise<Array<{ weekStart: string; scorePct: number }>> {
+    if (driverIds.length === 0) {
+      return Array.from({ length: weeks }, (_, index) => ({
+        weekStart: new Date(isoWeekStartMs(Date.now() - (weeks - 1 - index) * 7 * 24 * 3600 * 1000)).toISOString(),
+        scorePct: 100,
+      }));
+    }
+
+    const nowMs = Date.now();
+    const buckets = this.buildWeekBuckets(weeks, nowMs);
+    const results: Array<{ weekStart: string; scorePct: number }> = [];
+
+    for (const bucket of buckets) {
+      const from = new Date(bucket.startMs);
+      const to = new Date(bucket.endMs);
+      const prevSpanMs = to.getTime() - from.getTime();
+      const prevFrom = new Date(from.getTime() - prevSpanMs);
+      const prevTo = new Date(from.getTime());
+      const score = await this.computeFleetComplianceScore(
+        tenantId,
+        driverIds,
+        from,
+        to,
+        prevFrom,
+        prevTo,
+      );
+      results.push({
+        weekStart: from.toISOString(),
+        scorePct: score.current,
+      });
+    }
+
+    return results;
   }
 }

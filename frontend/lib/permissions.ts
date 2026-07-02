@@ -39,3 +39,7 @@ export function canEditDriverVacationEntitlement(role: Role) {
 export function canImportCsv(role: Role) {
   return role === 'admin' || role === 'office';
 }
+
+export function canViewOperationalTachograph(role: Role) {
+  return role === 'admin' || role === 'boss' || role === 'accounting' || role === 'office';
+}

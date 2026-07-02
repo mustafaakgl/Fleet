@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -6,10 +7,12 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES, OPERATIONAL_WRITE_ROLES } from '../common/utils/permissions';
@@ -61,5 +64,22 @@ export class FleetVehicleMaintenanceController {
   @Get(':vehicleId/maintenance')
   list(@Param('vehicleId') vehicleId: string) {
     return this.maintenance.listVehicleMaintenance(vehicleId);
+  }
+
+  @Get(':vehicleId/costs')
+  costs(
+    @Param('vehicleId') vehicleId: string,
+    @Query('months') months?: string,
+    @CurrentUser('tenantId') tenantId?: string,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    const parsedMonths = months ? Number(months) : 6;
+    return this.maintenance.getVehicleCosts(
+      tenantId,
+      vehicleId,
+      Number.isFinite(parsedMonths) ? parsedMonths : 6,
+    );
   }
 }

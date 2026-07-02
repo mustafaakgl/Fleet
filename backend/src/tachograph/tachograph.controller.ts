@@ -80,6 +80,38 @@ export class TachographController {
     return this.tachographApiService.getComplianceOverview(tenantId, from, to);
   }
 
+  @Get('dashboard-summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  getDashboardSummary(@CurrentUser('tenantId') tenantId?: string) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    return this.tachographApiService.getDashboardSummary(tenantId);
+  }
+
+  @Get('drivers/:driverId/story')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(...OPERATIONAL_ROLES)
+  getDriverStory(
+    @CurrentUser('tenantId') tenantId?: string,
+    @Param('driverId') driverId?: string,
+    @Query('weeks') weeks?: string,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    if (!driverId) {
+      throw new BadRequestException('driverId is required');
+    }
+    const parsedWeeks = weeks ? Number(weeks) : 12;
+    return this.tachographApiService.getDriverStory(
+      tenantId,
+      driverId,
+      Number.isFinite(parsedWeeks) ? parsedWeeks : 12,
+    );
+  }
+
   @Get('infringements')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...OPERATIONAL_ROLES)

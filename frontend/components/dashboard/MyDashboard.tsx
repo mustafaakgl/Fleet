@@ -24,7 +24,10 @@ import type {
   MissingDepartureCheck,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { getUser } from '@/lib/auth';
+import { canViewOperationalTachograph } from '@/lib/permissions';
 import { GettingStartedPill } from '@/components/dashboard/GettingStartedPill';
+import { ComplianceFleetStrip } from '@/components/dashboard/ComplianceFleetStrip';
 import { OnboardingTasksWidget } from '@/components/dashboard/OnboardingTasksWidget';
 import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
 import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
@@ -113,6 +116,7 @@ const OPEN_DEFECT_STATUSES = new Set(['offen', 'in_reparatur']);
 
 export function MyDashboard() {
   const { t, i18n } = useTranslation();
+  const showComplianceStrip = canViewOperationalTachograph(getUser()?.role ?? 'customer');
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [locations, setLocations] = useState<LiveTrackingItem[] | null>(null);
@@ -198,6 +202,8 @@ export function MyDashboard() {
               </div>
             ) : null}
           </div>
+
+          {showComplianceStrip ? <ComplianceFleetStrip /> : null}
 
           {/* Row 2: fleet overview split/status widgets (backend: /dashboard fleetWidgets) */}
           <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />

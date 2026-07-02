@@ -13,3 +13,5 @@
 [2026-07-02] [faz2c] [plan] [Journal bulguları: corrupt-frames quarantine skipped; CRC reject quarantine yok; DTC clear clearedAt yok; gateway doğrudan DB yazıyor — hedef: ACK-after-queue, consumer, trip builder, watchdog]
 [2026-07-02] [faz2c] [result] [loop:verify ALL GREEN — 144 unit tests; gateway→BullMQ/inline queue→consumer; ACK-after-enqueue; TelemetryQuarantine; DTC bit-diff; trip close (ignition OFF+debounce); fuel-theft alarm+4h suppression; load 1k; live-stream-smoke; sim DTC IO id 48 (Codec8 1-byte)]
 [2026-07-02] [faz4-ui-2] [remaining+ddd] [GET /tachograph/remaining + PATCH ddd assign; rules/remaining-driving; remaining cards + DDD archive columns/toast/assign; seed exhausted+stale; 151 backend tests pass]
+[2026-06-15] [faz4-ui-3] [vehicle-health+driver-scores] [GET /telematics/vehicle-health + series + driver-scores + trips; downsample util; live UI KPI/charts/map reuse; i18n de/en/tr; e2e telematics-health-scores; Faz 4 TAMAMLANDI]
+[2026-06-15] [mock-fleet] [seed] [seed-mock-fleet.mjs: 50 araç / 62 sürücü / mock-fleet-tenant; DDD placeholder storedPath; 2× idempotent özet (seed 42, ~2s); seed-tacho-demo dokunulmadı]

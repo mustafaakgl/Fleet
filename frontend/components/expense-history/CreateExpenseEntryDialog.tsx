@@ -33,6 +33,8 @@ interface CreateExpenseEntryDialogProps {
   vehicles: Vehicle[];
   onClose: () => void;
   onCreated: (record: ServiceRecord, options?: { keepOpen?: boolean }) => void;
+  initialVehicleId?: string;
+  initialTask?: string;
 }
 
 type LineItem = {
@@ -133,6 +135,8 @@ export function CreateExpenseEntryDialog({
   vehicles,
   onClose,
   onCreated,
+  initialVehicleId,
+  initialTask,
 }: CreateExpenseEntryDialogProps) {
   const { t } = useTranslation();
   const formId = useId();
@@ -190,7 +194,12 @@ export function CreateExpenseEntryDialog({
   useEffect(() => {
     if (!open) return;
     resetForm();
-  }, [open, resetForm]);
+    if (initialVehicleId) setVehicleId(initialVehicleId);
+    if (initialTask) {
+      setLineItems([{ id: 'line-1', description: initialTask, amount: '' }]);
+      setPriorityClass('non_scheduled');
+    }
+  }, [open, resetForm, initialVehicleId, initialTask]);
 
   useEffect(() => {
     if (!open || vehicleId || availableVehicles.length === 0) return;

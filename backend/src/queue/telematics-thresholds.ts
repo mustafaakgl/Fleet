@@ -12,4 +12,8 @@ export const TELEMATICS_THRESHOLDS = {
   alarmSuppressionMs: Number(process.env.TELEMATICS_ALARM_SUPPRESSION_MS ?? 4 * 60 * 60 * 1000),
   deviceSilentMs: Number(process.env.TELEMATICS_DEVICE_SILENT_MS ?? 30 * 60 * 1000),
   watchdogIntervalMs: Number(process.env.TELEMATICS_WATCHDOG_INTERVAL_MS ?? 5 * 60 * 1000),
+  /** Idle fuel burn (litres per hour) for cost estimates — truck vs van. */
+  idleFuelLitersPerHourTruck: 3.0,
+  idleFuelLitersPerHourVan: 1.0,
+  defaultFuelEurPerLiter: 1.75,
 } as const;

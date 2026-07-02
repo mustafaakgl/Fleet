@@ -51,6 +51,7 @@ import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { StorageModule } from './storage/storage.module';
 import { TachographModule } from './tachograph/tachograph.module';
+import { TelematicsModule } from './telematics/telematics.module';
 import { DevicesModule } from './devices/devices.module';
 import { ThrottlerAuditFilter } from './common/filters/throttler-audit.filter';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
@@ -113,6 +114,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     FineManagementModule,
     FleetModule,
     TachographModule,
+    TelematicsModule,
     DevicesModule,
     HealthModule,
     MetricsModule,

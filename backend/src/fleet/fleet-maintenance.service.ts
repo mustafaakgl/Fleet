@@ -171,4 +171,92 @@ export class FleetMaintenanceService {
       updatedAt: rule.updatedAt.toISOString(),
     };
   }
+
+  async getVehicleCosts(tenantId: string, vehicleId: string, months = 6) {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id: vehicleId, tenantId },
+      select: { id: true },
+    });
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found');
+    }
+
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1));
+
+    const [fuelRows, serviceRows, fineRows] = await Promise.all([
+      this.prisma.fleetFuelEntry.findMany({
+        where: {
+          tenantId,
+          vehicleId,
+          enteredAt: { gte: start },
+        },
+        select: { enteredAt: true, totalCost: true },
+      }),
+      this.prisma.serviceRecord.findMany({
+        where: {
+          tenantId,
+          vehicleId,
+          date: { gte: start },
+        },
+        select: { date: true, costAmount: true },
+      }),
+      this.prisma.fine.findMany({
+        where: {
+          tenantId,
+          vehicleId,
+          violationAt: { gte: start },
+        },
+        select: { violationAt: true, amount: true },
+      }),
+    ]);
+
+    const monthKeys = Array.from({ length: months }, (_, index) => {
+      const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1 - index), 1));
+      return {
+        monthStart: date.toISOString(),
+        key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+      };
+    });
+
+    const fuelByMonth = new Map<string, number>();
+    for (const row of fuelRows) {
+      const key = `${row.enteredAt.getUTCFullYear()}-${String(row.enteredAt.getUTCMonth() + 1).padStart(2, '0')}`;
+      fuelByMonth.set(key, (fuelByMonth.get(key) ?? 0) + Number(row.totalCost));
+    }
+
+    const serviceByMonth = new Map<string, number>();
+    for (const row of serviceRows) {
+      const key = `${row.date.getUTCFullYear()}-${String(row.date.getUTCMonth() + 1).padStart(2, '0')}`;
+      serviceByMonth.set(key, (serviceByMonth.get(key) ?? 0) + Number(row.costAmount));
+    }
+
+    const fineByMonth = new Map<string, number>();
+    for (const row of fineRows) {
+      if (row.amount == null) continue;
+      const key = `${row.violationAt.getUTCFullYear()}-${String(row.violationAt.getUTCMonth() + 1).padStart(2, '0')}`;
+      fineByMonth.set(key, (fineByMonth.get(key) ?? 0) + Number(row.amount));
+    }
+
+    const monthsData = monthKeys.map(({ monthStart, key }) => ({
+      monthStart,
+      fuelEur: Number((fuelByMonth.get(key) ?? 0).toFixed(2)),
+      serviceEur: Number((serviceByMonth.get(key) ?? 0).toFixed(2)),
+      fineEur: Number((fineByMonth.get(key) ?? 0).toFixed(2)),
+    }));
+
+    const totalEur = monthsData.reduce(
+      (sum, month) => sum + month.fuelEur + month.serviceEur + month.fineEur,
+      0,
+    );
+
+    return {
+      generatedAt: now.toISOString(),
+      vehicleId,
+      months: monthsData,
+      totalEur: Number(totalEur.toFixed(2)),
+      monthlyAverageEur: Number((totalEur / months).toFixed(2)),
+      serviceCostUnavailable: false,
+    };
+  }
 }

@@ -64,7 +64,11 @@ import type {
   CustomerPortalMe,
   CustomerAssignmentMessage,
   TelematicsVehicleHealthResponse,
+  TelematicsVehicleHealthSeries24h,
+  TelematicsVehicleHealthSeries7d,
   TelematicsDriverScoresResponse,
+  TelematicsDriverTripsResponse,
+  TelemetryHistoryResponse,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -686,6 +690,11 @@ export const vehiclesApi = {
 
   uploadPhoto: (id: string, formData: FormData) =>
     api.post<Vehicle>(`/vehicles/${id}/photo`, formData).then((r) => r.data),
+
+  getCosts: (id: string, params?: { months?: number }) =>
+    api
+      .get<import('./types').VehicleMonthlyCostsResponse>(`/fleet/vehicles/${id}/costs`, { params })
+      .then((r) => r.data),
 
   listEquipment: (id: string, status?: 'active' | 'retired') =>
     api.get<VehicleEquipmentItem[]>(`/vehicles/${id}/equipment`, { params: { status } }).then((r) => r.data),
@@ -1747,10 +1756,45 @@ export const trackingApi = {
 
 export const telematicsApi = {
   getVehicleHealth: () =>
-    api.get<TelematicsVehicleHealthResponse>('/tracking/telematics/vehicle-health').then((r) => r.data),
+    api.get<TelematicsVehicleHealthResponse>('/telematics/vehicle-health').then((r) => r.data),
 
-  getDriverScores: () =>
-    api.get<TelematicsDriverScoresResponse>('/tracking/telematics/driver-scores').then((r) => r.data),
+  getVehicleHealthSeries: (vehicleId: string, window: '24h' | '7d') =>
+    api
+      .get<TelematicsVehicleHealthSeries24h | TelematicsVehicleHealthSeries7d>(
+        `/telematics/vehicle-health/${vehicleId}/series`,
+        { params: { window } },
+      )
+      .then((r) => r.data),
+
+  getDriverScores: (params?: { from?: string; to?: string; source?: 'all' | 'device' | 'phone' }) =>
+    api.get<TelematicsDriverScoresResponse>('/telematics/driver-scores', { params }).then((r) => r.data),
+
+  getDriverTrips: (
+    driverId: string,
+    params?: { from?: string; to?: string; source?: 'all' | 'device' | 'phone' },
+  ) =>
+    api
+      .get<TelematicsDriverTripsResponse>(`/telematics/driver-scores/${driverId}/trips`, { params })
+      .then((r) => r.data),
+
+  getVehicleTelemetryHistory: async (
+    vehicleId: string,
+    _params?: { from?: string; to?: string; limit?: number },
+  ): Promise<TelemetryHistoryResponse> => {
+    const series = await api
+      .get<TelematicsVehicleHealthSeries24h>(`/telematics/vehicle-health/${vehicleId}/series`, {
+        params: { window: '24h' },
+      })
+      .then((r) => r.data);
+    return {
+      points: series.speed.map((point, index) => ({
+        recordedAt: point.at,
+        speedKmh: point.kmh,
+        coolantTemp: series.coolant[index]?.celsius ?? null,
+        voltage: series.voltage[index]?.volts ?? null,
+      })),
+    };
+  },
 };
 
 export const tachographApi = {
@@ -1807,6 +1851,16 @@ export const tachographApi = {
 
   getRemaining: () =>
     api.get<import('./types').TachographRemainingResponse>('/tachograph/remaining').then((r) => r.data),
+
+  getDashboardSummary: () =>
+    api
+      .get<import('./types').TachographDashboardSummary>('/tachograph/dashboard-summary')
+      .then((r) => r.data),
+
+  getDriverStory: (driverId: string, params?: { weeks?: number }) =>
+    api
+      .get<import('./types').TachographDriverStory>(`/tachograph/drivers/${driverId}/story`, { params })
+      .then((r) => r.data),
 
   assignDddFile: (fileId: string, driverId: string) =>
     api

@@ -216,6 +216,8 @@ export function ExpenseHistoryPage() {
   const toFilter = searchParams.get('to') ?? undefined;
   const priorityFilter = searchParams.get('priority') ?? '';
   const vehicleIdFromUrl = searchParams.get('vehicle_id') ?? '';
+  const openCreateFromUrl = searchParams.get('open_create') === '1';
+  const taskFromUrl = searchParams.get('task') ?? '';
   const watchedOnly = searchParams.get('watched') === '1';
   const { watchedIds } = useExpenseWatchlist();
 
@@ -290,6 +292,12 @@ export function ExpenseHistoryPage() {
   useEffect(() => {
     if (vehicleIdFromUrl) setVehicleFilter(vehicleIdFromUrl);
   }, [vehicleIdFromUrl]);
+
+  useEffect(() => {
+    if (openCreateFromUrl && canEdit) {
+      setCreateOpen(true);
+    }
+  }, [openCreateFromUrl, canEdit]);
 
   useEffect(() => {
     setPage(0);
@@ -845,6 +853,8 @@ export function ExpenseHistoryPage() {
       <CreateExpenseEntryDialog
         open={createOpen}
         vehicles={vehicles}
+        initialVehicleId={vehicleIdFromUrl || undefined}
+        initialTask={taskFromUrl || undefined}
         onClose={() => setCreateOpen(false)}
         onCreated={(created, options) => {
           setUsingMockData(false);
