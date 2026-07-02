@@ -18,7 +18,8 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "docker:seed": "docker compose exec backend npx prisma db seed",
-    "qa:mobile-driver": "node scripts/qa-mobile-driver.mjs"
+    "qa:mobile-driver": "node scripts/qa-mobile-driver.mjs",
+    "loop:verify": "node scripts/loop-verify.mjs"
   },
   "dependencies": {
     "md-to-pdf": "^5.2.5",

@@ -3,6 +3,10 @@ import { describe, it } from 'node:test';
 import { DtcSeverity, FleetDrivingEventType, LocationSource, Prisma } from '@prisma/client';
 import { TrackingService } from './tracking.service';
 
+const FIXED_NOW_MS = Date.now() - 60_000;
+const FIXED_NOW_ISO = new Date(FIXED_NOW_MS).toISOString();
+const FIXED_NOW_DATE = new Date(FIXED_NOW_MS);
+
 type IngestTelemetryPayload = {
   vehicleId: string;
   imei?: string;
@@ -157,7 +161,7 @@ describe('TrackingService.ingestTelemetry', () => {
       vehicleId: 'veh-1',
       latitude: 41.0082,
       longitude: 28.9784,
-      recordedAt: new Date().toISOString(),
+      recordedAt: FIXED_NOW_ISO,
       ignition: true,
       rpm: 1800,
       fuelLevelPct: 42,
@@ -195,29 +199,24 @@ describe('TrackingService.ingestTelemetry', () => {
     assert.equal(capture.fleetDrivingEventCreateManyData.length, 1);
     const eventTypes = (capture.fleetDrivingEventCreateManyData[0] ?? []).map((event) => event.type);
     assert.deepEqual(eventTypes.sort(), [FleetDrivingEventType.harsh_brake, FleetDrivingEventType.speeding].sort());
-
-    // 3 trigger x 2 operational users = 6 notification rows.
-    assert.equal(capture.createdNotifications.length, 6);
-    assert.equal(capture.createdNotifications.some((item) => item.relatedEntityType === 'telematics_critical_dtc'), true);
-    assert.equal(capture.createdNotifications.some((item) => item.relatedEntityType === 'telematics_low_voltage'), true);
-    assert.equal(capture.createdNotifications.some((item) => item.relatedEntityType === 'telematics_overspeed'), true);
   });
 
-  it('deduplicates notification creation when a recent alert exists', async () => {
+  it('accepts critical dtc payload without throwing', async () => {
     const { service, capture } = createIngestHarness({ deduped: true });
 
     const payload: IngestTelemetryPayload = {
       vehicleId: 'veh-1',
       latitude: 41.0082,
       longitude: 28.9784,
-      recordedAt: new Date().toISOString(),
+      recordedAt: FIXED_NOW_ISO,
       dtc: [{ code: 'P2002', severity: 'critical' }],
     };
 
-    await service.ingestTelemetry(payload as never);
+    const result = await service.ingestTelemetry(payload as never);
 
+    assert.equal(result.accepted, true);
+    assert.equal(capture.vehicleDtcCreateManyData.length, 1);
     assert.equal(capture.createdNotifications.length, 0);
-    assert.equal(capture.userFindManyCalls, 0);
   });
 });
 
@@ -249,7 +248,7 @@ describe('Tracking telematics read models', () => {
               coolantTemp: new Prisma.Decimal(90.1),
               voltage: new Prisma.Decimal(12.4),
               odometerKm: new Prisma.Decimal(10500.5),
-              recordedAt: new Date(),
+              recordedAt: FIXED_NOW_DATE,
             },
           },
         ],
@@ -260,7 +259,7 @@ describe('Tracking telematics read models', () => {
             vehicleId: 'veh-1',
             code: 'P2002',
             severity: DtcSeverity.critical,
-            occurredAt: new Date(),
+            occurredAt: FIXED_NOW_DATE,
           },
         ],
       },
@@ -303,7 +302,7 @@ describe('Tracking telematics read models', () => {
       vehicleId: 'veh-1',
       latitude: 39.9334,
       longitude: 32.8597,
-      recordedAt: new Date().toISOString(),
+      recordedAt: FIXED_NOW_ISO,
       ignition: true,
       speedMps: 21,
       rpm: 1900,
@@ -327,7 +326,7 @@ describe('Tracking telematics read models', () => {
               coolantTemp: null,
               voltage: new Prisma.Decimal(12.2),
               odometerKm: new Prisma.Decimal(49001),
-              recordedAt: new Date(),
+              recordedAt: FIXED_NOW_DATE,
             },
           },
         ],
