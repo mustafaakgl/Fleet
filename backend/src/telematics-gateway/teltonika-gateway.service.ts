@@ -1,10 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { DeviceModel } from '@prisma/client';
 import { createServer, type Server, type Socket } from 'node:net';
-import { normalizeIoToTelemetry } from './avl-io-map';
+import { TELEMATICS_IO_MAP, normalizeIoToTelemetry, type ParsedAvlIo } from './avl-io-map';
 import { parseCodec8Frame } from './codec8-parser';
 import { PrismaService } from '../prisma/prisma.service';
-import { TrackingService } from '../tracking/tracking.service';
+import { MetricsService } from '../metrics/metrics.service';
+import { TelemetryQueueService } from '../queue/telemetry-queue.service';
+import type { TelemetryRecordPayload } from '../queue/telemetry.types';
 
 type DeviceBinding = {
   tenantId: string;
@@ -24,7 +26,8 @@ export class TeltonikaGatewayService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly trackingService: TrackingService,
+    private readonly telemetryQueue: TelemetryQueueService,
+    private readonly metrics: MetricsService,
     private readonly port: number,
     private readonly host = '0.0.0.0',
   ) {}
@@ -97,7 +100,6 @@ export class TeltonikaGatewayService {
       }
 
       while (state.buffer.length > 0) {
-        // Resync to preamble if stream got shifted by malformed payload.
         const preambleIndex = this.findPreamble(state.buffer);
         if (preambleIndex === -1) {
           state.buffer = Buffer.alloc(0);
@@ -113,77 +115,118 @@ export class TeltonikaGatewayService {
           return;
         }
 
-        state.buffer = state.buffer.subarray(parsed.bytesConsumed);
+        const consumedFrame = state.buffer.subarray(0, parsed.bytesConsumed);
 
         if (!parsed.crcValid) {
-          this.logger.warn(`crc mismatch imei=${state.imei}`);
-          socket.write(Buffer.alloc(4));
+          this.metrics.telematicsParseErrorsTotal.inc();
+          await this.quarantineFrame(state, consumedFrame, 'crc mismatch');
+          state.buffer = state.buffer.subarray(parsed.bytesConsumed);
+          this.writeAck(socket, 0);
           continue;
         }
 
-        const accepted = await this.processPacket(state, parsed.packet.records);
-        const ack = Buffer.alloc(4);
-        ack.writeUInt32BE(accepted, 0);
-        socket.write(ack);
+        const records = this.mapRecords(parsed.packet.records);
+        const accepted = await this.enqueuePacket(state, records);
+        if (accepted === null) {
+          this.logger.warn(`queue enqueue failed — withholding ACK imei=${state.imei}`);
+          return;
+        }
+
+        state.buffer = state.buffer.subarray(parsed.bytesConsumed);
+        this.writeAck(socket, accepted);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.metrics.telematicsParseErrorsTotal.inc();
+      const rawHex = state.buffer.subarray(0, Math.min(state.buffer.length, 512)).toString('hex');
+      await this.quarantineFrame(state, Buffer.from(rawHex, 'hex'), message);
+      this.writeAck(socket, 0);
+      state.buffer = Buffer.alloc(0);
       this.logger.warn(`failed to process chunk imei=${state.imei ?? '-'} error=${message}`);
-      socket.destroy();
     }
   }
 
-  private async processPacket(
-    state: SessionState,
+  private mapRecords(
     records: Array<{
       timestampMs: number;
+      priority: number;
       latitude: number;
       longitude: number;
       speedKph: number;
       angleDeg: number;
-      io: {
-        eventId: number;
-        totalCount: number;
-        values: Map<number, number | bigint>;
-      };
+      io: ParsedAvlIo;
     }>,
-  ): Promise<number> {
-    if (!state.device || !state.imei) {
+  ): TelemetryRecordPayload[] {
+    return records.map((record) => {
+      const normalized = normalizeIoToTelemetry(record.io, record.speedKph);
+      const dtcPresent = TELEMATICS_IO_MAP.dtc.ids.some((id) => record.io.values.has(id));
+
+      return {
+        timestampMs: record.timestampMs,
+        priority: record.priority,
+        latitude: record.latitude,
+        longitude: record.longitude,
+        speedKph: record.speedKph,
+        angleDeg: record.angleDeg,
+        ignition: normalized.ignition,
+        rpm: normalized.rpm,
+        fuelLevelPct: normalized.fuelLevelPct,
+        coolantTemp: normalized.coolantTemp,
+        voltage: normalized.voltage,
+        odometerKm: normalized.odometerKm,
+        dtcPresent,
+        dtc: normalized.dtc,
+        events: normalized.events,
+      };
+    });
+  }
+
+  private async enqueuePacket(
+    state: SessionState,
+    records: TelemetryRecordPayload[],
+  ): Promise<number | null> {
+    if (!state.device || !state.imei || records.length === 0) {
       return 0;
     }
 
-    let accepted = 0;
-
-    for (const record of records) {
-      try {
-        const normalizedIo = normalizeIoToTelemetry(record.io, record.speedKph);
-
-        await this.trackingService.ingestTelemetry({
-          vehicleId: state.device.vehicleId,
-          imei: state.imei,
-          latitude: record.latitude,
-          longitude: record.longitude,
-          recordedAt: new Date(record.timestampMs).toISOString(),
-          speedMps: Number((record.speedKph / 3.6).toFixed(3)),
-          headingDeg: record.angleDeg,
-          ignition: normalizedIo.ignition,
-          rpm: normalizedIo.rpm,
-          fuelLevelPct: normalizedIo.fuelLevelPct,
-          coolantTemp: normalizedIo.coolantTemp,
-          voltage: normalizedIo.voltage,
-          odometerKm: normalizedIo.odometerKm,
-          events: normalizedIo.events.length > 0 ? normalizedIo.events : undefined,
-          dtc: normalizedIo.dtc.length > 0 ? normalizedIo.dtc : undefined,
-        });
-
-        accepted += 1;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(`ingest failed imei=${state.imei} vehicle=${state.device.vehicleId} error=${message}`);
-      }
+    try {
+      await this.telemetryQueue.enqueueIngest({
+        tenantId: state.device.tenantId,
+        vehicleId: state.device.vehicleId,
+        imei: state.imei,
+        records,
+      });
+      return records.length;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`telemetry queue enqueue failed imei=${state.imei} error=${message}`);
+      return null;
     }
+  }
 
-    return accepted;
+  private async quarantineFrame(
+    state: SessionState,
+    frame: Buffer,
+    error: string,
+  ): Promise<void> {
+    try {
+      await this.telemetryQueue.enqueueQuarantine({
+        tenantId: state.device?.tenantId,
+        imei: state.imei,
+        rawHex: frame.toString('hex'),
+        error,
+      });
+    } catch (quarantineError) {
+      const message =
+        quarantineError instanceof Error ? quarantineError.message : String(quarantineError);
+      this.logger.error(`quarantine enqueue failed imei=${state.imei ?? '-'} error=${message}`);
+    }
+  }
+
+  private writeAck(socket: Socket, accepted: number): void {
+    const ack = Buffer.alloc(4);
+    ack.writeUInt32BE(accepted, 0);
+    socket.write(ack);
   }
 
   private async tryHandshake(socket: Socket, state: SessionState): Promise<boolean> {

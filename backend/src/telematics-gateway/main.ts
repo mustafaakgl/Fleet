@@ -3,8 +3,9 @@ import '../config/env.bootstrap';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { TrackingService } from '../tracking/tracking.service';
+import { TelemetryQueueService } from '../queue/telemetry-queue.service';
 import { TeltonikaGatewayService } from './teltonika-gateway.service';
 
 async function bootstrapGateway() {
@@ -16,8 +17,9 @@ async function bootstrapGateway() {
   });
 
   const prisma = app.get(PrismaService);
-  const trackingService = app.get(TrackingService);
-  const gateway = new TeltonikaGatewayService(prisma, trackingService, port);
+  const telemetryQueue = app.get(TelemetryQueueService);
+  const metrics = app.get(MetricsService);
+  const gateway = new TeltonikaGatewayService(prisma, telemetryQueue, metrics, port);
 
   await gateway.start();
 

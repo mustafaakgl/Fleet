@@ -38,6 +38,7 @@ import { InvitationsModule } from './invitations/invitations.module';
 import { ImportModule } from './import/import.module';
 import { JobsModule } from './queue/jobs.module';
 import { QueueModule } from './queue/queue.module';
+import { TelemetryQueueModule } from './queue/telemetry-queue.module';
 import { BillingModule } from './billing/billing.module';
 import { FleetOpsModule } from './fleet-ops/fleet-ops.module';
 import { TenantModule } from './tenant/tenant.module';
@@ -69,6 +70,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     ]),
     ScheduleModule.forRoot(),
     QueueModule,
+    TelemetryQueueModule,
     AuthModule,
     UsersModule,
     DriversModule,
