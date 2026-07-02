@@ -8,3 +8,4 @@
 [2026-07-02] [faz1] [verify-script] [verify-tacho-telematics.mjs: DB karşılaştırma, quarantine skipped]
 [2026-07-02] [faz1] [demo-seed] [seed-tacho-demo: 2 sürücü/araç/cihaz, 14g aktivite, idempotent]
 [2026-07-02] [faz1] [loop-verify] [npm run loop:verify yeşil x2; gateway child + tracking spec deterministik]
+[2026-07-02] [faz2a] [rules-engine] [561/2006 pure rules + specs + service integration; golden reference 3 ihlal]

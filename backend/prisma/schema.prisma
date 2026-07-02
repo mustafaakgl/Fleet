@@ -1918,6 +1918,7 @@ model TachoInfringement {
   type       TachoInfringementType
   severity   DtcSeverity
   occurredAt DateTime
+  notes      String?
   createdAt  DateTime              @default(now())
 
   @@unique([tenantId, driverId, type, occurredAt])

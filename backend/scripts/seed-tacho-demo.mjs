@@ -5,7 +5,7 @@
  * | Scenario                         | Driver        | Expected infringements (Faz 2)      |
  * |----------------------------------|---------------|-------------------------------------|
  * | Exactly 9h driving (clean)       | Demo Driver A | 0                                   |
- * | 9h 1min driving                  | Demo Driver A | 1 × daily_driving_exceeded          |
+ * | 9h 1min driving (3rd weekly extension)| Demo Driver A | 1 × daily_driving_exceeded          |
  * | Valid 15min + 30min break        | Demo Driver B | 0                                   |
  * | Invalid 30min + 15min break order| Demo Driver B | 1 × insufficient_break              |
  * | ISO week boundary 56h+ driving   | Demo Driver A | 1 × exceeded_weekly_driving         |
@@ -276,35 +276,41 @@ async function main() {
   rows.push(activity(driverA.id, vehicleA.id, TachoWorkState.driving, cursor, 9 * 3600, 'CARD-DEMO-A'));
   cursor = addSeconds(cursor, 9 * 3600 + 11 * 3600);
 
-  // Day 2: 9h 1min driving (violation)
+  // Day 2-4: two 9h30 extensions then 9h1m (3rd extension → infringement)
+  rows.push(activity(driverA.id, vehicleA.id, TachoWorkState.driving, cursor, 9 * 3600 + 30 * 60, 'CARD-DEMO-A'));
+  cursor = addSeconds(cursor, 9 * 3600 + 30 * 60 + 11 * 3600);
+  rows.push(activity(driverA.id, vehicleA.id, TachoWorkState.driving, cursor, 9 * 3600 + 30 * 60, 'CARD-DEMO-A'));
+  cursor = addSeconds(cursor, 9 * 3600 + 30 * 60 + 11 * 3600);
   rows.push(activity(driverA.id, vehicleA.id, TachoWorkState.driving, cursor, 9 * 3600 + 60, 'CARD-DEMO-A'));
   cursor = addDays(cursor, 1);
   cursor.setHours(6, 0, 0, 0);
 
-  // Day 3-4 filler rest/driving
+  // Day filler rest/driving
   rows.push(activity(driverA.id, vehicleA.id, TachoWorkState.rest, cursor, 10 * 3600, 'CARD-DEMO-A'));
   cursor = addSeconds(cursor, 10 * 3600);
   rows.push(activity(driverA.id, vehicleA.id, TachoWorkState.driving, cursor, 6 * 3600, 'CARD-DEMO-A'));
   cursor = addDays(cursor, 1);
   cursor.setHours(6, 0, 0, 0);
 
-  // Driver B day 5: valid 15 + 30 break pattern around driving
+  // Driver B day 5: valid 15 + 30 break pattern (consecutive before next driving)
   rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.driving, cursor, 4 * 3600, 'CARD-DEMO-B'));
   cursor = addSeconds(cursor, 4 * 3600);
   rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.rest, cursor, 15 * 60, 'CARD-DEMO-B'));
   cursor = addSeconds(cursor, 15 * 60);
-  rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.driving, cursor, 2 * 3600, 'CARD-DEMO-B'));
-  cursor = addSeconds(cursor, 2 * 3600);
   rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.rest, cursor, 30 * 60, 'CARD-DEMO-B'));
+  cursor = addSeconds(cursor, 30 * 60);
+  rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.driving, cursor, 4 * 3600, 'CARD-DEMO-B'));
   cursor = addDays(cursor, 1);
   cursor.setHours(6, 0, 0, 0);
 
-  // Driver B day 6: invalid 30 + 15 order
+  // Driver B day 6: invalid 30 + 15 order, then driving past 4.5h
   rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.driving, cursor, 4 * 3600, 'CARD-DEMO-B'));
   cursor = addSeconds(cursor, 4 * 3600);
   rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.rest, cursor, 30 * 60, 'CARD-DEMO-B'));
   cursor = addSeconds(cursor, 30 * 60);
   rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.rest, cursor, 15 * 60, 'CARD-DEMO-B'));
+  cursor = addSeconds(cursor, 15 * 60);
+  rows.push(activity(driverB.id, vehicleB.id, TachoWorkState.driving, cursor, 1 * 3600 + 60, 'CARD-DEMO-B'));
   cursor = addDays(cursor, 1);
   cursor.setHours(6, 0, 0, 0);
 
