@@ -1720,12 +1720,54 @@ export type TachographInfringementDetail = TachographInfringementItem & {
 export type DddFileListItem = {
   id: string;
   fileType: string;
+  source: string;
   capturedAt: string;
   createdAt: string;
   sizeBytes: number;
+  sha256: string;
+  generation: number | null;
   signatureValid: boolean | null;
+  coveredPeriod: { from: string | null; to: string | null };
   vehicle: { id: string; plateNumber: string } | null;
   driver: { id: string; firstName: string; lastName: string } | null;
+};
+
+export type TachographRemainingDriver = {
+  driverId: string;
+  firstName: string;
+  lastName: string;
+  todayDrivingS: number;
+  todayRemainingDrivingS: number;
+  todayContinuousDrivingS: number;
+  nextMandatoryBreakInS: number;
+  weekUsedS: number;
+  weekLimitS: number;
+  twoWeekUsedS: number;
+  twoWeekLimitS: number;
+  extensionsUsed: number;
+  extensionsMax: number;
+  reducedRestUsed: number;
+  reducedRestMax: number;
+  currentStatus: 'driving' | 'rest' | 'work' | 'available';
+  lastDddAt: string | null;
+  daysSinceDdd: number | null;
+  isStale: boolean;
+  plannedTodayS: number;
+  exceedsRemaining: boolean;
+  assignmentId: string | null;
+};
+
+export type TachographRemainingResponse = {
+  generatedAt: string;
+  hasActivityData: boolean;
+  drivers: TachographRemainingDriver[];
+  warnings: Array<{
+    driverId: string;
+    driverName: string;
+    plannedTodayS: number;
+    remainingDrivingS: number;
+    assignmentId: string | null;
+  }>;
 };
 
 export type DddUploadResponse = {

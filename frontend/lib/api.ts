@@ -1804,6 +1804,14 @@ export const tachographApi = {
       })
       .then((r) => r.data);
   },
+
+  getRemaining: () =>
+    api.get<import('./types').TachographRemainingResponse>('/tachograph/remaining').then((r) => r.data),
+
+  assignDddFile: (fileId: string, driverId: string) =>
+    api
+      .patch<import('./types').DddFileListItem>(`/tachograph/ddd/files/${fileId}/assign`, { driverId })
+      .then((r) => r.data),
 };
 
 // ─── Driver portal (web) ─────────────────────────────────────────────────────
