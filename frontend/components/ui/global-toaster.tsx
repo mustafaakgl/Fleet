@@ -12,6 +12,7 @@ type ToastState = {
 function toastClass(type: AppToastType): string {
   if (type === 'success') return 'bg-emerald-700';
   if (type === 'error') return 'bg-red-700';
+  if (type === 'warning') return 'bg-amber-700';
   return 'bg-slate-800';
 }
 

@@ -22,6 +22,13 @@ export function formatFleetDateTime(value?: string | null) {
   return parsed.toLocaleString(activeTag(), { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
 }
 
+export function formatFleetDate(value?: string | null) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(activeTag(), { dateStyle: 'medium', timeZone: 'UTC' });
+}
+
 export function formatFleetDurationMinutes(
   minutes: number | null,
   t: (key: string, opts?: Record<string, string | number>) => string,

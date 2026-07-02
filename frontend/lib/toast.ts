@@ -1,6 +1,6 @@
 'use client';
 
-export type AppToastType = 'success' | 'error' | 'info';
+export type AppToastType = 'success' | 'error' | 'info' | 'warning';
 
 export type AppToastDetail = {
   message: string;
