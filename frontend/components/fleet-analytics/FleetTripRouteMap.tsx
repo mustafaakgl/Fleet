@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import L from 'leaflet';
-import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, Polyline, Popup, useMap } from 'react-leaflet';
 import { useTranslation } from 'react-i18next';
+import { ThemedTileLayer, MapThemeSync } from '@/components/map/ThemedTileLayer';
+import { buildSpeedColoredSegments } from '@/lib/map-speed-segments';
 import type { FleetDrivingEvent, FleetTripLocationPoint } from '@/lib/types';
 import { formatFleetDateTime } from '@/lib/locale-format';
 import { formatFleetTripSpeed } from '@/lib/fleet-trip-format';
@@ -13,9 +15,9 @@ const DEFAULT_CENTER: L.LatLngExpression = [51.1657, 10.4515];
 const DEFAULT_ZOOM = 6;
 
 const EVENT_COLORS: Record<FleetDrivingEvent['type'], string> = {
-  speeding: '#dc2626',
+  speeding: '#ca8a04',
   harsh_accel: '#ea580c',
-  harsh_brake: '#ca8a04',
+  harsh_brake: '#dc2626',
   harsh_corner: '#7c3aed',
   crash: '#b91c1c',
 };
@@ -48,6 +50,18 @@ function FleetTripRouteMapCanvas({ locationPoints, drivingEvents }: FleetTripRou
     [locationPoints],
   );
 
+  const speedSegments = useMemo(
+    () =>
+      buildSpeedColoredSegments(
+        locationPoints.map((point) => ({
+          lat: point.lat,
+          lng: point.lng,
+          speedKmh: point.speedKmh,
+        })),
+      ),
+    [locationPoints],
+  );
+
   const startPoint = locationPoints[0] ?? null;
   const endPoint = locationPoints.length > 1 ? locationPoints[locationPoints.length - 1] : null;
 
@@ -77,14 +91,18 @@ function FleetTripRouteMapCanvas({ locationPoints, drivingEvents }: FleetTripRou
   }
 
   return (
-    <div className="h-full min-h-[420px] overflow-hidden rounded-lg border border-slate-200">
+    <div className="h-full min-h-[420px] overflow-hidden rounded-lg border border-slate-200" data-testid="trip-route-map">
       <MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full" scrollWheelZoom>
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <ThemedTileLayer />
+        <MapThemeSync />
         <FitRouteBounds coordinates={coordinates} />
-        <Polyline positions={coordinates} pathOptions={{ color: '#1a4d7a', weight: 5, opacity: 0.85 }} />
+        {speedSegments.map((segment, index) => (
+          <Polyline
+            key={`segment-${index}`}
+            positions={segment.positions}
+            pathOptions={{ color: segment.color, weight: 5, opacity: 0.9 }}
+          />
+        ))}
         {startPoint ? (
           <CircleMarker
             center={[startPoint.lat, startPoint.lng]}

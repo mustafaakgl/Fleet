@@ -39,6 +39,13 @@ import { computeAvgProcessingDays } from '@/lib/tachograph-processing';
 import { infringementTypeLabelKey } from '@/lib/tachograph-infringement-meta';
 import { computeRepeatCounts, getRepeatCount, topRepeatOffenders } from '@/lib/tachograph-repeat';
 import { cn } from '@/lib/utils';
+import { isInitialLoad } from '@/lib/is-initial-load';
+import { usePageTitle } from '@/lib/use-page-title';
+import {
+  ChartSkeleton,
+  KpiRowSkeleton,
+  MatrixSkeleton,
+} from '@/components/loading/page-skeletons';
 
 const KPI_ALARM = 'tabular-nums text-[22px] font-semibold leading-none';
 const KPI_PROCESS = 'tabular-nums text-lg font-semibold leading-none';
@@ -79,6 +86,7 @@ function vuDaysRemainingClass(days: number): string {
 
 export default function CompliancePage() {
   const { t } = useTranslation();
+  usePageTitle(t('nav.tachograph.compliance'));
 
   const overviewQuery = useQuery({
     queryKey: ['tachograph', 'compliance-overview'],
@@ -113,6 +121,7 @@ export default function CompliancePage() {
   );
 
   const criticalOpen = badgesQuery.data?.openCriticalInfringements ?? 0;
+  const showSkeleton = isInitialLoad(overviewQuery.isLoading, Boolean(overviewQuery.data));
 
   const error = overviewQuery.error
     ? getApiErrorMessage(overviewQuery.error, t('tachograph.compliance.loadError'))
@@ -148,11 +157,15 @@ export default function CompliancePage() {
         />
       ) : null}
 
-      {!error && overviewQuery.isLoading ? (
-        <p className="text-sm text-slate-500">{t('common.loading')}</p>
+      {!error && showSkeleton ? (
+        <div className="space-y-4" data-testid="page-skeleton">
+          <KpiRowSkeleton count={5} />
+          <ChartSkeleton />
+          <MatrixSkeleton rows={8} columns={7} />
+        </div>
       ) : null}
 
-      {!error && !overviewQuery.isLoading && data && !data.hasDddFiles ? (
+      {!error && !showSkeleton && data && !data.hasDddFiles ? (
         <EmptyState
           icon={HardDriveDownload}
           title={t('tachograph.compliance.emptyTitle')}
@@ -164,7 +177,7 @@ export default function CompliancePage() {
         />
       ) : null}
 
-      {!error && !overviewQuery.isLoading && data?.hasDddFiles ? (
+      {!error && !showSkeleton && data?.hasDddFiles ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Link href="/tachograph/infringements?tab=open" className="block">

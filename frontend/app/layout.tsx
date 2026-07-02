@@ -7,9 +7,17 @@ import { QueryProvider } from '@/components/providers/QueryProvider';
 import { LANG_STORAGE_KEY, resolveLanguage } from '@/src/language';
 
 export const metadata: Metadata = {
-  title: 'MyFleet — Fleet Management Platform',
+  title: {
+    default: 'Fleet — Fleet Management Platform',
+    template: '%s · Fleet',
+  },
   description:
     'Track vehicles, manage drivers, plan routes and stay compliant — all from one cloud platform.',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/myfleet-logo.png',
+    apple: '/myfleet-logo.png',
+  },
 };
 
 export default async function RootLayout({

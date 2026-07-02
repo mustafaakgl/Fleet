@@ -253,10 +253,7 @@ export default function LoginPage() {
 
         <div className="login-marke-mitte">
           <h1>Ihre Flotte wartet schon.</h1>
-          <p>
-            Fristen, Dokumente und Fahrer-Nachrichten — alles, was heute passiert ist, sehen Sie gleich auf
-            einen Blick.
-          </p>
+          <p>{t('auth.login.valueProp')}</p>
 
           <div className="login-status-karte">
             <div className="login-status-zeile">

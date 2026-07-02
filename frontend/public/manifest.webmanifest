@@ -1,0 +1,16 @@
+{
+  "name": "Fleet",
+  "short_name": "Fleet",
+  "description": "Fleet management platform",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#F5F7FA",
+  "theme_color": "#003366",
+  "icons": [
+    {
+      "src": "/myfleet-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -29,25 +29,18 @@
 }
 
 .login-page .login-marke {
-  background: linear-gradient(160deg, var(--navy) 0%, var(--blau) 100%);
-  color: #fff;
+  background: #F5F7FA;
+  color: #333333;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   padding: 48px 56px;
   position: relative;
-  overflow: hidden;
+  border-right: 1px solid #DEE2E6;
 }
 
 .login-page .login-marke::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 8px;
-  background: repeating-linear-gradient(90deg, var(--gelb) 0 50px, transparent 50px 90px);
-  opacity: 0.85;
+  display: none;
 }
 
 .login-page .login-marke-logo {
@@ -70,18 +63,17 @@
 }
 
 .login-page .login-marke-mitte p {
-  color: #bdcbe2;
+  color: #4B5563;
   font-size: 15.5px;
   line-height: 1.65;
 }
 
 .login-page .login-status-karte {
   margin-top: 30px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #ffffff;
+  border: 1px solid #DEE2E6;
   border-radius: 12px;
-  padding: 16px 18px;
-  backdrop-filter: blur(4px);
+  padding: 18px 20px;
 }
 
 .login-page .login-status-zeile {
@@ -90,7 +82,7 @@
   align-items: center;
   font-size: 13px;
   padding: 7px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid #E5E7EB;
 }
 
 .login-page .login-status-zeile:last-child {

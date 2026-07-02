@@ -44,6 +44,9 @@ import {
   infringementAgeDays,
 } from '@/lib/tachograph-repeat';
 import { cn } from '@/lib/utils';
+import { isInitialLoad } from '@/lib/is-initial-load';
+import { usePageTitle } from '@/lib/use-page-title';
+import { ChartSkeleton, KpiRowSkeleton, MatrixSkeleton } from '@/components/loading/page-skeletons';
 
 type QueueTab = 'open' | 'closed';
 
@@ -274,6 +277,7 @@ function QueueRow({
 
 export default function InfringementsPage() {
   const { t } = useTranslation();
+  usePageTitle(t('nav.tachograph.infringements'));
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -356,6 +360,7 @@ export default function InfringementsPage() {
   const error = listQuery.error
     ? getApiErrorMessage(listQuery.error, t('tachograph.infringements.loadError'))
     : null;
+  const showSkeleton = isInitialLoad(listQuery.isLoading, Boolean(listQuery.data));
 
   const drivers = driversQuery.data?.data ?? [];
 
@@ -455,11 +460,15 @@ export default function InfringementsPage() {
         />
       ) : null}
 
-      {!error && listQuery.isLoading ? (
-        <p className="text-sm text-slate-500">{t('common.loading')}</p>
+      {!error && showSkeleton ? (
+        <div className="space-y-4" data-testid="page-skeleton">
+          <KpiRowSkeleton count={4} className="xl:grid-cols-4" />
+          <ChartSkeleton />
+          <MatrixSkeleton rows={8} columns={8} />
+        </div>
       ) : null}
 
-      {!error && !listQuery.isLoading && chartData.length > 0 ? (
+      {!error && !showSkeleton && chartData.length > 0 ? (
         <Card className={FLEET_LIST_CARD}>
           <CardHeader>
             <CardTitle>{t('tachograph.infringements.chartTitle')}</CardTitle>
@@ -478,7 +487,7 @@ export default function InfringementsPage() {
         </Card>
       ) : null}
 
-      {!error && !listQuery.isLoading ? (
+      {!error && !showSkeleton ? (
         <Card className={FLEET_LIST_CARD}>
           <CardHeader>
             <CardTitle>{t('tachograph.infringements.queueTitle')}</CardTitle>

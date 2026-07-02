@@ -2,15 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, useMap } from 'react-leaflet';
 import type { LiveTrackingItem } from '@/lib/types';
+import { ThemedTileLayer, MapThemeSync } from '@/components/map/ThemedTileLayer';
+import { createVehicleDirectionIcon } from '@/components/map/vehicle-direction-icon';
 import { LocationSourceBadge } from './LocationSourceBadge';
 import {
   formatSpeed,
   formatTrackingTimestamp,
   hasMapCoordinates,
   markerFillColor,
-  markerStrokeOptions,
   toCoordinate,
 } from './tracking-utils';
 import 'leaflet/dist/leaflet.css';
@@ -35,15 +36,11 @@ function FitBounds({
   const map = useMap();
 
   useEffect(() => {
-    if (items.length === 0) {
-      return;
-    }
-
+    if (items.length === 0) return;
     if (items.length === 1) {
       map.setView([items[0].latitude!, items[0].longitude!], 13);
       return;
     }
-
     const bounds = L.latLngBounds(items.map((item) => [item.latitude!, item.longitude!]));
     map.fitBounds(bounds, { padding: [48, 48], maxZoom: 14 });
   }, [fitBoundsRequestId, items, map]);
@@ -51,24 +48,14 @@ function FitBounds({
   return null;
 }
 
-function MapFocusHandler({
-  item,
-}: {
-  item: LiveTrackingItem | null;
-}) {
+function MapFocusHandler({ item }: { item: LiveTrackingItem | null }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!item || !hasMapCoordinates(item)) {
-      return;
-    }
-
+    if (!item || !hasMapCoordinates(item)) return;
     const lat = toCoordinate(item.latitude);
     const lng = toCoordinate(item.longitude);
-    if (lat === null || lng === null) {
-      return;
-    }
-
+    if (lat === null || lng === null) return;
     map.flyTo([lat, lng], Math.max(map.getZoom(), 13), { duration: 0.8 });
   }, [item, map]);
 
@@ -84,36 +71,33 @@ function VehicleMarker({
   selected: boolean;
   onSelect: (item: LiveTrackingItem) => void;
 }) {
-  const markerRef = useRef<L.CircleMarker>(null);
+  const markerRef = useRef<L.Marker>(null);
   const lat = toCoordinate(item.latitude);
   const lng = toCoordinate(item.longitude);
 
+  const icon = useMemo(
+    () =>
+      createVehicleDirectionIcon({
+        headingDeg: item.headingDeg,
+        selected,
+        offline: item.status === 'offline',
+        fillColor: markerFillColor(item),
+      }),
+    [item, selected],
+  );
+
   useEffect(() => {
-    if (selected) {
-      markerRef.current?.openPopup();
-    }
+    if (selected) markerRef.current?.openPopup();
   }, [selected]);
 
-  if (lat === null || lng === null) {
-    return null;
-  }
-
-  const stroke = markerStrokeOptions(item);
+  if (lat === null || lng === null) return null;
 
   return (
-    <CircleMarker
+    <Marker
       ref={markerRef}
-      center={[lat, lng]}
-      radius={selected ? 11 : item.locationSource === 'telematics' ? 9 : 8}
-      pathOptions={{
-        color: stroke.color,
-        weight: selected ? stroke.weight + 1 : stroke.weight,
-        fillColor: markerFillColor(item),
-        fillOpacity: 0.95,
-      }}
-      eventHandlers={{
-        click: () => onSelect(item),
-      }}
+      position={[lat, lng]}
+      icon={icon}
+      eventHandlers={{ click: () => onSelect(item) }}
     >
       <Popup>
         <div className="space-y-1 text-sm">
@@ -127,7 +111,7 @@ function VehicleMarker({
           <LocationSourceBadge source={item.locationSource} />
         </div>
       </Popup>
-    </CircleMarker>
+    </Marker>
   );
 }
 
@@ -139,28 +123,23 @@ function LiveTrackingMapCanvas({
 }: LiveTrackingMapProps) {
   const mapItems = useMemo(
     () =>
-      items.filter((item) => hasMapCoordinates(item)).map((item) => ({
-        ...item,
-        latitude: toCoordinate(item.latitude)!,
-        longitude: toCoordinate(item.longitude)!,
-      })),
+      items
+        .filter((item) => hasMapCoordinates(item))
+        .map((item) => ({
+          ...item,
+          latitude: toCoordinate(item.latitude)!,
+          longitude: toCoordinate(item.longitude)!,
+        })),
     [items],
   );
 
   const selectedItem = mapItems.find((item) => item.driverId === selectedDriverId) ?? null;
 
   return (
-    <div className="h-full min-h-[520px] overflow-hidden rounded-lg border border-slate-200">
-      <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={DEFAULT_ZOOM}
-        className="h-full w-full"
-        scrollWheelZoom
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+    <div className="h-full min-h-[520px] overflow-hidden rounded-lg border border-slate-200" data-testid="live-tracking-map">
+      <MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full" scrollWheelZoom>
+        <ThemedTileLayer />
+        <MapThemeSync />
         <FitBounds items={mapItems} fitBoundsRequestId={fitBoundsRequestId} />
         <MapFocusHandler item={selectedItem} />
         {mapItems.map((item) => (
@@ -183,10 +162,7 @@ export function LiveTrackingMap(props: LiveTrackingMapProps) {
   useEffect(() => {
     setMounted(true);
     setMapKey((current) => current + 1);
-
-    return () => {
-      setMounted(false);
-    };
+    return () => setMounted(false);
   }, []);
 
   if (!mounted) {

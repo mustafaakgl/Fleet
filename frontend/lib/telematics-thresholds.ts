@@ -5,6 +5,9 @@ export const TELEMATICS_THRESHOLDS = {
   defaultFuelEurPerLiter: 1.75,
   /** Fleet blend when per-driver vehicle category is unavailable (mock-fleet ratio). */
   idleFuelLitersPerHourBlend: 0.7 * 3.0 + 0.3 * 1.0,
+  mapSpeedGreenMaxKph: 50,
+  mapSpeedAmberMaxKph: 80,
+  speedingKph: 90,
 } as const;
 
 export function estimateIdleFuelCostEur(totalIdleMinPerDay: number, periodDays = 28): number {

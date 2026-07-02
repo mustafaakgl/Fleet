@@ -39,6 +39,8 @@ import { cn } from '@/lib/utils';
 import { OperionLogo } from '@/components/brand/OperionLogo';
 import { getUser, performLogout } from '@/lib/auth';
 import { notificationsApi, tachographApi } from '@/lib/api';
+import { useRegisterConnection } from '@/components/connection/ConnectionBannerProvider';
+import type { ConnectionBannerStatus } from '@/components/connection/ConnectionBanner';
 import {
   getNavigationForRole,
   isNavItemActive,
@@ -151,6 +153,18 @@ export function Sidebar() {
     staleTime: 60_000,
     refetchInterval: 60_000,
   });
+
+  const badgeConnectionStatus: ConnectionBannerStatus = tachographBadgesQuery.isError
+    ? 'disconnected'
+    : tachographBadgesQuery.isFetching && tachographBadgesQuery.data
+      ? 'reconnecting'
+      : 'connected';
+
+  useRegisterConnection(
+    'nav-badges',
+    badgeConnectionStatus,
+    tachographBadgesQuery.dataUpdatedAt ? new Date(tachographBadgesQuery.dataUpdatedAt) : null,
+  );
 
   const navBadgeForHref = useMemo(() => {
     const badges = tachographBadgesQuery.data;

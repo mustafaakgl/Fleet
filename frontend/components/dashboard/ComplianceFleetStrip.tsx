@@ -5,8 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { KpiRowSkeleton } from '@/components/loading/page-skeletons';
 import { tachographApi } from '@/lib/api';
+import { isInitialLoad } from '@/lib/is-initial-load';
 import { cn } from '@/lib/utils';
 
 const KPI = 'tabular-nums text-[22px] font-semibold leading-none sm:text-[22px]';
@@ -84,14 +85,8 @@ export function ComplianceFleetStrip() {
     refetchInterval: 120_000,
   });
 
-  if (summaryQuery.isLoading) {
-    return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" data-testid="compliance-fleet-strip">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-28 w-full rounded-lg" />
-        ))}
-      </div>
-    );
+  if (isInitialLoad(summaryQuery.isLoading, Boolean(summaryQuery.data))) {
+    return <KpiRowSkeleton count={4} className="xl:grid-cols-4" data-testid="compliance-fleet-strip" />;
   }
 
   if (summaryQuery.isError || !summaryQuery.data) {

@@ -14,6 +14,9 @@ import { FLEET_LIST_CARD, FLEET_PAGE, FLEET_PAGE_HEADER, FLEET_PAGE_TITLE } from
 import { formatTachographDurationS } from '@/lib/tachograph-format';
 import type { TachographRemainingDriver } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { isInitialLoad } from '@/lib/is-initial-load';
+import { usePageTitle } from '@/lib/use-page-title';
+import { CardGridSkeleton } from '@/components/loading/page-skeletons';
 
 function remainingRadialColor(remainingS: number): string {
   if (remainingS < 3600) return '#dc2626';
@@ -158,6 +161,7 @@ function DriverRemainingCard({
 
 export default function RemainingDrivingTimePage() {
   const { t } = useTranslation();
+  usePageTitle(t('nav.tachograph.remainingDrivingTime'));
 
   const query = useQuery({
     queryKey: ['tachograph', 'remaining'],
@@ -172,6 +176,7 @@ export default function RemainingDrivingTimePage() {
 
   const drivers = useMemo(() => data?.drivers ?? [], [data?.drivers]);
   const warnings = data?.warnings ?? [];
+  const showSkeleton = isInitialLoad(query.isLoading, Boolean(query.data));
 
   return (
     <div className={FLEET_PAGE}>
@@ -193,11 +198,13 @@ export default function RemainingDrivingTimePage() {
         />
       ) : null}
 
-      {!error && query.isLoading ? (
-        <p className="text-sm text-slate-500">{t('common.loading')}</p>
+      {!error && showSkeleton ? (
+        <div data-testid="page-skeleton">
+          <CardGridSkeleton count={6} />
+        </div>
       ) : null}
 
-      {!error && !query.isLoading && data && !data.hasActivityData ? (
+      {!error && !showSkeleton && data && !data.hasActivityData ? (
         <EmptyState
           icon={HardDriveDownload}
           title={t('tachograph.remaining.emptyTitle')}
@@ -209,7 +216,7 @@ export default function RemainingDrivingTimePage() {
         />
       ) : null}
 
-      {!error && !query.isLoading && data?.hasActivityData ? (
+      {!error && !showSkeleton && data?.hasActivityData ? (
         <>
           {warnings.length > 0 ? (
             <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3">

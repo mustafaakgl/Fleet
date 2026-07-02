@@ -15,3 +15,4 @@
 [2026-07-02] [faz4-ui-2] [remaining+ddd] [GET /tachograph/remaining + PATCH ddd assign; rules/remaining-driving; remaining cards + DDD archive columns/toast/assign; seed exhausted+stale; 151 backend tests pass]
 [2026-06-15] [faz4-ui-3] [vehicle-health+driver-scores] [GET /telematics/vehicle-health + series + driver-scores + trips; downsample util; live UI KPI/charts/map reuse; i18n de/en/tr; e2e telematics-health-scores; Faz 4 TAMAMLANDI]
 [2026-06-15] [mock-fleet] [seed] [seed-mock-fleet.mjs: 50 araç / 62 sürücü / mock-fleet-tenant; DDD placeholder storedPath; 2× idempotent özet (seed 42, ~2s); seed-tacho-demo dokunulmadı]
+[2026-07-02] [premium-cila] [ui] [Skeleton loaders, CARTO maps, ConnectionBanner, login/mail brand shell; gerçek logo bekleniyor; Oturum 12+: Cmd+K, virtual tables, optimistic UI, density, PDF audit, public API, mTLS]

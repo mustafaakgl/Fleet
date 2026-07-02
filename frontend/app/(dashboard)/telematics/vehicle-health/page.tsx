@@ -44,6 +44,9 @@ import type {
   TelematicsVehicleHealthSeries7d,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { isInitialLoad } from '@/lib/is-initial-load';
+import { usePageTitle } from '@/lib/use-page-title';
+import { KpiRowSkeleton, MatrixSkeleton } from '@/components/loading/page-skeletons';
 
 const KPI_PRIMARY = 'tabular-nums text-[22px] font-semibold leading-none';
 const KPI_SECONDARY = 'tabular-nums text-lg font-semibold leading-none';
@@ -256,6 +259,7 @@ function VehicleHealthDetailPanel({
 
 export default function VehicleHealthPage() {
   const { t } = useTranslation();
+  usePageTitle(t('nav.telematics.vehicleHealth'));
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const healthQuery = useQuery({
@@ -281,6 +285,7 @@ export default function VehicleHealthPage() {
       }),
     [items],
   );
+  const showSkeleton = isInitialLoad(healthQuery.isLoading, Boolean(healthQuery.data));
 
   return (
     <div className={FLEET_PAGE}>
@@ -302,11 +307,14 @@ export default function VehicleHealthPage() {
         />
       ) : null}
 
-      {!error && healthQuery.isLoading ? (
-        <p className="text-sm text-slate-500">{t('common.loading')}</p>
+      {!error && showSkeleton ? (
+        <div className="space-y-4" data-testid="page-skeleton">
+          <KpiRowSkeleton count={4} className="xl:grid-cols-4" />
+          <MatrixSkeleton rows={8} columns={7} />
+        </div>
       ) : null}
 
-      {!error && !healthQuery.isLoading && summary ? (
+      {!error && !showSkeleton && summary ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className={FLEET_LIST_CARD}>
             <CardHeader className="pb-2">
@@ -346,7 +354,7 @@ export default function VehicleHealthPage() {
         </div>
       ) : null}
 
-      {!error && !healthQuery.isLoading && summary && !summary.hasAnyDevice ? (
+      {!error && !showSkeleton && summary && !summary.hasAnyDevice ? (
         <EmptyState
           icon={Wrench}
           title={t('telematics.vehicleHealth.noDevicesTitle')}
@@ -358,7 +366,7 @@ export default function VehicleHealthPage() {
         />
       ) : null}
 
-      {!error && !healthQuery.isLoading && sortedItems.length > 0 ? (
+      {!error && !showSkeleton && sortedItems.length > 0 ? (
         <Card className={FLEET_LIST_CARD}>
           <CardHeader>
             <CardTitle>{t('telematics.vehicleHealth.table.title')}</CardTitle>

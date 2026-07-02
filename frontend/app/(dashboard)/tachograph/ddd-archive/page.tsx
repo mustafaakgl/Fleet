@@ -20,6 +20,9 @@ import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { driversApi, getApiErrorMessage, tachographApi, vehiclesApi } from '@/lib/api';
 import { formatFleetDate, formatFleetDateTime } from '@/lib/locale-format';
+import { isInitialLoad } from '@/lib/is-initial-load';
+import { usePageTitle } from '@/lib/use-page-title';
+import { MatrixSkeleton } from '@/components/loading/page-skeletons';
 import { showToast } from '@/lib/toast';
 import type { DddFileListItem } from '@/lib/types';
 import {
@@ -66,6 +69,7 @@ function signatureLabel(
 
 export default function DddArchivePage() {
   const { t } = useTranslation();
+  usePageTitle(t('nav.tachograph.dddArchive'));
   const queryClient = useQueryClient();
 
   const [vehicleId, setVehicleId] = useState('');
@@ -163,6 +167,7 @@ export default function DddArchivePage() {
   const vehicleOptions = useMemo(() => vehiclesQuery.data?.data ?? [], [vehiclesQuery.data]);
   const drivers = driversQuery.data?.data ?? [];
   const files = filesQuery.data ?? [];
+  const showSkeleton = isInitialLoad(filesQuery.isLoading, filesQuery.data !== undefined);
 
   const archiveSummary = useMemo(() => {
     if (files.length === 0) {
@@ -261,7 +266,11 @@ export default function DddArchivePage() {
         />
       ) : null}
 
-      {!listError && files.length === 0 && !filesQuery.isLoading ? (
+      {!listError && showSkeleton ? (
+        <MatrixSkeleton rows={8} columns={10} data-testid="page-skeleton" />
+      ) : null}
+
+      {!listError && !showSkeleton && files.length === 0 ? (
         <EmptyState
           icon={HardDriveDownload}
           title={t('tachograph.dddArchive.emptyTitle')}

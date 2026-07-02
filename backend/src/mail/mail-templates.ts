@@ -1,7 +1,9 @@
 import { getFrontendUrl } from '../config/env.validation';
 
-const BRAND = 'MyFleet';
+const BRAND = 'Fleet';
 const FOOTER = `Mit freundlichen Grüßen\n${BRAND} Team`;
+const BRAND_COLOR = '#003366';
+const SETTINGS_URL = `${getFrontendUrl()}/settings`;
 
 function formatDeDate(iso: string): string {
   try {
@@ -19,17 +21,26 @@ function htmlLayout(body: string): string {
   return `<!DOCTYPE html>
 <html lang="de">
 <head><meta charset="utf-8"><title>${BRAND}</title></head>
-<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5;color:#1e293b;max-width:560px;margin:0 auto;padding:24px">
-  <div style="margin-bottom:24px;font-weight:700;font-size:18px;color:#1d4ed8">${BRAND}</div>
-  ${body}
-  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
-  <p style="font-size:12px;color:#64748b">Diese E-Mail wurde automatisch versendet. Bitte antworten Sie nicht direkt auf diese Nachricht.</p>
+<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5;color:#333333;max-width:560px;margin:0 auto;padding:24px;background:#F5F7FA">
+  <div style="margin-bottom:24px;padding:16px 20px;background:#ffffff;border:1px solid #DEE2E6;border-radius:8px">
+    <div style="font-weight:700;font-size:20px;color:${BRAND_COLOR};letter-spacing:-0.02em">${BRAND}</div>
+    <div style="font-size:13px;color:#4B5563;margin-top:4px">Flottenmanagement für den Mittelstand</div>
+  </div>
+  <div style="background:#ffffff;border:1px solid #DEE2E6;border-radius:8px;padding:20px">
+    ${body}
+  </div>
+  <hr style="border:none;border-top:1px solid #DEE2E6;margin:24px 0" />
+  <p style="font-size:12px;color:#4B5563;line-height:1.6">
+    Diese E-Mail wurde automatisch versendet. Bitte antworten Sie nicht direkt auf diese Nachricht.<br />
+    <a href="${SETTINGS_URL}" style="color:${BRAND_COLOR}">Benachrichtigungseinstellungen</a> ·
+    MyFleet GmbH · Musterstraße 1 · 80331 München
+  </p>
 </body>
 </html>`;
 }
 
 function button(href: string, label: string): string {
-  return `<p style="margin:24px 0"><a href="${href}" style="display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${label}</a></p>`;
+  return `<p style="margin:24px 0"><a href="${href}" style="display:inline-block;background:${BRAND_COLOR};color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${label}</a></p>`;
 }
 
 export type MailTemplateResult = { subject: string; text: string; html: string };
@@ -56,7 +67,7 @@ export function invitationMail(params: {
     <p>Hallo <strong>${params.fullName}</strong>,</p>
     <p>Sie wurden zu <strong>${BRAND}</strong> eingeladen. Bitte richten Sie Ihr Passwort ein:</p>
     ${button(params.inviteUrl, 'Einladung annehmen')}
-    <p style="font-size:14px;color:#64748b">Der Link ist bis <strong>${expires}</strong> gültig.</p>
+    <p style="font-size:14px;color:#4B5563">Der Link ist bis <strong>${expires}</strong> gültig.</p>
   `);
 
   return { subject, text, html };
@@ -69,7 +80,7 @@ export function passwordResetMail(params: {
   const expires = formatDeDate(params.expiresAt);
   const subject = `${BRAND} — Passwort zurücksetzen`;
   const text = [
-    'Sie haben eine Anfrage zum Zurücksetzen Ihres MyFleet-Passworts erhalten.',
+    'Sie haben eine Anfrage zum Zurücksetzen Ihres Passworts erhalten.',
     '',
     params.resetUrl,
     '',
@@ -83,7 +94,7 @@ export function passwordResetMail(params: {
   const html = htmlLayout(`
     <p>Sie haben eine Anfrage zum Zurücksetzen Ihres Passworts erhalten.</p>
     ${button(params.resetUrl, 'Passwort zurücksetzen')}
-    <p style="font-size:14px;color:#64748b">Gültig bis <strong>${expires}</strong>. Falls Sie dies nicht angefordert haben, ignorieren Sie diese E-Mail.</p>
+    <p style="font-size:14px;color:#4B5563">Gültig bis <strong>${expires}</strong>. Falls Sie dies nicht angefordert haben, ignorieren Sie diese E-Mail.</p>
   `);
 
   return { subject, text, html };
@@ -134,7 +145,7 @@ export function companyEmailMail(params: {
   const subject = params.subject;
   const text = params.body;
   const companyLine = params.companyName
-    ? `<p style="font-size:13px;color:#64748b">Auftraggeber: ${params.companyName}</p>`
+    ? `<p style="font-size:13px;color:#4B5563">Auftraggeber: ${params.companyName}</p>`
     : '';
 
   const html = htmlLayout(`
@@ -148,7 +159,7 @@ export function companyEmailMail(params: {
 export function smtpTestMail(): MailTemplateResult {
   const subject = `${BRAND} — SMTP-Test erfolgreich`;
   const text = [
-    'Dies ist eine Test-E-Mail von MyFleet.',
+    'Dies ist eine Test-E-Mail von Fleet.',
     '',
     'Wenn Sie diese Nachricht erhalten haben, ist der SMTP-Versand korrekt konfiguriert.',
     '',
@@ -157,7 +168,7 @@ export function smtpTestMail(): MailTemplateResult {
 
   const html = htmlLayout(`
     <p>Dies ist eine <strong>Test-E-Mail</strong> von ${BRAND}.</p>
-    <p style="color:#059669">✓ SMTP-Versand ist korrekt konfiguriert.</p>
+    <p style="color:#4CAF50">✓ SMTP-Versand ist korrekt konfiguriert.</p>
   `);
 
   return { subject, text, html };
