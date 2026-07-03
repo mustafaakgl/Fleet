@@ -16,11 +16,24 @@ type ConnectionBannerContextValue = {
 
 const ConnectionBannerContext = createContext<ConnectionBannerContextValue | null>(null);
 
+function entryEquals(a: ConnectionEntry, b: ConnectionEntry): boolean {
+  return (
+    a.status === b.status &&
+    (a.lastUpdatedAt?.getTime() ?? null) === (b.lastUpdatedAt?.getTime() ?? null)
+  );
+}
+
 export function ConnectionBannerProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Record<string, ConnectionEntry>>({});
 
   const register = useCallback((id: string, entry: ConnectionEntry) => {
-    setEntries((current) => ({ ...current, [id]: entry }));
+    setEntries((current) => {
+      const existing = current[id];
+      if (existing && entryEquals(existing, entry)) {
+        return current;
+      }
+      return { ...current, [id]: entry };
+    });
   }, []);
 
   const unregister = useCallback((id: string) => {
@@ -71,11 +84,13 @@ export function useRegisterConnection(
   status: ConnectionBannerStatus,
   lastUpdatedAt: Date | null,
 ) {
-  const context = useContext(ConnectionBannerContext);
+  const register = useContext(ConnectionBannerContext)?.register;
+  const unregister = useContext(ConnectionBannerContext)?.unregister;
+  const lastUpdatedAtMs = lastUpdatedAt?.getTime() ?? null;
 
   useEffect(() => {
-    if (!context) return undefined;
-    context.register(id, { status, lastUpdatedAt });
-    return () => context.unregister(id);
-  }, [context, id, lastUpdatedAt, status]);
+    if (!register || !unregister) return undefined;
+    register(id, { status, lastUpdatedAt });
+    return () => unregister(id);
+  }, [id, lastUpdatedAtMs, register, status, unregister]);
 }
