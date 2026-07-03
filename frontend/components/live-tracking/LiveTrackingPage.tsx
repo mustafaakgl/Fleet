@@ -13,15 +13,16 @@ import {
 } from '@/components/loading/page-skeletons';
 import type { ConnectionBannerStatus } from '@/components/connection/ConnectionBanner';
 import { useRegisterConnection } from '@/components/connection/ConnectionBannerProvider';
-import { trackingApi } from '@/lib/api';
+import { tachographApi, telematicsApi, trackingApi } from '@/lib/api';
 import { connectionBackoffDelay } from '@/lib/connection-backoff';
 import { isInitialLoad } from '@/lib/is-initial-load';
 import { usePageTitle } from '@/lib/use-page-title';
 import { openSseStream } from '@/lib/sse-stream';
-import type { LiveTrackingItem } from '@/lib/types';
+import type { LiveTrackingItem, LiveTrackingTrailPoint, TachographRemainingDriver, TelematicsVehicleHealthItem } from '@/lib/types';
+import { LiveTrackingDetail } from './LiveTrackingDetail';
 import { LocationSourceBadge } from './LocationSourceBadge';
 import { LiveTrackingSidebar } from './LiveTrackingSidebar';
-import { filterBySource, filterByStatus, type SourceFilter, type StatusFilter } from './tracking-utils';
+import { filterBySource, filterByStatus, isAlarmItem, type SourceFilter, type LiveTrackingStateFilter } from './tracking-utils';
 
 const LiveTrackingMap = dynamic(
   () => import('./LiveTrackingMap').then((module) => module.LiveTrackingMap),
@@ -43,10 +44,14 @@ export function LiveTrackingPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<LiveTrackingStateFilter>('all');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [includeOffline, setIncludeOffline] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [trailPoints, setTrailPoints] = useState<LiveTrackingTrailPoint[]>([]);
+  const [followMode, setFollowMode] = useState(false);
+  const [selectedRemaining, setSelectedRemaining] = useState<TachographRemainingDriver | null>(null);
+  const [selectedVehicleHealth, setSelectedVehicleHealth] = useState<TelematicsVehicleHealthItem | null>(null);
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
   const [fitBoundsRequestId, setFitBoundsRequestId] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionBannerStatus>('reconnecting');
@@ -157,9 +162,62 @@ export function LiveTrackingPage() {
   }, [debouncedSearch, fetchLiveTracking, includeOffline]);
 
   const filteredItems = useMemo(
-    () => filterBySource(filterByStatus(items, statusFilter), sourceFilter),
-    [items, statusFilter, sourceFilter],
+    () => filterByStatus(filterBySource(items, sourceFilter), statusFilter),
+    [items, sourceFilter, statusFilter],
   );
+
+  const sourceFilteredItems = useMemo(() => filterBySource(items, sourceFilter), [items, sourceFilter]);
+  const selectedItem = items.find((item) => item.driverId === selectedDriverId) ?? null;
+  const idleWatchItems = useMemo(
+    () =>
+      sourceFilteredItems
+        .filter(
+          (item) =>
+            item.motionState === 'idle'
+            && item.idleSinceMs != null
+            && Date.now() - item.idleSinceMs >= 10 * 60 * 1000,
+        )
+        .sort((a, b) => (a.idleSinceMs ?? 0) - (b.idleSinceMs ?? 0)),
+    [sourceFilteredItems],
+  );
+
+  const statusCounters = useMemo(
+    () => ({
+      moving: sourceFilteredItems.filter((item) => item.motionState === 'moving').length,
+      idle: sourceFilteredItems.filter((item) => item.motionState === 'idle').length,
+      stopped: sourceFilteredItems.filter((item) => item.motionState === 'stopped').length,
+      alarm: sourceFilteredItems.filter((item) => isAlarmItem(item)).length,
+      offline: sourceFilteredItems.filter((item) => item.motionState === 'offline').length,
+    }),
+    [sourceFilteredItems],
+  );
+
+  useEffect(() => {
+    if (!selectedDriverId) {
+      setTrailPoints([]);
+      setSelectedRemaining(null);
+      setSelectedVehicleHealth(null);
+      return;
+    }
+
+    setTrailPoints([]);
+    void (async () => {
+      try {
+        const [trail, remaining, health] = await Promise.all([
+          trackingApi.getTrail(selectedDriverId, 30),
+          tachographApi.getRemaining({ driverId: selectedDriverId }),
+          telematicsApi.getVehicleHealth(),
+        ]);
+        setTrailPoints(trail.points);
+        setSelectedRemaining(remaining.drivers.find((driver) => driver.driverId === selectedDriverId) ?? null);
+
+        const selectedVehicleId = items.find((item) => item.driverId === selectedDriverId)?.vehicleId;
+        setSelectedVehicleHealth(health.items.find((item) => item.vehicleId === selectedVehicleId) ?? null);
+      } catch {
+        setTrailPoints([]);
+      }
+    })();
+  }, [items, selectedDriverId]);
 
   const mappableCount = filteredItems.filter(
     (item) => item.latitude !== null && item.longitude !== null,
@@ -204,9 +262,10 @@ export function LiveTrackingPage() {
       ) : null}
 
       {showInitialSkeleton ? (
-        <div className="grid flex-1 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="grid flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
           <CardGridSkeleton count={4} className="grid-cols-1" />
           <ChartSkeleton heightClass="min-h-[520px]" />
+          <CardGridSkeleton count={3} className="grid-cols-1" />
         </div>
       ) : filteredItems.length === 0 ? (
         <EmptyState
@@ -219,9 +278,39 @@ export function LiveTrackingPage() {
           onAction={() => void fetchLiveTracking({ manual: true, fitMap: true })}
         />
       ) : (
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3" data-testid="live-status-strip">
+            {(
+              [
+                { value: 'moving', color: 'bg-emerald-500', label: t('liveTracking.motion.moving'), count: statusCounters.moving },
+                { value: 'idle', color: 'bg-amber-500', label: t('liveTracking.motion.idle'), count: statusCounters.idle },
+                { value: 'stopped', color: 'bg-slate-400', label: t('liveTracking.motion.stopped'), count: statusCounters.stopped },
+                { value: 'alarm', color: 'bg-red-600', label: t('liveTracking.motion.alarm'), count: statusCounters.alarm },
+                { value: 'offline', color: 'bg-slate-600', label: t('liveTracking.motion.offline'), count: statusCounters.offline },
+              ] as const
+            ).map((chip) => {
+              const isActive = statusFilter === chip.value;
+              return (
+                <button
+                  key={chip.value}
+                  type="button"
+                  disabled={chip.count === 0}
+                  onClick={() => setStatusFilter((current) => (current === chip.value ? 'all' : chip.value))}
+                  data-testid={`live-status-chip-${chip.value}`}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition ${isActive ? 'border-slate-700 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 text-slate-700'} ${chip.count === 0 ? 'cursor-not-allowed opacity-50' : 'hover:border-slate-300'}`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${chip.color}`} />
+                  <span>{chip.label}</span>
+                  <span className="tabular-nums">{chip.count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
           <LiveTrackingSidebar
             items={filteredItems}
+            idleWatchItems={idleWatchItems}
             search={search}
             onSearchChange={setSearch}
             statusFilter={statusFilter}
@@ -243,13 +332,27 @@ export function LiveTrackingPage() {
             ) : (
               <LiveTrackingMap
                 items={filteredItems}
+                trailPoints={trailPoints}
                 selectedDriverId={selectedDriverId}
                 onSelect={(item) => setSelectedDriverId(item.driverId)}
+                followMode={followMode}
+                onFollowModeChange={setFollowMode}
                 fitBoundsRequestId={fitBoundsRequestId}
               />
             )}
           </div>
-        </div>
+
+            <div className="min-h-0 overflow-y-auto">
+              <LiveTrackingDetail
+                item={selectedItem}
+                remaining={selectedRemaining}
+                vehicleHealth={selectedVehicleHealth}
+                followMode={followMode}
+                onFollowModeChange={setFollowMode}
+              />
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

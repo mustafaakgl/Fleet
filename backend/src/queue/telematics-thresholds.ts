@@ -5,6 +5,7 @@ export const TELEMATICS_THRESHOLDS = {
   harshAccelDeltaKph: Number(process.env.TELEMATICS_HARSH_ACCEL_KPH ?? 12),
   harshBrakeDeltaKph: Number(process.env.TELEMATICS_HARSH_BRAKE_KPH ?? 12),
   idleSpeedKph: 2,
+  idleWatchMinutes: 10,
   coolantHighC: Number(process.env.TELEMATICS_COOLANT_HIGH_C ?? 105),
   voltageLowV: Number(process.env.TELEMATICS_VOLTAGE_LOW_V ?? 11.8),
   fuelTheftDropPct: Number(process.env.TELEMATICS_FUEL_THEFT_DROP_PCT ?? 15),

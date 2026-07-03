@@ -1,5 +1,6 @@
 /** Client mirror of backend telematics-thresholds idle fuel constants. */
 export const TELEMATICS_THRESHOLDS = {
+  idleWatchMinutes: 10,
   idleFuelLitersPerHourTruck: 3.0,
   idleFuelLitersPerHourVan: 1.0,
   defaultFuelEurPerLiter: 1.75,

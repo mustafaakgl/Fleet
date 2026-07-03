@@ -9,22 +9,24 @@ import { Input } from '@/components/ui/input';
 import type { LiveTrackingItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { LocationSourceBadge } from './LocationSourceBadge';
-import { LiveTrackingDetail } from './LiveTrackingDetail';
 import {
   countBySource,
+  estimateIdleCostEur,
   formatSpeed,
   formatTrackingTimestamp,
+  isAlarmItem,
+  motionBadgeClass,
   type SourceFilter,
-  type StatusFilter,
-  statusBadgeVariant,
+  type LiveTrackingStateFilter,
 } from './tracking-utils';
 
 interface LiveTrackingSidebarProps {
   items: LiveTrackingItem[];
+  idleWatchItems: LiveTrackingItem[];
   search: string;
   onSearchChange: (value: string) => void;
-  statusFilter: StatusFilter;
-  onStatusFilterChange: (value: StatusFilter) => void;
+  statusFilter: LiveTrackingStateFilter;
+  onStatusFilterChange: (value: LiveTrackingStateFilter) => void;
   sourceFilter: SourceFilter;
   onSourceFilterChange: (value: SourceFilter) => void;
   includeOffline: boolean;
@@ -34,13 +36,6 @@ interface LiveTrackingSidebarProps {
   lastFetchedAt: Date | null;
 }
 
-const STATUS_FILTER_KEYS: Array<{ value: StatusFilter; labelKey: string }> = [
-  { value: 'all', labelKey: 'liveTracking.filter.all' },
-  { value: 'online', labelKey: 'liveTracking.filter.online' },
-  { value: 'stale', labelKey: 'liveTracking.filter.stale' },
-  { value: 'offline', labelKey: 'liveTracking.filter.offline' },
-];
-
 const SOURCE_FILTER_KEYS: Array<{ value: SourceFilter; labelKey: string }> = [
   { value: 'all', labelKey: 'liveTracking.sourceFilter.all' },
   { value: 'mobile', labelKey: 'liveTracking.source.mobile' },
@@ -49,9 +44,10 @@ const SOURCE_FILTER_KEYS: Array<{ value: SourceFilter; labelKey: string }> = [
 
 export function LiveTrackingSidebar({
   items,
+  idleWatchItems,
   search,
   onSearchChange,
-  statusFilter,
+  statusFilter: _statusFilter,
   onStatusFilterChange,
   sourceFilter,
   onSourceFilterChange,
@@ -62,11 +58,10 @@ export function LiveTrackingSidebar({
   lastFetchedAt,
 }: LiveTrackingSidebarProps) {
   const { t } = useTranslation();
-  const selectedItem = items.find((item) => item.driverId === selectedDriverId) ?? null;
   const sourceCounts = countBySource(items);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4" data-status-filter={_statusFilter}>
       <div className="space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -76,29 +71,6 @@ export function LiveTrackingSidebar({
             placeholder={t('liveTracking.searchPlaceholder')}
             className="pl-9"
           />
-        </div>
-
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            {t('liveTracking.filter.status')}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {STATUS_FILTER_KEYS.map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                onClick={() => onStatusFilterChange(filter.value)}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                  statusFilter === filter.value
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
-                )}
-              >
-                {t(filter.labelKey)}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -148,6 +120,43 @@ export function LiveTrackingSidebar({
         </p>
       </div>
 
+      {idleWatchItems.length > 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3" data-testid="idle-watch-panel">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+              {t('liveTracking.idleWatchTitle')}
+            </p>
+            <button
+              type="button"
+              onClick={() => onStatusFilterChange('idle')}
+              className="text-[11px] font-medium text-amber-800 underline"
+            >
+              {t('liveTracking.showIdleOnly')}
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {idleWatchItems.map((item) => {
+              const idleMinutes = Math.max(0, Math.floor((Date.now() - (item.idleSinceMs ?? 0)) / 60_000));
+              const approxCost = estimateIdleCostEur(item.idleSinceMs ?? Date.now());
+              return (
+                <button
+                  key={`idle-${item.driverId}`}
+                  type="button"
+                  onClick={() => onSelect(item)}
+                  data-testid="idle-watch-row"
+                  className="flex w-full items-center justify-between rounded-md border border-amber-200 bg-white px-2 py-1.5 text-left text-xs text-slate-700 hover:border-amber-300"
+                >
+                  <span className="font-medium text-slate-900">{item.plateNumber ?? t('liveTracking.noVehicle')}</span>
+                  <span>
+                    {idleMinutes} dk · ~{approxCost.toFixed(1)} €
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {items.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
@@ -159,6 +168,8 @@ export function LiveTrackingSidebar({
               key={item.driverId}
               type="button"
               onClick={() => onSelect(item)}
+              data-testid="live-tracking-row"
+              data-motion={item.motionState}
               className={cn(
                 'w-full rounded-lg border px-3 py-3 text-left transition-colors',
                 selectedDriverId === item.driverId
@@ -177,9 +188,10 @@ export function LiveTrackingSidebar({
                   ) : null}
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <Badge variant={statusBadgeVariant(item.status)} className="capitalize">
-                    {item.status}
+                  <Badge className={cn('capitalize', motionBadgeClass(item.motionState))}>
+                    {t(`liveTracking.motion.${item.motionState}`)}
                   </Badge>
+                  {isAlarmItem(item) ? <Badge className="bg-red-100 text-red-700 border border-red-200">{t('liveTracking.motion.alarm')}</Badge> : null}
                   <LocationSourceBadge source={item.locationSource} />
                 </div>
               </div>
@@ -209,8 +221,6 @@ export function LiveTrackingSidebar({
           ))
         )}
       </div>
-
-      <LiveTrackingDetail item={selectedItem} />
     </div>
   );
 }

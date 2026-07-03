@@ -8,5 +8,6 @@ import { TelematicsService } from './telematics.service';
   imports: [PrismaModule, FleetModule],
   controllers: [TelematicsController],
   providers: [TelematicsService],
+  exports: [TelematicsService],
 })
 export class TelematicsModule {}

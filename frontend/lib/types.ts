@@ -1375,6 +1375,8 @@ export interface MessengerUnreadCount {
 
 export type LiveTrackingStatus = 'online' | 'stale' | 'offline';
 
+export type LiveTrackingMotionState = 'moving' | 'idle' | 'stopped' | 'offline';
+
 export type LocationSourceType = 'mobile' | 'telematics';
 
 export type DriverLocationTrackingStatus = 'active' | 'paused' | 'denied';
@@ -1668,10 +1670,22 @@ export interface LiveTrackingItem {
   recordedAt: string | null;
   receivedAt: string | null;
   status: LiveTrackingStatus;
+  motionState: LiveTrackingMotionState;
+  idleSinceMs?: number;
+  hasCriticalDtc: boolean;
+  fuelDropFlag: boolean;
+  isSilent: boolean;
   locationSource: LocationSourceType | null;
   assignmentId: string | null;
   companyName: string | null;
   cargoName: string | null;
+}
+
+export interface LiveTrackingTrailPoint {
+  at: string;
+  lat: number;
+  lng: number;
+  speedKph: number | null;
 }
 
 export type TachographBadges = {

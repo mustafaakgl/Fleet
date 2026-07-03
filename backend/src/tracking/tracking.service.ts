@@ -12,10 +12,15 @@ import {
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TELEMATICS_THRESHOLDS } from '../queue/telematics-thresholds';
+import { TelematicsService } from '../telematics/telematics.service';
 import type { IngestTelemetryDto } from './dto/ingest-telemetry.dto';
+import { resolveMotionState } from './motion-state.util';
+import { sampleTrailPoints } from './trail-sampling.util';
 import type { SubmitLocationDto } from './dto/submit-location.dto';
 import type {
   LiveTrackingItem,
+  LiveTrailPoint,
   LiveTrackingParams,
   LocationHistoryParams,
   LocationHistoryPoint,
@@ -104,6 +109,7 @@ export class TrackingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly telematicsService?: TelematicsService,
   ) {}
 
   async grantLocationConsent(driverId: string) {
@@ -743,8 +749,37 @@ export class TrackingService {
       },
     });
 
+    const alarmFlagsByVehicle = await this.loadAlarmFlagsByVehicle();
+    const idleSinceByDriver = await this.loadIdleSinceByDriver(
+      latestRows.map((row) => row.driverId),
+      now,
+    );
+
+    const vehicleIds = Array.from(
+      new Set(latestRows.map((row) => row.vehicleId).filter((value): value is string => Boolean(value))),
+    );
+
+    const telemetryRows = vehicleIds.length
+      ? await this.prisma.vehicleTelemetryLatest.findMany({
+          where: { vehicleId: { in: vehicleIds } },
+          select: {
+            vehicleId: true,
+            ignition: true,
+          },
+        })
+      : [];
+    const ignitionByVehicle = new Map(telemetryRows.map((row) => [row.vehicleId, row.ignition]));
+
     const items: LiveTrackingItem[] = latestRows.map((row) =>
-      this.mapLatestRowToLiveItem(row, assignmentMap.get(row.driverId) ?? null, params.staleAfterSec, now),
+      this.mapLatestRowToLiveItem(
+        row,
+        assignmentMap.get(row.driverId) ?? null,
+        params.staleAfterSec,
+        now,
+        ignitionByVehicle.get(row.vehicleId ?? '') ?? null,
+        idleSinceByDriver.get(row.driverId) ?? null,
+        alarmFlagsByVehicle.get(row.vehicleId ?? ''),
+      ),
     );
 
     if (params.includeOffline) {
@@ -784,6 +819,39 @@ export class TrackingService {
     return filtered.sort((a, b) => a.driverName.localeCompare(b.driverName));
   }
 
+  async getLiveTrail(driverId: string, minutes = 30): Promise<{ driverId: string; points: LiveTrailPoint[] }> {
+    await this.assertDriverExists(driverId);
+
+    const clampedMinutes = Math.max(1, Math.min(240, Math.floor(minutes || 30)));
+    const since = new Date(Date.now() - clampedMinutes * 60 * 1000);
+
+    const rows = await this.prisma.driverLocationHistory.findMany({
+      where: {
+        driverId,
+        recordedAt: { gte: since },
+      },
+      orderBy: { recordedAt: 'asc' },
+      select: {
+        recordedAt: true,
+        latitude: true,
+        longitude: true,
+        speedMps: true,
+      },
+    });
+
+    const rawPoints = rows.map((row) => ({
+      at: row.recordedAt.toISOString(),
+      lat: this.decimalToNumber(row.latitude),
+      lng: this.decimalToNumber(row.longitude),
+      speedKph: this.speedMpsToKmh(row.speedMps),
+    }));
+
+    return {
+      driverId,
+      points: sampleTrailPoints(rawPoints, 200),
+    };
+  }
+
   async getDriverLatest(driverId: string): Promise<LiveTrackingItem> {
     await this.assertDriverExists(driverId);
     const driver = await this.loadResolvedDriver(driverId);
@@ -816,8 +884,30 @@ export class TrackingService {
       throw new NotFoundException('No latest location found for driver');
     }
 
-    const assignment = await this.getCurrentAssignmentForDriver(driverId);
-    return this.mapLatestRowToLiveItem(latest, assignment, 300, new Date());
+    const [assignment, idleSinceByDriver, alarmsByVehicle] = await Promise.all([
+      this.getCurrentAssignmentForDriver(driverId),
+      this.loadIdleSinceByDriver([driverId], new Date()),
+      this.loadAlarmFlagsByVehicle(),
+    ]);
+
+    const ignitionOn = latest.vehicleId
+      ? (
+          await this.prisma.vehicleTelemetryLatest.findUnique({
+            where: { vehicleId: latest.vehicleId },
+            select: { ignition: true },
+          })
+        )?.ignition ?? null
+      : null;
+
+    return this.mapLatestRowToLiveItem(
+      latest,
+      assignment,
+      300,
+      new Date(),
+      ignitionOn,
+      idleSinceByDriver.get(driverId) ?? null,
+      alarmsByVehicle.get(latest.vehicleId ?? ''),
+    );
   }
 
   async getDriverHistory(
@@ -1189,6 +1279,61 @@ export class TrackingService {
     return rows.map((row) => row.driverId);
   }
 
+  private async loadIdleSinceByDriver(driverIds: string[], now: Date): Promise<Map<string, number>> {
+    if (driverIds.length === 0) {
+      return new Map();
+    }
+
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const rows = await this.prisma.driverLocationHistory.findMany({
+      where: {
+        driverId: { in: driverIds },
+        recordedAt: { gte: since },
+      },
+      orderBy: [{ driverId: 'asc' }, { recordedAt: 'asc' }],
+      select: {
+        driverId: true,
+        recordedAt: true,
+        speedMps: true,
+      },
+    });
+
+    const idleStartByDriver = new Map<string, number>();
+    for (const row of rows) {
+      const speedKph = this.speedMpsToKmh(row.speedMps) ?? 0;
+      if (speedKph < TELEMATICS_THRESHOLDS.idleSpeedKph) {
+        if (!idleStartByDriver.has(row.driverId)) {
+          idleStartByDriver.set(row.driverId, row.recordedAt.getTime());
+        }
+      } else {
+        idleStartByDriver.delete(row.driverId);
+      }
+    }
+
+    return idleStartByDriver;
+  }
+
+  private async loadAlarmFlagsByVehicle(): Promise<
+    Map<string, { hasCriticalDtc: boolean; fuelDropFlag: boolean; isSilent: boolean }>
+  > {
+    if (!this.telematicsService) {
+      return new Map();
+    }
+
+    const health = await this.telematicsService.getVehicleHealth();
+    const map = new Map<string, { hasCriticalDtc: boolean; fuelDropFlag: boolean; isSilent: boolean }>();
+
+    for (const item of health.items) {
+      map.set(item.vehicleId, {
+        hasCriticalDtc: item.criticalDtcCount > 0,
+        fuelDropFlag: item.fuelDropFlag,
+        isSilent: item.deviceStatus === 'silent',
+      });
+    }
+
+    return map;
+  }
+
   private async resolveDriverIdForVehicleToday(vehicleId: string): Promise<string | null> {
     return this.resolveDriverIdForVehicleTodayWithClient(this.prisma, vehicleId);
   }
@@ -1381,10 +1526,23 @@ export class TrackingService {
     } | null,
     staleAfterSec: number,
     now: Date,
+    ignitionOn: boolean | null,
+    idleSinceMs: number | null,
+    alarms?: { hasCriticalDtc: boolean; fuelDropFlag: boolean; isSilent: boolean },
   ): LiveTrackingItem {
     const driverName = `${row.driver.firstName} ${row.driver.lastName}`.trim();
     const vehicleId = row.vehicleId ?? assignment?.vehicle.id ?? null;
     const plateNumber = row.vehicle?.plateNumber ?? assignment?.vehicle.plateNumber ?? null;
+    const speedKmh = this.speedMpsToKmh(row.speedMps);
+    const status = this.computeTrackingStatus(row.receivedAt, staleAfterSec, now);
+    const motion = resolveMotionState({
+      presenceStatus: status,
+      ignitionOn,
+      speedKph: speedKmh,
+      idleSinceMs,
+      nowMs: now.getTime(),
+      idleWatchMinutes: TELEMATICS_THRESHOLDS.idleWatchMinutes,
+    });
 
     return {
       driverId: row.driverId,
@@ -1393,12 +1551,17 @@ export class TrackingService {
       plateNumber,
       latitude: this.decimalToNumber(row.latitude),
       longitude: this.decimalToNumber(row.longitude),
-      speedKmh: this.speedMpsToKmh(row.speedMps),
+      speedKmh,
       headingDeg: row.headingDeg,
       accuracyM: row.accuracyM,
       recordedAt: row.recordedAt.toISOString(),
       receivedAt: row.receivedAt.toISOString(),
-      status: this.computeTrackingStatus(row.receivedAt, staleAfterSec, now),
+      status,
+      motionState: motion.motionState,
+      idleSinceMs: motion.idleSinceMs,
+      hasCriticalDtc: alarms?.hasCriticalDtc ?? false,
+      fuelDropFlag: alarms?.fuelDropFlag ?? false,
+      isSilent: alarms?.isSilent ?? false,
       locationSource: this.mapLocationSource(row.source),
       assignmentId: assignment?.id ?? null,
       companyName: assignment?.company.name ?? null,
@@ -1429,6 +1592,10 @@ export class TrackingService {
       recordedAt: null,
       receivedAt: null,
       status: 'offline',
+      motionState: 'offline',
+      hasCriticalDtc: false,
+      fuelDropFlag: false,
+      isSilent: false,
       locationSource: null,
       assignmentId: assignment?.id ?? null,
       companyName: assignment?.company.name ?? null,

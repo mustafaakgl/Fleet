@@ -68,6 +68,17 @@ export class TrackingController {
     });
   }
 
+  @Get('live/trail/:driverId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  getLiveTrail(
+    @Param('driverId') driverId: string,
+    @Query('minutes') minutesRaw?: string,
+  ) {
+    const parsedMinutes = minutesRaw ? Number(minutesRaw) : 30;
+    const minutes = Number.isFinite(parsedMinutes) ? parsedMinutes : 30;
+    return this.trackingService.getLiveTrail(driverId, minutes);
+  }
+
   @Post('telematics/ingest')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @RequiresWrite()

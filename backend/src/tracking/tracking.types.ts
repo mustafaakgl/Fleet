@@ -1,5 +1,7 @@
 export type TrackingPresenceStatus = 'online' | 'stale' | 'offline';
 
+export type MotionState = 'moving' | 'idle' | 'stopped' | 'offline';
+
 export type LocationSourceType = 'mobile' | 'telematics';
 
 export type LiveTrackingItem = {
@@ -15,10 +17,22 @@ export type LiveTrackingItem = {
   recordedAt: string | null;
   receivedAt: string | null;
   status: TrackingPresenceStatus;
+  motionState: MotionState;
+  idleSinceMs?: number;
+  hasCriticalDtc: boolean;
+  fuelDropFlag: boolean;
+  isSilent: boolean;
   locationSource: LocationSourceType | null;
   assignmentId: string | null;
   companyName: string | null;
   cargoName: string | null;
+};
+
+export type LiveTrailPoint = {
+  at: string;
+  lat: number;
+  lng: number;
+  speedKph: number | null;
 };
 
 export type LocationHistoryPoint = {

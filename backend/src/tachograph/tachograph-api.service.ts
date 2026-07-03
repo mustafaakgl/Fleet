@@ -797,7 +797,7 @@ export class TachographApiService {
     return lines;
   }
 
-  async getRemainingDriving(tenantId: string) {
+  async getRemainingDriving(tenantId: string, driverId?: string) {
     const now = new Date();
     const nowMs = now.getTime();
     const todayStart = new Date(now);
@@ -806,7 +806,7 @@ export class TachographApiService {
 
     const [drivers, activities, lastDddByDriver, todayAssignments] = await Promise.all([
       this.prisma.driver.findMany({
-        where: { tenantId, status: 'active' },
+        where: { tenantId, status: 'active', ...(driverId ? { id: driverId } : {}) },
         select: { id: true, firstName: true, lastName: true },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       }),
@@ -814,6 +814,7 @@ export class TachographApiService {
         where: {
           tenantId,
           driverId: { not: null },
+          ...(driverId ? { driverId } : {}),
           startedAt: { gte: activityFrom },
         },
         select: {
@@ -828,12 +829,17 @@ export class TachographApiService {
       }),
       this.prisma.dddFile.groupBy({
         by: ['driverId'],
-        where: { tenantId, driverId: { not: null }, fileType: 'card' },
+        where: {
+          tenantId,
+          driverId: driverId ? driverId : { not: null },
+          fileType: 'card',
+        },
         _max: { capturedAt: true },
       }),
       this.prisma.assignment.findMany({
         where: {
           tenantId,
+          ...(driverId ? { driverId } : {}),
           workDate: { gte: todayStart, lt: new Date(todayStart.getTime() + 24 * 3600 * 1000) },
           status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
         },

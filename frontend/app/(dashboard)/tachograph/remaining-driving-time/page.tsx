@@ -5,7 +5,6 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Gauge, HardDriveDownload, WifiOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -17,12 +16,7 @@ import { cn } from '@/lib/utils';
 import { isInitialLoad } from '@/lib/is-initial-load';
 import { usePageTitle } from '@/lib/use-page-title';
 import { CardGridSkeleton } from '@/components/loading/page-skeletons';
-
-function remainingRadialColor(remainingS: number): string {
-  if (remainingS < 3600) return '#dc2626';
-  if (remainingS < 2 * 3600) return '#f59e0b';
-  return '#059669';
-}
+import { RemainingDrivingRadial } from '@/components/tachograph/RemainingDrivingRadial';
 
 function statusBadgeClass(status: TachographRemainingDriver['currentStatus']): string {
   if (status === 'driving') return 'border-blue-200 bg-blue-50 text-blue-800';
@@ -66,11 +60,6 @@ function DriverRemainingCard({
   driver: TachographRemainingDriver;
   t: (key: string, opts?: Record<string, string | number>) => string;
 }) {
-  const dailyLimitS = driver.todayDrivingS + driver.todayRemainingDrivingS;
-  const fillPct = dailyLimitS > 0 ? Math.round((driver.todayRemainingDrivingS / dailyLimitS) * 100) : 0;
-  const radialFill = remainingRadialColor(driver.todayRemainingDrivingS);
-  const breakSoon = driver.nextMandatoryBreakInS > 0 && driver.nextMandatoryBreakInS < 30 * 60;
-
   return (
     <Link href={`/tachograph/compliance?driverId=${driver.driverId}`} className="block">
       <Card
@@ -96,41 +85,7 @@ function DriverRemainingCard({
           ) : null}
         </CardHeader>
         <CardContent className="space-y-3 pb-4">
-          <div className="relative mx-auto h-36 w-full max-w-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart
-                innerRadius="72%"
-                outerRadius="100%"
-                data={[{ name: 'remaining', value: fillPct, fill: radialFill }]}
-                startAngle={90}
-                endAngle={-270}
-              >
-                <RadialBar dataKey="value" cornerRadius={4} background={{ fill: '#f1f5f9' }} />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span
-                className={cn(
-                  'tabular-nums text-lg font-semibold',
-                  driver.todayRemainingDrivingS < 3600
-                    ? 'text-red-700'
-                    : driver.todayRemainingDrivingS < 2 * 3600
-                      ? 'text-amber-700'
-                      : 'text-slate-900',
-                )}
-              >
-                {formatTachographDurationS(driver.todayRemainingDrivingS, t)}
-              </span>
-              <span className="text-[10px] text-slate-500">{t('tachograph.remaining.todayRemaining')}</span>
-            </div>
-          </div>
-
-          <p className="text-center text-xs text-slate-600">
-            {breakSoon ? <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-500" /> : null}
-            {t('tachograph.remaining.nextBreak', {
-              duration: formatTachographDurationS(driver.nextMandatoryBreakInS, t),
-            })}
-          </p>
+          <RemainingDrivingRadial driver={driver} t={t} />
 
           <ProgressBar
             usedS={driver.weekUsedS}

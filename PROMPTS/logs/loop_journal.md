@@ -16,3 +16,6 @@
 [2026-06-15] [faz4-ui-3] [vehicle-health+driver-scores] [GET /telematics/vehicle-health + series + driver-scores + trips; downsample util; live UI KPI/charts/map reuse; i18n de/en/tr; e2e telematics-health-scores; Faz 4 TAMAMLANDI]
 [2026-06-15] [mock-fleet] [seed] [seed-mock-fleet.mjs: 50 araç / 62 sürücü / mock-fleet-tenant; DDD placeholder storedPath; 2× idempotent özet (seed 42, ~2s); seed-tacho-demo dokunulmadı]
 [2026-07-02] [premium-cila] [ui] [Skeleton loaders, CARTO maps, ConnectionBanner, login/mail brand shell; gerçek logo bekleniyor; Oturum 12+: Cmd+K, virtual tables, optimistic UI, density, PDF audit, public API, mTLS]
+[2026-07-03] [oturum12] [backend-motion-trail] [motionState+trail util/controller/service eklendi]
+[2026-07-03] [oturum12] [frontend-cockpit-core] [status-strip+map-trail-follow+mini-kokpit altyapisi eklendi]
+[2026-07-03] [oturum12] [verify] [backend test/tsc yesil; codec8-sim ve tenant-isolation script ortam/veri kaynakli kirmizi]

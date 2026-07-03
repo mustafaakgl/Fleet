@@ -188,11 +188,14 @@ export class TachographController {
   @Get('remaining')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...OPERATIONAL_ROLES)
-  getRemaining(@CurrentUser('tenantId') tenantId?: string) {
+  getRemaining(
+    @CurrentUser('tenantId') tenantId?: string,
+    @Query('driverId') driverId?: string,
+  ) {
     if (!tenantId) {
       throw new BadRequestException('tenantId missing in auth context');
     }
-    return this.tachographApiService.getRemainingDriving(tenantId);
+    return this.tachographApiService.getRemainingDriving(tenantId, driverId);
   }
 
   @Patch('ddd/files/:id/assign')

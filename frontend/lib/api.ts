@@ -1752,6 +1752,13 @@ export interface LiveTrackingQueryParams {
 export const trackingApi = {
   getLive: (params?: LiveTrackingQueryParams) =>
     api.get<LiveTrackingItem[]>('/tracking/live', { params }).then((r) => r.data),
+  getTrail: (driverId: string, minutes = 30) =>
+    api
+      .get<{ driverId: string; points: import('./types').LiveTrackingTrailPoint[] }>(
+        `/tracking/live/trail/${driverId}`,
+        { params: { minutes } },
+      )
+      .then((r) => r.data),
 };
 
 export const telematicsApi = {
@@ -1849,8 +1856,10 @@ export const tachographApi = {
       .then((r) => r.data);
   },
 
-  getRemaining: () =>
-    api.get<import('./types').TachographRemainingResponse>('/tachograph/remaining').then((r) => r.data),
+  getRemaining: (params?: { driverId?: string }) =>
+    api
+      .get<import('./types').TachographRemainingResponse>('/tachograph/remaining', { params })
+      .then((r) => r.data),
 
   getDashboardSummary: () =>
     api
