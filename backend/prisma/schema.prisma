@@ -59,6 +59,13 @@ enum BillingMode {
   manual
 }
 
+enum FuelCardTransactionStatus {
+  imported
+  matched
+  disputed
+  ignored
+}
+
 enum DriverStatus {
   active
   on_leave
@@ -488,6 +495,8 @@ model Tenant {
   fleetTripPurposeLogs  FleetTripPurposeLog[]
   fleetDrivingEvents    FleetDrivingEvent[]
   fleetFuelEntries      FleetFuelEntry[]
+  fuelCardImportBatches FuelCardImportBatch[]
+  fuelCardTransactions  FuelCardTransaction[]
   fleetMaintenanceRules FleetMaintenanceRule[]
   devices               Device[]
   vehicleTelemetryLatest VehicleTelemetryLatest[]
@@ -683,6 +692,7 @@ model Driver {
   fleetTrips            FleetTrip[]
   fleetDrivingEvents    FleetDrivingEvent[]
   fleetFuelEntries      FleetFuelEntry[]
+  fuelCardTransactions  FuelCardTransaction[]
   dddFiles              DddFile[]
   tachoActivities       TachoActivity[]
   tachoInfringements    TachoInfringement[]
@@ -795,6 +805,7 @@ model Vehicle {
   fines             Fine[]
   fleetTrips        FleetTrip[]
   fleetFuelEntries  FleetFuelEntry[]
+  fuelCardTransactions FuelCardTransaction[]
   fleetMaintenanceRules FleetMaintenanceRule[]
   devices           Device[]
   telemetryLatest   VehicleTelemetryLatest?
@@ -1900,10 +1911,70 @@ model FleetFuelEntry {
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
+  fuelCardTransactions FuelCardTransaction[]
+
   @@index([tenantId])
   @@index([vehicleId, enteredAt])
   @@index([driverId, enteredAt])
   @@map("fleet_fuel_entries")
+}
+
+model FuelCardImportBatch {
+  id               String   @id @default(cuid())
+  tenantId         String   @default("default-tenant")
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sourceFileName   String
+  sourceStoredPath String?
+  sourceMimeType   String?
+  importedAt       DateTime @default(now())
+  totalRows        Int      @default(0)
+  matchedRows      Int      @default(0)
+  unmatchedRows    Int      @default(0)
+  ignoredRows      Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  transactions FuelCardTransaction[]
+
+  @@index([tenantId])
+  @@map("fuel_card_import_batches")
+}
+
+model FuelCardTransaction {
+  id                String                    @id @default(cuid())
+  tenantId          String                    @default("default-tenant")
+  tenant            Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  batchId           String
+  vehicleId         String?
+  driverId          String?
+  fuelEntryId       String?
+  externalReference String?
+  cardLast4         String?
+  merchantName      String
+  transactionAt     DateTime
+  liters            Decimal?                  @db.Decimal(10, 3)
+  amount            Decimal                   @db.Decimal(12, 2)
+  currency          String                    @default("EUR")
+  odometerKm        Decimal?                  @db.Decimal(12, 3)
+  status            FuelCardTransactionStatus @default(imported)
+  matchScore        Int?
+  matchNote         String?
+  rawPayload        Json?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  batch     FuelCardImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driver    Driver?             @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  fuelEntry FleetFuelEntry?     @relation(fields: [fuelEntryId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([batchId])
+  @@index([vehicleId, transactionAt])
+  @@index([driverId, transactionAt])
+  @@index([fuelEntryId])
+  @@index([status])
+  @@map("fuel_card_transactions")
 }
 
 model FleetMaintenanceRule {

@@ -121,6 +121,40 @@ async function main() {
       }
     }
 
+    const totalFuelCardBatches = await base.fuelCardImportBatch.count();
+    const scopedFuelCardBatchesA = await TenantContext.run(tenantA, () =>
+      scoped.fuelCardImportBatch.count(),
+    );
+    console.log(`FuelCardImportBatch total: ${totalFuelCardBatches}, tenant A scoped: ${scopedFuelCardBatchesA}`);
+
+    if (tenantA !== tenantB) {
+      const crossFuelCardBatch = await TenantContext.run(tenantA, () =>
+        scoped.fuelCardImportBatch.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossFuelCardBatch) {
+        throw new Error('Isolation failure: tenant A context read tenant B fuel card batch');
+      }
+    }
+
+    const totalFuelCardTransactions = await base.fuelCardTransaction.count();
+    const scopedFuelCardTransactionsA = await TenantContext.run(tenantA, () =>
+      scoped.fuelCardTransaction.count(),
+    );
+    console.log(`FuelCardTransaction total: ${totalFuelCardTransactions}, tenant A scoped: ${scopedFuelCardTransactionsA}`);
+
+    if (tenantA !== tenantB) {
+      const crossFuelCardTransaction = await TenantContext.run(tenantA, () =>
+        scoped.fuelCardTransaction.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossFuelCardTransaction) {
+        throw new Error('Isolation failure: tenant A context read tenant B fuel card transaction');
+      }
+    }
+
     console.log('Tenant isolation check passed.');
   } finally {
     await base.$disconnect();

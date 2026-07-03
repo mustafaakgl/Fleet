@@ -112,6 +112,18 @@ export class FleetFuelOverviewController {
   }
 }
 
+@Controller('fleet/fuel/analytics')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(...OPERATIONAL_ROLES)
+export class FleetFuelCockpitController {
+  constructor(private readonly fleetFuel: FleetFuelService) {}
+
+  @Get()
+  getAnalytics(@Query() query: FleetFuelOverviewQueryDto) {
+    return this.fleetFuel.getFleetFuelAnalyticsCockpit(query);
+  }
+}
+
 @Controller('fleet/fuel-entries')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)

@@ -401,6 +401,48 @@ export interface FleetFuelEntryDetail extends FleetFuelEntry {
   previousOdometerKm: number | null;
 }
 
+export type FuelCardTransactionStatus = 'imported' | 'matched' | 'disputed' | 'ignored';
+
+export interface FuelCardImportBatchSummary {
+  id: string;
+  sourceFileName: string;
+  sourceStoredPath: string | null;
+  sourceMimeType: string | null;
+  importedAt: string;
+  totalRows: number;
+  matchedRows: number;
+  unmatchedRows: number;
+  ignoredRows: number;
+  transactionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FuelCardTransactionSummary {
+  id: string;
+  batchId: string;
+  sourceFileName: string;
+  vehicleId: string | null;
+  plateNumber: string | null;
+  driverId: string | null;
+  driverName: string | null;
+  fuelEntryId: string | null;
+  matchedFuelEntryAt: string | null;
+  externalReference: string | null;
+  cardLast4: string | null;
+  merchantName: string;
+  transactionAt: string;
+  liters: number | null;
+  amount: number;
+  currency: string;
+  odometerKm: number | null;
+  status: FuelCardTransactionStatus;
+  matchScore: number | null;
+  matchNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface FleetFuelOverviewResponse {
   from: string | null;
   to: string | null;
@@ -468,6 +510,78 @@ export interface FleetVehicleFuelAnalyticsResponse {
     createdAt: string;
     updatedAt: string;
   }>;
+}
+
+export interface FleetFuelAnalyticsCockpitResponse {
+  generatedAt: string;
+  from: string | null;
+  to: string | null;
+  vehicleId: string | null;
+  driverId: string | null;
+  assumptions: {
+    co2KgPerLiter: number;
+    suspiciousDeltaPercent: number;
+  };
+  totals: {
+    totalLiters: number;
+    totalEstimatedLiters: number;
+    tripDistanceKm: number;
+    totalCost: number;
+    avgLitersPer100Km: number | null;
+    avgEstimatedLitersPer100Km: number | null;
+    estimatedVsRealDeltaLiters: number | null;
+    estimatedVsRealDeltaPercent: number | null;
+    co2Kg: number;
+    estimatedCo2Kg: number;
+    averagePricePerLiter: number | null;
+    suspiciousEventCount: number;
+  };
+  vehicles: Array<{
+    vehicleId: string;
+    plateNumber: string;
+    brand: string;
+    model: string;
+    avgLitersPer100Km: number | null;
+    avgEstimatedLitersPer100Km: number | null;
+    totalLiters: number;
+    totalEstimatedLiters: number;
+    tripDistanceKm: number;
+    totalCost: number;
+    deltaLiters: number | null;
+    deltaPercent: number | null;
+    suspiciousEventCount: number;
+  }>;
+  weeklyTrend: Array<{
+    weekStart: string;
+    tripDistanceKm: number;
+    realDistanceKm: number;
+    realLiters: number;
+    estimatedLiters: number;
+    realLitersPer100Km: number | null;
+    estimatedLitersPer100Km: number | null;
+  }>;
+  driverBreakdown: Array<{
+    driverId: string;
+    driverName: string;
+    tripDistanceKm: number;
+    realLiters: number;
+    estimatedLiters: number;
+    eventCount: number;
+    realLitersPer100Km: number | null;
+    estimatedLitersPer100Km: number | null;
+    deltaLiters: number | null;
+    deltaPercent: number | null;
+  }>;
+  suspiciousEvents: Array<{
+    id: string;
+    type: 'fuel_theft_suspected' | 'fuel_deviation';
+    vehicleId: string;
+    plateNumber: string;
+    occurredAt: string;
+    title: string;
+    message: string;
+  }>;
+  entries: FleetFuelEntry[];
 }
 
 export type FleetTripStatus = 'active' | 'closed';

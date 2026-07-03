@@ -2137,6 +2137,11 @@ export const fleetFuelAnalyticsApi = {
       .get<import('./types').FleetFuelOverviewResponse>('/fleet/fuel-analytics', { params })
       .then((r) => r.data),
 
+  getCockpit: (params?: { from?: string; to?: string; vehicleId?: string; driverId?: string }) =>
+    api
+      .get<import('./types').FleetFuelAnalyticsCockpitResponse>('/fleet/fuel/analytics', { params })
+      .then((r) => r.data),
+
   getVehicleAnalytics: (vehicleId: string, params?: { from?: string; to?: string }) =>
     api
       .get<import('./types').FleetVehicleFuelAnalyticsResponse>(
@@ -2169,6 +2174,30 @@ export const fleetFuelEntriesApi = {
   }) =>
     api
       .post<import('./types').FleetFuelEntry>('/fleet/fuel-entries', payload)
+      .then((r) => r.data),
+};
+
+export const fleetFuelCardApi = {
+  listImportBatches: () =>
+    api
+      .get<import('./types').FuelCardImportBatchSummary[]>('/fleet/fuel-card/import-batches')
+      .then((r) => r.data),
+
+  getImportBatch: (batchId: string) =>
+    api
+      .get<import('./types').FuelCardImportBatchSummary>(`/fleet/fuel-card/import-batches/${batchId}`)
+      .then((r) => r.data),
+
+  listTransactions: (params?: {
+    batchId?: string;
+    vehicleId?: string;
+    driverId?: string;
+    status?: import('./types').FuelCardTransactionStatus;
+    from?: string;
+    to?: string;
+  }) =>
+    api
+      .get<import('./types').FuelCardTransactionSummary[]>('/fleet/fuel-card/transactions', { params })
       .then((r) => r.data),
 };
 

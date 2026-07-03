@@ -13,4 +13,9 @@ export class FleetFuelOverviewQueryDto {
   @IsString()
   @MinLength(1)
   vehicleId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  driverId?: string;
 }

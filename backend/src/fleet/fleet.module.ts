@@ -10,10 +10,13 @@ import {
   FleetFuelController,
   FleetFuelDriverController,
   FleetFuelAnalyticsDriverController,
+  FleetFuelCockpitController,
   FleetFuelOverviewController,
   FleetVehicleFuelAnalyticsController,
 } from './fleet-fuel.controller';
+import { FuelCardReconciliationController } from './fuel-card-reconciliation.controller';
 import { FleetFuelService } from './fleet-fuel.service';
+import { FuelCardReconciliationService } from './fuel-card-reconciliation.service';
 import {
   FleetMaintenanceController,
   FleetVehicleMaintenanceController,
@@ -40,7 +43,9 @@ import { FleetTripsService } from './fleet-trips.service';
     FleetFuelController,
     FleetFuelDriverController,
     FleetFuelAnalyticsDriverController,
+    FleetFuelCockpitController,
     FleetFuelOverviewController,
+    FuelCardReconciliationController,
     FleetVehicleFuelAnalyticsController,
     FleetVehicleStatusController,
     FleetVehicleStatusDriverController,
@@ -53,6 +58,7 @@ import { FleetTripsService } from './fleet-trips.service';
     FleetTripsScheduler,
     FleetDriverScoreService,
     FleetFuelService,
+    FuelCardReconciliationService,
     FleetVehicleStatusService,
     FleetMaintenanceService,
     FleetMaintenanceScheduler,

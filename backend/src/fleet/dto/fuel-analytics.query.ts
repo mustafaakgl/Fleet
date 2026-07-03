@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional } from 'class-validator';
+import { IsDateString, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class FuelAnalyticsQueryDto {
   @IsOptional()
@@ -8,4 +8,9 @@ export class FuelAnalyticsQueryDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  driverId?: string;
 }

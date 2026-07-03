@@ -19,3 +19,5 @@
 [2026-07-03] [oturum12] [backend-motion-trail] [motionState+trail util/controller/service eklendi]
 [2026-07-03] [oturum12] [frontend-cockpit-core] [status-strip+map-trail-follow+mini-kokpit altyapisi eklendi]
 [2026-07-03] [oturum12] [verify] [backend test/tsc yesil; codec8-sim ve tenant-isolation script ortam/veri kaynakli kirmizi]
+[2026-07-03] [faz5-fuel-analytics] [14b-schema] [fuel card import batch + transaction modelleri ve tenant kayıtları eklendi]
+[2026-07-03] [faz5-fuel-analytics] [14b-api] [fuel card import batch/transaction list API ve module wiring eklendi]

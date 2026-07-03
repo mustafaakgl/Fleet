@@ -7,6 +7,7 @@ import {
 import {
   AssignmentStatus,
   FleetTripStatus,
+  NotificationType,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -105,6 +106,61 @@ export type FleetFuelOverviewResponse = {
     avgLitersPer100Km: number | null;
     avgEstimatedLitersPer100Km: number | null;
   };
+};
+
+export type FleetFuelAnalyticsVehicleRow = FleetFuelOverviewVehicleSummary & {
+  brand: string;
+  model: string;
+  deltaLiters: number | null;
+  deltaPercent: number | null;
+  suspiciousEventCount: number;
+};
+
+export type FleetFuelAnalyticsDriverRow = DriverFuelBreakdown & {
+  driverName: string;
+  deltaLiters: number | null;
+  deltaPercent: number | null;
+};
+
+export type FleetFuelAnalyticsSuspiciousEvent = {
+  id: string;
+  type: 'fuel_theft_suspected' | 'fuel_deviation';
+  vehicleId: string;
+  plateNumber: string;
+  occurredAt: string;
+  title: string;
+  message: string;
+};
+
+export type FleetFuelAnalyticsCockpitResponse = {
+  generatedAt: string;
+  from: string | null;
+  to: string | null;
+  vehicleId: string | null;
+  driverId: string | null;
+  assumptions: {
+    co2KgPerLiter: number;
+    suspiciousDeltaPercent: number;
+  };
+  totals: {
+    totalLiters: number;
+    totalEstimatedLiters: number;
+    tripDistanceKm: number;
+    totalCost: number;
+    avgLitersPer100Km: number | null;
+    avgEstimatedLitersPer100Km: number | null;
+    estimatedVsRealDeltaLiters: number | null;
+    estimatedVsRealDeltaPercent: number | null;
+    co2Kg: number;
+    estimatedCo2Kg: number;
+    averagePricePerLiter: number | null;
+    suspiciousEventCount: number;
+  };
+  vehicles: FleetFuelAnalyticsVehicleRow[];
+  weeklyTrend: WeeklyFuelTrendPoint[];
+  driverBreakdown: FleetFuelAnalyticsDriverRow[];
+  suspiciousEvents: FleetFuelAnalyticsSuspiciousEvent[];
+  entries: FleetFuelEntrySummary[];
 };
 
 @Injectable()
@@ -359,6 +415,265 @@ export class FleetFuelService {
     };
   }
 
+  async getFleetFuelAnalyticsCockpit(
+    query: FleetFuelOverviewQueryDto,
+  ): Promise<FleetFuelAnalyticsCockpitResponse> {
+    const vehicleIds = await this.resolveOverviewVehicleIds(query);
+    const rows = await Promise.all(
+      vehicleIds.map(async (vehicleId) => {
+        const analytics = await this.buildVehicleFuelAnalytics(vehicleId, query);
+        const vehicle = await this.prisma.vehicle.findFirst({
+          where: { id: vehicleId },
+          select: { plateNumber: true, brand: true, model: true },
+        });
+
+        return {
+          vehicleId,
+          plateNumber: vehicle?.plateNumber ?? vehicleId,
+          brand: vehicle?.brand ?? '—',
+          model: vehicle?.model ?? '—',
+          analytics,
+        };
+      }),
+    );
+
+    const suspiciousEventsRaw =
+      vehicleIds.length > 0
+        ? await this.prisma.notification.findMany({
+            where: {
+              type: NotificationType.fuel_theft_suspected,
+              relatedEntityId: { in: vehicleIds },
+              ...(query.from || query.to ? { createdAt: this.buildDateFilter(query.from, query.to) } : {}),
+            },
+            select: {
+              id: true,
+              relatedEntityId: true,
+              createdAt: true,
+              title: true,
+              message: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+          })
+        : [];
+
+    const driverIds = [...new Set(rows.flatMap((row) => row.analytics.driverBreakdown.map((driver) => driver.driverId)))];
+    const driverNames = new Map<string, string>();
+    if (driverIds.length > 0) {
+      const drivers = await this.prisma.driver.findMany({
+        where: { id: { in: driverIds } },
+        select: { id: true, firstName: true, lastName: true },
+      });
+      for (const driver of drivers) {
+        driverNames.set(driver.id, `${driver.firstName} ${driver.lastName}`.trim());
+      }
+    }
+
+    const vehicles = rows
+      .map((row) => {
+        const deltaLiters =
+          row.analytics.estimatedVsRealDeltaLiters != null
+            ? round(row.analytics.estimatedVsRealDeltaLiters, 3)
+            : null;
+        const deltaPercent =
+          row.analytics.totalLiters > 0 && deltaLiters != null
+            ? round((deltaLiters / row.analytics.totalLiters) * 100, 2)
+            : null;
+        const suspiciousEventCount =
+          suspiciousEventsRaw.filter((event) => event.relatedEntityId === row.vehicleId).length +
+          (deltaPercent !== null && Math.abs(deltaPercent) >= 15 ? 1 : 0);
+
+        return {
+          vehicleId: row.vehicleId,
+          plateNumber: row.plateNumber,
+          brand: row.brand,
+          model: row.model,
+          avgLitersPer100Km: row.analytics.avgLitersPer100Km,
+          avgEstimatedLitersPer100Km: row.analytics.avgEstimatedLitersPer100Km,
+          totalLiters: row.analytics.totalLiters,
+          totalEstimatedLiters: row.analytics.totalEstimatedLiters,
+          tripDistanceKm: row.analytics.tripDistanceKm,
+          totalCost: row.analytics.totalCost,
+          deltaLiters,
+          deltaPercent,
+          suspiciousEventCount,
+        } satisfies FleetFuelAnalyticsVehicleRow;
+      })
+      .sort((left, right) => {
+        const leftDelta = Math.abs(left.deltaPercent ?? 0);
+        const rightDelta = Math.abs(right.deltaPercent ?? 0);
+        if (leftDelta !== rightDelta) return rightDelta - leftDelta;
+        return right.totalCost - left.totalCost;
+      });
+
+    const driverBreakdownMap = new Map<string, FleetFuelAnalyticsDriverRow>();
+    for (const row of rows) {
+      for (const driver of row.analytics.driverBreakdown) {
+        const driverName = driverNames.get(driver.driverId) ?? driver.driverId;
+        const deltaLiters = round(driver.estimatedLiters - driver.realLiters, 3);
+        const deltaPercent =
+          driver.realLiters > 0 ? round((deltaLiters / driver.realLiters) * 100, 2) : null;
+        const existing = driverBreakdownMap.get(driver.driverId);
+
+        if (!existing) {
+          driverBreakdownMap.set(driver.driverId, {
+            ...driver,
+            driverName,
+            deltaLiters,
+            deltaPercent,
+          });
+          continue;
+        }
+
+        const tripDistanceKm = round(existing.tripDistanceKm + driver.tripDistanceKm, 3);
+        const realLiters = round(existing.realLiters + driver.realLiters, 3);
+        const estimatedLiters = round(existing.estimatedLiters + driver.estimatedLiters, 3);
+        const eventCount = existing.eventCount + driver.eventCount;
+
+        driverBreakdownMap.set(driver.driverId, {
+          ...existing,
+          driverName,
+          tripDistanceKm,
+          realLiters,
+          estimatedLiters,
+          eventCount,
+          realLitersPer100Km:
+            tripDistanceKm > 0 && realLiters > 0 ? round((realLiters / tripDistanceKm) * 100, 2) : null,
+          estimatedLitersPer100Km:
+            tripDistanceKm > 0 && estimatedLiters > 0
+              ? round((estimatedLiters / tripDistanceKm) * 100, 2)
+              : null,
+          deltaLiters: round(estimatedLiters - realLiters, 3),
+          deltaPercent: realLiters > 0 ? round(((estimatedLiters - realLiters) / realLiters) * 100, 2) : null,
+        });
+      }
+    }
+
+    const weeklyTrendMap = new Map<string, WeeklyFuelTrendPoint>();
+    for (const row of rows) {
+      for (const point of row.analytics.weeklyTrend) {
+        const bucket = weeklyTrendMap.get(point.weekStart) ?? {
+          weekStart: point.weekStart,
+          tripDistanceKm: 0,
+          realDistanceKm: 0,
+          realLiters: 0,
+          estimatedLiters: 0,
+          realLitersPer100Km: null,
+          estimatedLitersPer100Km: null,
+        };
+        bucket.tripDistanceKm += point.tripDistanceKm;
+        bucket.realDistanceKm += point.realDistanceKm;
+        bucket.realLiters += point.realLiters;
+        bucket.estimatedLiters += point.estimatedLiters;
+        weeklyTrendMap.set(point.weekStart, bucket);
+      }
+    }
+
+    const weeklyTrend = [...weeklyTrendMap.values()]
+      .map((point) => ({
+        ...point,
+        tripDistanceKm: round(point.tripDistanceKm, 3),
+        realDistanceKm: round(point.realDistanceKm, 3),
+        realLiters: round(point.realLiters, 3),
+        estimatedLiters: round(point.estimatedLiters, 3),
+        realLitersPer100Km:
+          point.realDistanceKm > 0 && point.realLiters > 0
+            ? round((point.realLiters / point.realDistanceKm) * 100, 2)
+            : null,
+        estimatedLitersPer100Km:
+          point.tripDistanceKm > 0 && point.estimatedLiters > 0
+            ? round((point.estimatedLiters / point.tripDistanceKm) * 100, 2)
+            : null,
+      }))
+      .sort((left, right) => left.weekStart.localeCompare(right.weekStart));
+
+    const entries = await this.prisma.fleetFuelEntry.findMany({
+      where: this.buildListWhere(query),
+      orderBy: { enteredAt: 'desc' },
+      take: 200,
+      include: {
+        vehicle: { select: { plateNumber: true } },
+        driver: { select: { firstName: true, lastName: true } },
+      },
+    });
+
+    const totalLiters = round(rows.reduce((sum, row) => sum + row.analytics.totalLiters, 0), 3);
+    const totalEstimatedLiters = round(
+      rows.reduce((sum, row) => sum + row.analytics.totalEstimatedLiters, 0),
+      3,
+    );
+    const tripDistanceKm = round(rows.reduce((sum, row) => sum + row.analytics.tripDistanceKm, 0), 3);
+    const totalCost = round(rows.reduce((sum, row) => sum + row.analytics.totalCost, 0), 2);
+    const estimatedVsRealDeltaLiters = round(totalEstimatedLiters - totalLiters, 3);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      from: query.from ?? null,
+      to: query.to ?? null,
+      vehicleId: query.vehicleId ?? null,
+      driverId: query.driverId ?? null,
+      assumptions: {
+        co2KgPerLiter: 2.64,
+        suspiciousDeltaPercent: 15,
+      },
+      totals: {
+        totalLiters,
+        totalEstimatedLiters,
+        tripDistanceKm,
+        totalCost,
+        avgLitersPer100Km:
+          tripDistanceKm > 0 && totalLiters > 0 ? round((totalLiters / tripDistanceKm) * 100, 2) : null,
+        avgEstimatedLitersPer100Km:
+          tripDistanceKm > 0 && totalEstimatedLiters > 0
+            ? round((totalEstimatedLiters / tripDistanceKm) * 100, 2)
+            : null,
+        estimatedVsRealDeltaLiters,
+        estimatedVsRealDeltaPercent:
+          totalLiters > 0 ? round((estimatedVsRealDeltaLiters / totalLiters) * 100, 2) : null,
+        co2Kg: round(totalLiters * 2.64, 2),
+        estimatedCo2Kg: round(totalEstimatedLiters * 2.64, 2),
+        averagePricePerLiter: totalLiters > 0 ? round(totalCost / totalLiters, 2) : null,
+        suspiciousEventCount:
+          suspiciousEventsRaw.length + vehicles.filter((vehicle) => Math.abs(vehicle.deltaPercent ?? 0) >= 15).length,
+      },
+      vehicles,
+      weeklyTrend,
+      driverBreakdown: [...driverBreakdownMap.values()].sort(
+        (left, right) => right.tripDistanceKm - left.tripDistanceKm,
+      ),
+      suspiciousEvents: [
+        ...suspiciousEventsRaw.map((event) => {
+          const vehicle = rows.find((row) => row.vehicleId === event.relatedEntityId);
+          return {
+            id: event.id,
+            type: 'fuel_theft_suspected' as const,
+            vehicleId: event.relatedEntityId ?? '',
+            plateNumber: vehicle?.plateNumber ?? event.relatedEntityId ?? '—',
+            occurredAt: event.createdAt.toISOString(),
+            title: event.title,
+            message: event.message,
+          };
+        }),
+        ...vehicles
+          .filter((vehicle) => Math.abs(vehicle.deltaPercent ?? 0) >= 15)
+          .map((vehicle) => ({
+            id: `deviation-${vehicle.vehicleId}`,
+            type: 'fuel_deviation' as const,
+            vehicleId: vehicle.vehicleId,
+            plateNumber: vehicle.plateNumber,
+            occurredAt: new Date().toISOString(),
+            title: 'Fuel deviation flagged',
+            message: `${vehicle.plateNumber} has an estimated vs real delta of ${vehicle.deltaPercent?.toFixed(1) ?? '0.0'}%`,
+          })),
+      ],
+      entries: entries.map((entry) => ({
+        ...this.serializeFuelEntry(entry),
+        vehiclePlate: entry.vehicle.plateNumber,
+        driverName: `${entry.driver.firstName} ${entry.driver.lastName}`.trim(),
+      })),
+    };
+  }
+
   private async resolveOverviewVehicleIds(query: FleetFuelOverviewQueryDto): Promise<string[]> {
     if (query.vehicleId) {
       await this.assertVehicleExists(query.vehicleId);
@@ -370,6 +685,7 @@ export class FleetFuelService {
       this.prisma.fleetTrip.findMany({
         where: {
           status: FleetTripStatus.closed,
+          ...(query.driverId ? { driverId: query.driverId } : {}),
           ...(startedAt ? { startedAt } : {}),
         },
         select: { vehicleId: true },
@@ -377,7 +693,7 @@ export class FleetFuelService {
         take: 500,
       }),
       this.prisma.fleetFuelEntry.findMany({
-        where: this.buildListWhere({ from: query.from, to: query.to }),
+        where: this.buildListWhere({ from: query.from, to: query.to, driverId: query.driverId }),
         select: { vehicleId: true },
         distinct: ['vehicleId'],
         take: 500,
@@ -422,6 +738,7 @@ export class FleetFuelService {
       where: {
         vehicleId,
         status: FleetTripStatus.closed,
+        ...(query.driverId ? { driverId: query.driverId } : {}),
         ...(query.from || query.to
           ? {
               startedAt: this.buildDateFilter(query.from, query.to),

@@ -2,15 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ChevronRight, Download, Droplets, Plus, Receipt, WifiOff } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Droplets, Receipt, WifiOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { fleetFuelAnalyticsApi, fleetFuelEntriesApi, getApiErrorMessage } from '@/lib/api';
-import { FLEET_FUEL_PERIOD_WEEKS, fleetFuelDateRange } from '@/lib/fleet-fuel-report';
+import { fleetFuelAnalyticsApi, getApiErrorMessage } from '@/lib/api';
+import { FLEET_FUEL_PERIOD_WEEKS, fleetFuelDateRange, formatWeekLabel } from '@/lib/fleet-fuel-report';
 import {
   FLEET_LIST_CARD,
   FLEET_PAGE,
@@ -23,9 +35,10 @@ import {
   FLEET_TABLE_CELL_PRIMARY,
   FLEET_TABLE_HEAD,
   FLEET_TABLE_HEADER_ROW,
+  FLEET_TABLE_ROW,
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
-import type { FleetFuelEntry, FleetFuelOverviewResponse } from '@/lib/types';
+import type { FleetFuelAnalyticsCockpitResponse, FleetFuelEntry } from '@/lib/types';
 
 function escapeCsvCell(value: string): string {
   if (/[",\n\r]/.test(value)) {
@@ -51,7 +64,7 @@ function downloadFuelEntriesCsv(entries: FleetFuelEntry[]) {
     lines.push(
       [
         row.enteredAt,
-        row.vehiclePlate,
+        row.vehiclePlate ?? row.vehicleId,
         row.driverName ?? '',
         row.odometerKm ?? '',
         row.liters,
@@ -68,7 +81,7 @@ function downloadFuelEntriesCsv(entries: FleetFuelEntry[]) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `fuel-entries-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.download = `fuel-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -79,12 +92,15 @@ function intlLocale(language: string): string {
   return 'de-DE';
 }
 
+function formatDelta(value: number | null): string {
+  if (value === null) return '—';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+}
+
 export default function FleetFuelAnalyticsPage() {
   const { t, i18n } = useTranslation();
-  const router = useRouter();
   const [weeks, setWeeks] = useState(8);
-  const [data, setData] = useState<FleetFuelOverviewResponse | null>(null);
-  const [entries, setEntries] = useState<FleetFuelEntry[]>([]);
+  const [data, setData] = useState<FleetFuelAnalyticsCockpitResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,15 +109,10 @@ export default function FleetFuelAnalyticsPage() {
     setError(null);
     try {
       const range = fleetFuelDateRange(weeks);
-      const [overview, entryList] = await Promise.all([
-        fleetFuelAnalyticsApi.getOverview(range),
-        fleetFuelEntriesApi.list(range),
-      ]);
-      setData(overview);
-      setEntries(entryList);
+      const cockpit = await fleetFuelAnalyticsApi.getCockpit(range);
+      setData(cockpit);
     } catch (e) {
       setData(null);
-      setEntries([]);
       setError(getApiErrorMessage(e, t('fleetFuelReport.loadError', 'Yakıt analitiği yüklenemedi.')));
     } finally {
       setLoading(false);
@@ -122,67 +133,98 @@ export default function FleetFuelAnalyticsPage() {
       }),
     [locale],
   );
-  const dateTimeFormat = useMemo(
+  const numberFormat = useMemo(
     () =>
-      new Intl.DateTimeFormat(locale, {
-        weekday: 'short',
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+      new Intl.NumberFormat(locale, {
+        maximumFractionDigits: 1,
+      }),
+    [locale],
+  );
+  const integerFormat = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        maximumFractionDigits: 0,
       }),
     [locale],
   );
 
-  const statCards = useMemo(() => {
+  const overviewCards = useMemo(() => {
     if (!data) return [];
-    const avgPricePerLiter =
-      data.totals.totalLiters > 0 ? data.totals.totalCost / data.totals.totalLiters : null;
     return [
       {
+        key: 'realLiters',
+        label: t('fleetFuelReport.summary.realLiters', 'Gerçek litre (fiş)'),
+        value: `${numberFormat.format(data.totals.totalLiters)} L`,
+      },
+      {
+        key: 'estimatedLiters',
+        label: t('fleetFuelReport.summary.estimatedLiters', 'Tahmini litre (GPS)'),
+        value: `${numberFormat.format(data.totals.totalEstimatedLiters)} L`,
+      },
+      {
+        key: 'deltaLiters',
+        label: t('fleetFuelReport.detail.deltaLiters', 'Tahmin − fiş farkı'),
+        value: `${formatDelta(data.totals.estimatedVsRealDeltaLiters)} L`,
+      },
+      {
+        key: 'co2',
+        label: t('fleetFuelReport.summary.co2', 'CO₂ tahmini'),
+        value: `${numberFormat.format(data.totals.co2Kg)} kg`,
+      },
+      {
         key: 'cost',
-        label: t('fuelHistory.stats.totalCost', 'Toplam Yakıt Maliyeti'),
+        label: t('fleetFuelReport.summary.fuelCost', 'Yakıt maliyeti'),
         value: currency.format(data.totals.totalCost),
-        unit: null as string | null,
       },
       {
-        key: 'volume',
-        label: t('fuelHistory.stats.totalVolume', 'Toplam Hacim'),
-        value: data.totals.totalLiters.toLocaleString(locale, { maximumFractionDigits: 1 }),
-        unit: t('fuelHistory.unit.liters', 'litre'),
-      },
-      {
-        key: 'realAvg',
-        label: t('fuelHistory.stats.avgEconomy', 'Ort. Tüketim (Gerçek)'),
-        value:
-          data.totals.avgLitersPer100Km != null ? data.totals.avgLitersPer100Km.toFixed(1) : '—',
-        unit: 'L/100 km',
-      },
-      {
-        key: 'estimatedAvg',
-        label: t('fuelHistory.stats.avgEconomyEstimated', 'Ort. Tüketim (GPS)'),
-        value:
-          data.totals.avgEstimatedLitersPer100Km != null
-            ? data.totals.avgEstimatedLitersPer100Km.toFixed(1)
-            : '—',
-        unit: 'L/100 km',
-      },
-      {
-        key: 'avgPrice',
-        label: t('fuelHistory.stats.avgCost', 'Ort. Maliyet'),
-        value: avgPricePerLiter != null ? currency.format(avgPricePerLiter) : '—',
-        unit: t('fuelHistory.unit.perLiter', '/ litre'),
+        key: 'alerts',
+        label: t('fleetFuelReport.summary.suspiciousEvents', 'Şüpheli olay'),
+        value: integerFormat.format(data.totals.suspiciousEventCount),
       },
     ];
-  }, [data, currency, locale, t]);
+  }, [currency, data, integerFormat, numberFormat, t]);
+
+  const trendChartData = useMemo(() => {
+    if (!data) return [];
+    return data.weeklyTrend.map((week) => ({
+      weekStart: week.weekStart,
+      label: formatWeekLabel(week.weekStart),
+      realAvg: week.realLitersPer100Km,
+      estimatedAvg: week.estimatedLitersPer100Km,
+      distanceKm: week.tripDistanceKm,
+    }));
+  }, [data]);
+
+  const vehicleChartData = useMemo(() => {
+    if (!data) return [];
+    return [...data.vehicles].slice(0, 8).map((vehicle) => ({
+      plateNumber: vehicle.plateNumber,
+      deltaPercent: vehicle.deltaPercent,
+      suspiciousEventCount: vehicle.suspiciousEventCount,
+    }));
+  }, [data]);
+
+  const topDrivers = useMemo(() => {
+    if (!data) return [];
+    return [...data.driverBreakdown].slice(0, 6);
+  }, [data]);
+
+  const suspiciousEvents = useMemo(() => {
+    if (!data) return [];
+    return [...data.suspiciousEvents].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+  }, [data]);
 
   return (
     <div className={FLEET_PAGE}>
       <div className={`${FLEET_PAGE_HEADER} flex flex-wrap items-center justify-between gap-3`}>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Droplets className="h-6 w-6 text-primary" />
-          <h1 className={FLEET_PAGE_TITLE}>{t('fuelHistory.title', 'Yakıt Geçmişi')}</h1>
+          <div className="min-w-0">
+            <h1 className={FLEET_PAGE_TITLE}>{t('fleetFuelReport.title', 'Yakıt analitiği')}</h1>
+            <p className="text-sm text-muted-foreground">
+              {t('fleetFuelReport.subtitle', 'Fiş, GPS ve alarm verilerini tek kokpitte topla')}
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -198,7 +240,7 @@ export default function FleetFuelAnalyticsPage() {
           </select>
           <Button asChild size="sm">
             <Link href="/fleet-analytics/fuel/new">
-              <Plus className="mr-1.5 h-4 w-4" />
+              <Receipt className="mr-1.5 h-4 w-4" />
               {t('fuelHistory.addEntry', 'Yakıt Girişi Ekle')}
             </Link>
           </Button>
@@ -222,193 +264,222 @@ export default function FleetFuelAnalyticsPage() {
       {!error && !loading && data ? (
         <>
           <Card className={FLEET_LIST_CARD}>
-            <CardContent className="grid grid-cols-2 gap-px bg-slate-100 p-0 sm:grid-cols-3 xl:grid-cols-5">
-              {statCards.map((card) => (
+            <CardContent className="grid grid-cols-2 gap-px bg-slate-100 p-0 lg:grid-cols-3 xl:grid-cols-6">
+              {overviewCards.map((card) => (
                 <div key={card.key} className="bg-white px-4 py-3">
                   <p className="text-xs text-slate-500">{card.label}</p>
-                  <p className="mt-1 text-xl font-semibold text-slate-900">
-                    {card.value}
-                    {card.unit ? (
-                      <span className="ml-1 text-xs font-normal text-slate-500">{card.unit}</span>
-                    ) : null}
-                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-slate-900">{card.value}</p>
                 </div>
               ))}
             </CardContent>
           </Card>
 
-          <Card className={`${FLEET_LIST_CARD} mt-4`}>
-            <CardContent className="overflow-x-auto p-0">
-              <Table className={FLEET_TABLE}>
-                <TableHeader>
-                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                    <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
-                      {t('fuelHistory.col.vehicle', 'Araç')}
-                    </TableHead>
-                    <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
-                      {t('fuelHistory.col.date', 'Tarih')}
-                    </TableHead>
-                    <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
-                      {t('fuelHistory.col.driver', 'Sürücü')}
-                    </TableHead>
-                    <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
-                      {t('fuelHistory.col.meter', 'Km Sayacı')}
-                    </TableHead>
-                    <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
-                      {t('fuelHistory.col.volume', 'Hacim')}
-                    </TableHead>
-                    <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
-                      {t('fuelHistory.col.total', 'Toplam')}
-                    </TableHead>
-                    <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
-                      {t('fuelHistory.col.receipt', 'Fiş')}
-                    </TableHead>
-                    <TableHead className={FLEET_TABLE_HEAD} aria-hidden />
-                  </TableRow>
-                </TableHeader>
-                <TableBody className={FLEET_TABLE_BODY}>
-                  {entries.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={8}
-                        className="px-4 py-6 text-center text-sm text-muted-foreground"
-                      >
-                        {t('fuelHistory.noEntries', 'Seçilen dönemde yakıt girişi yok.')}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    entries.map((entry) => {
-                      const pricePerLiter = entry.liters > 0 ? entry.totalCost / entry.liters : null;
-                      return (
-                        <TableRow
-                          key={entry.id}
-                          className={FLEET_TABLE_ROW_CLICKABLE}
-                          onClick={() => router.push(`/fleet-analytics/fuel/entries/${entry.id}`)}
-                        >
-                          <TableCell className={`${FLEET_TABLE_CELL_PRIMARY} whitespace-nowrap`}>
-                            {entry.vehiclePlate ?? '—'}
-                          </TableCell>
-                          <TableCell className={`${FLEET_TABLE_CELL_MUTED} whitespace-nowrap`}>
-                            {dateTimeFormat.format(new Date(entry.enteredAt))}
-                          </TableCell>
-                          <TableCell className={`${FLEET_TABLE_CELL} whitespace-nowrap`}>
-                            {entry.driverName ?? '—'}
-                          </TableCell>
-                          <TableCell className={`${FLEET_TABLE_CELL} whitespace-nowrap`}>
-                            {entry.odometerKm != null
-                              ? `${entry.odometerKm.toLocaleString(locale, { maximumFractionDigits: 0 })} km`
-                              : '—'}
-                          </TableCell>
-                          <TableCell className={`${FLEET_TABLE_CELL} whitespace-nowrap`}>
-                            {entry.liters.toLocaleString(locale, { maximumFractionDigits: 3 })}{' '}
-                            <span className="text-slate-500">L</span>
-                          </TableCell>
-                          <TableCell className={`${FLEET_TABLE_CELL} whitespace-nowrap`}>
-                            <div className="font-medium text-slate-900">
-                              {currency.format(entry.totalCost)}
-                            </div>
-                            {pricePerLiter != null ? (
-                              <div className="text-xs text-slate-500">
-                                {currency.format(pricePerLiter)} / L
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className={FLEET_TABLE_CELL}>
-                            {entry.hasReceipt ? (
-                              <Receipt className="h-4 w-4 text-emerald-600" aria-hidden />
-                            ) : (
-                              <span className="text-slate-400">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className={FLEET_TABLE_CELL}>
-                            <ChevronRight className="h-4 w-4 text-slate-400" aria-hidden />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-              <div className="flex justify-end p-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={entries.length === 0}
-                  onClick={() => downloadFuelEntriesCsv(entries)}
-                >
-                  <Download className="mr-1.5 h-4 w-4" />
-                  {t('common.exportCsv', 'CSV exportieren')}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <Card className={FLEET_LIST_CARD}>
+              <CardHeader>
+                <CardTitle>{t('fleetFuelReport.detail.weeklyTrend', 'Haftalık L/100 km trendi')}</CardTitle>
+              </CardHeader>
+              <CardContent className="h-80">
+                {trendChartData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t('fleetFuelReport.detail.noTrend', 'Trend için yeterli sefer veya fiş verisi yok.')}
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trendChartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#64748b' }} interval="preserveStartEnd" minTickGap={12} />
+                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={36} />
+                      <Tooltip
+                        formatter={(value: number, name: string) => [
+                          value != null ? `${value.toFixed(1)} L/100 km` : '—',
+                          name === 'realAvg'
+                            ? t('fleetFuelReport.realAvg', 'Gerçek L/100')
+                            : t('fleetFuelReport.estimatedAvg', 'Tahmini L/100'),
+                        ]}
+                        labelFormatter={(_, payload) => {
+                          const row = payload?.[0]?.payload as { weekStart?: string } | undefined;
+                          return row?.weekStart ?? '';
+                        }}
+                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      />
+                      <Legend
+                        formatter={(value) =>
+                          value === 'realAvg'
+                            ? t('fleetFuelReport.realAvg', 'Gerçek L/100')
+                            : t('fleetFuelReport.estimatedAvg', 'Tahmini L/100')
+                        }
+                      />
+                      <Line type="monotone" dataKey="realAvg" stroke="#2563eb" strokeWidth={2.5} dot={false} name="realAvg" />
+                      <Line type="monotone" dataKey="estimatedAvg" stroke="#16a34a" strokeWidth={2.5} dot={false} name="estimatedAvg" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card className={`${FLEET_LIST_CARD} mt-6`}>
-            <CardHeader>
-              <CardTitle>{t('fleetFuelReport.vehicleTable', 'Araç karşılaştırması')}</CardTitle>
+            <Card className={FLEET_LIST_CARD}>
+              <CardHeader>
+                <CardTitle>{t('fleetFuelReport.vehicleTable', 'Araç karşılaştırması')}</CardTitle>
+              </CardHeader>
+              <CardContent className="h-80">
+                {vehicleChartData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('fleetFuelReport.noData', 'Seçilen dönemde veri yok.')}</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={vehicleChartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="plateNumber" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} />
+                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={36} />
+                      <Tooltip
+                        formatter={(value: number, name: string) => [
+                          name === 'deltaPercent'
+                            ? `${value?.toFixed?.(1) ?? '—'} %`
+                            : `${value?.toFixed?.(0) ?? '—'}`,
+                          name === 'deltaPercent'
+                            ? t('fleetFuelReport.detail.deltaLiters', 'Tahmin − fiş farkı')
+                            : t('fleetFuelReport.summary.suspiciousEvents', 'Şüpheli olay'),
+                        ]}
+                      />
+                      <Legend />
+                      <Bar dataKey="deltaPercent" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={32} name="deltaPercent" />
+                      <Bar dataKey="suspiciousEventCount" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={32} name="suspiciousEventCount" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <Card className={FLEET_LIST_CARD}>
+              <CardHeader>
+                <CardTitle>{t('fleetFuelReport.detail.driverBreakdown', 'Sürücü kırılımı')}</CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto p-0">
+                {topDrivers.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    {t('fleetFuelReport.detail.noDrivers', 'Bu dönemde sürücü verisi yok.')}
+                  </p>
+                ) : (
+                  <Table className={FLEET_TABLE}>
+                    <TableHeader>
+                      <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                        <TableHead className={FLEET_TABLE_HEAD}>{t('fuelHistory.col.driver', 'Sürücü')}</TableHead>
+                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.tripKm', 'Sefer km')}</TableHead>
+                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.realAvg', 'Gerçek L/100')}</TableHead>
+                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.estimatedAvg', 'Tahmini L/100')}</TableHead>
+                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.detail.deltaLiters', 'Tahmin − fiş farkı')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className={FLEET_TABLE_BODY}>
+                      {topDrivers.map((driver) => (
+                        <TableRow key={driver.driverId} className={FLEET_TABLE_ROW}>
+                          <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{driver.driverName}</TableCell>
+                          <TableCell className={FLEET_TABLE_CELL}>{integerFormat.format(driver.tripDistanceKm)}</TableCell>
+                          <TableCell className={FLEET_TABLE_CELL}>{driver.realLitersPer100Km != null ? driver.realLitersPer100Km.toFixed(1) : '—'}</TableCell>
+                          <TableCell className={FLEET_TABLE_CELL}>{driver.estimatedLitersPer100Km != null ? driver.estimatedLitersPer100Km.toFixed(1) : '—'}</TableCell>
+                          <TableCell className={FLEET_TABLE_CELL}>{formatDelta(driver.deltaLiters)} L</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className={FLEET_LIST_CARD}>
+              <CardHeader>
+                <CardTitle>{t('fleetFuelReport.detail.alerts', 'Şüpheli olaylar')}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {suspiciousEvents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t('fleetFuelReport.detail.noAlerts', 'Bu dönemde şüpheli olay yok.')}
+                  </p>
+                ) : (
+                  suspiciousEvents.slice(0, 6).map((event) => (
+                    <div key={event.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                            <p className="text-sm font-medium text-slate-900">{event.plateNumber}</p>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">{event.title}</p>
+                          <p className="mt-1 text-xs text-slate-500">{event.message}</p>
+                        </div>
+                        <Badge variant="secondary" className="shrink-0">
+                          {event.type === 'fuel_theft_suspected'
+                            ? t('fleetFuelReport.detail.fuelTheft', 'Yakıt hırsızlığı')
+                            : t('fleetFuelReport.detail.deviation', 'Sapma')}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className={`${FLEET_LIST_CARD} mt-4`}>
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <CardTitle>{t('fuelHistory.title', 'Yakıt Geçmişi')}</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => downloadFuelEntriesCsv(data.entries)}>
+                <ArrowRight className="mr-1.5 h-4 w-4" />
+                CSV
+              </Button>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              {data.vehicles.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {t('fleetFuelReport.noData', 'Seçilen dönemde yakıt veya sefer verisi yok.')}
+            <CardContent className="overflow-x-auto p-0">
+              {data.entries.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  {t('fuelHistory.noEntries', 'Seçilen dönemde yakıt girişi yok.')}
                 </p>
               ) : (
                 <Table className={FLEET_TABLE}>
                   <TableHeader>
                     <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                      <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetFuelReport.plate', 'Plaka')}
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
+                        {t('fuelHistory.col.vehicle', 'Araç')}
                       </TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetFuelReport.realAvg', 'Gerçek L/100')}
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
+                        {t('fuelHistory.col.date', 'Tarih')}
                       </TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetFuelReport.estimatedAvg', 'Tahmini L/100')}
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
+                        {t('fuelHistory.col.driver', 'Sürücü')}
                       </TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetFuelReport.realLiters', 'Gerçek L')}
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
+                        {t('fuelHistory.col.meter', 'Km Sayacı')}
                       </TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetFuelReport.estimatedLiters', 'Tahmini L')}
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
+                        {t('fuelHistory.col.volume', 'Hacim')}
                       </TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetFuelReport.tripKm', 'Sefer km')}
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
+                        {t('fuelHistory.col.total', 'Toplam')}
                       </TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD} aria-hidden />
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>
+                        {t('fuelHistory.col.receipt', 'Fiş')}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className={FLEET_TABLE_BODY}>
-                    {data.vehicles.map((vehicle) => (
-                      <TableRow key={vehicle.vehicleId} className={FLEET_TABLE_ROW_CLICKABLE}>
-                        <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
-                          <Link
-                            href={`/fleet-analytics/fuel/${vehicle.vehicleId}`}
-                            className="inline-flex items-center gap-1 hover:text-primary"
-                          >
-                            {vehicle.plateNumber}
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          </Link>
+                    {data.entries.map((entry) => (
+                      <TableRow
+                        key={entry.id}
+                        className={`${FLEET_TABLE_ROW} ${FLEET_TABLE_ROW_CLICKABLE}`}
+                        onClick={() => {
+                          window.location.href = `/fleet-analytics/fuel/entries/${entry.id}`;
+                        }}
+                      >
+                        <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{entry.vehiclePlate ?? entry.vehicleId}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{new Date(entry.enteredAt).toLocaleString(locale)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{entry.driverName ?? '—'}</TableCell>
+                        <TableCell className={`${FLEET_TABLE_CELL} tabular-nums`}>
+                          {entry.odometerKm != null ? integerFormat.format(entry.odometerKm) : '—'}
                         </TableCell>
-                        <TableCell className={FLEET_TABLE_CELL}>
-                          {vehicle.avgLitersPer100Km?.toFixed(1) ?? '—'}
-                        </TableCell>
-                        <TableCell className={FLEET_TABLE_CELL}>
-                          {vehicle.avgEstimatedLitersPer100Km?.toFixed(1) ?? '—'}
-                        </TableCell>
-                        <TableCell className={FLEET_TABLE_CELL}>{vehicle.totalLiters.toFixed(1)}</TableCell>
-                        <TableCell className={FLEET_TABLE_CELL}>
-                          {vehicle.totalEstimatedLiters.toFixed(1)}
-                        </TableCell>
-                        <TableCell className={FLEET_TABLE_CELL}>{vehicle.tripDistanceKm.toFixed(0)}</TableCell>
-                        <TableCell className={FLEET_TABLE_CELL}>
-                          <Link
-                            href={`/fleet-analytics/fuel/${vehicle.vehicleId}`}
-                            className="text-sm font-medium text-primary hover:underline"
-                          >
-                            {t('fleetFuelReport.openDetail', 'Detay')}
-                          </Link>
-                        </TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{numberFormat.format(entry.liters)} L</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{currency.format(entry.totalCost)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{entry.hasReceipt ? '✓' : '—'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
