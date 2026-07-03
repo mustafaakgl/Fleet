@@ -34,6 +34,7 @@ interface LiveTrackingSidebarProps {
   selectedDriverId: string | null;
   onSelect: (item: LiveTrackingItem) => void;
   lastFetchedAt: Date | null;
+  className?: string;
 }
 
 const SOURCE_FILTER_KEYS: Array<{ value: SourceFilter; labelKey: string }> = [
@@ -56,12 +57,13 @@ export function LiveTrackingSidebar({
   selectedDriverId,
   onSelect,
   lastFetchedAt,
+  className,
 }: LiveTrackingSidebarProps) {
   const { t } = useTranslation();
   const sourceCounts = countBySource(items);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4" data-status-filter={_statusFilter}>
+    <div className={cn('flex h-full min-h-0 flex-col gap-4', className)} data-status-filter={_statusFilter}>
       <div className="space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

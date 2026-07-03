@@ -104,6 +104,23 @@ async function main() {
       }
     }
 
+    const totalTripPurposeLogs = await base.fleetTripPurposeLog.count();
+    const scopedTripPurposeLogsA = await TenantContext.run(tenantA, () =>
+      scoped.fleetTripPurposeLog.count(),
+    );
+    console.log(`FleetTripPurposeLog total: ${totalTripPurposeLogs}, tenant A scoped: ${scopedTripPurposeLogsA}`);
+
+    if (tenantA !== tenantB) {
+      const crossTripPurposeLog = await TenantContext.run(tenantA, () =>
+        scoped.fleetTripPurposeLog.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossTripPurposeLog) {
+        throw new Error('Isolation failure: tenant A context read tenant B trip purpose log');
+      }
+    }
+
     console.log('Tenant isolation check passed.');
   } finally {
     await base.$disconnect();

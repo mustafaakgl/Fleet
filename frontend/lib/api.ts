@@ -69,6 +69,7 @@ import type {
   TelematicsDriverScoresResponse,
   TelematicsDriverTripsResponse,
   TelemetryHistoryResponse,
+  FleetTripTimelineResponse,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -2173,10 +2174,28 @@ export const fleetFuelEntriesApi = {
 
 export const fleetTripsApi = {
   list: (params?: { vehicleId?: string; driverId?: string; from?: string; to?: string }) =>
-    api.get<import('./types').FleetTripSummary[]>('/fleet/trips', { params }).then((r) => r.data),
+    api.get<FleetTripTimelineResponse>('/fleet/trips', { params }).then((r) => r.data),
 
   getById: (tripId: string) =>
     api.get<import('./types').FleetTripDetail>(`/fleet/trips/${tripId}`).then((r) => r.data),
+
+  setPurpose: (
+    tripId: string,
+    payload: {
+      purpose: import('./types').TripPurpose;
+      note?: string;
+      businessContact?: string;
+      reason?: string;
+    },
+  ) => api.patch<import('./types').FleetTripDetail>(`/fleet/trips/${tripId}/purpose`, payload).then((r) => r.data),
+
+  setPurposeBulk: (
+    payload: {
+      tripIds: string[];
+      purpose: import('./types').TripPurpose;
+      reason?: string;
+    },
+  ) => api.patch<{ updated: number }>('/fleet/trips/purpose/bulk', payload).then((r) => r.data),
 };
 
 export default api;

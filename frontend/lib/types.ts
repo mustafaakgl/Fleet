@@ -621,6 +621,12 @@ export interface FleetTripSummary {
   vehicleId: string;
   driverId: string;
   source: FleetTelemetrySource;
+  purpose?: TripPurpose | null;
+  purposeNote?: string | null;
+  businessContact?: string | null;
+  classifiedAt?: string | null;
+  classifiedById?: string | null;
+  purposeLockedAt?: string | null;
   startedAt: string;
   endedAt: string | null;
   distanceKm: number | string | null;
@@ -635,7 +641,20 @@ export interface FleetTripSummary {
   workSessionId: string | null;
   createdAt: string;
   updatedAt: string;
+  odoStartKm?: number | null;
+  odoEndKm?: number | null;
+  dataGapStartAt?: string | null;
+  dataGapEndAt?: string | null;
+  dataGapDurationS?: number | null;
+  routeStartLabel?: string | null;
+  routeEndLabel?: string | null;
+  routeStartLatitude?: number | null;
+  routeStartLongitude?: number | null;
+  routeEndLatitude?: number | null;
+  routeEndLongitude?: number | null;
 }
+
+export type TripPurpose = 'business' | 'private' | 'commute';
 
 export interface FleetTripLocationPoint {
   id: string;
@@ -661,6 +680,45 @@ export interface FleetDrivingEvent {
 export interface FleetTripDetail extends FleetTripSummary {
   locationPoints: FleetTripLocationPoint[];
   drivingEvents: FleetDrivingEvent[];
+}
+
+export interface FleetTripStopEntry {
+  kind: 'stop';
+  afterTripId: string;
+  beforeTripId: string;
+  startedAt: string;
+  endedAt: string;
+  durationS: number;
+  label: string;
+  coordinates: { lat: number; lng: number } | null;
+  tooltip: string;
+}
+
+export interface FleetTripTimelineTrip extends FleetTripSummary {
+  kind: 'trip';
+}
+
+export type FleetTripTimelineEntry = FleetTripTimelineTrip | FleetTripStopEntry;
+
+export interface FleetTripTimelineDay {
+  dayKey: string;
+  label: string;
+  tripCount: number;
+  totalKm: number;
+  totalDrivingS: number;
+  dayOdoStartKm: number | null;
+  dayOdoEndKm: number | null;
+  entries: FleetTripTimelineEntry[];
+}
+
+export interface FleetTripTimelineResponse {
+  from: string | null;
+  to: string | null;
+  totalTrips: number;
+  totalDistanceKm: number;
+  totalDrivingS: number;
+  dataGapCount: number;
+  days: FleetTripTimelineDay[];
 }
 
 export interface Fine {

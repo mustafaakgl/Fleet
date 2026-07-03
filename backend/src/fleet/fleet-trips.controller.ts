@@ -1,11 +1,13 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { BulkTripPurposeDto } from './dto/bulk-trip-purpose.dto';
 import { BatchFleetTripLocationsDto } from './dto/batch-fleet-trip-locations.dto';
 import { ListFleetTripsQueryDto } from './dto/list-fleet-trips.query';
+import { SetTripPurposeDto } from './dto/set-trip-purpose.dto';
 import { StartFleetTripDto } from './dto/start-fleet-trip.dto';
 import { FleetTripsService } from './fleet-trips.service';
 
@@ -61,5 +63,27 @@ export class FleetTripsController {
   @Get(':id')
   getById(@Param('id') tripId: string) {
     return this.fleetTrips.getTripById(tripId);
+  }
+
+  @Patch(':id/purpose')
+  @HttpCode(HttpStatus.OK)
+  setPurpose(
+    @CurrentUser('id') userId: string,
+    @Param('id') tripId: string,
+    @Body() dto: SetTripPurposeDto,
+  ) {
+    return this.fleetTrips.setTripPurpose(userId, tripId, dto.purpose, {
+      note: dto.note,
+      businessContact: dto.businessContact,
+      reason: dto.reason,
+    });
+  }
+
+  @Patch('purpose/bulk')
+  @HttpCode(HttpStatus.OK)
+  setPurposeBulk(@CurrentUser('id') userId: string, @Body() dto: BulkTripPurposeDto) {
+    return this.fleetTrips.bulkSetTripPurpose(userId, dto.tripIds, dto.purpose, {
+      reason: dto.reason,
+    });
   }
 }

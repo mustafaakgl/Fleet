@@ -52,9 +52,12 @@ export function RemainingDrivingRadial({
           >
             {formatTachographDurationS(driver.todayRemainingDrivingS, t)}
           </span>
-          <span className="text-[10px] text-slate-500">{t('liveTracking.remainingDrivingLabel')}</span>
         </div>
       </div>
+
+      <p className="text-center text-[11px] font-medium uppercase tracking-wide text-slate-500">
+        {t('liveTracking.remainingDrivingLabel')}
+      </p>
 
       <p className="text-center text-xs text-slate-600">
         {breakSoon ? <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-500" /> : null}

@@ -374,6 +374,12 @@ enum FleetTripStatus {
   closed
 }
 
+enum TripPurpose {
+  business
+  private
+  commute
+}
+
 enum FleetDrivingEventType {
   speeding
   harsh_accel
@@ -479,6 +485,7 @@ model Tenant {
   fines                 Fine[]
   fineStatusLogs        FineStatusLog[]
   fleetTrips            FleetTrip[]
+  fleetTripPurposeLogs  FleetTripPurposeLog[]
   fleetDrivingEvents    FleetDrivingEvent[]
   fleetFuelEntries      FleetFuelEntry[]
   fleetMaintenanceRules FleetMaintenanceRule[]
@@ -536,6 +543,8 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   driver             Driver?
+  fleetTripClassifications FleetTrip[] @relation("FleetTripClassifiedBy")
+  fleetTripPurposeLogs     FleetTripPurposeLog[] @relation("FleetTripPurposeChangedBy")
   createdAssignments Assignment[]   @relation("AssignmentCreatedBy")
   approvedRequests   Request[]      @relation("ApprovedRequests")
   uploadedDocuments  Document[]     @relation("DocumentUploadedBy")
@@ -1766,6 +1775,14 @@ model FleetTrip {
   vehicleId      String
   driverId       String
   source         FleetTelemetrySource @default(phone)
+  purpose        TripPurpose?
+  purposeNote    String?
+  businessContact String?
+  classifiedAt   DateTime?
+  classifiedById String?
+  purposeLockedAt DateTime?
+  odoStartKm     Decimal?             @db.Decimal(12, 3)
+  odoEndKm       Decimal?             @db.Decimal(12, 3)
   startedAt      DateTime
   endedAt        DateTime?
   distanceKm     Decimal?             @db.Decimal(12, 3)
@@ -1785,8 +1802,10 @@ model FleetTrip {
   driver       Driver                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
   assignment   Assignment?              @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   workSession  WorkSession?             @relation(fields: [workSessionId], references: [id], onDelete: SetNull)
+  classifiedBy User?                    @relation("FleetTripClassifiedBy", fields: [classifiedById], references: [id], onDelete: SetNull)
   locationPoints FleetTripLocationPoint[]
   drivingEvents  FleetDrivingEvent[]
+  purposeLogs    FleetTripPurposeLog[]
 
   @@index([tenantId])
   @@index([vehicleId, startedAt])
@@ -1795,6 +1814,27 @@ model FleetTrip {
   @@index([assignmentId])
   @@index([workSessionId])
   @@map("fleet_trips")
+}
+
+model FleetTripPurposeLog {
+  id          String      @id @default(cuid())
+  tenantId    String      @default("default-tenant")
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tripId      String
+  trip        FleetTrip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  oldPurpose  TripPurpose?
+  newPurpose  TripPurpose
+  oldNote     String?
+  newNote     String?
+  changedById String
+  changedBy   User        @relation("FleetTripPurposeChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+  changedAt   DateTime    @default(now())
+  reason      String?
+
+  @@index([tenantId])
+  @@index([tripId, changedAt])
+  @@index([changedById, changedAt])
+  @@map("fleet_trip_purpose_logs")
 }
 
 model FleetTripLocationPoint {

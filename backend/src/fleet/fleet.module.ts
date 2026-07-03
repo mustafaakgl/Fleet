@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
@@ -30,7 +31,7 @@ import { FleetTripsScheduler } from './fleet-trips.scheduler';
 import { FleetTripsService } from './fleet-trips.service';
 
 @Module({
-  imports: [PrismaModule, WorkSessionsModule, NotificationsModule, PushNotificationsModule],
+  imports: [PrismaModule, WorkSessionsModule, NotificationsModule, PushNotificationsModule, AuditModule],
   controllers: [
     FleetTripsController,
     FleetTripsDriverController,

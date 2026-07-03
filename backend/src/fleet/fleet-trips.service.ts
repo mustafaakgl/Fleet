@@ -1,7 +1,10 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
+  Optional,
+  LockedException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -9,19 +12,28 @@ import {
   FleetDrivingEventType,
   FleetTelemetrySource,
   FleetTripStatus,
+  TripPurpose,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { safeAuditLog } from '../audit/audit-helper';
 import { WorkSessionsService } from '../work-sessions/work-sessions.service';
 import {
   dedupeNormalizedLocationPoints,
   normalizeFleetTripLocationPoints,
 } from './core/fleet-trip-locations.util';
+import { findLargestTripDataGap } from './core/fleet-trip-gap.util';
+import { deriveTripStops } from './core/fleet-trip-stops.util';
+import { formatTripPurposeLockAt, isTripPurposeLocked } from './core/trip-purpose-lock.util';
 import type {
   FleetTripDetail,
   FleetTripLocationPointDto,
   FleetTripSummary,
   FleetTripSummaryWithRelations,
+  FleetTripTimelineDay,
+  FleetTripTimelineResponse,
+  FleetTripTimelineTrip,
 } from './core/fleet-trips.types';
 import type { ListFleetTripsQueryDto } from './dto/list-fleet-trips.query';
 import { FleetTripProcessingService } from './fleet-trip-processing.service';
@@ -44,6 +56,7 @@ export class FleetTripsService {
     private readonly prisma: PrismaService,
     private readonly workSessions: WorkSessionsService,
     private readonly processing: FleetTripProcessingService,
+    @Optional() private readonly auditService?: AuditService,
   ) {}
 
   async startTripForDriver(userId: string, vehicleId: string): Promise<FleetTripSummary> {
@@ -121,14 +134,14 @@ export class FleetTripsService {
     };
   }
 
-  async listTrips(query: ListFleetTripsQueryDto): Promise<FleetTripSummaryWithRelations[]> {
+  async listTrips(query: ListFleetTripsQueryDto): Promise<FleetTripTimelineResponse> {
     const where = this.buildListWhere(query);
     const page = query.page ?? 1;
     const limit = query.limit ?? 500;
 
     const trips = await this.prisma.fleetTrip.findMany({
       where,
-      orderBy: { startedAt: 'desc' },
+      orderBy: { startedAt: 'asc' },
       skip: (page - 1) * limit,
       take: limit,
       select: {
@@ -136,6 +149,14 @@ export class FleetTripsService {
         vehicleId: true,
         driverId: true,
         source: true,
+        purpose: true,
+        purposeNote: true,
+        businessContact: true,
+        classifiedAt: true,
+        classifiedById: true,
+        purposeLockedAt: true,
+        odoStartKm: true,
+        odoEndKm: true,
         startedAt: true,
         endedAt: true,
         distanceKm: true,
@@ -150,6 +171,14 @@ export class FleetTripsService {
         workSessionId: true,
         createdAt: true,
         updatedAt: true,
+        locationPoints: {
+          orderBy: { recordedAt: 'asc' },
+          select: {
+            recordedAt: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
         driver: {
           select: {
             id: true,
@@ -165,18 +194,36 @@ export class FleetTripsService {
             model: true,
           },
         },
+        assignment: {
+          select: {
+            id: true,
+            pickupAddress: true,
+            deliveryAddress: true,
+            routeName: true,
+            cargoName: true,
+            company: {
+              select: { name: true },
+            },
+          },
+        },
       },
     });
 
-    return trips.map((trip) => ({
-      ...this.serializeTrip(trip),
-      driver: trip.driver,
-      vehicle: trip.vehicle,
-      route: trip.assignmentId ? { assignmentId: trip.assignmentId } : null,
-    }));
+    const timelineTrips = trips.map((trip) => this.serializeTimelineTrip(trip));
+    const timelineDays = this.buildTimelineDays(timelineTrips);
+
+    return {
+      from: query.from ?? null,
+      to: query.to ?? null,
+      totalTrips: timelineTrips.length,
+      totalDistanceKm: round(timelineTrips.reduce((sum, trip) => sum + (Number(trip.distanceKm) || 0), 0), 3),
+      totalDrivingS: timelineTrips.reduce((sum, trip) => sum + (trip.durationS ?? 0), 0),
+      dataGapCount: timelineTrips.filter((trip) => trip.dataGapDurationS != null).length,
+      days: timelineDays,
+    };
   }
 
-  async listTripsForDriver(userId: string, query: ListFleetTripsQueryDto): Promise<FleetTripSummary[]> {
+  async listTripsForDriver(userId: string, query: ListFleetTripsQueryDto): Promise<FleetTripTimelineResponse> {
     const driver = await this.requireDriverForUser(userId);
     return this.listTrips({ ...query, driverId: driver.id });
   }
@@ -214,6 +261,134 @@ export class FleetTripsService {
     return this.serializeTripDetail(trip);
   }
 
+  async setTripPurpose(
+    userId: string,
+    tripId: string,
+    purpose: TripPurpose,
+    payload: { note?: string; businessContact?: string; reason?: string },
+  ): Promise<FleetTripDetail> {
+    const operator = await this.requireOperatorForUser(userId);
+    const trip = await this.prisma.fleetTrip.findFirst({
+      where: { id: tripId },
+    });
+
+    if (!trip) {
+      throw new NotFoundException('Trip not found');
+    }
+
+    this.assertTripPurposeEditable(trip);
+    this.assertTripPurposePayload(purpose, payload);
+
+    const updated = await this.prisma.fleetTrip.update({
+      where: { id: tripId },
+      data: {
+        purpose,
+        purposeNote: payload.note ?? null,
+        businessContact: payload.businessContact ?? null,
+        classifiedAt: new Date(),
+        classifiedById: operator.id,
+        purposeLockedAt: trip.endedAt ? formatTripPurposeLockAt(trip.endedAt) : trip.purposeLockedAt,
+      },
+      include: {
+        locationPoints: { orderBy: { recordedAt: 'asc' } },
+        drivingEvents: { orderBy: { occurredAt: 'asc' } },
+      },
+    });
+
+    if (this.auditService) {
+      await safeAuditLog(this.auditService, {
+        actorUserId: operator.id,
+        action: 'fleet.trip.purpose.update',
+        entityType: 'FleetTrip',
+        entityId: tripId,
+        summary: `Trip purpose set to ${purpose}`,
+        metadata: {
+          purpose,
+          note: payload.note ?? null,
+          businessContact: payload.businessContact ?? null,
+          reason: payload.reason ?? null,
+        },
+      });
+    }
+
+    await this.prisma.fleetTripPurposeLog.create({
+      data: {
+        tenantId: trip.tenantId,
+        tripId,
+        oldPurpose: trip.purpose,
+        newPurpose: purpose,
+        oldNote: trip.purposeNote,
+        newNote: payload.note ?? null,
+        changedById: operator.id,
+        reason: payload.reason ?? null,
+      },
+    });
+
+    return this.serializeTripDetail(updated);
+  }
+
+  async bulkSetTripPurpose(
+    userId: string,
+    tripIds: string[],
+    purpose: TripPurpose,
+    payload: { reason?: string },
+  ): Promise<{ updated: number }> {
+    const operator = await this.requireOperatorForUser(userId);
+    const trips = await this.prisma.fleetTrip.findMany({
+      where: { id: { in: tripIds } },
+    });
+
+    if (trips.length !== tripIds.length) {
+      throw new NotFoundException('One or more trips not found');
+    }
+
+    for (const trip of trips) {
+      this.assertTripPurposeEditable(trip);
+    }
+
+    const now = new Date();
+    for (const trip of trips) {
+      await this.prisma.fleetTrip.update({
+        where: { id: trip.id },
+        data: {
+          purpose,
+          classifiedAt: now,
+          classifiedById: operator.id,
+          purposeLockedAt: trip.endedAt ? formatTripPurposeLockAt(trip.endedAt) : trip.purposeLockedAt,
+        },
+      });
+
+      await this.prisma.fleetTripPurposeLog.create({
+        data: {
+          tenantId: trip.tenantId,
+          tripId: trip.id,
+          oldPurpose: trip.purpose,
+          newPurpose: purpose,
+          oldNote: trip.purposeNote,
+          newNote: trip.purposeNote,
+          changedById: operator.id,
+          reason: payload.reason ?? null,
+        },
+      });
+    }
+
+    if (this.auditService) {
+      await safeAuditLog(this.auditService, {
+        actorUserId: operator.id,
+        action: 'fleet.trip.purpose.bulk_update',
+        entityType: 'FleetTrip',
+        summary: `Bulk trip purpose set to ${purpose} for ${tripIds.length} trips`,
+        metadata: {
+          purpose,
+          tripIds,
+          reason: payload.reason ?? null,
+        },
+      });
+    }
+
+    return { updated: tripIds.length };
+  }
+
   private buildListWhere(query: ListFleetTripsQueryDto): Prisma.FleetTripWhereInput {
     const where: Prisma.FleetTripWhereInput = {};
 
@@ -237,6 +412,34 @@ export class FleetTripsService {
     }
 
     return where;
+  }
+
+  private async requireOperatorForUser(userId: string) {
+    const operator = await this.prisma.user.findFirst({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!operator) {
+      throw new ForbiddenException('User not found');
+    }
+
+    return operator;
+  }
+
+  private assertTripPurposeEditable(trip: { endedAt: Date | null; purposeLockedAt: Date | null }) {
+    if (trip.endedAt && isTripPurposeLocked(trip.endedAt)) {
+      throw new LockedException('Trip purpose is locked');
+    }
+  }
+
+  private assertTripPurposePayload(
+    purpose: TripPurpose,
+    payload: { note?: string; businessContact?: string },
+  ) {
+    if (purpose === TripPurpose.business && !payload.note?.trim()) {
+      throw new BadRequestException('Business trips require a note');
+    }
   }
 
   private async requireDriverForUser(userId: string) {
@@ -337,6 +540,14 @@ export class FleetTripsService {
     vehicleId: string;
     driverId: string;
     source: FleetTelemetrySource;
+    purpose: TripPurpose | null;
+    purposeNote: string | null;
+    businessContact: string | null;
+    classifiedAt: Date | null;
+    classifiedById: string | null;
+    purposeLockedAt: Date | null;
+    odoStartKm: Prisma.Decimal | null;
+    odoEndKm: Prisma.Decimal | null;
     startedAt: Date;
     endedAt: Date | null;
     distanceKm: Prisma.Decimal | null;
@@ -357,6 +568,14 @@ export class FleetTripsService {
       vehicleId: trip.vehicleId,
       driverId: trip.driverId,
       source: trip.source,
+      purpose: trip.purpose,
+      purposeNote: trip.purposeNote,
+      businessContact: trip.businessContact,
+      classifiedAt: trip.classifiedAt,
+      classifiedById: trip.classifiedById,
+      purposeLockedAt: trip.purposeLockedAt,
+      odoStartKm: trip.odoStartKm == null ? null : Number(trip.odoStartKm),
+      odoEndKm: trip.odoEndKm == null ? null : Number(trip.odoEndKm),
       startedAt: trip.startedAt,
       endedAt: trip.endedAt,
       distanceKm: trip.distanceKm,
@@ -379,6 +598,14 @@ export class FleetTripsService {
     vehicleId: string;
     driverId: string;
     source: FleetTelemetrySource;
+    purpose: TripPurpose | null;
+    purposeNote: string | null;
+    businessContact: string | null;
+    classifiedAt: Date | null;
+    classifiedById: string | null;
+    purposeLockedAt: Date | null;
+    odoStartKm: Prisma.Decimal | null;
+    odoEndKm: Prisma.Decimal | null;
     startedAt: Date;
     endedAt: Date | null;
     distanceKm: Prisma.Decimal | null;
@@ -413,27 +640,186 @@ export class FleetTripsService {
       threshold: Prisma.Decimal;
     }>;
   }): FleetTripDetail {
+    const isPrivateTrip = trip.purpose === TripPurpose.private;
+    const dataGap = findLargestTripDataGap(
+      trip.locationPoints.map((point) => ({ recordedAt: point.recordedAt })),
+    );
+
     return {
       ...this.serializeTrip(trip),
-      locationPoints: trip.locationPoints.map((point) => ({
-        id: point.id,
-        recordedAt: point.recordedAt.toISOString(),
-        lat: Number(point.latitude),
-        lng: Number(point.longitude),
-        speedKmh: point.speedKmh,
-        headingDeg: point.headingDeg,
-        accuracyM: point.accuracyM,
-        source: point.source,
-      })),
-      drivingEvents: trip.drivingEvents.map((event) => ({
-        id: event.id,
-        type: event.type,
-        occurredAt: event.occurredAt.toISOString(),
-        lat: Number(event.latitude),
-        lng: Number(event.longitude),
-        value: Number(event.value),
-        threshold: Number(event.threshold),
-      })),
+      dataGapStartAt: isPrivateTrip ? null : dataGap?.startedAt.toISOString() ?? null,
+      dataGapEndAt: isPrivateTrip ? null : dataGap?.endedAt.toISOString() ?? null,
+      dataGapDurationS: isPrivateTrip ? null : dataGap?.durationS ?? null,
+      locationPoints: isPrivateTrip
+        ? []
+        : trip.locationPoints.map((point) => ({
+            id: point.id,
+            recordedAt: point.recordedAt.toISOString(),
+            lat: Number(point.latitude),
+            lng: Number(point.longitude),
+            speedKmh: point.speedKmh,
+            headingDeg: point.headingDeg,
+            accuracyM: point.accuracyM,
+            source: point.source,
+          })),
+      drivingEvents: isPrivateTrip
+        ? []
+        : trip.drivingEvents.map((event) => ({
+            id: event.id,
+            type: event.type,
+            occurredAt: event.occurredAt.toISOString(),
+            lat: Number(event.latitude),
+            lng: Number(event.longitude),
+            value: Number(event.value),
+            threshold: Number(event.threshold),
+          })),
     };
   }
+
+  private serializeTimelineTrip(trip: {
+    id: string;
+    vehicleId: string;
+    driverId: string;
+    source: FleetTelemetrySource;
+    purpose: TripPurpose | null;
+    purposeNote: string | null;
+    businessContact: string | null;
+    classifiedAt: Date | null;
+    classifiedById: string | null;
+    purposeLockedAt: Date | null;
+    odoStartKm: Prisma.Decimal | null;
+    odoEndKm: Prisma.Decimal | null;
+    startedAt: Date;
+    endedAt: Date | null;
+    distanceKm: Prisma.Decimal | null;
+    durationS: number | null;
+    avgSpeedKmh: Prisma.Decimal | null;
+    maxSpeedKmh: Prisma.Decimal | null;
+    idleS: number | null;
+    score: Prisma.Decimal | null;
+    hasDataGap: boolean;
+    status: FleetTripStatus;
+    assignmentId: string | null;
+    workSessionId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    locationPoints: Array<{
+      recordedAt: Date;
+      latitude: Prisma.Decimal;
+      longitude: Prisma.Decimal;
+    }>;
+    driver: { id: string; firstName: string; lastName: string };
+    vehicle: { id: string; plateNumber: string; brand: string; model: string };
+    assignment: {
+      id: string;
+      pickupAddress: string | null;
+      deliveryAddress: string | null;
+      routeName: string | null;
+      cargoName: string | null;
+      company: { name: string };
+    } | null;
+  }): FleetTripTimelineTrip {
+    const dataGap = findLargestTripDataGap(
+      trip.locationPoints.map((point) => ({ recordedAt: point.recordedAt })),
+    );
+    const startPoint = trip.locationPoints[0] ?? null;
+    const endPoint = trip.locationPoints.length > 0 ? trip.locationPoints[trip.locationPoints.length - 1] : null;
+    const isPrivateTrip = trip.purpose === TripPurpose.private;
+    const routeStartLabel = trip.assignment?.pickupAddress ?? trip.assignment?.routeName ?? trip.assignment?.cargoName ?? null;
+    const routeEndLabel = trip.assignment?.deliveryAddress ?? trip.assignment?.company?.name ?? null;
+
+    return {
+      ...this.serializeTrip(trip),
+      kind: 'trip',
+      routeStartLabel: isPrivateTrip ? null : routeStartLabel,
+      routeEndLabel: isPrivateTrip ? null : routeEndLabel,
+      routeStartLatitude: isPrivateTrip || !startPoint ? null : Number(startPoint.latitude),
+      routeStartLongitude: isPrivateTrip || !startPoint ? null : Number(startPoint.longitude),
+      routeEndLatitude: isPrivateTrip || !endPoint ? null : Number(endPoint.latitude),
+      routeEndLongitude: isPrivateTrip || !endPoint ? null : Number(endPoint.longitude),
+      odoStartKm: trip.odoStartKm == null ? null : Number(trip.odoStartKm),
+      odoEndKm: trip.odoEndKm == null ? null : Number(trip.odoEndKm),
+      dataGapStartAt: isPrivateTrip ? null : dataGap?.startedAt.toISOString() ?? null,
+      dataGapEndAt: isPrivateTrip ? null : dataGap?.endedAt.toISOString() ?? null,
+      dataGapDurationS: isPrivateTrip ? null : dataGap?.durationS ?? null,
+      driver: trip.driver,
+      vehicle: trip.vehicle,
+      route: trip.assignmentId ? { assignmentId: trip.assignmentId } : null,
+    };
+  }
+
+  private buildTimelineDays(trips: FleetTripTimelineTrip[]): FleetTripTimelineDay[] {
+    const grouped = new Map<string, FleetTripTimelineTrip[]>();
+
+    for (const trip of trips) {
+      const dayKey = this.dayKey(trip.startedAt);
+      const current = grouped.get(dayKey) ?? [];
+      current.push(trip);
+      grouped.set(dayKey, current);
+    }
+
+    return Array.from(grouped.entries())
+      .sort(([left], [right]) => right.localeCompare(left))
+      .map(([dayKey, dayTrips]) => {
+        const sortedTrips = dayTrips.slice().sort((left, right) => left.startedAt.getTime() - right.startedAt.getTime());
+        const stops = deriveTripStops(
+          sortedTrips.map((trip) => ({
+            tripId: trip.id,
+            startedAt: trip.startedAt,
+            endedAt: trip.endedAt,
+            startCoordinate:
+              trip.routeStartLatitude != null && trip.routeStartLongitude != null
+                ? { lat: trip.routeStartLatitude, lng: trip.routeStartLongitude }
+                : null,
+            endCoordinate:
+              trip.routeEndLatitude != null && trip.routeEndLongitude != null
+                ? { lat: trip.routeEndLatitude, lng: trip.routeEndLongitude }
+                : null,
+            routeStartLabel: trip.routeStartLabel ?? null,
+            routeEndLabel: trip.routeEndLabel ?? null,
+          })),
+        );
+        const stopByAfterTripId = new Map(stops.map((stop) => [stop.afterTripId, stop]));
+
+        const entries = sortedTrips.flatMap((trip) => {
+          const stop = stopByAfterTripId.get(trip.id);
+          return stop ? [trip, stop] : [trip];
+        });
+
+        return {
+          dayKey,
+          label: dayKey,
+          tripCount: sortedTrips.length,
+          totalKm: round(sortedTrips.reduce((sum, trip) => sum + (Number(trip.distanceKm) || 0), 0), 3),
+          totalDrivingS: sortedTrips.reduce((sum, trip) => sum + (trip.durationS ?? 0), 0),
+          dayOdoStartKm: this.firstDefined(sortedTrips.map((trip) => trip.odoStartKm ?? null)),
+          dayOdoEndKm: this.lastDefined(sortedTrips.map((trip) => trip.odoEndKm ?? null)),
+          entries,
+        };
+      });
+  }
+
+  private dayKey(value: Date): string {
+    return value.toISOString().slice(0, 10);
+  }
+
+  private firstDefined(values: Array<number | null>): number | null {
+    for (const value of values) {
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  private lastDefined(values: Array<number | null>): number | null {
+    for (let index = values.length - 1; index >= 0; index -= 1) {
+      if (values[index] != null) return values[index] as number;
+    }
+    return null;
+  }
+
+}
+
+function round(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }

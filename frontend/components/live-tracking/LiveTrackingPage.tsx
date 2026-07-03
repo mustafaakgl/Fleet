@@ -264,7 +264,7 @@ export function LiveTrackingPage() {
       {showInitialSkeleton ? (
         <div className="grid flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
           <CardGridSkeleton count={4} className="grid-cols-1" />
-          <ChartSkeleton heightClass="min-h-[520px]" />
+          <ChartSkeleton heightClass="min-h-[380px]" />
           <CardGridSkeleton count={3} className="grid-cols-1" />
         </div>
       ) : filteredItems.length === 0 ? (
@@ -279,7 +279,7 @@ export function LiveTrackingPage() {
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3" data-testid="live-status-strip">
+          <div className="hidden flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 md:flex lg:order-none" data-testid="live-status-strip">
             {(
               [
                 { value: 'moving', color: 'bg-emerald-500', label: t('liveTracking.motion.moving'), count: statusCounters.moving },
@@ -307,7 +307,7 @@ export function LiveTrackingPage() {
             })}
           </div>
 
-          <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
+          <div className="order-1 grid min-h-0 flex-1 gap-4 -mx-4 sm:-mx-7 lg:order-none lg:mx-0 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
           <LiveTrackingSidebar
             items={filteredItems}
             idleWatchItems={idleWatchItems}
@@ -322,11 +322,12 @@ export function LiveTrackingPage() {
             selectedDriverId={selectedDriverId}
             onSelect={(item) => setSelectedDriverId(item.driverId)}
             lastFetchedAt={lastFetchedAt}
+            className="order-2 lg:order-none"
           />
 
-          <div className="min-h-0">
+          <div className="order-first min-h-0 lg:order-none">
             {mappableCount === 0 ? (
-              <div className="flex h-full min-h-[520px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500">
+              <div className="flex h-[380px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500">
                 {t('liveTracking.noCoordinates')}
               </div>
             ) : (
@@ -342,7 +343,7 @@ export function LiveTrackingPage() {
             )}
           </div>
 
-            <div className="min-h-0 overflow-y-auto">
+            <div className="order-3 min-h-0 overflow-y-auto lg:order-none">
               <LiveTrackingDetail
                 item={selectedItem}
                 remaining={selectedRemaining}

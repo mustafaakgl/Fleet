@@ -20,7 +20,19 @@ export type FleetTripSummary = Pick<
   | 'workSessionId'
   | 'createdAt'
   | 'updatedAt'
->;
+> & {
+  odoStartKm?: number | null;
+  odoEndKm?: number | null;
+  dataGapStartAt?: string | null;
+  dataGapEndAt?: string | null;
+  dataGapDurationS?: number | null;
+  routeStartLabel?: string | null;
+  routeEndLabel?: string | null;
+  routeStartLatitude?: number | null;
+  routeStartLongitude?: number | null;
+  routeEndLatitude?: number | null;
+  routeEndLongitude?: number | null;
+};
 
 export type FleetTripSummaryWithRelations = FleetTripSummary & {
   driver: {
@@ -78,4 +90,42 @@ export type FleetTripDetail = FleetTripSummary & {
     value: number;
     threshold: number;
   }>;
+};
+
+export type FleetTripTimelineTrip = FleetTripSummaryWithRelations & {
+  kind: 'trip';
+};
+
+export type FleetTripTimelineEntry = FleetTripTimelineTrip | FleetTripStopEntry;
+
+export type FleetTripStopEntry = {
+  kind: 'stop';
+  afterTripId: string;
+  beforeTripId: string;
+  startedAt: string;
+  endedAt: string;
+  durationS: number;
+  label: string;
+  coordinates: { lat: number; lng: number } | null;
+};
+
+export type FleetTripTimelineDay = {
+  dayKey: string;
+  label: string;
+  tripCount: number;
+  totalKm: number;
+  totalDrivingS: number;
+  dayOdoStartKm: number | null;
+  dayOdoEndKm: number | null;
+  entries: FleetTripTimelineEntry[];
+};
+
+export type FleetTripTimelineResponse = {
+  from: string | null;
+  to: string | null;
+  totalTrips: number;
+  totalDistanceKm: number;
+  totalDrivingS: number;
+  dataGapCount: number;
+  days: FleetTripTimelineDay[];
 };

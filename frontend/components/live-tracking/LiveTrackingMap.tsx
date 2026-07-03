@@ -101,6 +101,20 @@ function MapFocusHandler({
   return null;
 }
 
+function MapResizeHandler({ refreshKey }: { refreshKey: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      map.invalidateSize();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [map, refreshKey]);
+
+  return null;
+}
+
 function clusterClass(items: LiveTrackingItem[]): string {
   if (items.some((item) => isAlarmItem(item))) return 'live-cluster-critical';
   if (items.some((item) => item.motionState === 'idle')) return 'live-cluster-idle';
@@ -276,7 +290,7 @@ function LiveTrackingMapCanvas({
   );
 
   return (
-    <div className="h-full min-h-[520px] overflow-hidden rounded-lg border border-slate-200" data-testid="live-tracking-map">
+    <div className="h-[380px] overflow-hidden rounded-lg border border-slate-200" data-testid="live-tracking-map">
       <style>{`
         .live-cluster-normal { background: rgba(22, 163, 74, 0.9); color: #fff; border-radius: 9999px; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
         .live-cluster-idle { background: rgba(217, 119, 6, 0.92); color: #fff; border-radius: 9999px; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
@@ -285,6 +299,7 @@ function LiveTrackingMapCanvas({
       <MapContainer center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full" scrollWheelZoom>
         <ThemedTileLayer />
         <MapThemeSync />
+        <MapResizeHandler refreshKey={mapItems.length + trailSegments.length + fitBoundsRequestId} />
         <FitBounds items={mapItems} fitBoundsRequestId={fitBoundsRequestId} />
         <MapFocusHandler
           item={selectedItem}
@@ -320,7 +335,7 @@ export function LiveTrackingMap(props: LiveTrackingMapProps) {
 
   if (!mounted) {
     return (
-      <div className="flex h-full min-h-[520px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-500">
+      <div className="flex h-[380px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-500">
         Loading map...
       </div>
     );
