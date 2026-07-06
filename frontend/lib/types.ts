@@ -1974,10 +1974,14 @@ export type TachographInfringementDetail = TachographInfringementItem & {
   } | null;
 };
 
+export type DddFileProcessingStatus = 'pending' | 'processed' | 'failed';
+
 export type DddFileListItem = {
   id: string;
   fileType: string;
   source: string;
+  status: DddFileProcessingStatus;
+  processingErrorSummary: string | null;
   capturedAt: string;
   createdAt: string;
   sizeBytes: number;
@@ -2077,11 +2081,6 @@ export type VehicleMonthlyCostsResponse = {
 };
 
 export type DddUploadResponse = {
-  file: DddFileListItem;
-  parsed: {
-    activities: unknown[];
-    warnings: string[];
-  };
-  infringementsCreated: number;
+  file: { id: string; status: DddFileProcessingStatus };
   deduplicated: boolean;
 };

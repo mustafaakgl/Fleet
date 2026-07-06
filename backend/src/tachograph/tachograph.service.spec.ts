@@ -21,6 +21,20 @@ describe('TachographService.ingestDddFile', () => {
   let vehicleId = '';
   let driverId = '';
 
+  async function ingestAndProcess(
+    buffer: Buffer,
+    meta: Parameters<TachographService['enqueueDddFile']>[1],
+  ) {
+    const result = await service.enqueueDddFile(buffer, meta);
+    if (!result.deduplicated) {
+      await service.processDddFile(meta.tenantId, result.file.id);
+    }
+    const file = await prisma.dddFile.findUniqueOrThrow({
+      where: { id: result.file.id },
+    });
+    return { deduplicated: result.deduplicated, file };
+  }
+
   before(async () => {
     const driver = await prisma.driver.upsert({
       where: {
@@ -88,7 +102,7 @@ describe('TachographService.ingestDddFile', () => {
   it('ingests fixture DDD and deduplicates identical uploads', async () => {
     const buffer = readFileSync(FIXTURE_PATH);
 
-    const first = await service.ingestDddFile(buffer, {
+    const first = await ingestAndProcess(buffer, {
       tenantId: TEST_TENANT_ID,
       vehicleId,
       fileName: 'sample-driver-card.ddd',
@@ -112,7 +126,7 @@ describe('TachographService.ingestDddFile', () => {
     assert.equal(activityCountAfterFirst, 4);
     assert.ok(infringementCountAfterFirst >= 1);
 
-    const second = await service.ingestDddFile(buffer, {
+    const second = await ingestAndProcess(buffer, {
       tenantId: TEST_TENANT_ID,
       vehicleId,
       fileName: 'sample-driver-card.ddd',

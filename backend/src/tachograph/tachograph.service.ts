@@ -1,11 +1,14 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
+  DddFileProcessingStatus,
+  DddFileType,
   DddFileSource,
   DtcSeverity,
   Prisma,
   TachoInfringementType,
   TachoWorkState,
 } from '@prisma/client';
+import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -29,6 +32,13 @@ type IngestDddMeta = {
   source: DddFileSource;
 };
 
+export type EnqueueDddResult = {
+  file: { id: string; status: DddFileProcessingStatus };
+  deduplicated: boolean;
+};
+
+const MAX_ERROR_SUMMARY_LENGTH = 500;
+
 @Injectable()
 export class TachographService {
   private readonly logger = new Logger(TachographService.name);
@@ -39,7 +49,12 @@ export class TachographService {
     @Optional() private readonly dddParser?: DddParserPort,
   ) {}
 
-  async ingestDddFile(buffer: Buffer, meta: IngestDddMeta) {
+  /**
+   * Upload entry point: archives the raw DDD file and records a pending DddFile row,
+   * then hands processing off to the queue. Returns immediately so the controller can
+   * answer 202 Accepted. Parsing/rules/persist happen in {@link processDddFile}.
+   */
+  async enqueueDddFile(buffer: Buffer, meta: IngestDddMeta): Promise<EnqueueDddResult> {
     const sha256 = createHash('sha256').update(buffer).digest('hex');
     const capturedAt = meta.capturedAt ? new Date(meta.capturedAt) : new Date();
 
@@ -50,103 +65,183 @@ export class TachographService {
           sha256,
         },
       },
-      include: {
-        vehicle: { select: { id: true, plateNumber: true } },
-        driver: { select: { id: true, firstName: true, lastName: true } },
-      },
+      select: { id: true, status: true },
     });
 
     if (existing) {
       return {
-        file: existing,
+        file: { id: existing.id, status: existing.status },
         deduplicated: true,
       };
     }
 
-    const parsed = this.parseBuffer(buffer);
-    const driver = await this.resolveDriverFromCard(meta.tenantId, parsed.driverCardNo);
     const storedPath = await this.archiveDddFile(meta.tenantId, meta.fileName, buffer);
-    const signatureBlocksRuleEngine = parsed.signature.valid === false;
 
-    const fileRecord = await this.prisma.$transaction(async (tx) => {
-      const createdFile = await tx.dddFile.create({
-        data: {
-          tenantId: meta.tenantId,
-          vehicleId: meta.vehicleId,
-          driverId: driver?.id ?? null,
-          uploadedByUserId: meta.uploadedByUserId ?? null,
-          fileType: parsed.fileType,
-          source: meta.source,
-          capturedAt,
-          storedPath,
-          sizeBytes: buffer.length,
-          sha256,
-          generation: this.mapGeneration(parsed.generation),
-          signatureValid: parsed.signature.valid,
-          skippedBlocks: parsed.skippedBlocks,
-        },
-      });
-
-      if (!signatureBlocksRuleEngine && parsed.activities.length > 0 && meta.vehicleId) {
-        const vehicleId = meta.vehicleId;
-        await tx.tachoActivity.createMany({
-          data: parsed.activities.map((activity) => {
-            const startedAt = new Date(activity.startedAt);
-            const endedAt = new Date(startedAt.getTime() + activity.durationS * 1000);
-
-            return {
-              tenantId: meta.tenantId,
-              dddFileId: createdFile.id,
-              vehicleId,
-              driverId: driver?.id ?? null,
-              driverCardNo: parsed.driverCardNo ?? null,
-              workState: this.mapWorkState(activity.state),
-              startedAt,
-              endedAt,
-              durationS: activity.durationS,
-            };
-          }),
-        });
-      } else if (!signatureBlocksRuleEngine && parsed.activities.length > 0) {
-        this.logger.warn('Skipping TachoActivity writes: vehicleId is missing');
-      } else if (signatureBlocksRuleEngine) {
-        this.logger.warn('Skipping rule engine: DDD signature validation failed');
-      }
-
-      let infringementsCreated = 0;
-      if (!signatureBlocksRuleEngine) {
-        infringementsCreated = await this.buildInfringements(
-          tx,
-          meta.tenantId,
-          driver?.id,
-          meta.vehicleId,
-          createdFile.id,
-          parsed.activities.map((activity) => {
-            const startedAt = new Date(activity.startedAt);
-            return {
-              startedAt,
-              endedAt: new Date(startedAt.getTime() + activity.durationS * 1000),
-              durationS: activity.durationS,
-              workState: this.mapWorkState(activity.state),
-            };
-          }),
-          parsed.events,
-        );
-      }
-
-      return { createdFile, infringementsCreated };
+    const created = await this.prisma.dddFile.create({
+      data: {
+        tenantId: meta.tenantId,
+        vehicleId: meta.vehicleId ?? null,
+        uploadedByUserId: meta.uploadedByUserId ?? null,
+        fileType: DddFileType.unknown,
+        source: meta.source,
+        capturedAt,
+        storedPath,
+        sizeBytes: buffer.length,
+        sha256,
+        status: DddFileProcessingStatus.pending,
+      },
+      select: { id: true, status: true },
     });
 
-    if (signatureBlocksRuleEngine) {
-      await this.notifySignatureInvalid(meta, fileRecord.createdFile.id, parsed.warnings);
-    }
-
     return {
-      file: fileRecord.createdFile,
-      parsed,
-      infringementsCreated: fileRecord.infringementsCreated,
+      file: { id: created.id, status: created.status },
       deduplicated: false,
     };
+  }
+
+  /**
+   * Queue consumer: parse -> signature -> rules -> persist for a pending DddFile.
+   * Marks the row processed on success, failed (with a short summary) on error.
+   * Idempotent: an already-processed file is a no-op.
+   */
+  async processDddFile(tenantId: string, dddFileId: string): Promise<void> {
+    const file = await this.prisma.dddFile.findFirst({
+      where: { id: dddFileId, tenantId },
+      select: {
+        id: true,
+        tenantId: true,
+        vehicleId: true,
+        uploadedByUserId: true,
+        storedPath: true,
+        status: true,
+      },
+    });
+
+    if (!file) {
+      this.logger.warn(`DDD file ${dddFileId} not found for tenant ${tenantId}; skipping.`);
+      return;
+    }
+
+    if (file.status === DddFileProcessingStatus.processed) {
+      // Idempotent: duplicate delivery of an already-completed job.
+      return;
+    }
+
+    await this.prisma.dddFile.update({
+      where: { id: file.id },
+      data: {
+        processingErrorSummary: null,
+      },
+    });
+
+    try {
+      const buffer = await readFile(file.storedPath);
+      const meta: IngestDddMeta = {
+        tenantId: file.tenantId,
+        uploadedByUserId: file.uploadedByUserId ?? undefined,
+        vehicleId: file.vehicleId ?? undefined,
+        fileName: file.storedPath,
+        source: DddFileSource.manual,
+      };
+
+      const parsed = this.parseBuffer(buffer);
+      const driver = await this.resolveDriverFromCard(file.tenantId, parsed.driverCardNo);
+      const signatureBlocksRuleEngine = parsed.signature.valid === false;
+
+      const infringementsCreated = await this.prisma.$transaction(async (tx) => {
+        await tx.dddFile.update({
+          where: { id: file.id },
+          data: {
+            driverId: driver?.id ?? null,
+            fileType: parsed.fileType,
+            generation: this.mapGeneration(parsed.generation),
+            signatureValid: parsed.signature.valid,
+            skippedBlocks: parsed.skippedBlocks,
+          },
+        });
+
+        if (!signatureBlocksRuleEngine && parsed.activities.length > 0 && file.vehicleId) {
+          const vehicleId = file.vehicleId;
+          await tx.tachoActivity.createMany({
+            data: parsed.activities.map((activity) => {
+              const startedAt = new Date(activity.startedAt);
+              const endedAt = new Date(startedAt.getTime() + activity.durationS * 1000);
+
+              return {
+                tenantId: file.tenantId,
+                dddFileId: file.id,
+                vehicleId,
+                driverId: driver?.id ?? null,
+                driverCardNo: parsed.driverCardNo ?? null,
+                workState: this.mapWorkState(activity.state),
+                startedAt,
+                endedAt,
+                durationS: activity.durationS,
+              };
+            }),
+          });
+        } else if (!signatureBlocksRuleEngine && parsed.activities.length > 0) {
+          this.logger.warn('Skipping TachoActivity writes: vehicleId is missing');
+        } else if (signatureBlocksRuleEngine) {
+          this.logger.warn('Skipping rule engine: DDD signature validation failed');
+        }
+
+        let created = 0;
+        if (!signatureBlocksRuleEngine) {
+          created = await this.buildInfringements(
+            tx,
+            file.tenantId,
+            driver?.id,
+            file.vehicleId ?? undefined,
+            file.id,
+            parsed.activities.map((activity) => {
+              const startedAt = new Date(activity.startedAt);
+              return {
+                startedAt,
+                endedAt: new Date(startedAt.getTime() + activity.durationS * 1000),
+                durationS: activity.durationS,
+                workState: this.mapWorkState(activity.state),
+              };
+            }),
+            parsed.events,
+          );
+        }
+
+        await tx.dddFile.update({
+          where: { id: file.id },
+          data: {
+            status: DddFileProcessingStatus.processed,
+            processingErrorSummary: null,
+          },
+        });
+
+        return created;
+      });
+
+      if (signatureBlocksRuleEngine) {
+        await this.notifySignatureInvalid(meta, file.id, parsed.warnings);
+      }
+
+      this.logger.log(
+        `DDD file ${file.id} processed: ${parsed.activities.length} activities, ${infringementsCreated} infringements.`,
+      );
+    } catch (error) {
+      const summary = this.summarizeError(error);
+      await this.prisma.dddFile.update({
+        where: { id: file.id },
+        data: {
+          status: DddFileProcessingStatus.failed,
+          processingErrorSummary: summary,
+        },
+      });
+      // Re-throw so the queue can apply its retry policy.
+      throw error instanceof Error ? error : new Error(summary);
+    }
+  }
+
+  private summarizeError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.slice(0, MAX_ERROR_SUMMARY_LENGTH);
   }
 
   async listDddFiles(tenantId: string) {
@@ -187,6 +282,8 @@ export class TachographService {
       id: row.id,
       fileType: row.fileType,
       source: row.source,
+      status: row.status,
+      processingErrorSummary: row.processingErrorSummary,
       capturedAt: row.capturedAt.toISOString(),
       createdAt: row.createdAt.toISOString(),
       sizeBytes: row.sizeBytes,

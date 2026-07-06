@@ -50,6 +50,23 @@ function formatPeriod(row: DddFileListItem): string {
   return `${from} – ${to}`;
 }
 
+function processingStatusLabel(
+  row: DddFileListItem,
+  t: (key: string) => string,
+): { text: string; className: string; title?: string } {
+  if (row.status === 'processed') {
+    return { text: t('tachograph.dddArchive.status.processed'), className: 'text-emerald-700' };
+  }
+  if (row.status === 'failed') {
+    return {
+      text: t('tachograph.dddArchive.status.failed'),
+      className: 'text-red-700',
+      title: row.processingErrorSummary ?? undefined,
+    };
+  }
+  return { text: t('tachograph.dddArchive.status.pending'), className: 'text-slate-500' };
+}
+
 function signatureLabel(
   valid: boolean | null,
   t: (key: string) => string,
@@ -115,14 +132,7 @@ export default function DddArchivePage() {
       if (response.deduplicated) {
         showToast({ type: 'info', message: t('tachograph.dddArchive.dedupeToast') });
       } else {
-        const parsed = response.parsed;
-        showToast({
-          type: response.file.signatureValid === false ? 'warning' : 'success',
-          message: t('tachograph.dddArchive.uploadSuccess', {
-            activities: parsed.activities.length,
-            infringements: response.infringementsCreated,
-          }),
-        });
+        showToast({ type: 'success', message: t('tachograph.dddArchive.uploadQueued') });
       }
       setFile(null);
       void queryClient.invalidateQueries({ queryKey: ['tachograph', 'ddd-files'] });
@@ -290,6 +300,7 @@ export default function DddArchivePage() {
                   <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.dddArchive.columns.createdAt')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.dddArchive.columns.capturedAt')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.dddArchive.columns.type')}</TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.dddArchive.columns.status')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.dddArchive.columns.signature')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.dddArchive.columns.generation')}</TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.dddArchive.columns.source')}</TableHead>
@@ -303,6 +314,7 @@ export default function DddArchivePage() {
               <TableBody className={FLEET_TABLE_BODY}>
                 {files.map((row) => {
                   const sig = signatureLabel(row.signatureValid, t);
+                  const procStatus = processingStatusLabel(row, t);
                   return (
                     <TableRow
                       key={row.id}
@@ -311,6 +323,9 @@ export default function DddArchivePage() {
                       <TableCell className={FLEET_TABLE_CELL}>{formatFleetDateTime(row.createdAt)}</TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>{formatFleetDateTime(row.capturedAt)}</TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>{row.fileType}</TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL, procStatus.className)} title={procStatus.title}>
+                        {procStatus.text}
+                      </TableCell>
                       <TableCell className={cn(FLEET_TABLE_CELL, sig.className)} title={sig.title}>
                         {sig.text}
                       </TableCell>

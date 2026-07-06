@@ -30,6 +30,20 @@ describe('TachographService Annex 1C signature ingest', () => {
   let vehicleId = '';
   let driverId = '';
 
+  async function ingestAndProcess(
+    buffer: Buffer,
+    meta: Parameters<TachographService['enqueueDddFile']>[1],
+  ) {
+    const result = await service.enqueueDddFile(buffer, meta);
+    if (!result.deduplicated) {
+      await service.processDddFile(meta.tenantId, result.file.id);
+    }
+    const file = await prisma.dddFile.findUniqueOrThrow({
+      where: { id: result.file.id },
+    });
+    return { deduplicated: result.deduplicated, file };
+  }
+
   before(async () => {
     const driver = await prisma.driver.upsert({
       where: {
@@ -91,7 +105,7 @@ describe('TachographService Annex 1C signature ingest', () => {
       where: { tenantId: TEST_TENANT_ID, driverId },
     });
 
-    const result = await service.ingestDddFile(buffer, {
+    const result = await ingestAndProcess(buffer, {
       tenantId: TEST_TENANT_ID,
       vehicleId,
       fileName: 'signed-card.ddd',
@@ -119,7 +133,7 @@ describe('TachographService Annex 1C signature ingest', () => {
     });
 
     const corrupted = corruptSignedBuffer(buildSignedGen1CardFile());
-    const result = await service.ingestDddFile(corrupted, {
+    const result = await ingestAndProcess(corrupted, {
       tenantId: TEST_TENANT_ID,
       vehicleId,
       fileName: 'signed-card-corrupt.ddd',

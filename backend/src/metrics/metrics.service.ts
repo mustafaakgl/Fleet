@@ -18,6 +18,8 @@ export class MetricsService {
   readonly telematicsQuarantinedTotal: Counter<string>;
   readonly telematicsAckLatencyMs: Histogram<string>;
   readonly telematicsQueueDepth: Gauge<string>;
+  readonly tachographAckLatencyMs: Histogram<string>;
+  readonly tachographQueueDepth: Gauge<string>;
 
   constructor() {
     collectDefaultMetrics({ register: this.registry, prefix: 'fleet_' });
@@ -65,6 +67,19 @@ export class MetricsService {
     this.telematicsQueueDepth = new Gauge({
       name: 'fleet_telematics_queue_depth',
       help: 'Waiting + active telemetry jobs',
+      registers: [this.registry],
+    });
+
+    this.tachographAckLatencyMs = new Histogram({
+      name: 'fleet_tachograph_ack_latency_ms',
+      help: 'Milliseconds from DDD queue add to ACK',
+      buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
+      registers: [this.registry],
+    });
+
+    this.tachographQueueDepth = new Gauge({
+      name: 'fleet_tachograph_queue_depth',
+      help: 'Waiting + active DDD processing jobs',
       registers: [this.registry],
     });
   }

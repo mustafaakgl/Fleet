@@ -25,6 +25,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { TachographService } from './tachograph.service';
 import { TachographApiService } from './tachograph-api.service';
+import { TachographQueueService } from './tachograph-queue.service';
 import { TachoIngestTokenGuard } from './guards/tacho-ingest-token.guard';
 import { validateDddUpload } from './ddd/ddd-upload-validation.util';
 import { DddFileSource, TachoInfringementType, DtcSeverity } from '@prisma/client';
@@ -54,7 +55,29 @@ export class TachographController {
   constructor(
     private readonly tachographService: TachographService,
     private readonly tachographApiService: TachographApiService,
+    private readonly tachographQueue: TachographQueueService,
   ) {}
+
+  private async enqueueDddUpload(
+    buffer: Buffer,
+    meta: {
+      tenantId: string;
+      uploadedByUserId?: string;
+      vehicleId: string;
+      fileName: string;
+      capturedAt?: string;
+      source: DddFileSource;
+    },
+  ) {
+    const result = await this.tachographService.enqueueDddFile(buffer, meta);
+    if (!result.deduplicated) {
+      await this.tachographQueue.enqueueDddProcess({
+        tenantId: meta.tenantId,
+        dddFileId: result.file.id,
+      });
+    }
+    return result;
+  }
 
   @Get('badges')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -238,7 +261,7 @@ export class TachographController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...OPERATIONAL_ROLES)
   @RequiresWrite()
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(DDD_UPLOAD_INTERCEPTOR)
   uploadByUser(
@@ -259,7 +282,7 @@ export class TachographController {
       throw new BadRequestException('vehicleId is required');
     }
 
-    return this.tachographService.ingestDddFile(file.buffer, {
+    return this.enqueueDddUpload(file.buffer, {
       tenantId,
       uploadedByUserId: userId,
       vehicleId,
@@ -272,7 +295,7 @@ export class TachographController {
   @Post('ddd/upload/service')
   @Public()
   @UseGuards(TachoIngestTokenGuard)
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.ACCEPTED)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(DDD_UPLOAD_INTERCEPTOR)
   uploadByService(
@@ -292,7 +315,7 @@ export class TachographController {
       throw new BadRequestException('vehicleId is required');
     }
 
-    return this.tachographService.ingestDddFile(file.buffer, {
+    return this.enqueueDddUpload(file.buffer, {
       tenantId,
       vehicleId,
       fileName: file.originalname,
