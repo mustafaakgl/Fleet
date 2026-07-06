@@ -51,5 +51,10 @@ export const TENANT_SCOPED_MODELS = new Set([
 ]);
 
 export function isTenantScopedModel(model: string): boolean {
-  return TENANT_SCOPED_MODELS.has(model);
+  if (!model) {
+    return false;
+  }
+
+  const normalizedModel = model[0].toUpperCase() + model.slice(1);
+  return TENANT_SCOPED_MODELS.has(normalizedModel);
 }

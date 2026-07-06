@@ -105,7 +105,8 @@ export function createTenantPrismaExtension() {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
           const tenantId = TenantContext.getTenantId();
-          if (!tenantId || TenantContext.isBypassed() || !isTenantScopedModel(model)) {
+          const normalizedModel = model ? model[0].toUpperCase() + model.slice(1) : model;
+          if (!tenantId || TenantContext.isBypassed() || !normalizedModel || !isTenantScopedModel(normalizedModel)) {
             return query(args);
           }
 

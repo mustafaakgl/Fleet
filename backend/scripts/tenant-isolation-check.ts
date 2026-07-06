@@ -2,15 +2,14 @@
  * Verifies tenant isolation via Prisma extension.
  * Run: npx ts-node --transpile-only scripts/tenant-isolation-check.ts
  */
-import { PrismaClient } from '@prisma/client';
 import { TenantContext } from '../src/tenant/tenant-context';
-import { createTenantPrismaExtension } from '../src/tenant/tenant-prisma.extension';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 const DEFAULT_TENANT = 'default-tenant';
 
 async function main() {
-  const base = new PrismaClient();
-  const scoped = base.$extends(createTenantPrismaExtension());
+  const scoped = new PrismaService();
+  const base = scoped.unscoped;
 
   try {
     const tenants = await base.tenant.findMany({ take: 2, orderBy: { createdAt: 'asc' } });
@@ -22,6 +21,8 @@ async function main() {
     const tenantB = tenants[1]?.id ?? tenantA;
 
     const totalDrivers = await base.driver.count();
+    const tenantADriverCount = await base.driver.count({ where: { tenantId: tenantA } });
+    const tenantBDriverCount = await base.driver.count({ where: { tenantId: tenantB } });
     const scopedA = await TenantContext.run(tenantA, () =>
       scoped.driver.count(),
     );
@@ -33,8 +34,16 @@ async function main() {
     console.log(`Scoped drivers tenant A (${tenantA}): ${scopedA}`);
     console.log(`Scoped drivers tenant B (${tenantB}): ${scopedB}`);
 
+    if (scopedA !== tenantADriverCount) {
+      throw new Error('Isolation failure: tenant A scoped driver count mismatch');
+    }
+
+    if (scopedB !== tenantBDriverCount) {
+      throw new Error('Isolation failure: tenant B scoped driver count mismatch');
+    }
+
     if (tenantA !== tenantB && scopedA + scopedB > totalDrivers) {
-      throw new Error('Isolation failure: scoped counts exceed total');
+      throw new Error('Isolation failure: scoped driver counts exceed total');
     }
 
     if (tenantA !== tenantB) {
@@ -54,10 +63,27 @@ async function main() {
     console.log(`Default tenant drivers: ${defaultTenantDrivers}`);
 
     const totalLatest = await base.driverLocationLatest.count();
+    const tenantALatestCount = await base.driverLocationLatest.count({ where: { tenantId: tenantA } });
+    const tenantBLatestCount = await base.driverLocationLatest.count({ where: { tenantId: tenantB } });
     const scopedLatestA = await TenantContext.run(tenantA, () =>
       scoped.driverLocationLatest.count(),
     );
+    const scopedLatestB = await TenantContext.run(tenantB, () =>
+      scoped.driverLocationLatest.count(),
+    );
     console.log(`DriverLocationLatest total: ${totalLatest}, tenant A scoped: ${scopedLatestA}`);
+
+    if (scopedLatestA !== tenantALatestCount) {
+      throw new Error('Isolation failure: tenant A scoped driverLocationLatest count mismatch');
+    }
+
+    if (scopedLatestB !== tenantBLatestCount) {
+      throw new Error('Isolation failure: tenant B scoped driverLocationLatest count mismatch');
+    }
+
+    if (tenantA !== tenantB && scopedLatestA + scopedLatestB > totalLatest) {
+      throw new Error('Isolation failure: scoped driverLocationLatest counts exceed total');
+    }
 
     if (tenantA !== tenantB) {
       const crossLatest = await TenantContext.run(tenantA, () =>
@@ -71,10 +97,27 @@ async function main() {
     }
 
     const totalMessages = await base.customerAssignmentMessage.count();
+    const tenantAMessageCount = await base.customerAssignmentMessage.count({ where: { tenantId: tenantA } });
+    const tenantBMessageCount = await base.customerAssignmentMessage.count({ where: { tenantId: tenantB } });
     const scopedMessagesA = await TenantContext.run(tenantA, () =>
       scoped.customerAssignmentMessage.count(),
     );
+    const scopedMessagesB = await TenantContext.run(tenantB, () =>
+      scoped.customerAssignmentMessage.count(),
+    );
     console.log(`CustomerAssignmentMessage total: ${totalMessages}, tenant A scoped: ${scopedMessagesA}`);
+
+    if (scopedMessagesA !== tenantAMessageCount) {
+      throw new Error('Isolation failure: tenant A scoped customerAssignmentMessage count mismatch');
+    }
+
+    if (scopedMessagesB !== tenantBMessageCount) {
+      throw new Error('Isolation failure: tenant B scoped customerAssignmentMessage count mismatch');
+    }
+
+    if (tenantA !== tenantB && scopedMessagesA + scopedMessagesB > totalMessages) {
+      throw new Error('Isolation failure: scoped customerAssignmentMessage counts exceed total');
+    }
 
     if (tenantA !== tenantB) {
       const crossMessage = await TenantContext.run(tenantA, () =>

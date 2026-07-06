@@ -21,3 +21,7 @@
 [2026-07-03] [oturum12] [verify] [backend test/tsc yesil; codec8-sim ve tenant-isolation script ortam/veri kaynakli kirmizi]
 [2026-07-03] [faz5-fuel-analytics] [14b-schema] [fuel card import batch + transaction modelleri ve tenant kayıtları eklendi]
 [2026-07-03] [faz5-fuel-analytics] [14b-api] [fuel card import batch/transaction list API ve module wiring eklendi]
+[2026-07-03] [faz5-fuel-analytics] [14b-demo-ui] [default tenant seed + fuel-card demo seed + /fleet-analytics/fuel-card ekranı canlı veriyle doğrulandı]
+[2026-07-06] [faz-a] [T1] [DDD isleme BullMQ kuyruguna tasindi: status alani+migration, consumer+retry, 202 upload, ddd-archive status kolonu, i18n; sandbox: tsc+155 saf test yesil, DB-bagimli 2 spec + sim/verify/isolation lokalde kosulacak]
+[2026-07-06] [faz-a] [tenant-scope-fix] [tenant-scoped model adlari normalize edildi; PrismaService proxy + isolation script sıkı count assertions ile kapatildi]
+[2026-07-06] [faz-a] [verify] [tenant scoping regresyon spec eklendi; backend tsc/npm test/tenant isolation çalıştırılacak]

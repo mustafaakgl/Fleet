@@ -1,6 +1,9 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { createTenantPrismaExtension } from '../tenant/tenant-prisma.extension';
+import { applyTenantScope } from '../tenant/tenant-prisma.extension';
+import { TenantContext } from '../tenant/tenant-context';
+import { isTenantScopedModel } from '../tenant/tenant-scoped-models';
 
 const DELEGATED_PRISMA_METHODS = new Set([
   '$connect',
@@ -12,6 +15,10 @@ const DELEGATED_PRISMA_METHODS = new Set([
   '$executeRawUnsafe',
   '$extends',
 ]);
+
+function toModelName(model: string): string {
+  return model[0].toUpperCase() + model.slice(1);
+}
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -42,6 +49,35 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
         const scopedValue = (target.#scoped as Record<string, unknown>)[prop as string];
         if (scopedValue !== undefined) {
+          if (typeof prop === 'string' && scopedValue && typeof scopedValue === 'object') {
+            const modelName = toModelName(prop);
+            if (isTenantScopedModel(modelName)) {
+              return new Proxy(scopedValue as Record<string, unknown>, {
+                get: (delegateTarget, delegateProp, delegateReceiver) => {
+                  const delegateValue = Reflect.get(delegateTarget, delegateProp, delegateReceiver);
+                  if (typeof delegateProp === 'string' && typeof delegateValue === 'function') {
+                    return (...args: unknown[]) => {
+                      const tenantId = TenantContext.getTenantId();
+                      if (!tenantId || TenantContext.isBypassed()) {
+                        return (delegateValue as (...callArgs: unknown[]) => unknown).apply(delegateTarget, args);
+                      }
+
+                      const rawArgs = (args[0] ?? {}) as Record<string, unknown>;
+                      const scopedArgs = applyTenantScope(delegateProp, rawArgs, tenantId) as Record<string, unknown>;
+                      return (delegateValue as (...callArgs: unknown[]) => unknown).call(
+                        delegateTarget,
+                        scopedArgs,
+                        ...args.slice(1),
+                      );
+                    };
+                  }
+
+                  return delegateValue;
+                },
+              });
+            }
+          }
+
           return typeof scopedValue === 'function' ? scopedValue.bind(target.#scoped) : scopedValue;
         }
 
