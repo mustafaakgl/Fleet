@@ -748,7 +748,7 @@ function DayTimelineCard({
               {formatFleetDate(`${day.dayKey}T00:00:00.000Z`)}
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              {day.tripCount} {t('fleetTrips.summary.totalTrips', 'Sefer')} · {day.totalKm.toFixed(1)} km · {formatFleetTripDurationSeconds(day.totalDrivingS, t)}
+              {day.tripCount} {t('fleetTrips.summary.totalTrips', { defaultValue: 'Sefer' })} · {day.totalKm.toFixed(1)} km · {formatFleetTripDurationSeconds(day.totalDrivingS, t)}
             </p>
           </div>
           <div className="text-right text-sm text-slate-500">
@@ -797,8 +797,8 @@ function TripTimelineCard({
   t: (key: string, opts?: Record<string, string | number>) => string;
 }) {
   const isSelected = selectedTripId === trip.id;
-  const startLabel = trip.routeStartLabel ?? t('fleetTrips.route.unknown', 'Konum');
-  const endLabel = trip.routeEndLabel ?? t('fleetTrips.route.unknown', 'Konum');
+  const startLabel = trip.routeStartLabel ?? t('fleetTrips.route.unknown', { defaultValue: 'Konum' });
+  const endLabel = trip.routeEndLabel ?? t('fleetTrips.route.unknown', { defaultValue: 'Konum' });
 
   return (
     <button
@@ -818,29 +818,29 @@ function TripTimelineCard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{t(`fleetTrips.source.${trip.source}`, trip.source)}</Badge>
+          <Badge variant="outline">{t(`fleetTrips.source.${trip.source}`, { defaultValue: trip.source })}</Badge>
           <Badge variant={trip.status === 'active' ? 'default' : 'secondary'}>
             {trip.status === 'active'
-              ? t('fleetTrips.statusActive', 'Aktif')
-              : t('fleetTrips.statusClosed', 'Kapalı')}
+              ? t('fleetTrips.statusActive', { defaultValue: 'Aktif' })
+              : t('fleetTrips.statusClosed', { defaultValue: 'Kapalı' })}
           </Badge>
         </div>
       </div>
 
       <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
         <p>
-          {t('fleetTrips.colVehicle', 'Araç')}: {vehicleLabels.get(trip.vehicleId) ?? trip.vehicleId.slice(0, 8)}
+          {t('fleetTrips.colVehicle', { defaultValue: 'Araç' })}: {vehicleLabels.get(trip.vehicleId) ?? trip.vehicleId.slice(0, 8)}
         </p>
         <p>
-          {t('fleetTrips.colDriver', 'Sürücü')}: {driverLabels.get(trip.driverId) ?? trip.driverId.slice(0, 8)}
+          {t('fleetTrips.colDriver', { defaultValue: 'Sürücü' })}: {driverLabels.get(trip.driverId) ?? trip.driverId.slice(0, 8)}
         </p>
         <p>{formatFleetTripDistance(trip.distanceKm)}</p>
         <p>{formatFleetTripSpeed(trip.avgSpeedKmh)}</p>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-        <span>{t('fleetTrips.colScore', 'Skor')}: {formatFleetTripScore(trip.score)}</span>
-        <span>{t('fleetTrips.detail.routePoints', '{{count}} GPS noktası', { count: trip.dataGapDurationS != null ? 1 : 0 })}</span>
+        <span>{t('fleetTrips.colScore', { defaultValue: 'Skor' })}: {formatFleetTripScore(trip.score)}</span>
+        <span>{t('fleetTrips.detail.routePoints', { defaultValue: '{{count}} GPS noktası', count: trip.dataGapDurationS != null ? 1 : 0 })}</span>
         <span>ODO: {formatOdometerRange(trip.odoStartKm ?? null, trip.odoEndKm ?? null)}</span>
         <Badge variant={trip.purpose ? 'secondary' : 'outline'}>{formatTripPurposeLabel(trip.purpose ?? null)}</Badge>
       </div>
@@ -849,7 +849,8 @@ function TripTimelineCard({
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
           {trip.dataGapStartAt && trip.dataGapEndAt
             ? `${formatTime(trip.dataGapStartAt)}–${formatTime(trip.dataGapEndAt)}`
-            : '—'} · {t('fleetTrips.summary.dataGapDetail', '{{minutes}} dk kayıt yok — cihaz kontrol edilmeli', {
+            : '—'} · {t('fleetTrips.summary.dataGapDetail', {
+              defaultValue: '{{minutes}} dk kayıt yok — cihaz kontrol edilmeli',
               minutes: Math.round((trip.dataGapDurationS ?? 0) / 60),
             })}
         </div>

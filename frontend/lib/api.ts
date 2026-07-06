@@ -2208,6 +2208,33 @@ export const fleetFuelCardApi = {
       .then((r) => r.data),
 };
 
+export const devicesApi = {
+  list: () =>
+    api
+      .get<import('./types').DeviceRow[]>('/devices')
+      .then((r) => r.data),
+
+  listUnassigned: () =>
+    api
+      .get<import('./types').DeviceRow[]>('/devices/unassigned')
+      .then((r) => r.data),
+
+  create: (payload: import('./types').CreateDevicePayload) =>
+    api
+      .post<import('./types').DeviceRow>('/devices', payload)
+      .then((r) => r.data),
+
+  update: (id: string, payload: import('./types').UpdateDevicePayload) =>
+    api
+      .patch<import('./types').DeviceRow>(`/devices/${id}`, payload)
+      .then((r) => r.data),
+
+  remove: (id: string) =>
+    api
+      .delete<{ id: string; deleted: true }>(`/devices/${id}`)
+      .then((r) => r.data),
+};
+
 export const fleetTripsApi = {
   list: (params?: { vehicleId?: string; driverId?: string; from?: string; to?: string }) =>
     api.get<FleetTripTimelineResponse>('/fleet/trips', { params }).then((r) => r.data),

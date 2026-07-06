@@ -196,6 +196,32 @@ export interface PaginatedVehicles {
   data: Vehicle[];
 }
 
+// ─── Devices ────────────────────────────────────────────────────────────────
+
+export type DeviceModel = 'FMC130' | 'FMC650';
+export type DeviceStatus = 'online' | 'offline' | 'never';
+
+export interface DeviceRow {
+  id: string;
+  imei: string;
+  model: DeviceModel;
+  vehicleId: string | null;
+  plateNumber: string | null;
+  lastSeenAt: string | null;
+  status: DeviceStatus;
+}
+
+export interface CreateDevicePayload {
+  imei: string;
+  model: DeviceModel;
+  vehicleId?: string;
+}
+
+export interface UpdateDevicePayload {
+  model?: DeviceModel;
+  vehicleId?: string | null;
+}
+
 // ─── Company ─────────────────────────────────────────────────────────────────
 
 export interface Company {
