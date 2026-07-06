@@ -5,6 +5,8 @@ import { AuditModule } from '../audit/audit.module';
 import { MetricsModule } from '../metrics/metrics.module';
 import { TachographQueueModule } from './tachograph-queue.module';
 import { TachographRemoteDownloadService } from './tachograph-remote-download.service';
+import { TachographInfringementNotificationService } from './tachograph-infringement-notification.service';
+import { TachographDownloadReminderService } from './tachograph-download-reminder.service';
 import { TachographController } from './tachograph.controller';
 import { TachographService } from './tachograph.service';
 import { TachographApiService } from './tachograph-api.service';
@@ -21,6 +23,8 @@ import { TisWebAdapter } from './remote-download/tis-web.adapter';
     TachographService,
     TachographApiService,
     TachographRemoteDownloadService,
+    TachographInfringementNotificationService,
+    TachographDownloadReminderService,
     TachoIngestTokenGuard,
     TachoProviderCredentialCryptoService,
     TachoProviderCredentialService,

@@ -13,4 +13,7 @@ export type DriverNotifyKey =
   | 'license_expiry_soon'
   | 'departure_check_reminder'
   | 'defect_confirm_due'
-  | 'fine_assigned';
+  | 'fine_assigned'
+  | 'tacho_infringement'
+  | 'tacho_infringement_ack_reminder'
+  | 'tacho_download_due';

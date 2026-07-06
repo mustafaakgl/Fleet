@@ -246,10 +246,18 @@ enum NotificationType {
   reminder
   system
   tacho_signature_invalid
+  tacho_infringement
+  tacho_download_due
   device_silent
   fuel_theft_suspected
   telematics_coolant_high
   telematics_voltage_low
+}
+
+enum TachoDownloadReminderStage {
+  due_7d
+  due_1d
+  overdue
 }
 
 enum NotificationPriority {
@@ -585,6 +593,7 @@ model User {
   fineStatusChanges          FineStatusLog[] @relation("FineStatusChangedByUser")
   refreshTokens              RefreshToken[]
   acknowledgedTachoInfringements TachoInfringement[] @relation("TachoInfringementAcknowledgedBy")
+  payrollMarkedTachoInfringements TachoInfringement[] @relation("TachoInfringementPayrollMarkedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -2033,6 +2042,7 @@ model DddFile {
 
   activities    TachoActivity[]
   infringements TachoInfringement[]
+  fulfilledDownloadSchedules TachoDownloadSchedule[] @relation("TachoScheduleFulfilledByFile")
 
   @@unique([tenantId, sha256])
   @@index([tenantId])
@@ -2098,12 +2108,17 @@ model TachoInfringement {
   acknowledgedAt      DateTime?
   acknowledgedById    String?
   acknowledgedBy      User?                 @relation("TachoInfringementAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+  payrollRelevant     Boolean               @default(false)
+  payrollMarkedAt     DateTime?
+  payrollMarkedById   String?
+  payrollMarkedBy     User?                 @relation("TachoInfringementPayrollMarkedBy", fields: [payrollMarkedById], references: [id], onDelete: SetNull)
   acknowledgementNote String?
   createdAt           DateTime              @default(now())
 
   @@unique([tenantId, driverId, type, occurredAt])
   @@index([tenantId])
   @@index([tenantId, acknowledgedAt])
+  @@index([tenantId, acknowledgedAt, occurredAt])
   @@index([driverId, occurredAt])
   @@index([dddFileId])
   @@map("tacho_infringements")
@@ -2121,6 +2136,11 @@ model TachoDownloadSchedule {
   intervalDays   Int                  @default(28)
   nextDueAt      DateTime
   lastDownloadAt DateTime?
+  lastFulfilledAt DateTime?
+  lastFulfilledDddFileId String?
+  lastFulfilledDddFile DddFile?       @relation("TachoScheduleFulfilledByFile", fields: [lastFulfilledDddFileId], references: [id], onDelete: SetNull)
+  lastReminderStage TachoDownloadReminderStage?
+  lastReminderSentAt DateTime?
   enabled        Boolean              @default(true)
   lastAttemptAt  DateTime?
   lastError      String?
@@ -2130,7 +2150,9 @@ model TachoDownloadSchedule {
 
   @@index([tenantId])
   @@index([subject, nextDueAt])
+  @@index([enabled, nextDueAt])
   @@index([driverId])
   @@index([vehicleId])
+  @@index([lastFulfilledDddFileId])
   @@map("tacho_download_schedules")
 }

@@ -63,5 +63,17 @@
     "title": "Yeni trafik cezası",
     "message": "{{plate}} için {{date}} tarihli ceza bildirimi — uygulamadan onayla.",
     "default_plate": "Araç"
+  },
+  "tacho_infringement": {
+    "title": "Takograf ihlali kaydedildi",
+    "message": "{{subject}} için {{severityLabel}} bir takograf ihlali kaydedildi. Lütfen inceleyip onaylayın."
+  },
+  "tacho_infringement_ack_reminder": {
+    "title": "Takograf ihlali onayı bekliyor",
+    "message": "{{subject}} için takograf ihlali hâlâ açık. Lütfen bugün inceleyip onaylayın."
+  },
+  "tacho_download_due": {
+    "title": "Takograf okuma vadesi yaklaştı",
+    "message": "{{subject}}: {{deadlineText}} ({{intervalDays}} günlük yükümlülük, FPersV/EU 165/2014)."
   }
 }

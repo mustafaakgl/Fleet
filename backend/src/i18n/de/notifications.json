@@ -63,5 +63,17 @@
     "title": "Neuer Bußgeldbescheid",
     "message": "Bußgeld für {{plate}} vom {{date}} — bitte in der App bestätigen.",
     "default_plate": "Fahrzeug"
+  },
+  "tacho_infringement": {
+    "title": "Tachographenverstoß erfasst",
+    "message": "Ein {{severityLabel}} Tachographenverstoß wurde für {{subject}} erfasst. Bitte prüfen und bestätigen."
+  },
+  "tacho_infringement_ack_reminder": {
+    "title": "Bestätigung für Tachographenverstoß ausstehend",
+    "message": "Der Tachographenverstoß für {{subject}} ist weiterhin offen. Bitte heute prüfen und bestätigen."
+  },
+  "tacho_download_due": {
+    "title": "Tachographen-Auslesefrist fällig",
+    "message": "{{subject}}: {{deadlineText}} (Intervall {{intervalDays}} Tage, FPersV/EU 165/2014)."
   }
 }

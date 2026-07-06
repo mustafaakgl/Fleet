@@ -63,5 +63,17 @@
     "title": "New traffic fine",
     "message": "Fine for {{plate}} on {{date}} — please acknowledge in the app.",
     "default_plate": "vehicle"
+  },
+  "tacho_infringement": {
+    "title": "Tachograph infringement recorded",
+    "message": "A {{severityLabel}} tachograph infringement was recorded for {{subject}}. Please review and acknowledge it."
+  },
+  "tacho_infringement_ack_reminder": {
+    "title": "Tachograph infringement acknowledgement pending",
+    "message": "The tachograph infringement for {{subject}} is still open. Please review and acknowledge it today."
+  },
+  "tacho_download_due": {
+    "title": "Tachograph download deadline due",
+    "message": "{{subject}}: {{deadlineText}} ({{intervalDays}}-day obligation, FPersV/EU 165/2014)."
   }
 }

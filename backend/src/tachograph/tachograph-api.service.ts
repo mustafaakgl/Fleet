@@ -20,6 +20,7 @@ import { mapActivitiesToLike } from './tachograph-rules.runner';
 import { computeDriverRemainingSnapshot } from './rules/remaining-driving';
 import { formatDurationS, parseAssignmentDurationSeconds, parseInfringementEvidence } from './tachograph-format.util';
 import { getInfringementMeta } from './tachograph-infringement-meta';
+import { getTachoAckSlaCutoff } from './tachograph-infringement-sla.util';
 import {
   computeDriverScoreFromTrips,
   countEventsByType,
@@ -51,6 +52,10 @@ export type InfringementListQuery = {
   to?: string;
   page?: number;
   limit?: number;
+};
+
+export type SetInfringementPayrollFlagInput = {
+  payrollRelevant: boolean;
 };
 
 @Injectable()
@@ -136,6 +141,7 @@ export class TachographApiService {
       drivers,
       weeklyTrend,
       vuSchedules,
+      downloadSchedules,
       dddFileCount,
     ] = await Promise.all([
       this.prisma.tachoInfringement.count({
@@ -179,6 +185,19 @@ export class TachographApiService {
         },
         orderBy: { nextDueAt: 'asc' },
         take: 50,
+      }),
+      this.prisma.tachoDownloadSchedule.findMany({
+        where: {
+          tenantId,
+          enabled: true,
+          OR: [{ driverId: { not: null } }, { vehicleId: { not: null } }],
+        },
+        include: {
+          driver: { select: { firstName: true, lastName: true } },
+          vehicle: { select: { plateNumber: true } },
+        },
+        orderBy: [{ nextDueAt: 'asc' }, { createdAt: 'asc' }],
+        take: 200,
       }),
       this.prisma.dddFile.count({ where: { tenantId } }),
     ]);
@@ -342,6 +361,25 @@ export class TachographApiService {
       }),
     );
 
+    const downloadDeadlines = downloadSchedules.map((schedule) => {
+      const lastReadAt = schedule.lastFulfilledAt ?? schedule.lastDownloadAt;
+      const daysRemaining = Math.floor((schedule.nextDueAt.getTime() - nowMs) / (24 * 3600 * 1000));
+
+      return {
+        id: schedule.id,
+        subject: schedule.subject,
+        entityLabel:
+          schedule.subject === TachoDownloadSubject.driver_card
+            ? `${schedule.driver?.firstName ?? ''} ${schedule.driver?.lastName ?? ''}`.trim() || '—'
+            : schedule.vehicle?.plateNumber ?? '—',
+        lastReadAt: lastReadAt?.toISOString() ?? null,
+        nextDueAt: schedule.nextDueAt.toISOString(),
+        daysRemaining,
+        intervalDays: schedule.intervalDays,
+        status: this.downloadDeadlineStatus(daysRemaining),
+      };
+    });
+
     return {
       generatedAt: new Date().toISOString(),
       range: { from: from.toISOString(), to: to.toISOString() },
@@ -356,6 +394,7 @@ export class TachographApiService {
       weeklyInfringementTrend: weeklyTrend,
       driverMatrix,
       vuDownloads,
+      downloadDeadlines,
     };
   }
 
@@ -402,6 +441,7 @@ export class TachographApiService {
           dddFile: {
             select: { id: true, fileType: true, signatureValid: true, capturedAt: true },
           },
+          payrollMarkedBy: { select: { id: true, fullName: true } },
         },
       }),
       this.prisma.tachoInfringement.groupBy({
@@ -438,6 +478,7 @@ export class TachographApiService {
             source: true,
           },
         },
+        payrollMarkedBy: { select: { id: true, fullName: true } },
         acknowledgedBy: { select: { id: true, fullName: true } },
       },
     });
@@ -534,6 +575,7 @@ export class TachographApiService {
         dddFile: {
           select: { id: true, fileType: true, signatureValid: true, capturedAt: true },
         },
+        payrollMarkedBy: { select: { id: true, fullName: true } },
       },
     });
 
@@ -556,6 +598,54 @@ export class TachographApiService {
     return this.mapInfringementRow(updated);
   }
 
+  async setPayrollFlag(
+    tenantId: string,
+    id: string,
+    userId: string,
+    payrollRelevant: boolean,
+  ) {
+    const existing = await this.prisma.tachoInfringement.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Infringement not found');
+    }
+
+    const updated = await this.prisma.tachoInfringement.update({
+      where: { id },
+      data: {
+        payrollRelevant,
+        payrollMarkedAt: payrollRelevant ? new Date() : null,
+        payrollMarkedById: payrollRelevant ? userId : null,
+      },
+      include: {
+        driver: { select: { id: true, firstName: true, lastName: true } },
+        vehicle: { select: { id: true, plateNumber: true } },
+        dddFile: {
+          select: { id: true, fileType: true, signatureValid: true, capturedAt: true },
+        },
+        payrollMarkedBy: { select: { id: true, fullName: true } },
+      },
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId: userId,
+      action: 'tacho_infringement_payroll_flagged',
+      entityType: 'TachoInfringement',
+      entityId: id,
+      summary: `${payrollRelevant ? 'Marked' : 'Cleared'} tachograph infringement payroll relevance`,
+      metadata: {
+        driverId: existing.driverId,
+        type: existing.type,
+        severity: existing.severity,
+        payrollRelevant,
+      },
+    });
+
+    return this.mapInfringementRow(updated);
+  }
+
   private mapInfringementRow(
     row: {
       id: string;
@@ -563,6 +653,9 @@ export class TachographApiService {
       severity: DtcSeverity;
       occurredAt: Date;
       acknowledgedAt: Date | null;
+      payrollRelevant?: boolean;
+      payrollMarkedAt?: Date | null;
+      payrollMarkedBy?: { id: string; fullName: string } | null;
       notes: string | null;
       driver: { id: string; firstName: string; lastName: string } | null;
       vehicle: { id: string; plateNumber: string } | null;
@@ -575,6 +668,7 @@ export class TachographApiService {
     },
   ) {
     const meta = getInfringementMeta(row.type);
+    const acknowledgementSlaOverdue = row.acknowledgedAt === null && row.occurredAt <= getTachoAckSlaCutoff();
     return {
       id: row.id,
       type: row.type,
@@ -584,6 +678,10 @@ export class TachographApiService {
       occurredAt: row.occurredAt.toISOString(),
       acknowledgedAt: row.acknowledgedAt?.toISOString() ?? null,
       status: row.acknowledgedAt ? 'acknowledged' : 'open',
+      acknowledgementSlaOverdue,
+      payrollRelevant: row.payrollRelevant ?? false,
+      payrollMarkedAt: row.payrollMarkedAt?.toISOString() ?? null,
+      payrollMarkedBy: row.payrollMarkedBy ?? null,
       driver: row.driver,
       vehicle: row.vehicle,
       dddFile: row.dddFile
@@ -629,6 +727,16 @@ export class TachographApiService {
       result.push(drivingS);
     }
     return result;
+  }
+
+  private downloadDeadlineStatus(daysRemaining: number): 'ok' | 'warning' | 'overdue' {
+    if (daysRemaining < 0) {
+      return 'overdue';
+    }
+    if (daysRemaining <= 7) {
+      return 'warning';
+    }
+    return 'ok';
   }
 
   private async buildWeeklyInfringementTrend(tenantId: string, weeks: number) {

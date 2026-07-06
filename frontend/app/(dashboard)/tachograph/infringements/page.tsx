@@ -14,6 +14,7 @@ import {
 import { AlertTriangle, WifiOff, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
+import { getUser } from '@/lib/auth';
 import { EvidenceLine } from '@/components/tachograph/EvidenceLine';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ import {
   FLEET_SIDE_DRAWER_OVERLAY,
 } from '@/lib/fleet-table';
 import { formatFleetDateTime } from '@/lib/locale-format';
+import { canViewFinancials } from '@/lib/permissions';
 import type { TachographInfringementDetail, TachographInfringementItem } from '@/lib/types';
 import {
   INFRINGEMENT_TYPES,
@@ -113,10 +115,14 @@ function InfringementDetailDrawer({
   infringementId,
   onClose,
   onAcknowledged,
+  onPayrollChanged,
+  canManagePayroll,
 }: {
   infringementId: string;
   onClose: () => void;
   onAcknowledged: () => void;
+  onPayrollChanged: () => void;
+  canManagePayroll: boolean;
 }) {
   const { t } = useTranslation();
   const [note, setNote] = useState('');
@@ -132,6 +138,13 @@ function InfringementDetailDrawer({
     onSuccess: () => {
       onAcknowledged();
       onClose();
+    },
+  });
+
+  const payrollMutation = useMutation({
+    mutationFn: (nextValue: boolean) => tachographApi.setInfringementPayrollFlag(infringementId, nextValue),
+    onSuccess: () => {
+      onPayrollChanged();
     },
   });
 
@@ -172,6 +185,30 @@ function InfringementDetailDrawer({
               </p>
               <EvidenceLine type={detail.type} evidence={detail.evidence} />
             </div>
+
+            {canManagePayroll ? (
+              <div className="rounded-md border border-slate-200 p-3">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={detail.payrollRelevant}
+                    disabled={payrollMutation.isPending}
+                    onChange={(event) => payrollMutation.mutate(event.target.checked)}
+                  />
+                  {t('tachograph.infringements.payrollRelevant')}
+                </label>
+                <p className="mt-1 text-xs text-slate-500">
+                  {detail.payrollMarkedBy
+                    ? t('tachograph.infringements.payrollMarkedBy', { name: detail.payrollMarkedBy.fullName })
+                    : t('tachograph.infringements.payrollNotMarked')}
+                </p>
+                {payrollMutation.error ? (
+                  <p className="mt-2 text-sm text-red-600">
+                    {getApiErrorMessage(payrollMutation.error, t('tachograph.infringements.payrollToggleFailed'))}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             {detail.status === 'open' ? (
               <div className="space-y-3">
@@ -240,6 +277,16 @@ function QueueRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-slate-900">{t(row.typeLabelKey)}</span>
           <span className="text-xs text-slate-400">{row.article}</span>
+          {row.acknowledgementSlaOverdue ? (
+            <Badge className="border-red-200 bg-red-50 text-[10px] text-red-700">
+              {t('tachograph.infringements.slaOverdue')}
+            </Badge>
+          ) : null}
+          {row.payrollRelevant ? (
+            <Badge className="border-slate-200 bg-slate-100 text-[10px] text-slate-700">
+              {t('tachograph.infringements.payrollRelevantBadge')}
+            </Badge>
+          ) : null}
           {repeatCount >= 3 ? (
             <Badge
               className="border-red-200 bg-red-50 text-[10px] text-red-700"
@@ -280,6 +327,8 @@ export default function InfringementsPage() {
   usePageTitle(t('nav.tachograph.infringements'));
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const currentUser = useMemo(() => getUser(), []);
+  const canManagePayroll = currentUser ? canViewFinancials(currentUser.role) : false;
 
   const [tab, setTab] = useState<QueueTab>((searchParams.get('tab') as QueueTab) || 'open');
   const [driverId, setDriverId] = useState(searchParams.get('driverId') ?? '');
@@ -309,7 +358,13 @@ export default function InfringementsPage() {
   });
 
   const allItems = listQuery.data?.items ?? [];
-  const repeatCounts = useMemo(() => computeRepeatCounts(allItems), [allItems]);
+  const repeatCounts = useMemo(
+    () =>
+      computeRepeatCounts(
+        allItems.map((item) => ({ ...item, driverId: item.driver?.id ?? null })),
+      ),
+    [allItems],
+  );
 
   const openItems = useMemo(
     () => allItems.filter((row) => row.status === 'open'),
@@ -526,6 +581,8 @@ export default function InfringementsPage() {
               invalidateAll();
               setTab('closed');
             }}
+            onPayrollChanged={invalidateAll}
+            canManagePayroll={canManagePayroll}
           />
         </>
       ) : null}

@@ -12,6 +12,6 @@ import { NotificationI18nService } from '../i18n/notification-i18n.service';
   imports: [PrismaModule, PushNotificationsModule],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationSseService, DriverNotifyService, OperationalNotifyService, NotificationI18nService],
-  exports: [NotificationsService, NotificationSseService, DriverNotifyService, OperationalNotifyService],
+  exports: [NotificationsService, NotificationSseService, DriverNotifyService, OperationalNotifyService, NotificationI18nService],
 })
 export class NotificationsModule {}

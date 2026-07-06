@@ -29,7 +29,7 @@ const enumPolyfills: Record<string, EnumShape> = {
   IncidentType: asEnum(['vehicle_accident', 'cargo_damage']),
   IncidentStatus: asEnum(['reported', 'under_review', 'resolved', 'rejected']),
   CompanyEmailStatus: asEnum(['draft', 'draft_ready', 'needs_review', 'sent', 'failed']),
-  NotificationType: asEnum(['transport_request', 'request', 'document', 'handover', 'accident', 'cargo_damage', 'company_email', 'reminder', 'system']),
+  NotificationType: asEnum(['transport_request', 'request', 'document', 'handover', 'accident', 'cargo_damage', 'company_email', 'reminder', 'system', 'tacho_signature_invalid', 'tacho_infringement', 'tacho_download_due']),
   NotificationPriority: asEnum(['low', 'medium', 'high', 'critical']),
   NotificationStatus: asEnum(['unread', 'read']),
   ReminderStatus: asEnum(['open', 'sent', 'resolved', 'ignored']),

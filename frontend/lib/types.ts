@@ -1914,6 +1914,16 @@ export type TachographComplianceOverview = {
     progressPct: number;
     overdue: boolean;
   }>;
+  downloadDeadlines: Array<{
+    id: string;
+    subject: 'driver_card' | 'vehicle_unit';
+    entityLabel: string;
+    lastReadAt: string | null;
+    nextDueAt: string;
+    daysRemaining: number;
+    intervalDays: number;
+    status: 'ok' | 'warning' | 'overdue';
+  }>;
 };
 
 export type TachographInfringementItem = {
@@ -1925,6 +1935,10 @@ export type TachographInfringementItem = {
   occurredAt: string;
   acknowledgedAt: string | null;
   status: 'open' | 'acknowledged';
+  acknowledgementSlaOverdue: boolean;
+  payrollRelevant: boolean;
+  payrollMarkedAt: string | null;
+  payrollMarkedBy: { id: string; fullName: string } | null;
   driver: { id: string; firstName: string; lastName: string } | null;
   vehicle: { id: string; plateNumber: string } | null;
   dddFile: {

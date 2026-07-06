@@ -16,6 +16,8 @@ type NotificationType =
   | 'reminder'
   | 'system'
   | 'tacho_signature_invalid'
+  | 'tacho_infringement'
+  | 'tacho_download_due'
   | 'device_silent'
   | 'fuel_theft_suspected'
   | 'telematics_coolant_high'
@@ -49,6 +51,8 @@ const NOTIFICATION_TYPES: NotificationType[] = [
   'reminder',
   'system',
   'tacho_signature_invalid',
+  'tacho_infringement',
+  'tacho_download_due',
   'device_silent',
   'fuel_theft_suspected',
   'telematics_coolant_high',

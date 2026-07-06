@@ -208,6 +208,29 @@ export class TachographController {
     return this.tachographApiService.acknowledgeInfringement(tenantId, id, userId, note ?? '');
   }
 
+  @Patch('infringements/:id/payroll-flag')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'boss', 'accounting')
+  @RequiresWrite()
+  @HttpCode(HttpStatus.OK)
+  setPayrollFlag(
+    @CurrentUser('tenantId') tenantId?: string,
+    @CurrentUser('id') userId?: string,
+    @Param('id') id?: string,
+    @Body('payrollRelevant') payrollRelevant?: boolean,
+  ) {
+    if (!tenantId) {
+      throw new BadRequestException('tenantId missing in auth context');
+    }
+    if (!userId) {
+      throw new BadRequestException('userId missing in auth context');
+    }
+    if (!id) {
+      throw new BadRequestException('id is required');
+    }
+    return this.tachographApiService.setPayrollFlag(tenantId, id, userId, Boolean(payrollRelevant));
+  }
+
   @Get('remaining')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(...OPERATIONAL_ROLES)
