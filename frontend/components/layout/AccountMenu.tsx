@@ -88,11 +88,16 @@ export function AccountMenu() {
   const [open, setOpen] = useState(false);
   const [user] = useState<AuthUser | null>(() => getUser());
   const [tenantName, setTenantName] = useState<string | null>(null);
+  const canLoadTenantName = user?.role === 'admin';
 
   const workspaceLabel = useMemo(() => resolveWorkspaceLabel(user, tenantName), [tenantName, user]);
   const userInitial = user?.name?.charAt(0)?.toUpperCase() ?? 'U';
 
   useEffect(() => {
+    if (!canLoadTenantName) {
+      return;
+    }
+
     let cancelled = false;
 
     onboardingApi
@@ -109,7 +114,7 @@ export function AccountMenu() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canLoadTenantName]);
 
   useEffect(() => {
     function handleOutside(event: MouseEvent) {

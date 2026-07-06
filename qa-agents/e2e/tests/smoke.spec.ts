@@ -1,4 +1,8 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { test, expect } from '@playwright/test';
+
+const API_BASE_URL = process.env.API_BASE_URL?.trim() || 'http://127.0.0.1:3000/api/v1';
 
 /**
  * Smoke tests — the most basic "is the app up?" checks.
@@ -43,5 +47,231 @@ test.describe('Smoke', () => {
 
     // The login email field is the anchor for later authenticated flows.
     await expect(page.locator('#email')).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+const OFFICE_AUTH_STATE = path.resolve(__dirname, '..', '.auth', 'office.json');
+const DRIVER_AUTH_STATE = path.resolve(__dirname, '..', '.auth', 'driver.json');
+
+function readAccessToken(storageStatePath: string): string | null {
+  if (!fs.existsSync(storageStatePath)) {
+    return null;
+  }
+
+  const raw = fs.readFileSync(storageStatePath, 'utf8');
+  const state = JSON.parse(raw) as {
+    origins?: Array<{
+      localStorage?: Array<{ name?: string; value?: string }>;
+    }>;
+  };
+
+  for (const origin of state.origins ?? []) {
+    for (const entry of origin.localStorage ?? []) {
+      if ((entry.name === 'accessToken' || entry.name === 'fleet_access_token') && entry.value) {
+        return entry.value;
+      }
+    }
+  }
+
+  return null;
+}
+
+function readStoredUser(storageStatePath: string): { id: string; role: string; email: string } | null {
+  if (!fs.existsSync(storageStatePath)) {
+    return null;
+  }
+
+  const raw = fs.readFileSync(storageStatePath, 'utf8');
+  const state = JSON.parse(raw) as {
+    origins?: Array<{
+      localStorage?: Array<{ name?: string; value?: string }>;
+    }>;
+  };
+
+  for (const origin of state.origins ?? []) {
+    for (const entry of origin.localStorage ?? []) {
+      if ((entry.name === 'user' || entry.name === 'fleet_user') && entry.value) {
+        return JSON.parse(entry.value) as { id: string; role: string; email: string };
+      }
+    }
+  }
+
+  return null;
+}
+
+test.describe('Office smoke', () => {
+  test.skip(!fs.existsSync(OFFICE_AUTH_STATE), 'Missing .auth/office.json — run auth setup with OFFICE_EMAIL/OFFICE_PASSWORD first.');
+  test.use({ storageState: OFFICE_AUTH_STATE });
+
+  test('office login reaches assignments without a forbidden state', async ({ page }) => {
+    const response = await page.goto('/assignments');
+
+    expect(response, 'No navigation response was received for the office assignments route.').not.toBeNull();
+    expect(response?.status() ?? 0).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/assignments/, { timeout: 20_000 });
+  });
+
+  test('office message is visible to driver and driver reply increases office unread count', async ({ request }) => {
+    const officeToken = readAccessToken(OFFICE_AUTH_STATE);
+    const driverToken = readAccessToken(DRIVER_AUTH_STATE);
+    const driverUser = readStoredUser(DRIVER_AUTH_STATE);
+
+    test.skip(!officeToken || !driverToken || !driverUser, 'Missing office/driver auth state for messenger smoke.');
+
+    const officeHeaders = { Authorization: `Bearer ${officeToken}` };
+    const driverHeaders = { Authorization: `Bearer ${driverToken}` };
+
+    const conversationsResponse = await request.get(`${API_BASE_URL}/messenger/conversations?limit=100`, {
+      headers: officeHeaders,
+    });
+    expect(conversationsResponse.ok()).toBeTruthy();
+
+    const conversations = await conversationsResponse.json() as Array<{
+      id: string;
+      driver: { userId: string | null };
+    }>;
+
+    const conversation = conversations.find((item) => item.driver.userId === driverUser!.id);
+    expect(conversation, 'No office conversation found for the seeded driver user.').toBeTruthy();
+
+    await request.post(`${API_BASE_URL}/messenger/conversations/${conversation!.id}/read`, {
+      headers: officeHeaders,
+    });
+    await request.post(`${API_BASE_URL}/messenger/conversations/${conversation!.id}/read`, {
+      headers: driverHeaders,
+    });
+
+    const officeMessageText = `office-smoke-${Date.now()}`;
+    const driverReplyText = `driver-smoke-${Date.now()}`;
+
+    const officeSend = await request.post(`${API_BASE_URL}/messenger/conversations/${conversation!.id}/messages`, {
+      headers: officeHeaders,
+      data: {
+        text: officeMessageText,
+        originalLanguage: 'de',
+      },
+    });
+    expect(officeSend.ok(), await officeSend.text()).toBeTruthy();
+
+    const driverMessages = await request.get(`${API_BASE_URL}/messenger/conversations/${conversation!.id}/messages?limit=20`, {
+      headers: driverHeaders,
+    });
+    expect(driverMessages.ok()).toBeTruthy();
+    const driverThread = await driverMessages.json() as Array<{ originalText: string; translatedText: string | null }>;
+    expect(driverThread.some((message) => message.originalText === officeMessageText || message.translatedText === officeMessageText)).toBeTruthy();
+
+    const unreadBeforeResponse = await request.get(`${API_BASE_URL}/messenger/unread-count`, {
+      headers: officeHeaders,
+    });
+    expect(unreadBeforeResponse.ok()).toBeTruthy();
+    const unreadBefore = await unreadBeforeResponse.json() as {
+      byConversation: Array<{ conversationId: string; count: number }>;
+    };
+    const beforeCount = unreadBefore.byConversation.find((row) => row.conversationId === conversation!.id)?.count ?? 0;
+
+    const driverSend = await request.post(`${API_BASE_URL}/messenger/conversations/${conversation!.id}/messages`, {
+      headers: driverHeaders,
+      data: {
+        text: driverReplyText,
+        originalLanguage: 'tr',
+      },
+    });
+    expect(driverSend.ok(), await driverSend.text()).toBeTruthy();
+
+    const unreadAfterResponse = await request.get(`${API_BASE_URL}/messenger/unread-count`, {
+      headers: officeHeaders,
+    });
+    expect(unreadAfterResponse.ok()).toBeTruthy();
+    const unreadAfter = await unreadAfterResponse.json() as {
+      byConversation: Array<{ conversationId: string; count: number }>;
+    };
+    const afterCount = unreadAfter.byConversation.find((row) => row.conversationId === conversation!.id)?.count ?? 0;
+
+    expect(afterCount).toBeGreaterThan(beforeCount);
+  });
+});
+
+test.describe('Driver smoke', () => {
+  test.skip(!fs.existsSync(DRIVER_AUTH_STATE), 'Missing .auth/driver.json — run auth setup with DRIVER_EMAIL/DRIVER_PASSWORD first.');
+  test.use({ storageState: DRIVER_AUTH_STATE });
+
+  test('driver login reaches morning check-in without a forbidden state', async ({ page }) => {
+    const response = await page.goto('/driver/morning-checkin');
+
+    expect(response, 'No navigation response was received for the driver morning check-in route.').not.toBeNull();
+    expect(response?.status() ?? 0).toBeLessThan(500);
+    await expect(page).toHaveURL(/\/driver\/morning-checkin/, { timeout: 20_000 });
+  });
+
+  test('driver can start and stop a work session after satisfying departure check requirements', async ({ request }) => {
+    const token = readAccessToken(DRIVER_AUTH_STATE);
+    test.skip(!token, 'Missing driver access token in .auth/driver.json.');
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    await request.post(`${API_BASE_URL}/driver/work-sessions/end`, {
+      headers,
+      data: { reason: 'manual' },
+    });
+
+    const statusResponse = await request.get(`${API_BASE_URL}/driver/departure-check/status`, {
+      headers,
+    });
+    expect(statusResponse.ok()).toBeTruthy();
+    const departureStatus = await statusResponse.json() as {
+      required: boolean;
+      completed_today: boolean;
+      assignment: { id: string; vehicle_id: string } | null;
+      template: { items: Array<{ item_key: string }> } | null;
+    };
+
+    if (departureStatus.required && !departureStatus.completed_today) {
+      expect(departureStatus.assignment).not.toBeNull();
+      expect(departureStatus.template).not.toBeNull();
+
+      const submitResponse = await request.post(`${API_BASE_URL}/driver/departure-check/submit`, {
+        headers,
+        multipart: {
+          payload: JSON.stringify({
+            vehicle_id: departureStatus.assignment!.vehicle_id,
+            assignment_id: departureStatus.assignment!.id,
+            client_submission_id: `e2e-${Date.now()}`,
+            offline_captured_at: new Date().toISOString(),
+            signature_confirmed_at: new Date().toISOString(),
+            items: departureStatus.template!.items.map((item) => ({
+              item_key: item.item_key,
+              result: 'ok',
+            })),
+          }),
+        },
+      });
+
+      expect(submitResponse.ok()).toBeTruthy();
+    }
+
+    const startResponse = await request.post(`${API_BASE_URL}/driver/work-sessions/start`, {
+      headers,
+    });
+    expect(startResponse.ok(), await startResponse.text()).toBeTruthy();
+
+    const currentAfterStart = await request.get(`${API_BASE_URL}/driver/work-sessions/current`, {
+      headers,
+    });
+    expect(currentAfterStart.ok()).toBeTruthy();
+    expect((await currentAfterStart.json() as { active: boolean }).active).toBe(true);
+
+    const endResponse = await request.post(`${API_BASE_URL}/driver/work-sessions/end`, {
+      headers,
+      data: { reason: 'manual' },
+    });
+    expect(endResponse.ok(), await endResponse.text()).toBeTruthy();
+
+    const currentAfterEnd = await request.get(`${API_BASE_URL}/driver/work-sessions/current`, {
+      headers,
+    });
+    expect(currentAfterEnd.ok()).toBeTruthy();
+    expect((await currentAfterEnd.json() as { active: boolean }).active).toBe(false);
   });
 });

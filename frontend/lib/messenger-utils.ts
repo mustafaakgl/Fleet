@@ -1,9 +1,11 @@
 import type {
+  ConversationParticipant,
   ConversationDetail,
   ConversationListItem,
   MessengerDepartment,
   MessengerLanguage,
   MessengerMessage,
+  UserRole,
 } from '@/lib/types';
 
 export function formatMessengerDateTime(value: string | null | undefined, locale: string): string {
@@ -16,20 +18,42 @@ export function formatMessengerDateTime(value: string | null | undefined, locale
   }).format(date);
 }
 
-export function formatMessengerRelativeTime(value: string | null | undefined, locale: string): string {
+export function formatMessengerRelativeTime(
+  value: string | null | undefined,
+  locale: string,
+  labels?: { yesterday: string },
+): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  const diffMs = date.getTime() - Date.now();
-  const diffMinutes = Math.round(diffMs / 60_000);
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const now = new Date();
+  const isSameDay =
+    date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
 
-  if (Math.abs(diffMinutes) < 60) return rtf.format(diffMinutes, 'minute');
-  const diffHours = Math.round(diffMinutes / 60);
-  if (Math.abs(diffHours) < 24) return rtf.format(diffHours, 'hour');
-  const diffDays = Math.round(diffHours / 24);
-  if (Math.abs(diffDays) < 7) return rtf.format(diffDays, 'day');
-  return formatMessengerDateTime(value, locale);
+  if (isSameDay) {
+    return new Intl.DateTimeFormat(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear()
+    && date.getMonth() === yesterday.getMonth()
+    && date.getDate() === yesterday.getDate();
+
+  if (isYesterday) {
+    return labels?.yesterday ?? 'Yesterday';
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+  }).format(date);
 }
 
 export function conversationTitle(conversation: ConversationListItem | ConversationDetail): string {
@@ -39,6 +63,89 @@ export function conversationTitle(conversation: ConversationListItem | Conversat
 
 export function driverDisplayName(conversation: ConversationListItem | ConversationDetail): string {
   return `${conversation.driver.firstName} ${conversation.driver.lastName}`.trim();
+}
+
+export type MessengerConversationPersonaFilter = 'all' | 'drivers' | 'customers';
+
+export interface MessengerCounterpartInfo {
+  name: string;
+  role: UserRole;
+}
+
+function otherParticipants(
+  conversation: ConversationListItem | ConversationDetail,
+  currentUserId: string | null | undefined,
+): ConversationParticipant[] {
+  return conversation.participants.filter((participant) => participant.userId !== currentUserId);
+}
+
+export function getConversationCategory(
+  conversation: ConversationListItem | ConversationDetail,
+  currentUserId: string | null | undefined,
+): MessengerConversationPersonaFilter {
+  const hasCustomer = otherParticipants(conversation, currentUserId).some(
+    (participant) => participant.role === 'customer',
+  );
+  return hasCustomer ? 'customers' : 'drivers';
+}
+
+export function getCounterpartInfo(
+  conversation: ConversationListItem | ConversationDetail,
+  currentUserId: string | null | undefined,
+): MessengerCounterpartInfo {
+  const others = otherParticipants(conversation, currentUserId);
+  const prioritized = others.find((participant) => participant.role === 'customer')
+    ?? others.find((participant) => participant.role === 'driver')
+    ?? others[0];
+
+  if (prioritized) {
+    return {
+      name: prioritized.user.fullName,
+      role: prioritized.role,
+    };
+  }
+
+  return {
+    name: driverDisplayName(conversation),
+    role: 'driver',
+  };
+}
+
+export function getConversationSearchText(
+  conversation: ConversationListItem,
+  currentUserId: string | null | undefined,
+): string {
+  const counterpart = getCounterpartInfo(conversation, currentUserId);
+  return [
+    counterpart.name,
+    counterpart.role,
+    conversation.subject ?? '',
+    conversation.driver.employeeNumber ?? '',
+    conversation.lastMessage?.originalText ?? '',
+    conversation.lastMessage?.translatedText ?? '',
+    ...conversation.participants.map((participant) => participant.user.fullName),
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+export function roleLabelKey(role: UserRole): string {
+  switch (role) {
+    case 'admin':
+      return 'messenger.roles.admin';
+    case 'boss':
+      return 'messenger.roles.boss';
+    case 'accounting':
+      return 'messenger.roles.accounting';
+    case 'office':
+      return 'messenger.roles.office';
+    case 'driver':
+      return 'messenger.roles.driver';
+    case 'customer':
+      return 'messenger.roles.customer';
+    default:
+      return 'messenger.roles.office';
+  }
 }
 
 export function personInitials(name: string): string {
@@ -84,49 +191,84 @@ export type MessageDayGroup = {
   key: string;
   label: string;
   messages: MessengerMessage[];
+  groups: Array<{
+    senderUserId: string;
+    own: boolean;
+    messages: MessengerMessage[];
+  }>;
 };
+
+function formatDayLabel(date: Date, labels: { today: string; yesterday: string }, locale: string): string {
+  const formatter = new Intl.DateTimeFormat(locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (
+    date.getDate() === today.getDate()
+    && date.getMonth() === today.getMonth()
+    && date.getFullYear() === today.getFullYear()
+  ) {
+    return labels.today;
+  }
+
+  if (
+    date.getDate() === yesterday.getDate()
+    && date.getMonth() === yesterday.getMonth()
+    && date.getFullYear() === yesterday.getFullYear()
+  ) {
+    return labels.yesterday;
+  }
+
+  return formatter.format(date);
+}
 
 export function groupMessagesByDay(
   messages: MessengerMessage[],
   labels: { today: string; yesterday: string },
   locale: string,
+  currentUserId?: string | null,
 ): MessageDayGroup[] {
   const groups: MessageDayGroup[] = [];
-  const formatter = new Intl.DateTimeFormat(locale, { dateStyle: 'long' });
 
   for (const message of messages) {
     const date = new Date(message.createdAt);
     const dayKey = Number.isNaN(date.getTime())
       ? 'unknown'
       : `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    let label = formatter.format(date);
-    if (
-      !Number.isNaN(date.getTime()) &&
-      date.getDate() === today.getDate() &&
-      date.getMonth() === today.getMonth() &&
-      date.getFullYear() === today.getFullYear()
-    ) {
-      label = labels.today;
-    } else if (
-      !Number.isNaN(date.getTime()) &&
-      date.getDate() === yesterday.getDate() &&
-      date.getMonth() === yesterday.getMonth() &&
-      date.getFullYear() === yesterday.getFullYear()
-    ) {
-      label = labels.yesterday;
-    }
+    const label = Number.isNaN(date.getTime())
+      ? labels.today
+      : formatDayLabel(date, labels, locale);
 
     const existing = groups.find((group) => group.key === dayKey);
     if (existing) {
       existing.messages.push(message);
     } else {
-      groups.push({ key: dayKey, label, messages: [message] });
+      groups.push({ key: dayKey, label, messages: [message], groups: [] });
     }
+  }
+
+  for (const group of groups) {
+    const mergedGroups: MessageDayGroup['groups'] = [];
+    for (const message of group.messages) {
+      const own = message.senderUserId === currentUserId;
+      const previous = mergedGroups[mergedGroups.length - 1];
+      if (previous && previous.senderUserId === message.senderUserId) {
+        previous.messages.push(message);
+      } else {
+        mergedGroups.push({
+          senderUserId: message.senderUserId,
+          own,
+          messages: [message],
+        });
+      }
+    }
+    group.groups = mergedGroups;
   }
 
   return groups;

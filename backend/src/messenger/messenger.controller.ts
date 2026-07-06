@@ -144,9 +144,10 @@ export class MessengerController {
     @Param('id') conversationId: string,
     @Query('since') since?: string,
     @Query('afterId') afterId?: string,
+    @Query('beforeId') beforeId?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.messengerService.listMessages(userId, conversationId, { since, afterId, limit });
+    return this.messengerService.listMessages(userId, conversationId, { since, afterId, beforeId, limit });
   }
 
   @Post('conversations/:id/messages')

@@ -1,21 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Download, MessageSquare, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { MessengerChatPanel } from '@/components/messenger/MessengerChatPanel';
+import { MessengerChatPanel, type MessengerUiMessage } from '@/components/messenger/MessengerChatPanel';
 import { MessengerConversationList } from '@/components/messenger/MessengerConversationList';
 import { NewConversationDialog } from '@/components/messenger/NewConversationDialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authApi, driversApi, messengerApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
 import { FLEET_LIST_CARD, FLEET_PAGE, FLEET_PAGE_HEADER, FLEET_PAGE_HEADER_ACTIONS, FLEET_PAGE_HEADER_TITLE } from '@/lib/fleet-table';
-import { openSseStream } from '@/lib/sse-stream';
+import {
+  getConversationCategory,
+  getConversationSearchText,
+  type MessengerConversationPersonaFilter,
+} from '@/lib/messenger-utils';
 import { cn } from '@/lib/utils';
 import type {
   ConversationDetail,
@@ -23,7 +27,6 @@ import type {
   Driver,
   MessengerLanguage,
   MessengerMessage,
-  MessengerStats,
   MessengerUnreadCount,
 } from '@/lib/types';
 
@@ -35,6 +38,10 @@ type ToastState = {
 export function MessengerPage() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
+  const pollTimerRef = useRef<number | null>(null);
+  const currentUser = getUser();
+  const currentUserId = currentUser?.id ?? null;
+  const currentUserName = currentUser?.name ?? currentUser?.email ?? 'User';
   const previewText = useCallback(
     (conversation: ConversationListItem): string => {
       if (!conversation.lastMessage) return t('messenger.noMessagesPreview');
@@ -49,16 +56,16 @@ export function MessengerPage() {
 
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<MessengerUnreadCount>({ total: 0, byConversation: [] });
-  const [stats, setStats] = useState<MessengerStats | null>(null);
   const [exporting, setExporting] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<ConversationDetail | null>(null);
-  const [messages, setMessages] = useState<MessengerMessage[]>([]);
+  const [messages, setMessages] = useState<MessengerUiMessage[]>([]);
   const [search, setSearch] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [personaFilter, setPersonaFilter] = useState<MessengerConversationPersonaFilter>('all');
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
 
@@ -72,6 +79,54 @@ export function MessengerPage() {
   const [newConversationSubject, setNewConversationSubject] = useState('');
   const [newConversationDepartment, setNewConversationDepartment] = useState<string>('dispatch');
   const [creatingConversation, setCreatingConversation] = useState(false);
+
+  const sortMessages = useCallback((items: MessengerUiMessage[]) => {
+    return [...items].sort((left, right) => {
+      const leftTime = new Date(left.createdAt).getTime();
+      const rightTime = new Date(right.createdAt).getTime();
+      if (leftTime !== rightTime) {
+        return leftTime - rightTime;
+      }
+      return left.id.localeCompare(right.id);
+    });
+  }, []);
+
+  const mergeMessages = useCallback((current: MessengerUiMessage[], incoming: MessengerMessage[]) => {
+    const tempMessages = current.filter((message) => message.deliveryState === 'sending' || message.deliveryState === 'error');
+    const mapped = incoming.map((message) => ({ ...message, deliveryState: 'sent' as const }));
+    const byId = new Map<string, MessengerUiMessage>();
+
+    for (const message of [...mapped, ...tempMessages]) {
+      byId.set(message.id, message);
+    }
+
+    return sortMessages(Array.from(byId.values()));
+  }, [sortMessages]);
+
+  const patchConversationPreview = useCallback((message: MessengerUiMessage, unreadDelta = 0) => {
+    setConversations((previous) => {
+      const next = previous.map((conversation) => {
+        if (conversation.id !== message.conversationId) return conversation;
+        return {
+          ...conversation,
+          lastMessage: {
+            id: message.id,
+            senderUserId: message.senderUserId,
+            senderName: message.senderName,
+            originalText: message.originalText,
+            translatedText: message.translatedText,
+            originalLanguage: message.originalLanguage,
+            targetLanguage: message.targetLanguage,
+            translationStatus: message.translationStatus,
+            createdAt: message.createdAt,
+          },
+          lastMessageAt: message.createdAt,
+          unreadCount: Math.max(0, conversation.unreadCount + unreadDelta),
+        };
+      });
+      return [...next].sort((left, right) => (right.lastMessageAt ?? '').localeCompare(left.lastMessageAt ?? ''));
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,26 +166,11 @@ export function MessengerPage() {
     setUnreadCount(response);
   }, []);
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const response = await messengerApi.getStats({
-        search: search.trim() || undefined,
-        department: departmentFilter === 'all' ? undefined : departmentFilter,
-      });
-      setStats(response);
-    } catch {
-      setStats(null);
-    }
-  }, [search, departmentFilter]);
-
   const fetchConversations = useCallback(
     async (silent = false) => {
       if (!silent) setLoadingConversations(true);
       try {
-        const list = await messengerApi.listConversations({
-          search: search.trim() || undefined,
-          department: departmentFilter === 'all' ? undefined : departmentFilter,
-        });
+        const list = await messengerApi.listConversations({ limit: 100 });
         setConversations(list);
         if (!silent) {
           if (!selectedConversationId && list.length > 0) {
@@ -145,12 +185,12 @@ export function MessengerPage() {
         if (!silent) setLoadingConversations(false);
       }
     },
-    [search, departmentFilter, selectedConversationId, t],
+    [selectedConversationId, t],
   );
 
   const refreshLeftPanel = useCallback(async () => {
-    await Promise.all([fetchConversations(true), fetchUnreadCount(), fetchStats()]);
-  }, [fetchConversations, fetchUnreadCount, fetchStats]);
+    await Promise.all([fetchConversations(true), fetchUnreadCount()]);
+  }, [fetchConversations, fetchUnreadCount]);
 
   const fetchConversationDetailAndMessages = useCallback(
     async (conversationId: string) => {
@@ -159,10 +199,11 @@ export function MessengerPage() {
       try {
         const [detail, list] = await Promise.all([
           messengerApi.getConversation(conversationId),
-          messengerApi.listMessages(conversationId, { limit: 50 }),
+          messengerApi.listMessages(conversationId, { limit: 40 }),
         ]);
         setSelectedConversation(detail);
-        setMessages(list);
+        setMessages(list.map((message) => ({ ...message, deliveryState: 'sent' as const })));
+        setHasOlderMessages(list.length >= 40);
         await messengerApi.markConversationRead(conversationId);
         await fetchUnreadCount();
       } catch (e) {
@@ -184,67 +225,51 @@ export function MessengerPage() {
   useEffect(() => {
     if (bootLoading || forbidden) return;
     const timer = window.setTimeout(() => {
-      void Promise.all([fetchConversations(false), fetchUnreadCount(), fetchStats()]);
+      void Promise.all([fetchConversations(false), fetchUnreadCount()]);
     }, 200);
     return () => window.clearTimeout(timer);
-  }, [bootLoading, forbidden, fetchConversations, fetchUnreadCount, fetchStats]);
+  }, [bootLoading, forbidden, fetchConversations, fetchUnreadCount]);
 
   useEffect(() => {
     if (bootLoading || forbidden) return;
 
-    const params = new URLSearchParams();
-    if (search.trim()) {
-      params.set('search', search.trim());
-    }
-    if (departmentFilter !== 'all') {
-      params.set('department', departmentFilter);
-    }
-    if (selectedConversationId) {
-      params.set('conversationId', selectedConversationId);
-    }
+    const poll = async () => {
+      if (document.hidden) return;
+      await refreshLeftPanel();
+      if (selectedConversationId) {
+        try {
+          const latest = await messengerApi.listMessages(selectedConversationId, { limit: 40 });
+          setMessages((previous) => mergeMessages(previous, latest));
+          await messengerApi.markConversationRead(selectedConversationId);
+          setMessages((previous) => previous.map((message) => (
+            message.senderUserId === currentUserId ? message : { ...message, readByCurrentUser: true }
+          )));
+          await fetchUnreadCount();
+        } catch {
+          // keep stale thread visible
+        }
+      }
+    };
 
-    const stop = openSseStream<{
-      conversations: ConversationListItem[];
-      unread: MessengerUnreadCount;
-      stats: MessengerStats;
-      messages: MessengerMessage[];
-    }>(
-      `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'}/messenger/stream?${params.toString()}`,
-      {
-        onMessage: (payload) => {
-          setConversations(payload.conversations);
-          setUnreadCount(payload.unread);
-          setStats(payload.stats);
-          if (payload.messages.length > 0) {
-            setMessages((previous) => {
-              const seen = new Set(previous.map((item) => item.id));
-              const merged = [...previous];
-              for (const message of payload.messages) {
-                if (!seen.has(message.id)) {
-                  merged.push(message);
-                }
-              }
-              return merged;
-            });
-          }
-        },
-        onError: () => {
-          void refreshLeftPanel();
-        },
-      },
-    );
+    void poll();
+    pollTimerRef.current = window.setInterval(() => {
+      void poll();
+    }, 7_500);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void poll();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      stop();
+      if (pollTimerRef.current != null) {
+        window.clearInterval(pollTimerRef.current);
+      }
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [
-    bootLoading,
-    forbidden,
-    search,
-    departmentFilter,
-    selectedConversationId,
-    refreshLeftPanel,
-  ]);
+  }, [bootLoading, currentUserId, fetchUnreadCount, forbidden, mergeMessages, refreshLeftPanel, selectedConversationId]);
 
   useEffect(() => {
     if (!selectedConversationId || forbidden || bootLoading) {
@@ -260,6 +285,21 @@ export function MessengerPage() {
     [role],
   );
 
+  const filteredConversations = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return conversations.filter((conversation) => {
+      const personaMatch =
+        personaFilter === 'all' || getConversationCategory(conversation, currentUserId) === personaFilter;
+      if (!personaMatch) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      return getConversationSearchText(conversation, currentUserId).includes(query);
+    });
+  }, [conversations, currentUserId, personaFilter, search]);
+
   const handleSendMessage = useCallback(async () => {
     if (!selectedConversationId) return;
     const text = composerText.trim();
@@ -268,25 +308,113 @@ export function MessengerPage() {
       return;
     }
 
-    setSending(true);
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: MessengerUiMessage = {
+      id: tempId,
+      clientId: tempId,
+      conversationId: selectedConversationId,
+      senderUserId: currentUserId ?? 'unknown',
+      senderName: currentUserName,
+      originalText: text,
+      translatedText: null,
+      originalLanguage,
+      targetLanguage: null,
+      translationStatus: 'pending',
+      createdAt: new Date().toISOString(),
+      readByCurrentUser: true,
+      deliveryState: 'sending',
+    };
+
+    setMessages((previous) => sortMessages([...previous, optimisticMessage]));
+    patchConversationPreview(optimisticMessage);
+    setComposerText('');
+
     try {
       const created = await messengerApi.sendMessage(selectedConversationId, { text, originalLanguage });
-      setMessages((previous) => [...previous, created]);
-      setComposerText('');
+      const delivered = { ...created, deliveryState: 'sent' as const };
+      setMessages((previous) =>
+        sortMessages(previous.filter((message) => message.id !== tempId).concat(delivered)),
+      );
+      patchConversationPreview(delivered);
       await refreshLeftPanel();
     } catch (e) {
+      setMessages((previous) =>
+        previous.map((message) =>
+          message.id === tempId
+            ? { ...message, deliveryState: 'error', translationStatus: 'failed' }
+            : message,
+        ),
+      );
       showToast(e instanceof Error ? e.message : t('messenger.sendError'), 'error');
-    } finally {
-      setSending(false);
     }
   }, [
     composerText,
+    currentUserId,
+    currentUserName,
     originalLanguage,
+    patchConversationPreview,
     refreshLeftPanel,
     selectedConversationId,
     showToast,
+    sortMessages,
     t,
   ]);
+
+  const handleRetryMessage = useCallback(async (messageId: string) => {
+    const failed = messages.find((message) => message.id === messageId);
+    if (!failed || !selectedConversationId) return;
+
+    setMessages((previous) => previous.map((message) => (
+      message.id === messageId ? { ...message, deliveryState: 'sending' } : message
+    )));
+
+    try {
+      const created = await messengerApi.sendMessage(selectedConversationId, {
+        text: failed.originalText,
+        originalLanguage: failed.originalLanguage,
+      });
+      const delivered = { ...created, deliveryState: 'sent' as const };
+      setMessages((previous) =>
+        sortMessages(previous.filter((message) => message.id !== messageId).concat(delivered)),
+      );
+      patchConversationPreview(delivered);
+      await refreshLeftPanel();
+    } catch (e) {
+      setMessages((previous) => previous.map((message) => (
+        message.id === messageId ? { ...message, deliveryState: 'error' } : message
+      )));
+      showToast(e instanceof Error ? e.message : t('messenger.sendError'), 'error');
+    }
+  }, [messages, patchConversationPreview, refreshLeftPanel, selectedConversationId, showToast, sortMessages, t]);
+
+  const handleLoadOlderMessages = useCallback(async () => {
+    if (!selectedConversationId || loadingOlder) return;
+    const oldestServerMessage = messages.find((message) => !message.id.startsWith('temp-'));
+    if (!oldestServerMessage) return;
+
+    setLoadingOlder(true);
+    try {
+      const older = await messengerApi.listMessages(selectedConversationId, {
+        beforeId: oldestServerMessage.id,
+        limit: 30,
+      });
+      if (older.length === 0) {
+        setHasOlderMessages(false);
+      } else {
+        setMessages((previous) =>
+          sortMessages([
+            ...older.map((message) => ({ ...message, deliveryState: 'sent' as const })),
+            ...previous,
+          ]),
+        );
+        setHasOlderMessages(older.length >= 30);
+      }
+    } catch {
+      setHasOlderMessages(false);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [loadingOlder, mergeMessages, messages, selectedConversationId]);
 
   const loadDrivers = useCallback(async () => {
     if (!canCreateConversation) return;
@@ -325,7 +453,8 @@ export function MessengerPage() {
       await refreshLeftPanel();
       setSelectedConversationId(created.id);
       setSelectedConversation(created);
-      setMessages(created.messagesPreview ?? []);
+      setMessages((created.messagesPreview ?? []).map((message) => ({ ...message, deliveryState: 'sent' as const })));
+      setHasOlderMessages(false);
       showToast(t('messenger.created'), 'success');
     } catch (e) {
       showToast(e instanceof Error ? e.message : t('messenger.createError'), 'error');
@@ -346,7 +475,6 @@ export function MessengerPage() {
     try {
       const csv = await messengerApi.exportConversations({
         search: search.trim() || undefined,
-        department: departmentFilter === 'all' ? undefined : departmentFilter,
       });
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -361,7 +489,7 @@ export function MessengerPage() {
     } finally {
       setExporting(false);
     }
-  }, [departmentFilter, search, showToast, t]);
+  }, [search, showToast, t]);
 
   if (bootLoading) {
     return (
@@ -422,51 +550,6 @@ export function MessengerPage() {
         </div>
       </div>
 
-      {stats ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className={FLEET_LIST_CARD}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                {t('messenger.stats.conversations')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-2xl font-semibold text-slate-900">{stats.totalConversations}</p>
-            </CardContent>
-          </Card>
-          <Card className={FLEET_LIST_CARD}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                {t('messenger.stats.unread')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-2xl font-semibold text-brand-primary">{stats.unreadTotal}</p>
-            </CardContent>
-          </Card>
-          <Card className={FLEET_LIST_CARD}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                {t('messenger.stats.needsAttention')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-2xl font-semibold text-orange-600">{stats.conversationsWithUnread}</p>
-            </CardContent>
-          </Card>
-          <Card className={FLEET_LIST_CARD}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                {t('messenger.stats.messages24h')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-2xl font-semibold text-slate-900">{stats.messagesLast24Hours}</p>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
-
       {error ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
           {error}
@@ -486,17 +569,20 @@ export function MessengerPage() {
           )}
         >
           <MessengerConversationList
-            conversations={conversations}
+            conversations={filteredConversations}
             selectedConversationId={selectedConversationId}
             search={search}
-            departmentFilter={departmentFilter}
+            personaFilter={personaFilter}
+            currentUserId={currentUserId}
             loading={loadingConversations}
+            canCreateConversation={canCreateConversation}
             onSearchChange={setSearch}
-            onDepartmentFilterChange={setDepartmentFilter}
+            onPersonaFilterChange={setPersonaFilter}
             onSelectConversation={(id) => {
               setSelectedConversationId(id);
               void fetchConversationDetailAndMessages(id);
             }}
+            onCreateConversation={canCreateConversation ? () => setNewConversationOpen(true) : undefined}
             previewText={previewText}
           />
         </div>
@@ -512,12 +598,16 @@ export function MessengerPage() {
             selectedConversation={selectedConversation}
             messages={messages}
             loading={loadingMessages}
+            loadingOlder={loadingOlder}
+            hasOlderMessages={hasOlderMessages}
             composerText={composerText}
             originalLanguage={originalLanguage}
-            sending={sending}
+            sending={false}
             onBack={() => setSelectedConversationId(null)}
             onComposerChange={setComposerText}
             onOriginalLanguageChange={setOriginalLanguage}
+            onLoadOlder={() => void handleLoadOlderMessages()}
+            onRetryMessage={(id) => void handleRetryMessage(id)}
             onSend={() => void handleSendMessage()}
           />
         </div>

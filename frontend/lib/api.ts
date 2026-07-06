@@ -1127,6 +1127,7 @@ export interface MessengerConversationListParams {
 export interface MessengerListMessagesParams {
   since?: string;
   afterId?: string;
+  beforeId?: string;
   limit?: number;
 }
 

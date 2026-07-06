@@ -18,14 +18,26 @@ export function WorkspaceSelector() {
   const [user] = useState<AuthUser | null>(() => getUser());
   const [tenantName, setTenantName] = useState<string | null>(null);
   const workspaceLabel = useMemo(() => resolveWorkspaceLabel(user, tenantName), [tenantName, user]);
+  const canLoadTenantName = user?.role === 'admin';
 
   useEffect(() => {
+    if (!canLoadTenantName) {
+      return;
+    }
+
     let cancelled = false;
-    onboardingApi.getTenant().then((tenant) => {
-      if (!cancelled) setTenantName(tenant.name ?? null);
-    }).catch(() => { if (!cancelled) setTenantName(null); });
-    return () => { cancelled = true; };
-  }, []);
+    onboardingApi
+      .getTenant()
+      .then((tenant) => {
+        if (!cancelled) setTenantName(tenant.name ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setTenantName(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canLoadTenantName]);
 
   return (
     <div className="flex min-w-0 max-w-[10rem] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 sm:max-w-[12rem]" title={workspaceLabel}>

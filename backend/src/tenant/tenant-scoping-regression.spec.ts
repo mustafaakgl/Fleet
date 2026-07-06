@@ -21,4 +21,29 @@ describe('tenant scoping regressions', () => {
     assert.deepEqual(aggregateResult.where, { tenantId: TENANT_ID });
     assert.deepEqual(groupByResult.where, { tenantId: TENANT_ID });
   });
+
+  it('does not inject tenantId into compound unique inputs that do not contain tenantId', () => {
+    const result = applyTenantScope(
+      'findUnique',
+      {
+        where: {
+          driverId_vehicleId_workDate: {
+            driverId: 'drv-1',
+            vehicleId: 'veh-1',
+            workDate: '2026-07-06',
+          },
+        },
+      },
+      TENANT_ID,
+      'DepartureCheck',
+    );
+
+    assert.deepEqual(result.where, {
+      driverId_vehicleId_workDate: {
+        driverId: 'drv-1',
+        vehicleId: 'veh-1',
+        workDate: '2026-07-06',
+      },
+    });
+  });
 });

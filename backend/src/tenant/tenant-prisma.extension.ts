@@ -2,6 +2,30 @@ import { Prisma } from '@prisma/client';
 import { TenantContext } from './tenant-context';
 import { isTenantScopedModel } from './tenant-scoped-models';
 
+const COMPOUND_UNIQUE_KEYS_WITH_TENANT = new Map(
+  Prisma.dmmf.datamodel.models.map((model) => {
+    const keys = new Set<string>();
+
+    for (const field of model.fields) {
+      if (field.isId && field.kind === 'scalar' && field.name === 'tenantId') {
+        keys.add('tenantId');
+      }
+    }
+
+    for (const index of model.uniqueIndexes) {
+      if (index.fields.includes('tenantId')) {
+        keys.add(index.fields.join('_'));
+      }
+    }
+
+    if (model.primaryKey?.fields.includes('tenantId')) {
+      keys.add(model.primaryKey.fields.join('_'));
+    }
+
+    return [model.name, keys] as const;
+  }),
+);
+
 const READ_OPS = new Set([
   'findMany',
   'findFirst',
@@ -30,6 +54,7 @@ function mergeWhere(
 function scopeUniqueWhere(
   where: Record<string, unknown> | undefined,
   tenantId: string,
+  model?: string,
 ): Record<string, unknown> {
   const base = where ?? {};
   if (base.id) {
@@ -38,6 +63,10 @@ function scopeUniqueWhere(
 
   const compoundKey = Object.keys(base).find((key) => key.includes('_'));
   if (compoundKey && typeof base[compoundKey] === 'object' && base[compoundKey] !== null) {
+    if (!model || !COMPOUND_UNIQUE_KEYS_WITH_TENANT.get(model)?.has(compoundKey)) {
+      return base;
+    }
+
     return {
       [compoundKey]: {
         ...(base[compoundKey] as Record<string, unknown>),
@@ -67,6 +96,7 @@ export function applyTenantScope(
   operation: string,
   args: Record<string, unknown>,
   tenantId: string,
+  model?: string,
 ): Record<string, unknown> {
   const nextArgs = { ...args };
 
@@ -76,7 +106,7 @@ export function applyTenantScope(
     || operation === 'update'
     || operation === 'delete'
   ) {
-    nextArgs.where = scopeUniqueWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId);
+    nextArgs.where = scopeUniqueWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId, model);
   } else if (READ_OPS.has(operation) || WRITE_FILTER_OPS.has(operation)) {
     nextArgs.where = mergeWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId);
   }
@@ -91,7 +121,7 @@ export function applyTenantScope(
     if (operation === 'upsert') {
       nextArgs.create = mergeData(nextArgs.create as Record<string, unknown>, tenantId);
       nextArgs.update = nextArgs.update ?? {};
-      nextArgs.where = scopeUniqueWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId);
+      nextArgs.where = scopeUniqueWhere(nextArgs.where as Record<string, unknown> | undefined, tenantId, model);
     }
   }
 
@@ -111,7 +141,7 @@ export function createTenantPrismaExtension() {
           }
 
           return query(
-            applyTenantScope(operation, args as Record<string, unknown>, tenantId) as typeof args,
+            applyTenantScope(operation, args as Record<string, unknown>, tenantId, normalizedModel) as typeof args,
           );
         },
       },

@@ -36,6 +36,7 @@ type ConversationListQuery = {
 type ConversationMessagesQuery = {
   since?: string;
   afterId?: string;
+  beforeId?: string;
   limit?: string;
 };
 
@@ -852,6 +853,25 @@ export class MessengerService {
           { createdAt: { gt: cursorMessage.createdAt } },
           {
             AND: [{ createdAt: cursorMessage.createdAt }, { id: { gt: cursorMessage.id } }],
+          },
+        ],
+      });
+    }
+
+    if (query.beforeId) {
+      const cursorMessage = await this.prisma.message.findUnique({
+        where: { id: query.beforeId },
+        select: { id: true, conversationId: true, createdAt: true },
+      });
+      if (!cursorMessage || cursorMessage.conversationId !== conversationId) {
+        throw new NotFoundException('beforeId message not found in this conversation');
+      }
+
+      filters.push({
+        OR: [
+          { createdAt: { lt: cursorMessage.createdAt } },
+          {
+            AND: [{ createdAt: cursorMessage.createdAt }, { id: { lt: cursorMessage.id } }],
           },
         ],
       });

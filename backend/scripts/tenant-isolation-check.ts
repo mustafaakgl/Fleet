@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 /**
  * Verifies tenant isolation via Prisma extension.
  * Run: npx ts-node --transpile-only scripts/tenant-isolation-check.ts

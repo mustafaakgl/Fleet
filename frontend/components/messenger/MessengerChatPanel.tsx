@@ -1,7 +1,7 @@
 'use client';
 
-import { ChevronLeft, UserRound } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { AlertCircle, Check, ChevronLeft, Languages, Loader2, RotateCcw, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -10,25 +10,28 @@ import { MessengerComposer } from '@/components/messenger/MessengerComposer';
 import { getUser } from '@/lib/auth';
 import {
   conversationTitle,
-  departmentBadgeClass,
-  driverDisplayName,
   formatMessengerDateTime,
+  getCounterpartInfo,
   groupMessagesByDay,
   personInitials,
   resolveDriverLanguageFromConversation,
+  roleLabelKey,
 } from '@/lib/messenger-utils';
 import { cn } from '@/lib/utils';
-import type {
-  ConversationDetail,
-  MessengerLanguage,
-  MessengerMessage,
-} from '@/lib/types';
+import type { ConversationDetail, MessengerLanguage, MessengerMessage } from '@/lib/types';
+
+export type MessengerUiMessage = MessengerMessage & {
+  deliveryState?: 'sending' | 'sent' | 'error';
+  clientId?: string;
+};
 
 interface MessengerChatPanelProps {
   selectedConversationId: string | null;
   selectedConversation: ConversationDetail | null;
-  messages: MessengerMessage[];
+  messages: MessengerUiMessage[];
   loading: boolean;
+  loadingOlder: boolean;
+  hasOlderMessages: boolean;
   composerText: string;
   originalLanguage: MessengerLanguage;
   sending: boolean;
@@ -36,79 +39,127 @@ interface MessengerChatPanelProps {
   onComposerChange: (value: string) => void;
   onOriginalLanguageChange: (language: MessengerLanguage) => void;
   onSend: () => void;
+  onLoadOlder: () => void;
+  onRetryMessage?: (messageId: string) => void;
+}
+
+function DeliveryIndicator({
+  state,
+  retryLabel,
+  onRetry,
+}: {
+  state: MessengerUiMessage['deliveryState'];
+  retryLabel: string;
+  onRetry?: () => void;
+}) {
+  if (state === 'sending') {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+        <Loader2 className="h-3 w-3 animate-spin" />
+      </span>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <span className="inline-flex items-center gap-2 text-[11px] text-red-600">
+        <AlertCircle className="h-3 w-3" />
+        <button type="button" className="font-medium underline underline-offset-2" onClick={onRetry}>
+          {retryLabel}
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+      <Check className="h-3 w-3" />
+    </span>
+  );
 }
 
 function MessageBubble({
   message,
   own,
-  t,
+  showAvatar,
+  senderLabel,
   locale,
+  translationLabel,
+  originalToggleLabel,
+  translatedToggleLabel,
+  retryLabel,
+  onRetry,
 }: {
-  message: MessengerMessage;
+  message: MessengerUiMessage;
   own: boolean;
-  t: (key: string, options?: Record<string, unknown>) => string;
+  showAvatar: boolean;
+  senderLabel: string;
   locale: string;
+  translationLabel: string;
+  originalToggleLabel: string;
+  translatedToggleLabel: string;
+  retryLabel: string;
+  onRetry?: () => void;
 }) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  const hasIncomingTranslation = !own && Boolean(message.translatedText);
+
   return (
-    <div
-      className={cn(
-        'max-w-[min(85%,28rem)] animate-in fade-in slide-in-from-bottom-1 duration-200',
-        own ? 'ml-auto' : 'mr-auto',
-      )}
-    >
+    <div className={cn('flex gap-3', own ? 'justify-end' : 'justify-start')}>
       {!own ? (
-        <p className="mb-1 px-1 text-[11px] font-medium text-slate-500">{message.senderName}</p>
+        <div className="flex w-10 shrink-0 justify-center">
+          {showAvatar ? (
+            <span className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
+              {personInitials(senderLabel)}
+            </span>
+          ) : null}
+        </div>
       ) : null}
-      <div
-        className={cn(
-          'rounded-2xl px-3 py-2 text-[13px] leading-relaxed shadow-sm',
-          own
-            ? 'rounded-br-md bg-brand-primary text-white'
-            : 'rounded-bl-md border border-slate-200 bg-white text-slate-900',
-        )}
-      >
-        {message.translatedText && !own ? (
-          <>
-            <p className="whitespace-pre-wrap">{message.translatedText}</p>
-            <p
-              className={cn(
-                'mt-1.5 whitespace-pre-wrap text-[11px]',
-                own ? 'text-white/75' : 'text-slate-500',
-              )}
-            >
-              {t('messenger.originalLabel', { lang: message.originalLanguage })}{' '}
-              {message.originalText}
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="whitespace-pre-wrap">{message.originalText}</p>
-            {message.translatedText ? (
-              <p
-                className={cn(
-                  'mt-1.5 whitespace-pre-wrap text-[11px]',
-                  own ? 'text-white/80' : 'text-slate-600',
-                )}
-              >
-                {message.translatedText}
-              </p>
-            ) : null}
-          </>
-        )}
-        {message.translationStatus === 'failed' ? (
-          <p className={cn('mt-1 text-[11px]', own ? 'text-amber-200' : 'text-amber-700')}>
-            {t('messenger.translationFailed')}
-          </p>
+      <div className={cn('min-w-0 max-w-[min(88%,42rem)]', own && 'items-end')}>
+        {!own && showAvatar ? (
+          <p className="mb-1 px-1 text-xs font-medium text-slate-500">{senderLabel}</p>
         ) : null}
+        <div
+          className={cn(
+            'rounded-3xl px-4 py-3 text-sm leading-6 shadow-sm',
+            own
+              ? 'rounded-br-lg bg-brand-primary text-white'
+              : 'rounded-bl-lg border border-slate-200 bg-white text-slate-900',
+            message.deliveryState === 'sending' && 'opacity-70',
+            message.deliveryState === 'error' && own && 'border border-red-300 bg-red-50 text-red-900',
+          )}
+        >
+          {hasIncomingTranslation ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+                  <Languages className="h-3 w-3" />
+                  {translationLabel}
+                </span>
+                <button
+                  type="button"
+                  className="font-medium text-brand-primary underline-offset-2 hover:underline"
+                  onClick={() => setShowOriginal((current) => !current)}
+                >
+                  {showOriginal ? translatedToggleLabel : originalToggleLabel}
+                </button>
+              </div>
+              <p className="whitespace-pre-wrap break-words">{showOriginal ? message.originalText : message.translatedText}</p>
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap break-words">{message.originalText}</p>
+          )}
+          {!own && message.translationStatus === 'failed' ? (
+            <p className="mt-2 text-xs text-amber-700">{translatedToggleLabel}</p>
+          ) : null}
+        </div>
+        <div className={cn('mt-1 flex items-center gap-2 px-1 text-[11px]', own ? 'justify-end' : 'justify-start')}>
+          <span className="text-slate-400">{formatMessengerDateTime(message.createdAt, locale)}</span>
+          {own ? (
+            <DeliveryIndicator state={message.deliveryState ?? 'sent'} retryLabel={retryLabel} onRetry={onRetry} />
+          ) : null}
+        </div>
       </div>
-      <p
-        className={cn(
-          'mt-1 px-1 text-[10px]',
-          own ? 'text-right text-slate-400' : 'text-slate-400',
-        )}
-      >
-        {formatMessengerDateTime(message.createdAt, locale)}
-      </p>
     </div>
   );
 }
@@ -118,6 +169,8 @@ export function MessengerChatPanel({
   selectedConversation,
   messages,
   loading,
+  loadingOlder,
+  hasOlderMessages,
   composerText,
   originalLanguage,
   sending,
@@ -125,22 +178,75 @@ export function MessengerChatPanel({
   onComposerChange,
   onOriginalLanguageChange,
   onSend,
+  onLoadOlder,
+  onRetryMessage,
 }: MessengerChatPanelProps) {
   const { t, i18n } = useTranslation();
   const currentUserId = getUser()?.id;
   const messageEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const loadingOlderRef = useRef(false);
+  const previousHeightRef = useRef(0);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    loadingOlderRef.current = loadingOlder;
+  }, [loadingOlder]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting || !hasOlderMessages || loadingOlderRef.current) {
+          return;
+        }
+        previousHeightRef.current = scrollContainerRef.current?.scrollHeight ?? 0;
+        onLoadOlder();
+      },
+      { root: scrollContainerRef.current, rootMargin: '120px 0px 0px 0px' },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasOlderMessages, onLoadOlder]);
+
+  useEffect(() => {
+    if (!loadingOlder || !scrollContainerRef.current) return;
+    const node = scrollContainerRef.current;
+    const nextHeight = node.scrollHeight;
+    const delta = nextHeight - previousHeightRef.current;
+    node.scrollTop += delta;
+  }, [loadingOlder, messages.length]);
+
+  useEffect(() => {
+    if (loading || loadingOlder) return;
+    messageEndRef.current?.scrollIntoView({ behavior: 'auto' });
+  }, [selectedConversationId, loading]);
+
+  useEffect(() => {
+    if (loadingOlder || !scrollContainerRef.current) return;
+    const node = scrollContainerRef.current;
+    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 160;
+    if (nearBottom) {
+      messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [loadingOlder, messages]);
 
   const messageGroups = useMemo(
     () =>
-      groupMessagesByDay(messages, {
-        today: t('messenger.today'),
-        yesterday: t('messenger.yesterday'),
-      }, i18n.language),
-    [messages, t, i18n.language],
+      groupMessagesByDay(
+        messages,
+        {
+          today: t('messenger.today'),
+          yesterday: t('messenger.yesterday'),
+        },
+        i18n.language,
+        currentUserId,
+      ),
+    [messages, t, i18n.language, currentUserId],
   );
 
   if (!selectedConversationId) {
@@ -157,15 +263,15 @@ export function MessengerChatPanel({
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="mt-2 h-3 w-32" />
+      <div className="flex h-full flex-col bg-white">
+        <div className="border-b border-slate-200 px-4 py-4">
+          <Skeleton className="h-5 w-56" />
+          <Skeleton className="mt-2 h-4 w-36" />
         </div>
-        <div className="flex-1 space-y-3 p-4">
-          <Skeleton className="ml-auto h-16 w-2/3" />
-          <Skeleton className="h-16 w-2/3" />
-          <Skeleton className="ml-auto h-16 w-1/2" />
+        <div className="flex-1 space-y-4 p-4">
+          <Skeleton className="ml-auto h-20 w-2/3 rounded-3xl" />
+          <Skeleton className="h-20 w-2/3 rounded-3xl" />
+          <Skeleton className="ml-auto h-20 w-1/2 rounded-3xl" />
         </div>
       </div>
     );
@@ -183,75 +289,83 @@ export function MessengerChatPanel({
     );
   }
 
-  const driverName = driverDisplayName(selectedConversation);
+  const counterpart = getCounterpartInfo(selectedConversation, currentUserId);
   const driverLanguage = resolveDriverLanguageFromConversation(selectedConversation);
-  const initials = personInitials(driverName);
-  const dept = selectedConversation.department;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-2">
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="border-b border-slate-200 bg-white px-4 py-4">
+        <div className="flex items-center gap-3">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0 xl:hidden"
+            className="h-11 w-11 shrink-0 xl:hidden"
             onClick={onBack}
             aria-label={t('messenger.backToList')}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-5 w-5" />
           </Button>
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary text-xs font-semibold text-white">
-            {initials}
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary text-sm font-semibold text-white">
+            {personInitials(counterpart.name)}
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-[15px] font-semibold text-slate-900">
+            <h2 className="truncate text-base font-semibold text-slate-900">
               {conversationTitle(selectedConversation)}
             </h2>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              {dept ? (
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                    departmentBadgeClass(dept),
-                  )}
-                >
-                  {t(`messenger.dept.${dept}`)}
-                </span>
-              ) : null}
-              <p className="truncate text-[12px] text-slate-500">
-                {t('messenger.participants')}{' '}
-                {selectedConversation.participants.map((p) => p.user.fullName).join(', ')}
-              </p>
-            </div>
+            <p className="mt-0.5 truncate text-sm text-slate-500">
+              {counterpart.name} · {t(roleLabelKey(counterpart.role))}
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/80 px-4 py-4">
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50/80 px-4 py-4">
+        <div ref={loadMoreRef} className="flex min-h-8 items-center justify-center">
+          {loadingOlder ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+        </div>
         {messages.length === 0 ? (
-          <p className="text-center text-[13px] text-slate-500">{t('messenger.noMessages')}</p>
+          <div className="flex h-full items-center justify-center py-8">
+            <EmptyState
+              icon={UserRound}
+              title={t('messenger.emptyConversationTitle')}
+              subtitle={t('messenger.emptyConversationSubtitle')}
+            />
+          </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {messageGroups.map((group) => (
               <div key={group.key}>
-                <div className="mb-3 flex items-center gap-3">
+                <div className="mb-4 flex items-center gap-3">
                   <div className="h-px flex-1 bg-slate-200" />
-                  <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     {group.label}
                   </span>
                   <div className="h-px flex-1 bg-slate-200" />
                 </div>
-                <div className="space-y-3">
-                  {group.messages.map((message) => (
-                    <MessageBubble
-                      key={message.id}
-                      message={message}
-                      own={message.senderUserId === currentUserId}
-                      t={t}
-                      locale={i18n.language}
-                    />
+                <div className="space-y-4">
+                  {group.groups.map((senderGroup, groupIndex) => (
+                    <div key={`${group.key}-${senderGroup.senderUserId}-${groupIndex}`} className="space-y-1.5">
+                      {senderGroup.messages.map((message, messageIndex) => (
+                        <MessageBubble
+                          key={message.id}
+                          message={message}
+                          own={senderGroup.own}
+                          showAvatar={messageIndex === 0}
+                          senderLabel={message.senderName}
+                          locale={i18n.language}
+                          translationLabel={t('messenger.translatedFrom', { lang: message.originalLanguage.toUpperCase() })}
+                          originalToggleLabel={t('messenger.showOriginal')}
+                          translatedToggleLabel={
+                            message.translationStatus === 'failed'
+                              ? t('messenger.translationFailed')
+                              : t('messenger.showTranslation')
+                          }
+                          retryLabel={t('messenger.retrySend')}
+                          onRetry={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                        />
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -266,7 +380,7 @@ export function MessengerChatPanel({
         originalLanguage={originalLanguage}
         driverLanguage={driverLanguage}
         sending={sending}
-        driverName={driverName}
+        driverName={counterpart.name}
         onChange={onComposerChange}
         onOriginalLanguageChange={onOriginalLanguageChange}
         onSend={onSend}

@@ -1132,7 +1132,7 @@ export interface Document {
 
 // ─── User (admin panel) ───────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
+export type UserRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver' | 'customer';
 export type UserStatus = 'active' | 'inactive';
 
 export interface User {

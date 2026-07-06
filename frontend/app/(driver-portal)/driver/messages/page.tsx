@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import { ChevronRight, Loader2, MessageSquarePlus } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, Loader2, MessageSquarePlus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { messengerApi } from '@/lib/api';
 import {
   departmentBadgeClass,
   driverMessageAudienceLabelKey,
   DRIVER_MESSAGE_AUDIENCES,
   formatMessengerRelativeTime,
+  getConversationSearchText,
   type DriverMessageAudience,
 } from '@/lib/messenger-utils';
 import type { ConversationListItem } from '@/lib/types';
@@ -31,10 +33,12 @@ function previewText(item: ConversationListItem): string {
 export default function DriverMessagesPage() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
+  const pollTimerRef = useRef<number | null>(null);
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const [audience, setAudience] = useState<DriverMessageAudience>('dispatch');
   const [subject, setSubject] = useState('');
@@ -51,6 +55,14 @@ export default function DriverMessagesPage() {
     setError(null);
   }, []);
 
+  const filteredConversations = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return conversations;
+    return conversations.filter((conversation) =>
+      getConversationSearchText(conversation, null).includes(query),
+    );
+  }, [conversations, search]);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -63,8 +75,33 @@ export default function DriverMessagesPage() {
       .finally(() => {
         if (active) setLoading(false);
       });
+
+    const poll = async () => {
+      if (document.hidden) return;
+      try {
+        await loadConversations();
+      } catch {
+        // keep current list visible
+      }
+    };
+
+    pollTimerRef.current = window.setInterval(() => {
+      void poll();
+    }, 7_500);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void poll();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       active = false;
+      if (pollTimerRef.current != null) {
+        window.clearInterval(pollTimerRef.current);
+      }
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [loadConversations, t]);
 
@@ -148,33 +185,44 @@ export default function DriverMessagesPage() {
             </p>
           </CardHeader>
           <CardContent>
+            <div className="relative mb-4">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={search}
+                placeholder={t('messenger.searchPlaceholder')}
+                onChange={(e) => setSearch(e.target.value)}
+                className="min-h-11 pl-9"
+              />
+            </div>
             {loading ? (
-              <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {t('driverPortal.assignments.loading')}
+              <div className="space-y-3 py-2">
+                <Skeleton className="h-20 rounded-2xl" />
+                <Skeleton className="h-20 rounded-2xl" />
+                <Skeleton className="h-20 rounded-2xl" />
               </div>
             ) : error ? (
               <p className="text-sm text-red-600">{error}</p>
-            ) : conversations.length === 0 ? (
+            ) : filteredConversations.length === 0 ? (
               <p className="py-6 text-sm text-slate-500">{t('driverPortal.messages.empty')}</p>
             ) : (
-              <ul className="divide-y divide-slate-100">
-                {conversations.map((conversation) => {
+              <ul className="space-y-2">
+                {filteredConversations.map((conversation) => {
                   const dept = conversation.department as DriverMessageAudience | undefined;
                   const audienceLabel =
                     dept && DRIVER_MESSAGE_AUDIENCES.includes(dept)
                       ? t(driverMessageAudienceLabelKey(dept))
                       : null;
+                  const unreadThread = conversation.unreadCount > 0;
 
                   return (
                     <li key={conversation.id}>
                       <Link
                         href={`/driver/messages/${conversation.id}`}
-                        className="flex items-start justify-between gap-3 rounded-md py-3 hover:bg-slate-50"
+                        className="flex min-h-11 items-start justify-between gap-3 rounded-2xl border border-slate-200 px-4 py-3 hover:bg-slate-50"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-slate-900">
+                            <p className={cn('font-semibold text-slate-900', unreadThread && 'font-bold')}>
                               {conversation.subject ?? t('driverPortal.messages.thread')}
                             </p>
                             {audienceLabel ? (
@@ -193,12 +241,14 @@ export default function DriverMessagesPage() {
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">
+                          <p className={cn('mt-1 line-clamp-2 text-sm text-slate-600', unreadThread && 'font-medium text-slate-800')}>
                             {previewText(conversation) || t('driverPortal.messages.noMessages')}
                           </p>
                           {conversation.lastMessageAt ? (
-                            <p className="mt-1 text-xs text-slate-400">
-                              {formatMessengerRelativeTime(conversation.lastMessageAt, i18n.language)}
+                            <p className="mt-2 text-xs text-slate-400">
+                              {formatMessengerRelativeTime(conversation.lastMessageAt, i18n.language, {
+                                yesterday: t('messenger.yesterdayShort'),
+                              })}
                             </p>
                           ) : null}
                         </div>

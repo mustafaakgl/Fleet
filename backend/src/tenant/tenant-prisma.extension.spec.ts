@@ -67,9 +67,35 @@ describe('applyTenantScope — findUnique', () => {
       'findUnique',
       { where: { tenantId_email: { email: 'a@b.c', tenantId: TENANT_B } } },
       TENANT_A,
+      'User',
     );
     assert.deepEqual(result.where, {
       tenantId_email: { email: 'a@b.c', tenantId: TENANT_A },
+    });
+  });
+
+  it('leaves compound unique keys unchanged when tenantId is not part of the unique input', () => {
+    const result = applyTenantScope(
+      'findUnique',
+      {
+        where: {
+          driverId_vehicleId_workDate: {
+            driverId: 'drv-1',
+            vehicleId: 'veh-1',
+            workDate: '2026-07-06',
+          },
+        },
+      },
+      TENANT_A,
+      'DepartureCheck',
+    );
+
+    assert.deepEqual(result.where, {
+      driverId_vehicleId_workDate: {
+        driverId: 'drv-1',
+        vehicleId: 'veh-1',
+        workDate: '2026-07-06',
+      },
     });
   });
 

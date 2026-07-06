@@ -8,23 +8,18 @@ import * as path from 'path';
  * Produces Playwright storage states (cookies + localStorage) per role so the
  * RBAC specs can run as a specific user without re-logging-in each time.
  *
- * Detected from the Fleet frontend (frontend/app/login/page.tsx):
- *   - Login route:    /login   (append ?manual=1 to bypass dev auto-login)
- *   - Email input:    #email
- *   - Password input: #password
- *   - Submit button:  button[type="submit"]  (label "Anmelden")
- *   - Auth token is stored in localStorage after a successful sign-in.
+ * Auth states are created through the backend login API and then written into
+ * the same localStorage keys the Fleet frontend uses at runtime. This avoids
+ * flaky pre-hydration form submits in dev mode while still exercising the real
+ * application auth contract.
  *
  * If selectors change, update the constants below. Credentials are read from
  * environment variables only — never hardcoded. Roles without credentials are
  * skipped with a clear reason (no fake auth state is written).
  */
 
-// ---- Selectors / routes (single source of truth) ---------------------------
 const LOGIN_PATH = '/login?manual=1';
-const EMAIL_SELECTOR = '#email';
-const PASSWORD_SELECTOR = '#password';
-const SUBMIT_SELECTOR = 'button[type="submit"]';
+const API_BASE_URL = process.env.API_BASE_URL?.trim() || 'http://127.0.0.1:3000/api/v1';
 
 const AUTH_DIR = path.resolve(__dirname, '..', '.auth');
 
@@ -38,33 +33,64 @@ const ROLES = [
 ] as const;
 
 /**
- * Perform a manual login and assert we left the login page.
- *
- * We do NOT assert a specific post-login URL because it varies by role
- * (/dashboard, /driver, /portal/dashboard). Leaving /login is a safe signal.
+ * Authenticate through the backend API and persist the resulting auth state
+ * into the browser's localStorage for the frontend origin.
  */
 async function login(page: Page, email: string, password: string): Promise<void> {
+  const response = await page.request.post(`${API_BASE_URL}/auth/login`, {
+    data: { email, password },
+  });
+
+  expect(response.ok(), `Backend login failed for ${email}: ${response.status()} ${await response.text()}`).toBeTruthy();
+
+  const data = await response.json() as {
+    accessToken?: string;
+    access_token?: string;
+    refreshToken?: string;
+    refresh_token?: string;
+    user?: {
+      id: string;
+      email: string;
+      name?: string;
+      role: string;
+      language?: string;
+      fleet_ops?: boolean;
+    };
+  };
+
+  const accessToken = data.accessToken ?? data.access_token;
+  const refreshToken = data.refreshToken ?? data.refresh_token ?? null;
+  expect(accessToken, `Missing access token in login response for ${email}.`).toBeTruthy();
+  expect(data.user, `Missing user payload in login response for ${email}.`).toBeTruthy();
+
   await page.goto(LOGIN_PATH);
+  await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
 
-  const emailInput = page.locator(EMAIL_SELECTOR);
-  const passwordInput = page.locator(PASSWORD_SELECTOR);
-  const submit = page.locator(SUBMIT_SELECTOR);
-
-  // If the expected form is not present, fail loudly with guidance rather than
-  // writing an unauthenticated storage state.
-  await expect(
-    emailInput,
-    `Login email input "${EMAIL_SELECTOR}" not found. The Fleet login form may ` +
-      `have changed — update the selectors in auth/auth.setup.ts.`,
-  ).toBeVisible({ timeout: 15_000 });
-
-  await emailInput.fill(email);
-  await passwordInput.fill(password);
-  await submit.click();
-
-  // Wait until the app navigates away from the login route.
-  await expect(page, 'Login did not complete (still on /login). Check credentials and selectors.')
-    .not.toHaveURL(/\/login/, { timeout: 20_000 });
+  await page.evaluate(
+    ({ token, refresh, user }) => {
+      const normalizedUser = {
+        ...user,
+        name: user.name ?? user.email,
+      };
+      localStorage.setItem('accessToken', token);
+      localStorage.setItem('fleet_access_token', token);
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
+      localStorage.setItem('fleet_user', JSON.stringify(normalizedUser));
+      if (refresh) {
+        localStorage.setItem('refreshToken', refresh);
+        localStorage.setItem('fleet_refresh_token', refresh);
+      }
+      if (user.language) {
+        localStorage.setItem('fleet_language', user.language);
+      }
+      sessionStorage.removeItem('fleet_skip_auto_login');
+    },
+    {
+      token: accessToken,
+      refresh: refreshToken,
+      user: data.user,
+    },
+  );
 }
 
 // Ensure the .auth directory exists before any state is written.

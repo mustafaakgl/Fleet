@@ -1,191 +1,233 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessengerComposer } from '@/components/messenger/MessengerComposer';
-import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
+import { MessengerChatPanel, type MessengerUiMessage } from '@/components/messenger/MessengerChatPanel';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { driverPortalApi, messengerApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
-import {
-  departmentBadgeClass,
-  driverMessageAudienceLabelKey,
-  DRIVER_MESSAGE_AUDIENCES,
-  formatMessengerDateTime,
-  groupMessagesByDay,
-  type DriverMessageAudience,
-} from '@/lib/messenger-utils';
 import type { ConversationDetail, MessengerLanguage, MessengerMessage } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 export default function DriverMessageThreadPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const conversationId = params.id;
+  const pollTimerRef = useRef<number | null>(null);
+  const currentUser = getUser();
+  const currentUserId = currentUser?.id ?? null;
+  const currentUserName = currentUser?.name ?? currentUser?.email ?? 'User';
+
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
-  const [messages, setMessages] = useState<MessengerMessage[]>([]);
+  const [messages, setMessages] = useState<MessengerUiMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(true);
   const [composerText, setComposerText] = useState('');
   const [originalLanguage, setOriginalLanguage] = useState<MessengerLanguage>('de');
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const userId = getUser()?.id;
 
-  useEffect(() => {
-    const id = params.id;
-    if (!id) return;
-
-    let active = true;
-    async function load() {
-      setLoading(true);
-      try {
-        const [detail, thread] = await Promise.all([
-          messengerApi.getConversation(id),
-          messengerApi.listMessages(id),
-        ]);
-        if (!active) return;
-        setConversation(detail);
-        setMessages(thread);
-        const profile = await driverPortalApi.me().catch(() => null);
-        setOriginalLanguage((profile?.user.language as MessengerLanguage | undefined) ?? 'de');
-        await messengerApi.markConversationRead(id);
-        setError(null);
-      } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : t('driverPortal.messages.threadError'));
-      } finally {
-        if (active) setLoading(false);
+  const sortMessages = useCallback((items: MessengerUiMessage[]) => {
+    return [...items].sort((left, right) => {
+      const leftTime = new Date(left.createdAt).getTime();
+      const rightTime = new Date(right.createdAt).getTime();
+      if (leftTime !== rightTime) {
+        return leftTime - rightTime;
       }
+      return left.id.localeCompare(right.id);
+    });
+  }, []);
+
+  const mergeMessages = useCallback((current: MessengerUiMessage[], incoming: MessengerMessage[]) => {
+    const localOnly = current.filter((message) => message.deliveryState === 'sending' || message.deliveryState === 'error');
+    const byId = new Map<string, MessengerUiMessage>();
+
+    for (const message of incoming) {
+      byId.set(message.id, { ...message, deliveryState: 'sent' });
+    }
+    for (const message of localOnly) {
+      byId.set(message.id, message);
     }
 
-    void load();
-    const interval = window.setInterval(() => {
-      messengerApi
-        .listMessages(id)
-        .then((thread) => {
-          if (active) setMessages(thread);
-        })
-        .catch(() => undefined);
-    }, 10_000);
+    return sortMessages(Array.from(byId.values()));
+  }, [sortMessages]);
+
+  const loadThread = useCallback(async () => {
+    if (!conversationId) return;
+    setLoading(true);
+    try {
+      const [detail, thread, profile] = await Promise.all([
+        messengerApi.getConversation(conversationId),
+        messengerApi.listMessages(conversationId, { limit: 40 }),
+        driverPortalApi.me().catch(() => null),
+      ]);
+      setConversation(detail);
+      setMessages(thread.map((message) => ({ ...message, deliveryState: 'sent' as const })));
+      setHasOlderMessages(thread.length >= 40);
+      setOriginalLanguage((profile?.user.language as MessengerLanguage | undefined) ?? 'de');
+      await messengerApi.markConversationRead(conversationId);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('driverPortal.messages.threadError'));
+    } finally {
+      setLoading(false);
+    }
+  }, [conversationId, t]);
+
+  useEffect(() => {
+    void loadThread();
+  }, [loadThread]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    const poll = async () => {
+      if (document.hidden) return;
+      try {
+        const latest = await messengerApi.listMessages(conversationId, { limit: 40 });
+        setMessages((previous) => mergeMessages(previous, latest));
+        await messengerApi.markConversationRead(conversationId);
+        setMessages((previous) => previous.map((message) => (
+          message.senderUserId === currentUserId ? message : { ...message, readByCurrentUser: true }
+        )));
+      } catch {
+        // keep stale thread visible
+      }
+    };
+
+    pollTimerRef.current = window.setInterval(() => {
+      void poll();
+    }, 7_500);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void poll();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      active = false;
-      window.clearInterval(interval);
+      if (pollTimerRef.current != null) {
+        window.clearInterval(pollTimerRef.current);
+      }
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [params.id, t]);
+  }, [conversationId, currentUserId, mergeMessages]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  const handleSend = useCallback(async () => {
+    if (!conversationId) return;
+    const text = composerText.trim();
+    if (!text) return;
 
-  async function handleSend() {
-    if (!params.id || !composerText.trim()) return;
-    setSending(true);
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: MessengerUiMessage = {
+      id: tempId,
+      clientId: tempId,
+      conversationId,
+      senderUserId: currentUserId ?? 'unknown',
+      senderName: currentUserName,
+      originalText: text,
+      translatedText: null,
+      originalLanguage,
+      targetLanguage: null,
+      translationStatus: 'pending',
+      createdAt: new Date().toISOString(),
+      readByCurrentUser: true,
+      deliveryState: 'sending',
+    };
+
+    setMessages((previous) => sortMessages([...previous, optimisticMessage]));
+    setComposerText('');
+
     try {
-      const sent = await messengerApi.sendMessage(params.id, {
-        text: composerText.trim(),
+      const created = await messengerApi.sendMessage(conversationId, {
+        text,
         originalLanguage,
       });
-      setMessages((prev) => [...prev, sent]);
-      setComposerText('');
+      setMessages((previous) =>
+        sortMessages(previous.filter((message) => message.id !== tempId).concat({ ...created, deliveryState: 'sent' })),
+      );
     } catch (err) {
+      setMessages((previous) => previous.map((message) => (
+        message.id === tempId ? { ...message, deliveryState: 'error', translationStatus: 'failed' } : message
+      )));
       setError(err instanceof Error ? err.message : t('driverPortal.messages.sendFailed'));
-    } finally {
-      setSending(false);
     }
-  }
+  }, [composerText, conversationId, currentUserId, currentUserName, originalLanguage, sortMessages, t]);
 
-  const grouped = groupMessagesByDay(
-    messages,
-    { today: t('driverPortal.messages.today'), yesterday: t('driverPortal.messages.yesterday') },
-    i18n.language,
-  );
+  const handleRetry = useCallback(async (messageId: string) => {
+    const failed = messages.find((message) => message.id === messageId);
+    if (!failed || !conversationId) return;
+
+    setMessages((previous) => previous.map((message) => (
+      message.id === messageId ? { ...message, deliveryState: 'sending' } : message
+    )));
+
+    try {
+      const created = await messengerApi.sendMessage(conversationId, {
+        text: failed.originalText,
+        originalLanguage: failed.originalLanguage,
+      });
+      setMessages((previous) =>
+        sortMessages(previous.filter((message) => message.id !== messageId).concat({ ...created, deliveryState: 'sent' })),
+      );
+    } catch (err) {
+      setMessages((previous) => previous.map((message) => (
+        message.id === messageId ? { ...message, deliveryState: 'error' } : message
+      )));
+      setError(err instanceof Error ? err.message : t('driverPortal.messages.sendFailed'));
+    }
+  }, [conversationId, messages, sortMessages, t]);
+
+  const handleLoadOlder = useCallback(async () => {
+    if (!conversationId || loadingOlder) return;
+    const oldestServerMessage = messages.find((message) => !message.id.startsWith('temp-'));
+    if (!oldestServerMessage) return;
+
+    setLoadingOlder(true);
+    try {
+      const older = await messengerApi.listMessages(conversationId, {
+        beforeId: oldestServerMessage.id,
+        limit: 30,
+      });
+      if (older.length === 0) {
+        setHasOlderMessages(false);
+      } else {
+        setMessages((previous) =>
+          sortMessages([
+            ...older.map((message) => ({ ...message, deliveryState: 'sent' as const })),
+            ...previous,
+          ]),
+        );
+        setHasOlderMessages(older.length >= 30);
+      }
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [conversationId, loadingOlder, messages, sortMessages]);
+
+  const selectedConversationId = useMemo(() => conversationId ?? null, [conversationId]);
 
   return (
-    <DriverPortalShell>
-      <DriverPageBack href="/driver/messages" label={t('driverPortal.messages.back')} />
-      <div className="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-slate-900">
-              {conversation?.subject ?? t('driverPortal.messages.thread')}
-            </p>
-            {conversation?.department &&
-            DRIVER_MESSAGE_AUDIENCES.includes(conversation.department as DriverMessageAudience) ? (
-              <span
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                  departmentBadgeClass(conversation.department),
-                )}
-              >
-                {t(driverMessageAudienceLabelKey(conversation.department as DriverMessageAudience))}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('driverPortal.assignments.loading')}
-            </div>
-          ) : error ? (
-            <p className="text-sm text-red-600">{error}</p>
-          ) : messages.length === 0 ? (
-            <p className="text-sm text-slate-500">{t('driverPortal.messages.noMessages')}</p>
-          ) : (
-            grouped.map((group) => (
-              <div key={group.key} className="space-y-2">
-                <p className="text-center text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                  {group.label}
-                </p>
-                {group.messages.map((message) => {
-                  const own = message.senderUserId === userId;
-                  return (
-                    <div
-                      key={message.id}
-                      className={cn('max-w-[85%] rounded-2xl px-3 py-2 text-sm', own
-                        ? 'ml-auto bg-[#1a4d7a] text-white'
-                        : 'mr-auto border border-slate-200 bg-slate-50 text-slate-900')}
-                    >
-                      {!own ? (
-                        <p className="mb-1 text-[11px] font-medium text-slate-500">{message.senderName}</p>
-                      ) : null}
-                      {message.translatedText && !own ? (
-                        <>
-                          <p className="whitespace-pre-wrap">{message.translatedText}</p>
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            {t('driverPortal.messages.original', { lang: message.originalLanguage })}{' '}
-                            {message.originalText}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="whitespace-pre-wrap">{message.originalText}</p>
-                      )}
-                      <p className={cn('mt-1 text-[10px]', own ? 'text-white/70' : 'text-slate-400')}>
-                        {formatMessengerDateTime(message.createdAt, i18n.language)}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
-          <div ref={bottomRef} />
-        </div>
-
-        <MessengerComposer
-          value={composerText}
+    <DriverPortalShell hideHeader hideNav>
+      {error ? <p className="px-4 pt-4 text-sm text-red-600">{error}</p> : null}
+      <div className="h-[100dvh] overflow-hidden bg-white">
+        <MessengerChatPanel
+          selectedConversationId={selectedConversationId}
+          selectedConversation={conversation}
+          messages={messages}
+          loading={loading}
+          loadingOlder={loadingOlder}
+          hasOlderMessages={hasOlderMessages}
+          composerText={composerText}
           originalLanguage={originalLanguage}
-          driverLanguage={originalLanguage}
-          sending={sending}
-          driverName={conversation?.driver ? `${conversation.driver.firstName} ${conversation.driver.lastName}` : null}
-          onChange={setComposerText}
+          sending={false}
+          onBack={() => router.push('/driver/messages')}
+          onComposerChange={setComposerText}
           onOriginalLanguageChange={setOriginalLanguage}
           onSend={() => void handleSend()}
+          onLoadOlder={() => void handleLoadOlder()}
+          onRetryMessage={(id) => void handleRetry(id)}
         />
       </div>
     </DriverPortalShell>

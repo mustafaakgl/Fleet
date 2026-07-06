@@ -50,11 +50,7 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [autoLoggingIn, setAutoLoggingIn] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const manual = new URLSearchParams(window.location.search).get('manual') === '1';
-    return autoLoginEnabled && !shouldSkipAutoLogin() && !manual;
-  });
+  const [autoLoggingIn, setAutoLoggingIn] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
