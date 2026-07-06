@@ -84,6 +84,12 @@ function vuDaysRemainingClass(days: number): string {
   return 'text-emerald-700';
 }
 
+function deadlineBadgeClass(status: 'ok' | 'warning' | 'overdue'): string {
+  if (status === 'overdue') return 'border-red-200 bg-red-50 text-red-700';
+  if (status === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+}
+
 export default function CompliancePage() {
   const { t } = useTranslation();
   usePageTitle(t('nav.tachograph.compliance'));
@@ -108,7 +114,14 @@ export default function CompliancePage() {
   });
 
   const data = overviewQuery.data;
-  const allInfringements = infringementsQuery.data?.items ?? [];
+  const allInfringements = useMemo(
+    () =>
+      (infringementsQuery.data?.items ?? []).map((item) => ({
+        ...item,
+        driverId: item.driver?.id ?? null,
+      })),
+    [infringementsQuery.data],
+  );
 
   const repeatCounts = useMemo(() => computeRepeatCounts(allInfringements), [allInfringements]);
   const repeatOffenders = useMemo(
@@ -451,6 +464,50 @@ export default function CompliancePage() {
                       </TableRow>
                     );
                   })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card className={FLEET_LIST_CARD}>
+            <CardHeader>
+              <CardTitle>{t('tachograph.compliance.downloadDeadlinesTitle')}</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table className={FLEET_TABLE}>
+                <TableHeader>
+                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.compliance.columns.subjectType')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.compliance.columns.subject')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.compliance.columns.lastRead')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.compliance.columns.nextDue')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('tachograph.compliance.columns.status')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={FLEET_TABLE_BODY}>
+                  {data.downloadDeadlines.map((row) => (
+                    <TableRow key={row.id} className={FLEET_TABLE_ROW}>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        {row.subject === 'driver_card'
+                          ? t('tachograph.compliance.subject.driverCard')
+                          : t('tachograph.compliance.subject.vehicleUnit')}
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{row.entityLabel}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        {row.lastReadAt ? formatFleetDateTime(row.lastReadAt) : '—'}
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatFleetDateTime(row.nextDueAt)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        <Badge className={cn('border', deadlineBadgeClass(row.status))}>
+                          {row.status === 'overdue'
+                            ? t('tachograph.compliance.deadline.overdue')
+                            : row.status === 'warning'
+                              ? t('tachograph.compliance.deadline.warning')
+                              : t('tachograph.compliance.deadline.ok')}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>

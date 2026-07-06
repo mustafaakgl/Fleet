@@ -74,16 +74,14 @@ export class TachographRemoteDownloadService {
       await this.prisma.tachoDownloadSchedule.update({
         where: { id: schedule.id },
         data: {
-          lastDownloadAt: now,
           lastAttemptAt: now,
           lastError: null,
           consecutiveFailureCount: 0,
-          nextDueAt: this.addDays(now, schedule.intervalDays),
         },
       });
 
       this.logger.log(
-        `Remote DDD schedule ${schedule.id} processed: ${processedCount} files, next due ${this.addDays(now, schedule.intervalDays).toISOString()}`,
+        `Remote DDD schedule ${schedule.id} processed: ${processedCount} files`,
       );
     } catch (error) {
       try {
@@ -139,9 +137,5 @@ export class TachographRemoteDownloadService {
   private summarizeError(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error);
     return message.slice(0, MAX_ERROR_SUMMARY_LENGTH);
-  }
-
-  private addDays(date: Date, days: number): Date {
-    return new Date(date.getTime() + days * 24 * 3600 * 1000);
   }
 }

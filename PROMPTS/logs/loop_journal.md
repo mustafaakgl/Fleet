@@ -28,3 +28,4 @@
 [2026-07-06] [faz-a] [T2] [TIS-Web remote download altyapisi, credential encryption, tenant scoping ve locale kaynak etiketi eklendi; tsc+npm test yeşil, loop-harness codec8/verify geçti, e2e harici kırmızı]
 [2026-07-06] [faz-a] [T3] [tacho_infringement eskalasyon zinciri tamamlandı: bildirim+SLA cron+payroll flag+migration+frontend badge/toggle; backend tsc/npm test yeşil, frontend dosya bazlı temiz, workspace frontend tsc'de mevcut başka modüller kırmızı]
 [2026-07-06] [faz-a] [T3-commit] [ihlal eskalasyon zinciri commitlendi: infringement notification + SLA util/spec + payroll flag + escalation migration + infringement UI]
+[2026-07-06] [faz-a] [T8-commit] [28/90 gun okuma takibi commitlendi: download reminder cron/spec + deadline migration + ddd ile otomatik fulfillment + compliance vade tablosu]

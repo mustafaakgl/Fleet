@@ -5,6 +5,7 @@ import {
   DddFileSource,
   DtcSeverity,
   Prisma,
+  TachoDownloadSubject,
   TachoInfringementType,
   TachoWorkState,
 } from '@prisma/client';
@@ -22,6 +23,7 @@ import {
   runTachographRuleEngine,
 } from './tachograph-rules.runner';
 import type { InfringementCandidate } from './rules/types';
+import { TachographInfringementNotificationService } from './tachograph-infringement-notification.service';
 
 type IngestDddMeta = {
   tenantId: string;
@@ -47,6 +49,8 @@ export class TachographService {
     private readonly prisma: PrismaService,
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly dddParser?: DddParserPort,
+    @Optional()
+    private readonly infringementNotifications?: TachographInfringementNotificationService,
   ) {}
 
   /**
@@ -186,9 +190,25 @@ export class TachographService {
           this.logger.warn('Skipping rule engine: DDD signature validation failed');
         }
 
-        let created = 0;
         if (!signatureBlocksRuleEngine) {
-          created = await this.buildInfringements(
+          await this.markDownloadScheduleFulfilled(
+            tx,
+            file.tenantId,
+            file.id,
+            parsed.fileType === 'card'
+              ? DddFileType.card
+              : parsed.fileType === 'vu'
+                ? DddFileType.vu
+                : DddFileType.unknown,
+            driver?.id ?? null,
+            file.vehicleId ?? null,
+          );
+        }
+
+        let created = 0;
+        const createdInfringements: Array<{ id: string }> = [];
+        if (!signatureBlocksRuleEngine) {
+          const result = await this.buildInfringements(
             tx,
             file.tenantId,
             driver?.id,
@@ -205,6 +225,8 @@ export class TachographService {
             }),
             parsed.events,
           );
+          created = result.created;
+          createdInfringements.push(...result.createdInfringements);
         }
 
         await tx.dddFile.update({
@@ -215,15 +237,21 @@ export class TachographService {
           },
         });
 
-        return created;
+        return { created, createdInfringements };
       });
+
+      if (this.infringementNotifications && infringementsCreated.createdInfringements.length > 0) {
+        for (const infringement of infringementsCreated.createdInfringements) {
+          await this.infringementNotifications.notifyCreated(file.tenantId, infringement.id);
+        }
+      }
 
       if (signatureBlocksRuleEngine) {
         await this.notifySignatureInvalid(meta, file.id, parsed.warnings);
       }
 
       this.logger.log(
-        `DDD file ${file.id} processed: ${parsed.activities.length} activities, ${infringementsCreated} infringements.`,
+        `DDD file ${file.id} processed: ${parsed.activities.length} activities, ${infringementsCreated.created} infringements.`,
       );
     } catch (error) {
       const summary = this.summarizeError(error);
@@ -391,7 +419,7 @@ export class TachographService {
       workState: TachoWorkState;
     }>,
     events: ParsedDddEvent[],
-  ): Promise<number> {
+  ): Promise<{ created: number; createdInfringements: Array<{ id: string }> }> {
     const cardEvents = mapParserEventsToCardEvents(events);
     const unassignedCardEvents = cardEvents.filter(() => !driverId);
     if (unassignedCardEvents.length > 0) {
@@ -401,7 +429,7 @@ export class TachographService {
     }
 
     if (!driverId) {
-      return 0;
+      return { created: 0, createdInfringements: [] };
     }
 
     const range = this.resolveEvaluationRange(ingestedActivities);
@@ -460,8 +488,9 @@ export class TachographService {
     vehicleId: string | undefined,
     dddFileId: string,
     candidates: InfringementCandidate[],
-  ): Promise<number> {
+  ): Promise<{ created: number; createdInfringements: Array<{ id: string }> }> {
     let created = 0;
+    const createdInfringements: Array<{ id: string }> = [];
 
     for (const candidate of candidates) {
       if (!candidate.driverId) {
@@ -486,7 +515,7 @@ export class TachographService {
         continue;
       }
 
-      await tx.tachoInfringement.create({
+      const createdRow = await tx.tachoInfringement.create({
         data: {
           tenantId,
           driverId,
@@ -497,10 +526,118 @@ export class TachographService {
           occurredAt,
           notes: JSON.stringify(candidate.evidence),
         },
+        select: { id: true },
       });
+      createdInfringements.push(createdRow);
       created += 1;
     }
 
-    return created;
+    return { created, createdInfringements };
+  }
+
+  private defaultIntervalDaysForSubject(subject: TachoDownloadSubject): number {
+    return subject === TachoDownloadSubject.driver_card ? 28 : 90;
+  }
+
+  private addDays(date: Date, days: number): Date {
+    return new Date(date.getTime() + days * 24 * 3600 * 1000);
+  }
+
+  private resolveScheduleTarget(
+    fileType: DddFileType,
+    driverId: string | null,
+    vehicleId: string | null,
+  ):
+    | {
+        subject: TachoDownloadSubject;
+        driverId: string | null;
+        vehicleId: string | null;
+        defaultIntervalDays: number;
+      }
+    | null {
+    if (fileType === DddFileType.card && driverId) {
+      return {
+        subject: TachoDownloadSubject.driver_card,
+        driverId,
+        vehicleId: null,
+        defaultIntervalDays: this.defaultIntervalDaysForSubject(TachoDownloadSubject.driver_card),
+      };
+    }
+
+    if (fileType === DddFileType.vu && vehicleId) {
+      return {
+        subject: TachoDownloadSubject.vehicle_unit,
+        driverId: null,
+        vehicleId,
+        defaultIntervalDays: this.defaultIntervalDaysForSubject(TachoDownloadSubject.vehicle_unit),
+      };
+    }
+
+    return null;
+  }
+
+  private async markDownloadScheduleFulfilled(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    dddFileId: string,
+    fileType: DddFileType,
+    driverId: string | null,
+    vehicleId: string | null,
+  ): Promise<void> {
+    const target = this.resolveScheduleTarget(fileType, driverId, vehicleId);
+    if (!target) {
+      return;
+    }
+
+    const fulfilledAt = new Date();
+    const existing = await tx.tachoDownloadSchedule.findFirst({
+      where: {
+        tenantId,
+        subject: target.subject,
+        driverId: target.driverId,
+        vehicleId: target.vehicleId,
+      },
+      orderBy: [{ enabled: 'desc' }, { updatedAt: 'desc' }],
+      select: {
+        id: true,
+        intervalDays: true,
+      },
+    });
+
+    const intervalDays = existing?.intervalDays ?? target.defaultIntervalDays;
+    const nextDueAt = this.addDays(fulfilledAt, intervalDays);
+
+    if (existing) {
+      await tx.tachoDownloadSchedule.update({
+        where: { id: existing.id },
+        data: {
+          lastDownloadAt: fulfilledAt,
+          lastFulfilledAt: fulfilledAt,
+          lastFulfilledDddFileId: dddFileId,
+          nextDueAt,
+          lastReminderStage: null,
+          lastReminderSentAt: null,
+          lastError: null,
+          consecutiveFailureCount: 0,
+        },
+      });
+      return;
+    }
+
+    await tx.tachoDownloadSchedule.create({
+      data: {
+        tenantId,
+        subject: target.subject,
+        driverId: target.driverId,
+        vehicleId: target.vehicleId,
+        intervalDays,
+        nextDueAt,
+        lastDownloadAt: fulfilledAt,
+        lastFulfilledAt: fulfilledAt,
+        lastFulfilledDddFileId: dddFileId,
+        enabled: true,
+        consecutiveFailureCount: 0,
+      },
+    });
   }
 }

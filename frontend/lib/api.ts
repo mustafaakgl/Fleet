@@ -1839,6 +1839,13 @@ export const tachographApi = {
       })
       .then((r) => r.data),
 
+  setInfringementPayrollFlag: (id: string, payrollRelevant: boolean) =>
+    api
+      .patch<import('./types').TachographInfringementItem>(`/tachograph/infringements/${id}/payroll-flag`, {
+        payrollRelevant,
+      })
+      .then((r) => r.data),
+
   listDddFiles: () =>
     api.get<import('./types').DddFileListItem[]>('/tachograph/ddd/files').then((r) => r.data),
 
