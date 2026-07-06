@@ -4,7 +4,6 @@ import {
   ForbiddenException,
   Injectable,
   Optional,
-  LockedException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -429,7 +428,7 @@ export class FleetTripsService {
 
   private assertTripPurposeEditable(trip: { endedAt: Date | null; purposeLockedAt: Date | null }) {
     if (trip.endedAt && isTripPurposeLocked(trip.endedAt)) {
-      throw new LockedException('Trip purpose is locked');
+      throw new ConflictException('Trip purpose is locked');
     }
   }
 

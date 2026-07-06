@@ -20,6 +20,12 @@ export type FleetTripSummary = Pick<
   | 'workSessionId'
   | 'createdAt'
   | 'updatedAt'
+  | 'purpose'
+  | 'purposeNote'
+  | 'businessContact'
+  | 'classifiedAt'
+  | 'classifiedById'
+  | 'purposeLockedAt'
 > & {
   odoStartKm?: number | null;
   odoEndKm?: number | null;

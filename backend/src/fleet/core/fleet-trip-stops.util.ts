@@ -58,8 +58,6 @@ export function deriveTripStops(trips: TripStopSlice[]): FleetTripStop[] {
       coordinates: coordinate,
       // Keep the display string close to the server-side provenance.
       // The UI can still render the raw coordinates separately if needed.
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-expect-error: intentional extra property for display fallback
       tooltip: coordinateLabel ? `${label} · ${coordinateLabel}` : label,
     });
   }
