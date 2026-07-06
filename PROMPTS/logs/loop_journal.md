@@ -25,3 +25,4 @@
 [2026-07-06] [faz-a] [T1] [DDD isleme BullMQ kuyruguna tasindi: status alani+migration, consumer+retry, 202 upload, ddd-archive status kolonu, i18n; sandbox: tsc+155 saf test yesil, DB-bagimli 2 spec + sim/verify/isolation lokalde kosulacak]
 [2026-07-06] [faz-a] [tenant-scope-fix] [tenant-scoped model adlari normalize edildi; PrismaService proxy + isolation script sıkı count assertions ile kapatildi]
 [2026-07-06] [faz-a] [verify] [tenant scoping regresyon spec eklendi; backend tsc/npm test/tenant isolation çalıştırılacak]
+[2026-07-06] [faz-a] [T2] [TIS-Web remote download altyapisi, credential encryption, tenant scoping ve locale kaynak etiketi eklendi; tsc+npm test yeşil, loop-harness codec8/verify geçti, e2e harici kırmızı]

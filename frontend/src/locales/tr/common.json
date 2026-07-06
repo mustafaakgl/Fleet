@@ -675,6 +675,7 @@
   "tachograph.dddArchive.signature.invalidTooltip": "Kural motoruna dahil edilmedi",
   "tachograph.dddArchive.source.manual": "Manuel",
   "tachograph.dddArchive.source.service": "Servis",
+  "tachograph.dddArchive.source.remote": "Uzaktan",
   "tachograph.dddArchive.copySha": "SHA-256 kopyala",
   "tachograph.dddArchive.shaCopied": "SHA-256 kopyalandı",
   "tachograph.dddArchive.shaCopyFailed": "SHA-256 kopyalanamadı",

@@ -681,6 +681,7 @@
   "tachograph.dddArchive.signature.invalidTooltip": "Nicht in Regelmotor einbezogen",
   "tachograph.dddArchive.source.manual": "Manuell",
   "tachograph.dddArchive.source.service": "Service",
+  "tachograph.dddArchive.source.remote": "Fernabruf",
   "tachograph.dddArchive.copySha": "SHA-256 kopieren",
   "tachograph.dddArchive.shaCopied": "SHA-256 kopiert",
   "tachograph.dddArchive.shaCopyFailed": "SHA-256 konnte nicht kopiert werden",

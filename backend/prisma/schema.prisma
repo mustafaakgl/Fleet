@@ -413,8 +413,12 @@ enum DddFileType {
 
 enum DddFileSource {
   manual
-  remote
   service
+  remote
+}
+
+enum TachoProvider {
+  tis_web
 }
 
 enum DddFileProcessingStatus {
@@ -507,6 +511,7 @@ model Tenant {
   devices               Device[]
   vehicleTelemetryLatest VehicleTelemetryLatest[]
   vehicleDtcs           VehicleDtc[]
+  tachoProviderCredentials TachoProviderCredential[]
   dddFiles              DddFile[]
   tachoActivities       TachoActivity[]
   tachoInfringements    TachoInfringement[]
@@ -2037,6 +2042,21 @@ model DddFile {
   @@map("ddd_files")
 }
 
+model TachoProviderCredential {
+  id               String      @id @default(cuid())
+  tenantId         String      @default("default-tenant")
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  provider         TachoProvider
+  encryptedPayload String
+  lastUsedAt       DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@map("tacho_provider_credentials")
+}
+
 model TachoActivity {
   id           String         @id @default(cuid())
   tenantId     String         @default("default-tenant")
@@ -2102,6 +2122,9 @@ model TachoDownloadSchedule {
   nextDueAt      DateTime
   lastDownloadAt DateTime?
   enabled        Boolean              @default(true)
+  lastAttemptAt  DateTime?
+  lastError      String?
+  consecutiveFailureCount Int         @default(0)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 

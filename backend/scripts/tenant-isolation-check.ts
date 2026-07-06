@@ -136,6 +136,12 @@ async function main() {
     );
     console.log(`DddFile total: ${totalDddFiles}, tenant A scoped: ${scopedDddFilesA}`);
 
+    const totalCredentials = await base.tachoProviderCredential.count();
+    const scopedCredentialsA = await TenantContext.run(tenantA, () =>
+      scoped.tachoProviderCredential.count(),
+    );
+    console.log(`TachoProviderCredential total: ${totalCredentials}, tenant A scoped: ${scopedCredentialsA}`);
+
     if (tenantA !== tenantB) {
       const crossDddFile = await TenantContext.run(tenantA, () =>
         scoped.dddFile.findFirst({
@@ -144,6 +150,15 @@ async function main() {
       );
       if (crossDddFile) {
         throw new Error('Isolation failure: tenant A context read tenant B ddd file');
+      }
+
+      const crossCredential = await TenantContext.run(tenantA, () =>
+        scoped.tachoProviderCredential.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossCredential) {
+        throw new Error('Isolation failure: tenant A context read tenant B provider credential');
       }
     }
 

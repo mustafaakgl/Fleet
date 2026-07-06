@@ -675,6 +675,7 @@
   "tachograph.dddArchive.signature.invalidTooltip": "Excluded from rule engine",
   "tachograph.dddArchive.source.manual": "Manual",
   "tachograph.dddArchive.source.service": "Service",
+  "tachograph.dddArchive.source.remote": "Remote",
   "tachograph.dddArchive.copySha": "Copy SHA-256",
   "tachograph.dddArchive.shaCopied": "SHA-256 copied",
   "tachograph.dddArchive.shaCopyFailed": "Could not copy SHA-256",

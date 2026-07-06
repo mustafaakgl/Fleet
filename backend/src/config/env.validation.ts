@@ -69,6 +69,8 @@ export function validateEnv(): void {
       }
     }
 
+    requireProductionEnv('TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY');
+
     return;
   }
 

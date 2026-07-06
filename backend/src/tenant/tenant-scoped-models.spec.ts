@@ -34,6 +34,7 @@ describe('TENANT_SCOPED_MODELS', () => {
 
   it('includes tachograph compliance models for tenant isolation', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('DddFile'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('TachoProviderCredential'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('TachoActivity'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('TachoInfringement'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('TachoDownloadSchedule'), true);

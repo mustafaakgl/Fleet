@@ -6,7 +6,6 @@ import { DddFileSource, PrismaClient } from '@prisma/client';
 import { TachographService } from './tachograph.service';
 
 const FIXTURE_PATH = join(__dirname, 'ddd', '__fixtures__', 'sample-driver-card.ddd');
-const TEST_TENANT_ID = 'default-tenant';
 
 class TestPrismaService extends PrismaClient {
   constructor() {
@@ -20,6 +19,7 @@ describe('TachographService.ingestDddFile', () => {
 
   let vehicleId = '';
   let driverId = '';
+  let tenantId = '';
 
   async function ingestAndProcess(
     buffer: Buffer,
@@ -36,10 +36,19 @@ describe('TachographService.ingestDddFile', () => {
   }
 
   before(async () => {
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: 'Tachograph Service Test Tenant',
+        slug: `tacho-service-test-${Date.now()}`,
+      },
+      select: { id: true },
+    });
+    tenantId = tenant.id;
+
     const driver = await prisma.driver.upsert({
       where: {
         tenantId_employeeNumber: {
-          tenantId: TEST_TENANT_ID,
+          tenantId,
           employeeNumber: 'TACHO-TEST-001',
         },
       },
@@ -47,7 +56,7 @@ describe('TachographService.ingestDddFile', () => {
         licenseNumber: 'CARD-TR-0001',
       },
       create: {
-        tenantId: TEST_TENANT_ID,
+        tenantId,
         employeeNumber: 'TACHO-TEST-001',
         firstName: 'Tacho',
         lastName: 'Tester',
@@ -60,13 +69,13 @@ describe('TachographService.ingestDddFile', () => {
     const vehicle = await prisma.vehicle.upsert({
       where: {
         tenantId_plateNumber: {
-          tenantId: TEST_TENANT_ID,
+          tenantId,
           plateNumber: 'TACHO-TEST-1',
         },
       },
       update: {},
       create: {
-        tenantId: TEST_TENANT_ID,
+        tenantId,
         plateNumber: 'TACHO-TEST-1',
         internalCode: 'TACHO-TEST-1',
         brand: 'Test',
@@ -80,22 +89,25 @@ describe('TachographService.ingestDddFile', () => {
   after(async () => {
     await prisma.tachoInfringement.deleteMany({
       where: {
-        tenantId: TEST_TENANT_ID,
+        tenantId,
         driverId,
       },
     });
     await prisma.tachoActivity.deleteMany({
       where: {
-        tenantId: TEST_TENANT_ID,
+        tenantId,
         vehicleId,
       },
     });
     await prisma.dddFile.deleteMany({
       where: {
-        tenantId: TEST_TENANT_ID,
+        tenantId,
         vehicleId,
       },
     });
+    await prisma.driver.deleteMany({ where: { id: driverId } });
+    await prisma.vehicle.deleteMany({ where: { id: vehicleId } });
+    await prisma.tenant.deleteMany({ where: { id: tenantId } });
     await prisma.$disconnect();
   });
 
@@ -103,7 +115,7 @@ describe('TachographService.ingestDddFile', () => {
     const buffer = readFileSync(FIXTURE_PATH);
 
     const first = await ingestAndProcess(buffer, {
-      tenantId: TEST_TENANT_ID,
+      tenantId,
       vehicleId,
       fileName: 'sample-driver-card.ddd',
       source: DddFileSource.manual,
@@ -113,13 +125,13 @@ describe('TachographService.ingestDddFile', () => {
     assert.ok(first.file.id);
 
     const fileCountAfterFirst = await prisma.dddFile.count({
-      where: { tenantId: TEST_TENANT_ID, vehicleId },
+      where: { tenantId, vehicleId },
     });
     const activityCountAfterFirst = await prisma.tachoActivity.count({
-      where: { tenantId: TEST_TENANT_ID, vehicleId },
+      where: { tenantId, vehicleId },
     });
     const infringementCountAfterFirst = await prisma.tachoInfringement.count({
-      where: { tenantId: TEST_TENANT_ID, driverId },
+      where: { tenantId, driverId },
     });
 
     assert.equal(fileCountAfterFirst, 1);
@@ -127,7 +139,7 @@ describe('TachographService.ingestDddFile', () => {
     assert.ok(infringementCountAfterFirst >= 1);
 
     const second = await ingestAndProcess(buffer, {
-      tenantId: TEST_TENANT_ID,
+      tenantId,
       vehicleId,
       fileName: 'sample-driver-card.ddd',
       source: DddFileSource.manual,
@@ -137,13 +149,13 @@ describe('TachographService.ingestDddFile', () => {
     assert.equal(second.file.id, first.file.id);
 
     const fileCountAfterSecond = await prisma.dddFile.count({
-      where: { tenantId: TEST_TENANT_ID, vehicleId },
+      where: { tenantId, vehicleId },
     });
     const activityCountAfterSecond = await prisma.tachoActivity.count({
-      where: { tenantId: TEST_TENANT_ID, vehicleId },
+      where: { tenantId, vehicleId },
     });
     const infringementCountAfterSecond = await prisma.tachoInfringement.count({
-      where: { tenantId: TEST_TENANT_ID, driverId },
+      where: { tenantId, driverId },
     });
 
     assert.equal(fileCountAfterSecond, fileCountAfterFirst);

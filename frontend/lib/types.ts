@@ -1976,10 +1976,12 @@ export type TachographInfringementDetail = TachographInfringementItem & {
 
 export type DddFileProcessingStatus = 'pending' | 'processed' | 'failed';
 
+export type DddFileSource = 'manual' | 'service' | 'remote';
+
 export type DddFileListItem = {
   id: string;
   fileType: string;
-  source: string;
+  source: DddFileSource;
   status: DddFileProcessingStatus;
   processingErrorSummary: string | null;
   capturedAt: string;
