@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { IBM_Plex_Mono, Inter } from 'next/font/google';
+import { useTranslation } from 'react-i18next';
 import { HeroScrollIndicator } from './HeroScrollIndicator';
 import { ProductTour } from './ProductTour';
 import { MarketingFooter } from './MarketingFooter';
@@ -76,6 +77,7 @@ const compareRows = [
 
 export function HomeLandingPage() {
   const partner = partnerStory();
+  const { t } = useTranslation('landing');
 
   useEffect(() => {
     const els = document.querySelectorAll('.marketing-landing [data-reveal]');
@@ -134,21 +136,9 @@ export function HomeLandingPage() {
 
       <section className="m-intro" id="intro">
         <div className="m-wrap m-intro-inner" data-reveal>
-          <p>
-            Webfleet ist eine marktführende Software (SaaS), die das Fuhrparkmanagement erleichtert. Mit unserer
-            modernen Technologie und intuitiven Benutzeroberfläche können Sie Ihre Betriebsabläufe in nur wenigen
-            Klicks optimieren.
-          </p>
-          <p>
-            Sie bleiben besser mit Ihrem Fuhrpark vernetzt, haben Einblick in den Standort Ihrer Fahrzeuge und sehen
-            Echtzeit-Informationen zu ihrer Nutzung. Sie können diese Leistungsdaten von jedem beliebigen Gerät aus
-            abrufen, um zu analysieren, wo Verbesserungen möglich wären.
-          </p>
-          <p>
-            Dank Echtzeit-Verkehrsinformationen, Routenoptimierung und Funktionen für vordefinierte Fahrten sind
-            Auftragsabwicklung und Kraftstoffeinsparungen einfach und effektiv. Erfahren Sie mehr über Ihre
-            Möglichkeiten mit einer Fuhrparkmanagement Software.
-          </p>
+          <p>{t('intro.p1')}</p>
+          <p>{t('intro.p2')}</p>
+          <p>{t('intro.p3')}</p>
         </div>
       </section>
 

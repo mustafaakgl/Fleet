@@ -106,4 +106,31 @@ curl -sS -H 'Content-Type: application/json' \
 ```
 Beklenen: HTTP 200 ve `accessToken` donmesi.
 
+## 8) Kurulum Sonrasi Gorsel Kontrol (Zorunlu)
+
+Temiz prod compose acildiktan sonra su kontroller yapilmadan kurulum tamamlandi sayilmaz:
+
+1. Tarayicida su sayfalari tek tek acin:
+- `http://localhost:3001/` (landing)
+- `http://localhost:3001/login` (login)
+- `http://localhost:3001/dashboard` (login sonrasi dashboard)
+
+2. Her uc sayfada da su durumlari dogrulayin:
+- Sayfa "ciplak HTML" degil, Tailwind stilleri tam yuklu.
+- Etkilesimli JS bilesenleri (menu, buton, sayac gibi) calisiyor.
+
+3. Gercek static asset URL'ini HTML'den alip HTTP durumunu kontrol edin:
+```bash
+CSS_PATH=$(curl -s http://localhost:3001/login | rg -o '/_next/static/[^"\) ]+\.css' -m 1 | head -n 1)
+curl -I "http://localhost:3001${CSS_PATH}"
+```
+Beklenen: `HTTP/1.1 200 OK`
+
+4. JS chunk icin de ayni kontrolu yapin:
+```bash
+JS_PATH=$(curl -s http://localhost:3001/login | rg -o '/_next/static/chunks/[^"\) ]+\.js' -m 1 | head -n 1)
+curl -I "http://localhost:3001${JS_PATH}"
+```
+Beklenen: `HTTP/1.1 200 OK`
+
 Not: Eger `3001` portu doluysa frontend container baslatilamaz; portu kullanan surec kapatilip `docker compose -f docker-compose.prod.yml up -d` tekrar kosulmalidir.

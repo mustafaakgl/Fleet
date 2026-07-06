@@ -6,6 +6,7 @@ import type { NextConfig } from 'next';
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   outputFileTracingRoot: repoRoot,
   images: {
     remotePatterns: [

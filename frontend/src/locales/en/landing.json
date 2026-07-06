@@ -52,6 +52,10 @@
 
   "trust.title": "Trusted by modern transport and logistics companies",
 
+  "intro.p1": "Fleet is a modern SaaS platform for commercial fleet operations. Manage deadlines, documents, and driver communication in one central system.",
+  "intro.p2": "Get real-time visibility into vehicle and driver status, detect operational bottlenecks early, and coordinate dispatch and drivers faster.",
+  "intro.p3": "With clear workflows for routes, tasks, and proof records, you reduce manual effort, avoid compliance gaps, and improve operational reliability.",
+
   "solutions.title": "Track your fleet and reduce costs — with MyFleet",
   "solutions.subtitle": "Europe's modern cloud platform for fleet management. Some of the key capabilities:",
   "solutions.learnMore": "Learn more",
