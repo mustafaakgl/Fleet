@@ -31,3 +31,4 @@
 [2026-07-06] [faz-a] [T8-commit] [28/90 gun okuma takibi commitlendi: download reminder cron/spec + deadline migration + ddd ile otomatik fulfillment + compliance vade tablosu]
 [2026-07-06] [hazirlik] [kurulum-1-frontend] [devices api/type eksikleri ve fleet trips i18n tip cagrilari duzeltildi; frontend tsc + next build yesil]
 [2026-07-06] [hazirlik] [kurulum-1-env-runbook] [backend/frontend/root env.example kapsamı tamamlandi ve docs/INSTALL.md taslagi (docker adimlari dogrulanacak notuyla) eklendi]
+[2026-07-06] [hazirlik] [kurulum-1-docker-provasi] [docker compose prod temiz kurulum dogrulandi; compose include/redis+dockeringore+backend runtime seed destegi ve env prod-valid varsayilanlariyla health+seed+login calisti]

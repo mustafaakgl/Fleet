@@ -3,9 +3,9 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm ci
 
-COPY prisma ./prisma
 COPY tsconfig.json ./
 COPY src ./src
 
@@ -21,6 +21,8 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 RUN mkdir -p /app/uploads/documents
 

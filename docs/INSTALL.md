@@ -1,13 +1,13 @@
 # INSTALL
 
-Bu belge Docker'siz adimlarda dogrulanmis komutlari ve Docker gerektiren ama henuz bu turda calistirilmayan adimlari ayirir.
+Bu belge KURULUM-1 provasi sirasinda gercekten kosulan komutlarla guncellenmistir.
 
 ## 1) On Kosullar
 
 - Node.js 22.x
 - npm 10+
 - PostgreSQL ve Redis (lokal calisma icin)
-- Docker Desktop (Docker provasi icin, bu turda calistirilmadi)
+- Docker Desktop
 
 ## 2) Ortam Dosyalari
 
@@ -17,11 +17,13 @@ cp .env.example .env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
 ```
-2. Placeholder kalan alanlari doldur:
+2. Production validation icin asagidaki alanlar bos olmamali:
 - `JWT_SECRET`
-- SMTP alanlari (`SMTP_HOST`, `SMTP_FROM`, vb.)
-- S3 alanlari (`S3_*`) eger `STORAGE_DRIVER=s3` kullanilacaksa
-- Stripe alanlari eger billing acilacaksa
+- SMTP alanlari (`SMTP_ENABLED=true`, `SMTP_HOST`, `SMTP_FROM`)
+- S3 alanlari (`STORAGE_DRIVER=s3`, `S3_*`)
+- `FRONTEND_URL` localhost olmamali
+- `DATA_CONTROLLER_NAME` ve `PRIVACY_CONTACT_EMAIL` gercek deger olmali
+- `TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY` bos olmamali
 
 ## 3) Bagimliliklar
 
@@ -65,20 +67,43 @@ node scripts/codec8-sim.mjs --scenario normal --seed 42 | node scripts/verify-ta
 npx ts-node --transpile-only scripts/tenant-isolation-check.ts
 ```
 
-## 7) Uretim Benzeri Docker Kurulumu
+## 7) Uretim Benzeri Docker Kurulumu (Dogrulandi)
 
-- (dogrulanacak) Temiz volume ile kaldir:
+1. Temiz volume ile kaldir:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml down -v
+docker compose -f docker-compose.prod.yml down -v
 ```
-- (dogrulanacak) Build + up:
+2. Build + up:
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml up -d --build
 ```
-- (dogrulanacak) Saglik kontrolu:
+3. Servis durumunu kontrol et:
 ```bash
-curl -fsS http://localhost:3000/api/v1/health
+docker compose -f docker-compose.prod.yml ps
 ```
-- (dogrulanacak) Login smoke testi: UI'dan giris ve temel dashboard acilisi
+4. API saglik kontrolu:
+```bash
+curl -sS http://localhost:3000/api/v1/health
+```
+Beklenen: HTTP 200 ve `{"status":"ok",...}`
 
-Bu adimlar Docker hazir oldugunda tekrar kosulacak, `(dogrulanacak)` notlari kaldirilacak.
+5. Ilk kurulum seed adimi (container icinden):
+```bash
+docker compose -f docker-compose.prod.yml exec -T backend sh -lc \
+"NODE_ENV=development SEED_SILENT=true \
+SEED_ADMIN_PASSWORD=admin123 SEED_BOSS_PASSWORD=boss123 \
+SEED_ACCOUNTING_PASSWORD=accounting123 SEED_OFFICE_PASSWORD=office123 \
+SEED_DRIVER_PASSWORD=driver123 SEED_DHL_CUSTOMER_PASSWORD=dhl123 \
+SEED_AMAZON_CUSTOMER_PASSWORD=amazon123 npx ts-node --transpile-only prisma/seed.ts"
+```
+Beklenen: `Fleet seed completed successfully.`
+
+6. Login smoke testi (API):
+```bash
+curl -sS -H 'Content-Type: application/json' \
+	-d '{"email":"admin@fleet.com","password":"admin123"}' \
+	http://localhost:3000/api/v1/auth/login
+```
+Beklenen: HTTP 200 ve `accessToken` donmesi.
+
+Not: Eger `3001` portu doluysa frontend container baslatilamaz; portu kullanan surec kapatilip `docker compose -f docker-compose.prod.yml up -d` tekrar kosulmalidir.

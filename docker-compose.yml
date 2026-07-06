@@ -28,6 +28,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: ${DATABASE_URL:-postgresql://fleet:fleet123@postgres:5432/fleet}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       JWT_SECRET: ${JWT_SECRET:-secret}
       PORT: ${BACKEND_PORT:-3000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
@@ -50,6 +51,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "3000:3000"
     volumes:
@@ -71,6 +74,21 @@ services:
       - "3001:3001"
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: fleet_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   backend_uploads:
+  redis_data:
