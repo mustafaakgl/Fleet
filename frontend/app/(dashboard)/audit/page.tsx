@@ -1,13 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, History, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { auditApi, type PaginatedAuditLogs } from '@/lib/api';
 import { downloadBlob } from '@/lib/download-blob';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -136,12 +138,19 @@ export default function AuditPage() {
           {error ? (
             <p className="px-6 py-4 text-sm text-rose-600">{error}</p>
           ) : loading ? (
-            <p className="flex items-center gap-2 px-6 py-8 text-sm text-gray-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('common.loading')}
-            </p>
+            <div className="space-y-3 p-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
           ) : !result || result.data.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-gray-500">{t('audit.empty')}</p>
+            <div className="p-4">
+              <EmptyState
+                icon={History}
+                title={t('audit.emptyTitle', 'Keine Audit-Einträge')}
+                subtitle={t('audit.empty')}
+              />
+            </div>
           ) : (
             <>
             <div className={FLEET_LIST_MOBILE}>

@@ -26,7 +26,7 @@ import {
   FLEET_PAGE_HEADER,
   FLEET_PAGE_TITLE,
 } from '@/lib/fleet-table';
-import { formatFleetDate } from '@/lib/locale-format';
+import { formatFleetDate, formatFleetDateTime } from '@/lib/locale-format';
 import type {
   Driver,
   FleetTripDetail,
@@ -111,13 +111,8 @@ function monthRange(month: string): { from: string; to: string } {
 
 function formatTime(value?: string | null): string {
   if (!value) return '—';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(parsed);
+  const dateTime = formatFleetDateTime(value);
+  return dateTime === '—' ? '—' : dateTime.slice(-5);
 }
 
 function formatTimeRange(startedAt: string, endedAt: string | null): string {

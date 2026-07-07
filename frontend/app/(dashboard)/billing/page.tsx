@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatFleetDate } from '@/lib/locale-format';
 
 export default function BillingPage() {
   const { t } = useTranslation();
@@ -160,7 +161,7 @@ export default function BillingPage() {
               {sub.trial_ends_at && (
                 <div>
                   <p className="text-slate-500">{t('billing.trialEnds')}</p>
-                  <p className="font-medium">{new Date(sub.trial_ends_at).toLocaleDateString('de-DE')}</p>
+                  <p className="font-medium">{formatFleetDate(sub.trial_ends_at)}</p>
                 </div>
               )}
             </div>

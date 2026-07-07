@@ -15,18 +15,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { devicesApi, getApiErrorMessage, vehiclesApi } from '@/lib/api';
 import { formatFleetDateTime } from '@/lib/locale-format';
 import type { CreateDevicePayload, DeviceModel, DeviceRow, UpdateDevicePayload } from '@/lib/types';
+import { statusColor } from '@/lib/utils';
 
 const ONLINE_STATUSES = new Set(['online']);
 const OFFLINE_STATUSES = new Set(['offline']);
 
 function statusBadgeClass(status: DeviceRow['status']): string {
-  if (ONLINE_STATUSES.has(status)) {
-    return 'bg-emerald-100 text-emerald-700';
-  }
-  if (OFFLINE_STATUSES.has(status)) {
-    return 'bg-amber-100 text-amber-800';
-  }
-  return 'bg-slate-100 text-slate-600';
+  if (ONLINE_STATUSES.has(status)) return statusColor('active');
+  if (OFFLINE_STATUSES.has(status)) return statusColor('inactive');
+  return statusColor('pending');
 }
 
 function modelOptions(): DeviceModel[] {

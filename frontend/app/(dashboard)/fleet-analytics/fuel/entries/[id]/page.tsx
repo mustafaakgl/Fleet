@@ -7,8 +7,10 @@ import { ArrowLeft, Droplets, WifiOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fleetFuelEntriesApi, getApiErrorMessage } from '@/lib/api';
 import { FLEET_LIST_CARD, FLEET_PAGE, FLEET_PAGE_TITLE } from '@/lib/fleet-table';
+import { formatFleetDateTime } from '@/lib/locale-format';
 import type { FleetFuelEntryDetail } from '@/lib/types';
 
 function intlLocale(language: string): string {
@@ -49,19 +51,6 @@ export default function FleetFuelEntryDetailPage() {
     () => new Intl.NumberFormat(locale, { style: 'currency', currency: entry?.currency || 'EUR' }),
     [locale, entry?.currency],
   );
-  const dateTimeFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        weekday: 'short',
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    [locale],
-  );
-
   const pricePerLiter = entry && entry.liters > 0 ? entry.totalCost / entry.liters : null;
   const usageKm =
     entry && entry.odometerKm != null && entry.previousOdometerKm != null
@@ -102,7 +91,11 @@ export default function FleetFuelEntryDetailPage() {
       ) : null}
 
       {!error && loading ? (
-        <p className="text-sm text-muted-foreground">{t('common.loading', 'Yükleniyor…')}</p>
+        <div className="space-y-3">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
       ) : null}
 
       {!error && !loading && entry ? (
@@ -136,7 +129,7 @@ export default function FleetFuelEntryDetailPage() {
                   {
                     key: 'date',
                     label: t('fuelHistory.col.date', 'Tarih'),
-                    value: dateTimeFormat.format(new Date(entry.enteredAt)),
+                    value: formatFleetDateTime(entry.enteredAt),
                   },
                   {
                     key: 'odometer',
@@ -150,7 +143,7 @@ export default function FleetFuelEntryDetailPage() {
                     key: 'previous',
                     label: t('fuelHistory.detail.previousEntry', 'Önceki Giriş'),
                     value: entry.previousEntryAt
-                      ? `${dateTimeFormat.format(new Date(entry.previousEntryAt))}${
+                      ? `${formatFleetDateTime(entry.previousEntryAt)}${
                           entry.previousOdometerKm != null
                             ? ` · ${entry.previousOdometerKm.toLocaleString(locale, { maximumFractionDigits: 0 })} km`
                             : ''
@@ -174,7 +167,7 @@ export default function FleetFuelEntryDetailPage() {
                   {
                     key: 'created',
                     label: t('fuelHistory.detail.createdAt', 'Kayıt Tarihi'),
-                    value: dateTimeFormat.format(new Date(entry.createdAt)),
+                    value: formatFleetDateTime(entry.createdAt),
                   },
                 ].map((row) => (
                   <div key={row.key} className="grid grid-cols-2 gap-4 px-4 py-2.5">

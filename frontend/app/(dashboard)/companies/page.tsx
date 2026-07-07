@@ -147,8 +147,10 @@ export default function CompaniesPage() {
           <div className="p-4">
             <EmptyState
               icon={Building2}
-              title="No companies found"
-              subtitle="No companies are available yet."
+              title={t('companies.emptyTitle')}
+              subtitle={t('companies.emptySubtitle')}
+              actionLabel={t('companies.addCompany')}
+              onAction={() => router.push('/companies/new')}
             />
           </div>
         ) : (

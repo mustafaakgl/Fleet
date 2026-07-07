@@ -77,21 +77,31 @@ export function statusColor(status: string): string {
     case 'active':
     case 'completed':
     case 'approved':
+    case 'ok':
+    case 'matched':
       return 'bg-green-100 text-green-700';
+    case 'pending':
+    case 'planned':
+    case 'in_progress':
+    case 'needs_review':
+    case 'imported':
+    case 'on_leave':
+      return 'bg-amber-100 text-amber-800';
+    case 'critical':
+    case 'expired':
+    case 'rejected':
+    case 'terminated':
+    case 'disputed':
+      return 'bg-red-100 text-red-700';
     case 'inactive':
     case 'cancelled':
-    case 'rejected':
+    case 'ignored':
+    case 'offline':
+    case 'passive':
       return 'bg-gray-100 text-gray-600';
-    case 'on_leave':
-    case 'in_progress':
-    case 'planned':
-    case 'pending':
-      return 'bg-blue-100 text-blue-700';
     case 'sick':
     case 'broken':
     case 'maintenance':
-      return 'bg-orange-100 text-orange-700';
-    case 'terminated':
       return 'bg-red-100 text-red-700';
     default:
       return 'bg-gray-100 text-gray-600';

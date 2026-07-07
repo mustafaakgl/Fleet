@@ -7,7 +7,9 @@ import { driversApi, workSessionsApi, type WorkSessionRow } from '@/lib/api';
 import { downloadBlob } from '@/lib/download-blob';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -237,9 +239,10 @@ export default function WorkSessionsPage() {
       <Card className={FLEET_LIST_CARD}>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-slate-500">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              {t('common.loading')}
+            <div className="space-y-3 p-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
           ) : (
             <>
@@ -284,7 +287,11 @@ export default function WorkSessionsPage() {
                 {rows.length === 0 ? (
                   <TableRow className={FLEET_TABLE_ROW}>
                     <TableCell colSpan={6} className={cn(FLEET_TABLE_CELL_MUTED, 'py-10 text-center')}>
-                      {t('workSessions.empty')}
+                      <EmptyState
+                        icon={Loader2}
+                        title={t('workSessions.emptyTitle', 'Keine Schichtdaten')}
+                        subtitle={t('workSessions.empty')}
+                      />
                     </TableCell>
                   </TableRow>
                 ) : (

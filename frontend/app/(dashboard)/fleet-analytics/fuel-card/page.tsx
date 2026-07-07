@@ -30,6 +30,7 @@ import type {
   FuelCardTransactionSummary,
 } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
+import { formatFleetDateTime } from '@/lib/locale-format';
 
 const STATUS_VARIANT: Record<FuelCardTransactionStatus, 'default' | 'secondary' | 'warning' | 'outline'> = {
   imported: 'secondary',
@@ -37,11 +38,6 @@ const STATUS_VARIANT: Record<FuelCardTransactionStatus, 'default' | 'secondary' 
   disputed: 'warning',
   ignored: 'outline',
 };
-
-const dateTimeFormat = new Intl.DateTimeFormat('de-DE', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
 
 function money(amount: number, currency: string): string {
   return new Intl.NumberFormat('de-DE', {
@@ -255,7 +251,7 @@ export default function FuelCardReconciliationPage() {
                         <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
                           <div className="font-medium">{transaction.merchantName}</div>
                           <div className="text-xs font-normal text-muted-foreground">
-                            {dateTimeFormat.format(new Date(transaction.transactionAt))}
+                            {formatFleetDateTime(transaction.transactionAt)}
                           </div>
                         </TableCell>
                         <TableCell className={FLEET_TABLE_CELL_MUTED}>

@@ -23,10 +23,10 @@ import {
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
 import type { DepartureCheck, MissingDepartureCheck } from '@/lib/types';
-import { formatDate } from '@/lib/utils';
+import { formatDate, statusColor } from '@/lib/utils';
 
 function overallClass(status: string) {
-  return status === 'ok' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800';
+  return status === 'ok' ? statusColor('ok') : statusColor('pending');
 }
 
 export default function DepartureChecksPage() {

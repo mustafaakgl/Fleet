@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Download, FileText, Plus } from 'lucide-react';
+import { Download, FileText, Loader2, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DocumentActionsMenu } from '@/components/documents/DocumentActionsMenu';
@@ -349,9 +350,11 @@ export default function DocumentsPage() {
       setFormOpen(false);
       await reload();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to save';
-      window.alert(message);
-      setToast({ type: 'error', message: `Upload failed: ${message}` });
+      console.error('documents:save_failed', e);
+      setToast({
+        type: 'error',
+        message: t('documents.saveError', 'Doküman kaydedilemedi. Lütfen alanları kontrol edip tekrar deneyin.'),
+      });
     } finally {
       setSaving(false);
     }
@@ -442,14 +445,19 @@ export default function DocumentsPage() {
 
       <Card className={FLEET_LIST_CARD}>
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-500">Loading...</div>
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : error ? (
           <div className="p-4">
             <EmptyState
               icon={FileText}
-              title="Failed to load documents"
+              title={t('documents.loadErrorTitle', 'Dokumente konnten nicht geladen werden')}
               subtitle={error}
-              actionLabel="Retry"
+              actionLabel={t('common.retry', 'Erneut versuchen')}
               onAction={reload}
             />
           </div>
@@ -457,9 +465,9 @@ export default function DocumentsPage() {
           <div className="p-4">
             <EmptyState
               icon={FileText}
-              title="No documents found"
-              subtitle="No documents match current filters."
-              actionLabel="Upload Document"
+              title={t('documents.emptyTitle', 'Keine Dokumente gefunden')}
+              subtitle={t('documents.emptySubtitle', 'Für die aktuellen Filter wurden keine Dokumente gefunden.')}
+              actionLabel={t('documents.uploadDocument', 'Dokument hochladen')}
               onAction={() => openForm('add')}
             />
           </div>
@@ -866,7 +874,12 @@ function AddDocumentDrawer({
             onClick={submit}
             disabled={isSaving || (fileRequired && !selectedFile && !currentFileName)}
           >
-            {isSaving ? 'Uploading...' : mode === 'add' ? t('common.add') : 'Save'}
+            {isSaving ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('common.saving', 'Kaydediliyor...')}
+              </span>
+            ) : mode === 'add' ? t('common.add') : t('common.save', 'Kaydet')}
           </Button>
         </DialogFooter>
       </DialogContent>

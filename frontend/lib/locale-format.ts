@@ -1,4 +1,5 @@
 import i18n from '@/src/i18n.client';
+import { format } from 'date-fns';
 
 const LOCALE_TAGS: Record<string, string> = {
   de: 'de-DE',
@@ -19,14 +20,14 @@ export function formatFleetDateTime(value?: string | null) {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString(activeTag(), { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+  return format(parsed, 'dd.MM.yyyy HH:mm');
 }
 
 export function formatFleetDate(value?: string | null) {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString(activeTag(), { dateStyle: 'medium', timeZone: 'UTC' });
+  return format(parsed, 'dd.MM.yyyy');
 }
 
 export function formatFleetDurationMinutes(
