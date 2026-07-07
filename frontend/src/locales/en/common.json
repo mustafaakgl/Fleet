@@ -2115,6 +2115,7 @@
   "messenger.languageSettings": "Language",
   "messenger.autoTranslateTo": "Messages are automatically translated to the driver's language",
   "messenger.autoTranslateDriver": "Driver language ({{lang}})",
+  "messenger.autoTranslateCompact": "{{source}} → {{target}} auto",
   "messenger.driverLanguageUnknown": "Driver language not set",
   "messenger.sendHintAutoTranslate": "Messages auto-translate to the driver's language · Enter to send · Shift+Enter for new line",
   "messenger.sendHintTouch": "Use the send button on touch devices · scroll inside the field for longer drafts",

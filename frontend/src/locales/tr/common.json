@@ -2115,6 +2115,7 @@
   "messenger.languageSettings": "Dil",
   "messenger.autoTranslateTo": "Mesajlar sürücünün diline otomatik çevrilir",
   "messenger.autoTranslateDriver": "Sürücü dili ({{lang}})",
+  "messenger.autoTranslateCompact": "{{source}} → {{target}} otomatik",
   "messenger.driverLanguageUnknown": "Sürücü dili tanımlı değil",
   "messenger.sendHintAutoTranslate": "Mesajlar sürücünün diline otomatik çevrilir · Enter ile gönder · Shift+Enter yeni satır",
   "messenger.sendHintTouch": "Dokunmatik cihazlarda gönder düğmesini kullanın · uzun taslaklarda alan içinde kaydırın",

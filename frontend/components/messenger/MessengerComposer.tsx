@@ -93,37 +93,38 @@ export function MessengerComposer({
   return (
     <div className="border-t border-slate-200 bg-white p-3 pb-3" style={{ paddingBottom: `${12 + bottomInset}px` }}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-          {t('messenger.languageSettings')}
-        </span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Select
-            value={originalLanguage}
-            onChange={(event) => onOriginalLanguageChange(event.target.value as MessengerLanguage)}
-            disabled={sending}
-            className={cn('min-h-11 min-w-[5.75rem] text-[12px]', FLEET_FILTER_SELECT, BRAND_FOCUS)}
-            aria-label={t('messenger.originalPrefix')}
-          >
-            {MESSENGER_LANGUAGES.map((lang) => (
-              <option key={`orig-${lang}`} value={lang}>
-                {lang.toUpperCase()}
-              </option>
-            ))}
-          </Select>
-          <span className="text-[12px] text-slate-400">→</span>
+        <Select
+          value={originalLanguage}
+          onChange={(event) => onOriginalLanguageChange(event.target.value as MessengerLanguage)}
+          disabled={sending}
+          className={cn('min-h-11 min-w-[5.5rem] text-[12px]', FLEET_FILTER_SELECT, BRAND_FOCUS)}
+          aria-label={t('messenger.originalPrefix')}
+        >
+          {MESSENGER_LANGUAGES.map((lang) => (
+            <option key={`orig-${lang}`} value={lang}>
+              {lang.toUpperCase()}
+            </option>
+          ))}
+        </Select>
+        {driverLanguage ? (
           <span
-            className={cn(
-              'inline-flex min-h-11 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-[12px] text-slate-700',
-              !driverLanguage && 'text-slate-400',
-            )}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-[12px] font-medium text-emerald-800"
             title={t('messenger.autoTranslateTo')}
           >
-            <Languages className="h-3.5 w-3.5 shrink-0 text-brand-primary" aria-hidden />
-            {driverLanguage
-              ? t('messenger.autoTranslateDriver', { lang: driverLanguage.toUpperCase() })
-              : t('messenger.driverLanguageUnknown')}
+            <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {t('messenger.autoTranslateCompact', {
+              source: originalLanguage.toUpperCase(),
+              target: driverLanguage.toUpperCase(),
+            })}
           </span>
-        </div>
+        ) : (
+          <span
+            className="inline-flex min-h-11 items-center rounded-md border border-slate-200 bg-slate-50 px-2.5 text-[12px] text-slate-400"
+            title={t('messenger.autoTranslateTo')}
+          >
+            {t('messenger.driverLanguageUnknown')}
+          </span>
+        )}
       </div>
 
       <div className="flex items-end gap-2">

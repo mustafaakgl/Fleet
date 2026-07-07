@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DeepLTranslationService } from './deepl-translation.service';
 
 const SUPPORTED_LANGUAGE_CODES = {
@@ -33,7 +33,21 @@ export type TranslationResult = {
 
 @Injectable()
 export class TranslationService {
+  private readonly logger = new Logger(TranslationService.name);
+
   constructor(private readonly deepLTranslationService: DeepLTranslationService) {}
+
+  private isDebugEnabled(): boolean {
+    return (process.env.MESSENGER_TRANSLATION_DEBUG ?? 'false').toLowerCase() === 'true';
+  }
+
+  private shorten(value: string): string {
+    const compact = value.replace(/\s+/g, ' ').trim();
+    if (compact.length <= 180) {
+      return compact;
+    }
+    return `${compact.slice(0, 177)}...`;
+  }
 
   private isEnabled(): boolean {
     return (process.env.MESSENGER_TRANSLATION_ENABLED ?? 'true').toLowerCase() === 'true';
@@ -130,6 +144,13 @@ export class TranslationService {
       ? this.fromDeepLLang(result.detectedDeepLSourceLang)
       : undefined;
 
+    if (this.isDebugEnabled()) {
+      const translatedPreview = result.translatedText ? this.shorten(result.translatedText) : '(null)';
+      this.logger.log(
+        `DeepL translation source=${params.sourceLang ?? 'auto'} detected=${detectedSourceLang ?? '-'} target=${params.targetLang} status=${result.status} text="${this.shorten(normalizedText)}" translated="${translatedPreview}"`,
+      );
+    }
+
     if (detectedSourceLang && detectedSourceLang === params.targetLang) {
       return {
         translatedText: null,
@@ -141,6 +162,7 @@ export class TranslationService {
 
     return {
       ...result,
+      translatedText: result.translatedText ? result.translatedText.normalize('NFC') : null,
       detectedSourceLang: detectedSourceLang ?? result.detectedSourceLang,
     };
   }

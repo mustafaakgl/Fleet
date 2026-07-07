@@ -979,7 +979,7 @@ async function main(): Promise<void> {
   });
 
   const driverQaUser = await upsertUser({
-    fullName: 'Ilker Cukur',
+    fullName: 'İlker Çukur',
     email: 'driver@fleet.com',
     password: seedPasswords.driver,
     role: UserRole.driver,
@@ -994,10 +994,10 @@ async function main(): Promise<void> {
   const drivers = [
     {
       id: 'drv_ilker_cukur',
-      key: 'Ilker Cukur',
+      key: 'İlker Çukur',
       employeeNumber: 'DRV-001',
-      firstName: 'Ilker',
-      lastName: 'Cukur',
+      firstName: 'İlker',
+      lastName: 'Çukur',
       phone: '+49 170 1000001',
       email: 'ilker.cukur@fleet.com',
       licenseNumber: 'LIC-DE-ILK-2001',
@@ -1150,7 +1150,7 @@ async function main(): Promise<void> {
   const pilotRows = parsePilotRoster();
   // Maps a CSV "Nachname Vorname" entry to an already-seeded driver key.
   const pilotNameToExistingKey: Record<string, string> = {
-    'Cukur Ilker': 'Ilker Cukur',
+    'Cukur Ilker': 'İlker Çukur',
     'Scharein Thomas': 'Thomas Scharein',
     'Diallo Sita': 'Sita Diallo',
     'Dudiak Andrii': 'Andrii Dudiak',
@@ -1451,7 +1451,7 @@ async function main(): Promise<void> {
     companiesByName.set(company.name, record);
   }
 
-  const ilker = driversByName.get('Ilker Cukur');
+  const ilker = driversByName.get('İlker Çukur');
   const thomas = driversByName.get('Thomas Scharein');
   const sita = driversByName.get('Sita Diallo');
   const andrii = driversByName.get('Andrii Dudiak');
@@ -1572,7 +1572,7 @@ async function main(): Promise<void> {
     update: {
       driverId: ilker.id,
       createdById: adminUser.id,
-      subject: 'Invoice and document follow-up',
+      subject: 'Invoice follow-up',
       lastMessageAt: atTime(today, 11, 5),
     },
     create: {
@@ -1580,7 +1580,7 @@ async function main(): Promise<void> {
       tenantId: SEED_TENANT_ID,
       driverId: ilker.id,
       createdById: adminUser.id,
-      subject: 'Invoice and document follow-up',
+      subject: 'Invoice follow-up',
       lastMessageAt: atTime(today, 11, 5),
     },
   });
@@ -1621,7 +1621,7 @@ async function main(): Promise<void> {
       conversationId: 'conv_office_driver_ilker',
       senderUserId: officeUser.id,
       originalText: 'Heute bitte zuerst Leipzig Hub anfahren.',
-      translatedText: 'Bugun lutfen once Leipzig hub noktasina gidin.',
+      translatedText: 'Bugün lütfen önce Leipzig hub noktasına gidin.',
       originalLanguage: 'de',
       targetLanguage: 'tr',
       translationStatus: MessageTranslationStatus.translated,
@@ -1632,7 +1632,7 @@ async function main(): Promise<void> {
       id: 'msg_office_driver_2',
       conversationId: 'conv_office_driver_ilker',
       senderUserId: driverQaUser.id,
-      originalText: 'Tamam, once Leipzig teslimatini yapacagim.',
+      originalText: 'Tamam, önce Leipzig teslimatını yapacağım.',
       translatedText: 'Verstanden, ich erledige zuerst die Leipzig-Lieferung.',
       originalLanguage: 'tr',
       targetLanguage: 'de',
@@ -1645,7 +1645,7 @@ async function main(): Promise<void> {
       conversationId: 'conv_admin_driver_ilker',
       senderUserId: accountingUser.id,
       originalText: 'Please upload the handover photo before end of shift.',
-      translatedText: 'Vardiya bitmeden once teslim fotografini yukleyin.',
+      translatedText: 'Vardiya bitmeden önce teslim fotoğrafını yükleyin.',
       originalLanguage: 'en',
       targetLanguage: 'tr',
       translationStatus: MessageTranslationStatus.translated,
@@ -1656,7 +1656,7 @@ async function main(): Promise<void> {
       id: 'msg_admin_driver_2',
       conversationId: 'conv_admin_driver_ilker',
       senderUserId: bossUser.id,
-      originalText: 'Danke fur die schnelle Ruckmeldung.',
+      originalText: 'Danke für die schnelle Rückmeldung.',
       translatedText: null,
       originalLanguage: 'de',
       targetLanguage: null,

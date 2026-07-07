@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Download, MessageSquare, Plus } from 'lucide-react';
+import { MessageSquare, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MessengerChatPanel, type MessengerUiMessage } from '@/components/messenger/MessengerChatPanel';
 import { MessengerConversationList } from '@/components/messenger/MessengerConversationList';
@@ -56,7 +56,6 @@ export function MessengerPage() {
 
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<MessengerUnreadCount>({ total: 0, byConversation: [] });
-  const [exporting, setExporting] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<ConversationDetail | null>(null);
   const [messages, setMessages] = useState<MessengerUiMessage[]>([]);
@@ -470,27 +469,6 @@ export function MessengerPage() {
     t,
   ]);
 
-  const handleExport = useCallback(async () => {
-    setExporting(true);
-    try {
-      const csv = await messengerApi.exportConversations({
-        search: search.trim() || undefined,
-      });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `messenger-conversations-${new Date().toISOString().slice(0, 10)}.csv`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      showToast(t('messenger.export.success'), 'success');
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : t('messenger.export.error'), 'error');
-    } finally {
-      setExporting(false);
-    }
-  }, [search, showToast, t]);
-
   if (bootLoading) {
     return (
       <div className="space-y-3">
@@ -527,16 +505,6 @@ export function MessengerPage() {
           ) : null}
         </div>
         <div className={FLEET_PAGE_HEADER_ACTIONS}>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() => void handleExport()}
-            disabled={exporting}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            {t('common.exportCsv')}
-          </Button>
           {canCreateConversation ? (
             <Button
               type="button"

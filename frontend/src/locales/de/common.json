@@ -2121,6 +2121,7 @@
   "messenger.languageSettings": "Sprache",
   "messenger.autoTranslateTo": "Nachrichten werden automatisch in die Fahrersprache übersetzt",
   "messenger.autoTranslateDriver": "Fahrersprache ({{lang}})",
+  "messenger.autoTranslateCompact": "{{source}} → {{target}} automatisch",
   "messenger.driverLanguageUnknown": "Fahrersprache nicht hinterlegt",
   "messenger.sendHintAutoTranslate": "Nachrichten werden automatisch in die Fahrersprache übersetzt · Enter zum Senden · Shift+Enter für neue Zeile",
   "messenger.sendHintTouch": "Zum Senden die Schaltfläche verwenden · für längere Nachrichten nach oben scrollen",

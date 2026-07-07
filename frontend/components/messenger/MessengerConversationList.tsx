@@ -7,6 +7,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  conversationTitle,
+  driverDisplayName,
   formatMessengerRelativeTime,
   getCounterpartInfo,
   personInitials,
@@ -118,7 +120,9 @@ export function MessengerConversationList({
             {conversations.map((conversation) => {
               const active = conversation.id === selectedConversationId;
               const counterpart = getCounterpartInfo(conversation, currentUserId);
-              const initials = personInitials(counterpart.name);
+              const title = conversationTitle(conversation).replace(' · ', ' — ');
+              const avatarName = counterpart.name || driverDisplayName(conversation);
+              const initials = personInitials(avatarName);
               const unread = conversation.unreadCount > 0;
 
               return (
@@ -146,7 +150,7 @@ export function MessengerConversationList({
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className={cn('truncate text-sm text-slate-900', unread && 'font-bold')}>
-                              {counterpart.name}
+                              {title}
                             </p>
                             <p className="mt-0.5 text-xs text-slate-500">
                               {t(roleLabelKey(counterpart.role))}
