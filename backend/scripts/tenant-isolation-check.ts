@@ -166,6 +166,40 @@ async function main() {
       }
     }
 
+    const totalMessageTranslations = await base.messageTranslation.count();
+    const tenantATranslationCount = await base.messageTranslation.count({ where: { tenantId: tenantA } });
+    const tenantBTranslationCount = await base.messageTranslation.count({ where: { tenantId: tenantB } });
+    const scopedTranslationsA = await TenantContext.run(tenantA, () =>
+      scoped.messageTranslation.count(),
+    );
+    const scopedTranslationsB = await TenantContext.run(tenantB, () =>
+      scoped.messageTranslation.count(),
+    );
+    console.log(`MessageTranslation total: ${totalMessageTranslations}, tenant A scoped: ${scopedTranslationsA}`);
+
+    if (scopedTranslationsA !== tenantATranslationCount) {
+      throw new Error('Isolation failure: tenant A scoped messageTranslation count mismatch');
+    }
+
+    if (scopedTranslationsB !== tenantBTranslationCount) {
+      throw new Error('Isolation failure: tenant B scoped messageTranslation count mismatch');
+    }
+
+    if (tenantA !== tenantB && scopedTranslationsA + scopedTranslationsB > totalMessageTranslations) {
+      throw new Error('Isolation failure: scoped messageTranslation counts exceed total');
+    }
+
+    if (tenantA !== tenantB) {
+      const crossTranslation = await TenantContext.run(tenantA, () =>
+        scoped.messageTranslation.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossTranslation) {
+        throw new Error('Isolation failure: tenant A context read tenant B message translation');
+      }
+    }
+
     const totalDddFiles = await base.dddFile.count();
     const scopedDddFilesA = await TenantContext.run(tenantA, () =>
       scoped.dddFile.count(),

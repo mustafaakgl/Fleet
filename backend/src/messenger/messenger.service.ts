@@ -13,7 +13,6 @@ import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { ObjectStorageService } from '../storage/object-storage.service';
 import { uploadAbsoluteDirForBucket } from '../storage/local-storage.service';
 import { StorageService } from '../storage/storage.service';
-import { TranslationService } from '../translation/translation.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import {
   assertMessengerAttachmentsInput,
@@ -29,11 +28,13 @@ import {
   normalizeMessengerDepartment,
 } from './messenger-departments.util';
 import { buildMessengerConversationsCsv } from './messenger-export.util';
+import { MessengerViewerTranslationService } from './messenger-viewer-translation.service';
 
 type MessengerUser = {
   id: string;
   role: UserRole;
   fullName: string;
+  language: string | null;
 };
 
 type ConversationListQuery = {
@@ -159,14 +160,11 @@ const messageInclude = {
 } satisfies Prisma.MessageInclude;
 
 const SUPPORTED_LANGUAGES = new Set(['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru']);
-const FLEET_TRANSLATION_LANGUAGE = 'de';
-const TRANSLATION_MAX_TEXT_LENGTH = 4000;
-
 @Injectable()
 export class MessengerService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly translationService: TranslationService,
+    private readonly viewerTranslationService: MessengerViewerTranslationService,
     private readonly auditService: AuditService,
     private readonly driverNotify: DriverNotifyService,
     private readonly storageService: StorageService,
@@ -195,6 +193,7 @@ export class MessengerService {
         id: true,
         role: true,
         fullName: true,
+        language: true,
       },
     });
 
@@ -278,59 +277,6 @@ export class MessengerService {
         `Unsupported ${fieldName}. Supported values: de, tr, en, pl, nl, it, es, ru`,
       );
     }
-  }
-
-  private async resolveAutomaticTargetLanguage(params: {
-    conversationId: string;
-    senderRole: UserRole;
-  }): Promise<string | null> {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: params.conversationId },
-      select: {
-        id: true,
-        driver: {
-          select: {
-            userId: true,
-            user: {
-              select: {
-                language: true,
-              },
-            },
-          },
-        },
-        participants: {
-          select: {
-            userId: true,
-            role: true,
-            user: {
-              select: {
-                language: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found');
-    }
-
-    if (params.senderRole === 'driver') {
-      return FLEET_TRANSLATION_LANGUAGE;
-    }
-
-    const driverUserId = conversation.driver.userId;
-    const driverParticipant = conversation.participants.find(
-      (participant) =>
-        participant.role === 'driver' ||
-        (driverUserId ? participant.userId === driverUserId : false),
-    );
-
-    const fromParticipant = this.normalizeSupportedLanguage(driverParticipant?.user.language);
-    const fromDriverUser = this.normalizeSupportedLanguage(conversation.driver.user?.language);
-
-    return fromParticipant ?? fromDriverUser ?? FLEET_TRANSLATION_LANGUAGE;
   }
 
   private mapParticipant(
@@ -433,11 +379,23 @@ export class MessengerService {
     return where;
   }
 
-  private mapConversationListItem(
+  private async mapConversationListItem(
     conversation: Prisma.ConversationGetPayload<{ include: typeof conversationListInclude }>,
     unreadMap: Map<string, number>,
+    viewerLanguage: string | null,
   ) {
     const lastMessage = conversation.messages[0] ?? null;
+    const viewerTranslatedText = lastMessage
+      ? await this.viewerTranslationService.getViewerTranslation({
+          message: {
+            id: lastMessage.id,
+            originalText: lastMessage.originalText,
+            originalLanguage: lastMessage.originalLanguage,
+          },
+          viewerLanguage,
+        })
+      : null;
+
     return {
       id: conversation.id,
       subject: conversation.subject,
@@ -450,10 +408,12 @@ export class MessengerService {
             senderUserId: lastMessage.senderUserId,
             senderName: lastMessage.sender.fullName,
             originalText: lastMessage.originalText,
-            translatedText: lastMessage.translatedText,
+            translatedText: viewerTranslatedText,
             originalLanguage: lastMessage.originalLanguage,
-            targetLanguage: lastMessage.targetLanguage,
-            translationStatus: lastMessage.translationStatus,
+            targetLanguage: viewerTranslatedText ? viewerLanguage : null,
+            translationStatus: viewerTranslatedText
+              ? MessageTranslationStatus.translated
+              : lastMessage.translationStatus,
             createdAt: lastMessage.createdAt.toISOString(),
           }
         : null,
@@ -465,6 +425,8 @@ export class MessengerService {
   private mapMessage(
     message: Prisma.MessageGetPayload<{ include: typeof messageInclude }>,
     currentUserId: string,
+    viewerTranslatedText: string | null,
+    viewerLanguage: string | null,
   ) {
     return {
       id: message.id,
@@ -472,10 +434,12 @@ export class MessengerService {
       senderUserId: message.senderUserId,
       senderName: message.sender.fullName,
       originalText: message.originalText,
-      translatedText: message.translatedText,
+      translatedText: viewerTranslatedText,
       originalLanguage: message.originalLanguage,
-      targetLanguage: message.targetLanguage,
-      translationStatus: message.translationStatus,
+      targetLanguage: viewerTranslatedText ? viewerLanguage : null,
+      translationStatus: viewerTranslatedText
+        ? MessageTranslationStatus.translated
+        : message.translationStatus,
       createdAt: message.createdAt.toISOString(),
       attachments: message.attachments.map((attachment) => ({
         id: attachment.id,
@@ -633,8 +597,12 @@ export class MessengerService {
       conversations.map((conversation) => conversation.id),
     );
 
-    return conversations.map((conversation) =>
-      this.mapConversationListItem(conversation, unreadMap),
+    const viewerLanguage = this.normalizeSupportedLanguage(currentUser.language);
+
+    return Promise.all(
+      conversations.map((conversation) =>
+        this.mapConversationListItem(conversation, unreadMap, viewerLanguage),
+      ),
     );
   }
 
@@ -690,9 +658,14 @@ export class MessengerService {
       conversations.map((conversation) => conversation.id),
     );
 
+    const viewerLanguage = this.normalizeSupportedLanguage(currentUser.language);
+
+    const mappedConversations = await Promise.all(
+      conversations.map((conversation) => this.mapConversationListItem(conversation, unreadMap, viewerLanguage)),
+    );
+
     return buildMessengerConversationsCsv(
-      conversations.map((conversation) => {
-        const mapped = this.mapConversationListItem(conversation, unreadMap);
+      mappedConversations.map((mapped) => {
         const preview =
           mapped.lastMessage?.translatedText?.trim() ||
           mapped.lastMessage?.originalText?.trim() ||
@@ -862,6 +835,15 @@ export class MessengerService {
     }
 
     const unreadMap = await this.unreadMapForUser(currentUser.id, [conversation.id]);
+    const viewerLanguage = this.normalizeSupportedLanguage(currentUser.language);
+    const translationMap = await this.viewerTranslationService.primeViewerTranslations({
+      messages: conversation.messages.map((message) => ({
+        id: message.id,
+        originalText: message.originalText,
+        originalLanguage: message.originalLanguage,
+      })),
+      viewerLanguage,
+    });
 
     return {
       id: conversation.id,
@@ -873,7 +855,14 @@ export class MessengerService {
       unreadCount: unreadMap.get(conversation.id) ?? 0,
       messagesPreview: [...conversation.messages]
         .reverse()
-        .map((message) => this.mapMessage(message, currentUser.id)),
+        .map((message) =>
+          this.mapMessage(
+            message,
+            currentUser.id,
+            translationMap.get(message.id) ?? null,
+            viewerLanguage,
+          ),
+        ),
     };
   }
 
@@ -949,7 +938,24 @@ export class MessengerService {
       take: limit,
     });
 
-    return messages.map((message) => this.mapMessage(message, currentUser.id));
+    const viewerLanguage = this.normalizeSupportedLanguage(currentUser.language);
+    const translationMap = await this.viewerTranslationService.primeViewerTranslations({
+      messages: messages.map((message) => ({
+        id: message.id,
+        originalText: message.originalText,
+        originalLanguage: message.originalLanguage,
+      })),
+      viewerLanguage,
+    });
+
+    return messages.map((message) =>
+      this.mapMessage(
+        message,
+        currentUser.id,
+        translationMap.get(message.id) ?? null,
+        viewerLanguage,
+      ),
+    );
   }
 
   async sendMessage(
@@ -968,59 +974,17 @@ export class MessengerService {
       throw new BadRequestException('Either text or at least one attachment is required');
     }
 
-    this.assertSupportedLanguage(dto.originalLanguage, 'originalLanguage');
+    if (dto.originalLanguage) {
+      this.assertSupportedLanguage(dto.originalLanguage, 'originalLanguage');
+    }
     if (dto.targetLanguage) {
       this.assertSupportedLanguage(dto.targetLanguage, 'targetLanguage');
     }
 
-    const autoTargetLanguage = await this.resolveAutomaticTargetLanguage({
-      conversationId,
-      senderRole: currentUser.role,
-    });
-
-    const effectiveTargetLanguage =
-      currentUser.role === 'driver'
-        ? (dto.targetLanguage ?? autoTargetLanguage)
-        : autoTargetLanguage;
-
-    let translationStatus: MessageTranslationStatus = MessageTranslationStatus.not_requested;
-    let translatedText: string | null = null;
-    let translatedAt: Date | null = null;
-
-    const autoDetectSource = currentUser.role === 'driver';
-    let storedOriginalLanguage: string = dto.originalLanguage;
-    const shouldAttemptTranslation =
-      Boolean(effectiveTargetLanguage) &&
-      (autoDetectSource || effectiveTargetLanguage !== dto.originalLanguage);
-
-    if (shouldAttemptTranslation && effectiveTargetLanguage) {
-      if (normalizedText.length > TRANSLATION_MAX_TEXT_LENGTH) {
-        translationStatus = MessageTranslationStatus.failed;
-      } else {
-        const translationResult = await this.translationService.translateText({
-          text: normalizedText,
-          sourceLang: autoDetectSource ? undefined : dto.originalLanguage,
-          targetLang: effectiveTargetLanguage,
-        });
-
-        if (
-          translationResult.detectedSourceLang &&
-          SUPPORTED_LANGUAGES.has(translationResult.detectedSourceLang)
-        ) {
-          storedOriginalLanguage = translationResult.detectedSourceLang;
-        }
-
-        if (translationResult.status === 'translated' && translationResult.translatedText) {
-          translationStatus = MessageTranslationStatus.translated;
-          translatedText = translationResult.translatedText;
-          translatedAt = new Date();
-        } else if (translationResult.status === 'failed') {
-          translationStatus = MessageTranslationStatus.failed;
-        } else {
-          translationStatus = MessageTranslationStatus.not_requested;
-        }
-      }
-    }
+    const fallbackLanguage = this.normalizeSupportedLanguage(currentUser.language) ?? 'de';
+    const storedOriginalLanguage = dto.originalLanguage
+      ? this.normalizeSupportedLanguage(dto.originalLanguage) ?? fallbackLanguage
+      : await this.viewerTranslationService.resolveSenderLanguage(currentUser.id, normalizedText);
 
     const persistedAttachments = await this.persistAttachmentFiles(attachments);
 
@@ -1030,11 +994,11 @@ export class MessengerService {
           conversationId,
           senderUserId: currentUser.id,
           originalText: normalizedText,
-          translatedText,
+          translatedText: null,
           originalLanguage: storedOriginalLanguage,
-          targetLanguage: effectiveTargetLanguage ?? null,
-          translationStatus,
-          translatedAt,
+          targetLanguage: null,
+          translationStatus: MessageTranslationStatus.not_requested,
+          translatedAt: null,
           attachments: persistedAttachments.length
             ? {
                 create: persistedAttachments.map((attachment) => ({
@@ -1081,7 +1045,6 @@ export class MessengerService {
     });
 
     const preview =
-      createdMessage.translatedText?.trim() ||
       createdMessage.originalText.trim().slice(0, 120);
 
     for (const recipient of recipients) {
@@ -1095,7 +1058,17 @@ export class MessengerService {
       });
     }
 
-    return this.mapMessage(createdMessage, currentUser.id);
+    const viewerLanguage = this.normalizeSupportedLanguage(currentUser.language);
+    const viewerTranslatedText = await this.viewerTranslationService.getViewerTranslation({
+      message: {
+        id: createdMessage.id,
+        originalText: createdMessage.originalText,
+        originalLanguage: createdMessage.originalLanguage,
+      },
+      viewerLanguage,
+    });
+
+    return this.mapMessage(createdMessage, currentUser.id, viewerTranslatedText, viewerLanguage);
   }
 
   async resolveAttachmentDownload(currentUserId: string, attachmentId: string) {

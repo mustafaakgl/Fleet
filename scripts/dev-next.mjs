@@ -52,8 +52,19 @@ function fail(message) {
   process.exit(1);
 }
 
-function resetNextCacheIfProductionBuild() {
+function resetNextCacheForDev() {
   const nextDir = path.join(frontendDir, '.next');
+  if (!fs.existsSync(nextDir)) {
+    return;
+  }
+
+  const shouldPreserveCache = process.env.NEXT_DEV_PRESERVE_CACHE === '1';
+  if (!shouldPreserveCache) {
+    console.log('[dev] Clearing .next cache before dev startup to avoid stale runtime chunks.');
+    fs.rmSync(nextDir, { recursive: true, force: true });
+    return;
+  }
+
   const productionMarkers = [
     path.join(nextDir, 'required-server-files.json'),
     path.join(nextDir, 'export-marker.json'),
@@ -129,7 +140,7 @@ async function main() {
   }
 
   if (command === 'dev') {
-    resetNextCacheIfProductionBuild();
+    resetNextCacheForDev();
   }
 
   await assertPortIsFree();

@@ -5,11 +5,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { TranslationModule } from '../translation/translation.module';
 import { MessengerController } from './messenger.controller';
 import { MessengerService } from './messenger.service';
+import { MessengerViewerTranslationService } from './messenger-viewer-translation.service';
 
 @Module({
   imports: [PrismaModule, TranslationModule, AuditModule, NotificationsModule],
   controllers: [MessengerController],
-  providers: [MessengerService],
+  providers: [MessengerService, MessengerViewerTranslationService],
   exports: [MessengerService],
 })
 export class MessengerModule {}

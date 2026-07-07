@@ -1567,7 +1567,7 @@ export interface ConversationDetail {
 
 export interface SendMessagePayload {
   text?: string;
-  originalLanguage: MessengerLanguage;
+  originalLanguage?: MessengerLanguage;
   targetLanguage?: MessengerLanguage;
   attachments?: File[];
 }

@@ -15,13 +15,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { messengerApi, driverApi } from '@/api/endpoints';
+import { messengerApi } from '@/api/endpoints';
 import { authStore } from '@/features/auth/store';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
 import { MessageBubble } from '@/components/MessageBubble';
-import type { MessengerLanguage } from '@/api/types';
 import { useTranslation } from '@/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
@@ -44,14 +43,8 @@ export default function MessageThreadScreen() {
   const queryClient = useQueryClient();
   const isFocused = useIsFocused();
   const sessionUserId = authStore((s) => s.session?.user.id);
-  const sessionLanguage = authStore((s) => s.session?.user.language);
   const [messages, setMessages] = useState<Awaited<ReturnType<typeof messengerApi.listMessages>>>([]);
   const [messageText, setMessageText] = useState('');
-
-  const { data: driverMe } = useQuery({
-    queryKey: ['driver-me'],
-    queryFn: () => driverApi.me(),
-  });
 
   const {
     data: conversation,
@@ -129,10 +122,9 @@ export default function MessageThreadScreen() {
   );
 
   const sendMutation = useMutation({
-    mutationFn: (payload: { text: string; originalLanguage: MessengerLanguage }) =>
+    mutationFn: (payload: { text: string }) =>
       messengerApi.sendMessage(conversationId, {
         text: payload.text,
-        originalLanguage: payload.originalLanguage,
       }),
     onSuccess: async (created) => {
       setMessages((prev) => [...prev, created]);
@@ -155,8 +147,7 @@ export default function MessageThreadScreen() {
     }
     const text = messageText.trim();
     if (!text) return;
-    const language = (driverMe?.user?.language ?? sessionLanguage ?? 'tr') as MessengerLanguage;
-    sendMutation.mutate({ text, originalLanguage: language });
+    sendMutation.mutate({ text });
   };
 
   const canSend = Boolean(messageText.trim()) && !sendMutation.isPending;

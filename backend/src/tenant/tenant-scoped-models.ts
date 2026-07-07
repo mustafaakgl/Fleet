@@ -44,6 +44,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'VehicleTelemetryLatest',
   'VehicleDtc',
   'MessageAttachment',
+  'MessageTranslation',
   'DddFile',
   'TachoProviderCredential',
   'TachoActivity',

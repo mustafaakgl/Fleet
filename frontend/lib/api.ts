@@ -1188,7 +1188,9 @@ export const messengerApi = {
       if (payload.text && payload.text.trim().length > 0) {
         formData.append('text', payload.text);
       }
-      formData.append('originalLanguage', payload.originalLanguage);
+      if (payload.originalLanguage) {
+        formData.append('originalLanguage', payload.originalLanguage);
+      }
       if (payload.targetLanguage) {
         formData.append('targetLanguage', payload.targetLanguage);
       }

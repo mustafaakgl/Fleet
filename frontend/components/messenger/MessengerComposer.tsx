@@ -4,17 +4,14 @@ import { Languages, Loader2, Paperclip, Send, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
 import { BRAND_BTN_PRIMARY, BRAND_FOCUS } from '@/lib/brand-colors';
-import { MESSENGER_LANGUAGES } from '@/lib/messenger-utils';
-import { FLEET_FILTER_SELECT } from '@/lib/fleet-table';
 import { cn } from '@/lib/utils';
 import type { MessengerLanguage } from '@/lib/types';
 
 interface MessengerComposerProps {
   value: string;
   attachments: File[];
-  originalLanguage: MessengerLanguage;
+  userLanguage: MessengerLanguage;
   driverLanguage: MessengerLanguage | null;
   sending: boolean;
   uploadProgress?: number | null;
@@ -22,14 +19,13 @@ interface MessengerComposerProps {
   onChange: (value: string) => void;
   onAddAttachments: (files: FileList | File[]) => void;
   onRemoveAttachment: (index: number) => void;
-  onOriginalLanguageChange: (language: MessengerLanguage) => void;
   onSend: () => void;
 }
 
 export function MessengerComposer({
   value,
   attachments,
-  originalLanguage,
+  userLanguage,
   driverLanguage,
   sending,
   uploadProgress,
@@ -37,7 +33,6 @@ export function MessengerComposer({
   onChange,
   onAddAttachments,
   onRemoveAttachment,
-  onOriginalLanguageChange,
   onSend,
 }: MessengerComposerProps) {
   const { t } = useTranslation();
@@ -124,19 +119,6 @@ export function MessengerComposer({
   return (
     <div className="border-t border-slate-200 bg-white p-3 pb-3" style={{ paddingBottom: `${12 + bottomInset}px` }}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <Select
-          value={originalLanguage}
-          onChange={(event) => onOriginalLanguageChange(event.target.value as MessengerLanguage)}
-          disabled={sending}
-          className={cn('min-h-11 min-w-[5.5rem] text-[12px]', FLEET_FILTER_SELECT, BRAND_FOCUS)}
-          aria-label={t('messenger.originalPrefix')}
-        >
-          {MESSENGER_LANGUAGES.map((lang) => (
-            <option key={`orig-${lang}`} value={lang}>
-              {lang.toUpperCase()}
-            </option>
-          ))}
-        </Select>
         {driverLanguage ? (
           <span
             className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 text-[12px] font-medium text-emerald-800"
@@ -144,7 +126,7 @@ export function MessengerComposer({
           >
             <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {t('messenger.autoTranslateCompact', {
-              source: originalLanguage.toUpperCase(),
+              source: userLanguage.toUpperCase(),
               target: driverLanguage.toUpperCase(),
             })}
           </span>

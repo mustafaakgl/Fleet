@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MessengerMessage } from '@/api/types';
 import { useTranslation } from '@/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '@/theme';
@@ -17,17 +18,27 @@ export function MessageBubble({
   mine: boolean;
 }) {
   const { t } = useTranslation();
+  const [showOriginal, setShowOriginal] = useState(false);
   const showTranslationFirst = !mine && Boolean(message.translatedText);
+  const displayText =
+    showTranslationFirst && !showOriginal ? message.translatedText ?? message.originalText : message.originalText;
 
   return (
     <View style={[styles.messageBubble, mine ? styles.mine : styles.other]}>
       <Text style={styles.sender}>{message.senderName}</Text>
       {showTranslationFirst ? (
         <>
-          <Text style={styles.primaryText}>{message.translatedText}</Text>
-          <Text style={styles.secondaryText}>
-            {t('messages.original', { lang: message.originalLanguage })}: {message.originalText}
-          </Text>
+          <View style={styles.translationRow}>
+            <Text style={styles.translationBadge}>
+              {t('messages.translatedFrom', { lang: message.originalLanguage.toUpperCase() })}
+            </Text>
+            <Pressable onPress={() => setShowOriginal((current) => !current)}>
+              <Text style={styles.translationToggle}>
+                {showOriginal ? t('messages.showTranslation') : t('messages.showOriginal')}
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.primaryText}>{displayText}</Text>
         </>
       ) : (
         <>
@@ -77,6 +88,22 @@ const styles = StyleSheet.create({
     color: colors.subtext,
     fontSize: 13,
     lineHeight: 18,
+  },
+  translationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  translationBadge: {
+    color: colors.subtext,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  translationToggle: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '700',
   },
   warning: {
     color: colors.warning,

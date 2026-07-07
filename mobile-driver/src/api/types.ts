@@ -318,7 +318,7 @@ export type ConversationDetail = {
 
 export type SendMessagePayload = {
   text: string;
-  originalLanguage: MessengerLanguage;
+  originalLanguage?: MessengerLanguage;
   targetLanguage?: MessengerLanguage;
 };
 

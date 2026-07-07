@@ -101,7 +101,10 @@
     "loadThreadError": "Nachrichten konnten nicht geladen werden.",
     "accessDenied": "Kein Zugriff auf diese Unterhaltung.",
     "sendFailed": "Senden fehlgeschlagen.",
-    "original": "Original ({{lang}})"
+    "original": "Original ({{lang}})",
+    "translatedFrom": "Uebersetzt aus {{lang}}",
+    "showOriginal": "Original anzeigen",
+    "showTranslation": "Uebersetzung anzeigen"
   },
   "profile": {
     "title": "Profil",

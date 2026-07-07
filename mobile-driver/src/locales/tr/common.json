@@ -115,8 +115,11 @@
     "noMessagesHint": "Write the first message below.",
     "loadThreadError": "Failed to load messages.",
     "accessDenied": "You do not have access to this conversation.",
-    "sendFailed": "Failed to send message.",
-    "original": "Original ({{lang}})"
+    "sendFailed": "Mesaj gonderilemedi.",
+    "original": "Orijinal ({{lang}})",
+    "translatedFrom": "{{lang}} dilinden cevrildi",
+    "showOriginal": "Orijinali goster",
+    "showTranslation": "Ceviriyi goster"
   },
   "profile": {
     "title": "Profil",

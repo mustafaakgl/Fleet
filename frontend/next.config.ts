@@ -8,6 +8,11 @@ const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: repoRoot,
+  experimental: {
+    // Prevent Next devtools segment explorer from injecting a client module
+    // that intermittently goes missing from the RSC client manifest in dev.
+    devtoolSegmentExplorer: false,
+  },
   images: {
     remotePatterns: [
       {

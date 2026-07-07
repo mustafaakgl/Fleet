@@ -35,6 +35,14 @@ type ToastState = {
   message: string;
 } | null;
 
+const MESSENGER_LANGUAGES = new Set(['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru']);
+
+function normalizeMessengerLanguage(value: string | null | undefined): MessengerLanguage {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return 'de';
+  return (MESSENGER_LANGUAGES.has(normalized) ? normalized : 'de') as MessengerLanguage;
+}
+
 export function MessengerPage() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
@@ -72,7 +80,9 @@ export function MessengerPage() {
   const [composerAttachments, setComposerAttachments] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
-  const [originalLanguage, setOriginalLanguage] = useState<MessengerLanguage>('de');
+  const [userLanguage, setUserLanguage] = useState<MessengerLanguage>(() =>
+    normalizeMessengerLanguage(getUser()?.language),
+  );
 
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -137,6 +147,7 @@ export function MessengerPage() {
       .then((user) => {
         if (cancelled) return;
         setRole(user.role);
+        setUserLanguage(normalizeMessengerLanguage(user.language));
         setForbidden((user.role as string) === 'driver');
       })
       .catch(() => {
@@ -319,7 +330,7 @@ export function MessengerPage() {
       senderName: currentUserName,
       originalText: text,
       translatedText: null,
-      originalLanguage,
+      originalLanguage: userLanguage,
       targetLanguage: null,
       translationStatus: 'pending',
       createdAt: new Date().toISOString(),
@@ -346,7 +357,7 @@ export function MessengerPage() {
     try {
       const created = await messengerApi.sendMessage(
         selectedConversationId,
-        { text: text || undefined, originalLanguage, attachments: composerAttachments },
+        { text: text || undefined, attachments: composerAttachments },
         {
           onUploadProgress: (progressPercent) => {
             setUploadProgress(progressPercent);
@@ -378,7 +389,6 @@ export function MessengerPage() {
     composerText,
     currentUserId,
     currentUserName,
-    originalLanguage,
     patchConversationPreview,
     refreshLeftPanel,
     selectedConversationId,
@@ -399,7 +409,6 @@ export function MessengerPage() {
     try {
       const created = await messengerApi.sendMessage(selectedConversationId, {
         text: failed.originalText || undefined,
-        originalLanguage: failed.originalLanguage,
         attachments: failed.pendingAttachments,
       });
       const delivered = { ...created, deliveryState: 'sent' as const };
@@ -650,13 +659,12 @@ export function MessengerPage() {
             composerText={composerText}
             composerAttachments={composerAttachments}
             uploadProgress={uploadProgress}
-            originalLanguage={originalLanguage}
+            userLanguage={userLanguage}
             sending={sending}
             onBack={() => setSelectedConversationId(null)}
             onComposerChange={setComposerText}
             onComposerAttachmentsAdd={handleComposerAttachmentsAdd}
             onComposerAttachmentRemove={handleComposerAttachmentRemove}
-            onOriginalLanguageChange={setOriginalLanguage}
             onLoadOlder={() => void handleLoadOlderMessages()}
             onDownloadAttachment={(id, name) => void handleDownloadAttachment(id, name)}
             onRetryMessage={(id) => void handleRetryMessage(id)}

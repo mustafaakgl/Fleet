@@ -36,13 +36,12 @@ interface MessengerChatPanelProps {
   composerText: string;
   composerAttachments: File[];
   uploadProgress?: number | null;
-  originalLanguage: MessengerLanguage;
+  userLanguage: MessengerLanguage;
   sending: boolean;
   onBack: () => void;
   onComposerChange: (value: string) => void;
   onComposerAttachmentsAdd: (files: FileList | File[]) => void;
   onComposerAttachmentRemove: (index: number) => void;
-  onOriginalLanguageChange: (language: MessengerLanguage) => void;
   onSend: () => void;
   onLoadOlder: () => void;
   onDownloadAttachment?: (attachmentId: string, fileName: string) => void;
@@ -228,13 +227,12 @@ export function MessengerChatPanel({
   composerText,
   composerAttachments,
   uploadProgress,
-  originalLanguage,
+  userLanguage,
   sending,
   onBack,
   onComposerChange,
   onComposerAttachmentsAdd,
   onComposerAttachmentRemove,
-  onOriginalLanguageChange,
   onSend,
   onLoadOlder,
   onDownloadAttachment,
@@ -439,7 +437,7 @@ export function MessengerChatPanel({
       <MessengerComposer
         value={composerText}
         attachments={composerAttachments}
-        originalLanguage={originalLanguage}
+        userLanguage={userLanguage}
         driverLanguage={driverLanguage}
         sending={sending}
         uploadProgress={uploadProgress}
@@ -447,7 +445,6 @@ export function MessengerChatPanel({
         onChange={onComposerChange}
         onAddAttachments={onComposerAttachmentsAdd}
         onRemoveAttachment={onComposerAttachmentRemove}
-        onOriginalLanguageChange={onOriginalLanguageChange}
         onSend={onSend}
       />
     </div>

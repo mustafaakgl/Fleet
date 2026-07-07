@@ -8,8 +8,9 @@ export class SendMessageDto {
   @MaxLength(5000)
   text?: string;
 
+  @IsOptional()
   @IsEnum(SUPPORTED_LANGUAGES)
-  originalLanguage!: (typeof SUPPORTED_LANGUAGES)[number];
+  originalLanguage?: (typeof SUPPORTED_LANGUAGES)[number];
 
   @IsOptional()
   @IsEnum(SUPPORTED_LANGUAGES)

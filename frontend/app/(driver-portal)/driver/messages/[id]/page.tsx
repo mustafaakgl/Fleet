@@ -9,6 +9,14 @@ import { driverPortalApi, messengerApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import type { ConversationDetail, MessengerLanguage, MessengerMessage } from '@/lib/types';
 
+const MESSENGER_LANGUAGES = new Set(['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru']);
+
+function normalizeMessengerLanguage(value: string | null | undefined): MessengerLanguage {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return 'de';
+  return (MESSENGER_LANGUAGES.has(normalized) ? normalized : 'de') as MessengerLanguage;
+}
+
 export default function DriverMessageThreadPage() {
   const { t } = useTranslation();
   const params = useParams<{ id: string }>();
@@ -28,7 +36,9 @@ export default function DriverMessageThreadPage() {
   const [composerAttachments, setComposerAttachments] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
-  const [originalLanguage, setOriginalLanguage] = useState<MessengerLanguage>('de');
+  const [userLanguage, setUserLanguage] = useState<MessengerLanguage>(() =>
+    normalizeMessengerLanguage(getUser()?.language),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const sortMessages = useCallback((items: MessengerUiMessage[]) => {
@@ -68,7 +78,7 @@ export default function DriverMessageThreadPage() {
       setConversation(detail);
       setMessages(thread.map((message) => ({ ...message, deliveryState: 'sent' as const })));
       setHasOlderMessages(thread.length >= 40);
-      setOriginalLanguage((profile?.user.language as MessengerLanguage | undefined) ?? 'de');
+      setUserLanguage(normalizeMessengerLanguage(profile?.user.language));
       await messengerApi.markConversationRead(conversationId);
       setError(null);
     } catch (err) {
@@ -131,7 +141,7 @@ export default function DriverMessageThreadPage() {
       senderName: currentUserName,
       originalText: text,
       translatedText: null,
-      originalLanguage,
+      originalLanguage: userLanguage,
       targetLanguage: null,
       translationStatus: 'pending',
       createdAt: new Date().toISOString(),
@@ -159,7 +169,6 @@ export default function DriverMessageThreadPage() {
         conversationId,
         {
           text: text || undefined,
-          originalLanguage,
           attachments: composerAttachments,
         },
         {
@@ -179,7 +188,7 @@ export default function DriverMessageThreadPage() {
     } finally {
       setSending(false);
     }
-  }, [composerAttachments, composerText, conversationId, currentUserId, currentUserName, originalLanguage, sortMessages, t]);
+  }, [composerAttachments, composerText, conversationId, currentUserId, currentUserName, sortMessages, t, userLanguage]);
 
   const handleRetry = useCallback(async (messageId: string) => {
     const failed = messages.find((message) => message.id === messageId);
@@ -193,7 +202,6 @@ export default function DriverMessageThreadPage() {
     try {
       const created = await messengerApi.sendMessage(conversationId, {
         text: failed.originalText || undefined,
-        originalLanguage: failed.originalLanguage,
         attachments: failed.pendingAttachments,
       });
       setMessages((previous) =>
@@ -299,13 +307,12 @@ export default function DriverMessageThreadPage() {
           composerText={composerText}
           composerAttachments={composerAttachments}
           uploadProgress={uploadProgress}
-          originalLanguage={originalLanguage}
+          userLanguage={userLanguage}
           sending={sending}
           onBack={() => router.push('/driver/messages')}
           onComposerChange={setComposerText}
           onComposerAttachmentsAdd={handleComposerAttachmentsAdd}
           onComposerAttachmentRemove={handleComposerAttachmentRemove}
-          onOriginalLanguageChange={setOriginalLanguage}
           onSend={() => void handleSend()}
           onLoadOlder={() => void handleLoadOlder()}
           onDownloadAttachment={(id, name) => void handleDownloadAttachment(id, name)}

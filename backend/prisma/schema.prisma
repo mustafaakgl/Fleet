@@ -495,6 +495,7 @@ model Tenant {
   serviceRecords        ServiceRecord[]
   conversations         Conversation[]
   messageAttachments    MessageAttachment[]
+  messageTranslations   MessageTranslation[]
   auditLogs             AuditLog[]
   driverLocationHistory DriverLocationHistory[]
   driverLocationLatest  DriverLocationLatest[]
@@ -1500,9 +1501,27 @@ model Message {
   sender       User         @relation("MessageSentBy", fields: [senderUserId], references: [id], onDelete: Restrict)
   reads        MessageRead[]
   attachments  MessageAttachment[]
+  translations MessageTranslation[]
 
   @@index([conversationId, createdAt])
   @@index([senderUserId, createdAt])
+}
+
+model MessageTranslation {
+  id             String   @id @default(cuid())
+  tenantId       String   @default("default-tenant")
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  messageId      String
+  targetLanguage String
+  translatedText String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, targetLanguage])
+  @@index([tenantId])
+  @@index([messageId])
 }
 
 model MessageAttachment {

@@ -116,7 +116,10 @@
     "loadThreadError": "Failed to load messages.",
     "accessDenied": "You do not have access to this conversation.",
     "sendFailed": "Failed to send message.",
-    "original": "Original ({{lang}})"
+    "original": "Original ({{lang}})",
+    "translatedFrom": "Translated from {{lang}}",
+    "showOriginal": "Show original",
+    "showTranslation": "Show translation"
   },
   "profile": {
     "title": "Profile",
