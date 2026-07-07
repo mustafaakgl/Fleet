@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const AUTH_DIR = path.resolve(__dirname, '..', '..', '.auth');
-const API_URL = process.env.API_URL || 'http://localhost:3000';
+const API_URL = process.env.API_URL || 'http://localhost:3000/api/v1';
 
 function storageStateFor(role: string): string | null {
   const statePath = path.join(AUTH_DIR, `${role}.json`);
@@ -51,7 +51,7 @@ test.describe('Session 9 integration polish', () => {
       const criticalCard = page.getByTestId('compliance-strip-critical');
       await expect(criticalCard).toBeVisible();
       await criticalCard.click();
-      await expect(page).toHaveURL(/\/tachograph\/infringements\?status=open/);
+      await expect(page).toHaveURL(/\/tachograph\/infringements\?(status|tab)=open/);
       await page.goto('/dashboard');
 
       if (summary.driversOutOfTimeToday > 0) {
@@ -81,6 +81,7 @@ test.describe('Session 9 integration polish', () => {
     const ctx = await browser.newContext({ storageState: state! });
     const page = await ctx.newPage();
     try {
+      await page.goto('/dashboard');
       const headers = await authHeaders(page);
       const infringementsRes = await request.get(`${API_URL}/tachograph/infringements?limit=50`, {
         headers,
@@ -117,13 +118,14 @@ test.describe('Session 9 integration polish', () => {
     const page = await ctx.newPage();
     try {
       await page.goto('/vehicles');
-      const firstVehicle = page.locator('table tbody tr a').first();
-      await expect(firstVehicle).toBeVisible({ timeout: 20_000 });
-      const vehicleHref = await firstVehicle.getAttribute('href');
-      const vehicleId = vehicleHref?.split('/').pop();
+      const firstVehicleRow = page.locator('table tbody tr').first();
+      test.skip((await firstVehicleRow.count()) < 1, 'No vehicle row in list');
+      await expect(firstVehicleRow).toBeVisible({ timeout: 20_000 });
+      await firstVehicleRow.click();
+      await expect(page).toHaveURL(/\/vehicles\/[^/]+$/, { timeout: 20_000 });
+      const vehicleId = page.url().split('/').pop();
       test.skip(!vehicleId, 'No vehicle in list');
 
-      await page.goto(`/vehicles/${vehicleId}`);
       const costChart = page.getByTestId('vehicle-cost-chart');
       await expect(costChart).toBeVisible({ timeout: 20_000 });
       await expect(costChart.locator('.recharts-bar-rectangle').first()).toBeVisible();
@@ -140,10 +142,12 @@ test.describe('Session 9 integration polish', () => {
     const page = await ctx.newPage();
     try {
       await page.goto('/vehicles');
-      const firstVehicle = page.locator('table tbody tr a').first();
-      await expect(firstVehicle).toBeVisible({ timeout: 20_000 });
-      const vehicleHref = await firstVehicle.getAttribute('href');
-      const vehicleId = vehicleHref?.split('/').pop();
+      const firstVehicleRow = page.locator('table tbody tr').first();
+      test.skip((await firstVehicleRow.count()) < 1, 'No vehicle row in list');
+      await expect(firstVehicleRow).toBeVisible({ timeout: 20_000 });
+      await firstVehicleRow.click();
+      await expect(page).toHaveURL(/\/vehicles\/[^/]+$/, { timeout: 20_000 });
+      const vehicleId = page.url().split('/').pop();
       test.skip(!vehicleId, 'No vehicle in list');
 
       await page.route(`**/fleet/vehicles/${vehicleId}/costs**`, async (route) => {

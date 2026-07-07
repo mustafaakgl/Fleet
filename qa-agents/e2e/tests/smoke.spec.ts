@@ -41,12 +41,23 @@ test.describe('Smoke', () => {
   test('login page is reachable', async ({ page }) => {
     // The login route is a stable, public entry point in the Fleet frontend.
     // `?manual=1` opts out of the dev auto-login redirect so the form renders.
+    const cssResponsePromise = page.waitForResponse(
+      (response) => {
+        const url = response.url();
+        return url.includes('/_next/static/') && /\.css(?:\?|$)/.test(url);
+      },
+      { timeout: 15_000 },
+    );
+
     const response = await page.goto('/login?manual=1');
     const status = response?.status() ?? 0;
     expect(status, `Login route returned a server error (${status}).`).toBeLessThan(500);
 
     // The login email field is the anchor for later authenticated flows.
     await expect(page.locator('#email')).toBeVisible({ timeout: 15_000 });
+
+    const cssResponse = await cssResponsePromise;
+    expect(cssResponse.status()).toBe(200);
   });
 });
 

@@ -23,6 +23,10 @@ const API_BASE_URL = process.env.API_BASE_URL?.trim() || 'http://127.0.0.1:3000/
 
 const AUTH_DIR = path.resolve(__dirname, '..', '.auth');
 
+// Production-like backend throttling can return 429 when role logins happen
+// in parallel. Setup states are independent, so serializing here avoids flakes.
+setup.describe.configure({ mode: 'serial' });
+
 // Map each role to its storage-state file and the env vars holding credentials.
 const ROLES = [
   { role: 'admin', emailVar: 'ADMIN_EMAIL', passwordVar: 'ADMIN_PASSWORD' },
@@ -37,9 +41,17 @@ const ROLES = [
  * into the browser's localStorage for the frontend origin.
  */
 async function login(page: Page, email: string, password: string): Promise<void> {
-  const response = await page.request.post(`${API_BASE_URL}/auth/login`, {
+  let response = await page.request.post(`${API_BASE_URL}/auth/login`, {
     data: { email, password },
   });
+
+  for (let attempt = 0; response.status() === 429 && attempt < 4; attempt += 1) {
+    const backoffMs = 1_500 * (attempt + 1);
+    await page.waitForTimeout(backoffMs);
+    response = await page.request.post(`${API_BASE_URL}/auth/login`, {
+      data: { email, password },
+    });
+  }
 
   expect(response.ok(), `Backend login failed for ${email}: ${response.status()} ${await response.text()}`).toBeTruthy();
 
