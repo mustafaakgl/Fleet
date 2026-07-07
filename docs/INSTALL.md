@@ -25,6 +25,13 @@ cp frontend/.env.example frontend/.env.local
 - `DATA_CONTROLLER_NAME` ve `PRIVACY_CONTACT_EMAIL` gercek deger olmali
 - `TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY` bos olmamali
 
+3. Uretim icin benzersiz secret uretin (placeholder deger kullanmayin):
+```bash
+JWT_SECRET="$(openssl rand -hex 32)"
+TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+```
+Not: Bu iki deger her ortam (staging/production) icin farkli olmali ve `.env.example` icindeki varsayilanlarla ayni olmamalidir.
+
 ## 3) Bagimliliklar
 
 ```bash

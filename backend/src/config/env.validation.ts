@@ -1,4 +1,15 @@
-const BLOCKED_JWT_SECRETS = new Set(['secret', 'development_jwt_secret', 'changeme', 'jwt_secret']);
+const BLOCKED_JWT_SECRETS = new Set([
+  'secret',
+  'development_jwt_secret',
+  'development_jwt_secret_minimum_32_chars',
+  'dev_jwt_secret_minimum_32_chars_ok',
+  'changeme',
+  'jwt_secret',
+]);
+
+const BLOCKED_TACHO_ENCRYPTION_KEYS = new Set([
+  '0123456789abcdef0123456789abcdef',
+]);
 
 function requireProductionEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -17,10 +28,13 @@ export function validateEnv(): void {
   const jwtSecret = process.env.JWT_SECRET?.trim();
 
   if (nodeEnv === 'production') {
-    if (!jwtSecret || jwtSecret.length < 32 || BLOCKED_JWT_SECRETS.has(jwtSecret.toLowerCase())) {
+    if (!jwtSecret || jwtSecret.length < 32) {
       throw new Error(
         'JWT_SECRET must be set to a strong value (minimum 32 characters) in production.',
       );
+    }
+    if (BLOCKED_JWT_SECRETS.has(jwtSecret.toLowerCase())) {
+      throw new Error('JWT_SECRET must not use default placeholder values from .env.example in production.');
     }
 
     if ((process.env.SMTP_ENABLED ?? '').toLowerCase() !== 'true') {
@@ -69,7 +83,12 @@ export function validateEnv(): void {
       }
     }
 
-    requireProductionEnv('TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY');
+    const tachoCredentialKey = requireProductionEnv('TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY');
+    if (BLOCKED_TACHO_ENCRYPTION_KEYS.has(tachoCredentialKey.toLowerCase())) {
+      throw new Error(
+        'TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY must not use default placeholder values from .env.example in production.',
+      );
+    }
 
     return;
   }
