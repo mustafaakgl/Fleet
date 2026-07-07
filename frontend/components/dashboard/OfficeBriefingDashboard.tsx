@@ -1,405 +1,292 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  AlertTriangle,
-  CalendarDays,
-  ChevronDown,
-  ChevronRight,
-  ClipboardList,
-  FileText,
-  MapPinned,
-  MessageSquare,
-  RefreshCw,
-  Sun,
-  Users,
-} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageError } from '@/components/ui/page-error';
-import { dashboardApi, trackingApi } from '@/lib/api';
-import { fetchOfficeQueueItems } from '@/lib/office-queue';
-import { einsatzplanHref, officeQueueHref } from '@/lib/office-deep-links';
-import { criticalAlertHref } from '@/lib/incident-routes';
-import type { DashboardCriticalAlert, DashboardSummary } from '@/lib/types';
-import { FleetOverviewWidgets } from '@/components/dashboard/FleetOverviewWidgets';
-import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
-import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
-import { RecentMessagesWidget } from '@/components/dashboard/RecentMessagesWidget';
-import { WatchedExpensesWidget } from '@/components/dashboard/WatchedExpensesWidget';
-import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
+import {
+  assignmentsApi,
+  dashboardApi,
+  defectsApi,
+  departureChecksApi,
+  driversApi,
+  tachographApi,
+  transportRequestsApi,
+} from '@/lib/api';
+import type { DashboardSummary, Defect, MissingDepartureCheck, TransportRequest } from '@/lib/types';
 
-function alertClass(priority: DashboardCriticalAlert['priority']) {
-  if (priority === 'critical') return 'border-red-300 bg-red-50 text-red-800';
-  if (priority === 'high') return 'border-orange-300 bg-orange-50 text-orange-800';
-  if (priority === 'medium') return 'border-yellow-300 bg-yellow-50 text-yellow-800';
-  return 'border-blue-300 bg-blue-50 text-blue-800';
+function iso(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
 }
 
-function alertHref(alert: DashboardCriticalAlert): string {
-  return criticalAlertHref(alert, true);
+function isOpenCriticalDefect(defect: Defect): boolean {
+  return defect.severity === 'kritisch' && (defect.status === 'offen' || defect.status === 'in_reparatur');
 }
 
-const QUICK_ACTIONS = [
-  {
-    href: officeQueueHref(),
-    labelKey: 'office.quick.queue',
-    icon: ClipboardList,
-    color: 'bg-rose-50 text-rose-700 border-rose-100',
-  },
-  {
-    href: einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' }),
-    labelKey: 'office.quick.einsatzplan',
-    icon: CalendarDays,
-    color: 'bg-blue-50 text-blue-700 border-blue-100',
-  },
-  {
-    href: '/live-tracking',
-    labelKey: 'office.quick.tracking',
-    icon: MapPinned,
-    color: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  },
-  {
-    href: '/requests',
-    labelKey: 'office.quick.requests',
-    icon: ClipboardList,
-    color: 'bg-violet-50 text-violet-700 border-violet-100',
-  },
-  {
-    href: einsatzplanHref({ office: true, tab: 'betrieb', view: 'morning-checkins' }),
-    labelKey: 'office.quick.checkins',
-    icon: Sun,
-    color: 'bg-amber-50 text-amber-700 border-amber-100',
-  },
-  {
-    href: '/documents?status=expiring_soon,expired',
-    labelKey: 'office.quick.documents',
-    icon: FileText,
-    color: 'bg-slate-50 text-slate-700 border-slate-200',
-  },
-  {
-    href: '/messenger',
-    labelKey: 'office.quick.messenger',
-    icon: MessageSquare,
-    color: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-  },
-] as const;
+type StreamRow = {
+  id: string;
+  title: string;
+  at: string;
+  href: string;
+  severity: 'critical' | 'high' | 'medium';
+};
 
 export function OfficeBriefingDashboard() {
   const { t, i18n } = useTranslation();
-  const router = useRouter();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [missingCheckins, setMissingCheckins] = useState<MissingDepartureCheck[]>([]);
+  const [criticalDefects, setCriticalDefects] = useState<Defect[]>([]);
+  const [overdueDdd, setOverdueDdd] = useState(0);
+  const [unassigned, setUnassigned] = useState<TransportRequest[]>([]);
+  const [checkinTrend, setCheckinTrend] = useState<Array<{ day: string; ratio: number }>>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
-  const [showMore, setShowMore] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [openTaskCount, setOpenTaskCount] = useState<number | null>(null);
-  const [gpsActiveCount, setGpsActiveCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const [data, queueItems, liveDrivers] = await Promise.all([
+      const [
+        summaryRes,
+        missingRes,
+        defectsRes,
+        badgesRes,
+        transportRes,
+        activeDriversRes,
+      ] = await Promise.all([
         dashboardApi.getSummary(),
-        fetchOfficeQueueItems(t).catch(() => []),
-        trackingApi.getLive({ staleAfterSec: 120, includeOffline: false }).catch(() => []),
+        departureChecksApi.missingToday(),
+        defectsApi.list({ severity: 'kritisch' }),
+        tachographApi.getBadges(),
+        transportRequestsApi.list(),
+        driversApi.list({ status: 'active', page: 1, limit: 200 }),
       ]);
-      setSummary(data);
-      setOpenTaskCount(queueItems.length);
-      setGpsActiveCount(liveDrivers.filter((item) => item.status === 'online').length);
-      setLastUpdated(new Date());
-    } catch (e) {
-      setError(e);
-      setSummary(null);
-      setOpenTaskCount(null);
-      setGpsActiveCount(null);
+
+      setSummary(summaryRes);
+      setMissingCheckins(missingRes);
+      setCriticalDefects(defectsRes.filter(isOpenCriticalDefect));
+      setOverdueDdd((badgesRes.overdueCardDownloads ?? 0) + (badgesRes.overdueVuDownloads ?? 0));
+      setUnassigned(
+        transportRes.filter((row) => {
+          const isPending = row.status === 'pending' || row.status === 'needs_review';
+          const isNear = row.requestedDate === iso(0) || row.requestedDate === iso(1);
+          return isPending && isNear;
+        }),
+      );
+
+      const activeDrivers = activeDriversRes.total;
+      const trendRows: Array<{ day: string; ratio: number }> = [];
+      for (let i = 6; i >= 0; i -= 1) {
+        const date = iso(-i);
+        const [checks, assignments] = await Promise.all([
+          departureChecksApi.list({ work_date: date }),
+          assignmentsApi.list({ date }),
+        ]);
+        const checkCount = checks.length;
+        const assigned = assignments.total ?? assignments.data.length;
+        const base = Math.max(activeDrivers, assigned, 1);
+        trendRows.push({ day: date.slice(5), ratio: Math.round((checkCount / base) * 100) });
+      }
+      setCheckinTrend(trendRows);
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     void load();
+    const id = window.setInterval(() => {
+      void load();
+    }, 30_000);
+    return () => window.clearInterval(id);
   }, [load]);
 
-  const todayLabel = new Intl.DateTimeFormat(i18n.language, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date());
+  const streamRows = useMemo<StreamRow[]>(() => {
+    const rows: StreamRow[] = [];
+    for (const alert of summary?.criticalAlerts ?? []) {
+      rows.push({
+        id: alert.id,
+        title: alert.message,
+        at: new Date().toISOString(),
+        href: '/office/queue',
+        severity: alert.priority === 'critical' ? 'critical' : alert.priority === 'high' ? 'high' : 'medium',
+      });
+    }
+    for (const defect of criticalDefects.slice(0, 4)) {
+      rows.push({
+        id: `defect-${defect.id}`,
+        title: defect.title,
+        at: defect.created_at,
+        href: '/defects?severity=kritisch',
+        severity: 'critical',
+      });
+    }
+    return rows
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 10);
+  }, [criticalDefects, summary?.criticalAlerts]);
 
-  const officeKpis = summary
-    ? [
-        {
-          id: 'docs',
-          label: t('dashboard.expiringDocuments'),
-          value: summary.kpis.expiringDocuments,
-          href: '/documents?status=expiring_soon,expired',
-          urgent: summary.kpis.expiringDocuments > 0,
-        },
-        {
-          id: 'email',
-          label: t('dashboard.unsentCompanyEmails'),
-          value: summary.kpis.unsentCompanyEmails,
-          href: einsatzplanHref({ office: true, tab: 'betrieb', view: 'company-notifications' }),
-          urgent: summary.kpis.unsentCompanyEmails > 0,
-        },
-        {
-          id: 'sick',
-          label: t('dashboard.sickDrivers'),
-          value: summary.kpis.sickDrivers,
-          href: '/drivers?status=sick',
-          urgent: summary.kpis.sickDrivers > 0,
-        },
-        {
-          id: 'missing',
-          label: t('dashboard.missingAssignments'),
-          value: summary.tomorrowPlanning.missingAssignments,
-          href: einsatzplanHref({ office: true, tab: 'morgen' }),
-          urgent: summary.tomorrowPlanning.missingAssignments > 0,
-        },
-        {
-          id: 'gps',
-          label: t('office.briefing.gpsSharing'),
-          value: gpsActiveCount ?? 0,
-          href: '/live-tracking',
-          urgent: false,
-        },
-      ]
-    : [];
+  const tomorrowGap = summary ? Math.max((summary.tomorrowPlanning.plannedDrivers ?? 0) - (summary.tomorrowPlanning.availableDrivers ?? 0), 0) : 0;
+
+  const healthStrip = [
+    {
+      key: 'planned',
+      label: t('dashboard.v3.office.health.plannedToday'),
+      value: summary?.todayOperations.length ?? 0,
+      href: '/assignments?tab=heute',
+      scope: t('dashboard.v3.scope.today'),
+    },
+    {
+      key: 'checkin',
+      label: t('dashboard.v3.office.health.missingCheckins'),
+      value: missingCheckins.length,
+      href: '/departure-checks',
+      scope: t('dashboard.v3.scope.today'),
+    },
+    {
+      key: 'criticalDefects',
+      label: t('dashboard.v3.office.health.criticalDefects'),
+      value: criticalDefects.length,
+      href: '/defects?severity=kritisch',
+      scope: t('dashboard.v3.scope.today'),
+    },
+    {
+      key: 'ddd',
+      label: t('dashboard.v3.office.health.overdueDdd'),
+      value: overdueDdd,
+      href: '/tachograph/ddd-archive',
+      scope: t('dashboard.v3.scope.today'),
+    },
+  ];
+
+  if (loading && !summary) {
+    return <Skeleton className="h-[440px] w-full" />;
+  }
 
   return (
-    <div className="space-y-4 pb-6 sm:space-y-6 sm:pb-8">
-      <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-blue-600">{t('office.briefing.eyebrow')}</p>
-          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('office.briefing.title')}</h1>
-          <p className="mt-1 text-sm text-slate-600">{todayLabel}</p>
-          {openTaskCount !== null && openTaskCount > 0 ? (
-            <Link
-              href={officeQueueHref()}
-              className="mt-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-200"
-            >
-              {t('office.briefing.openTasks', { count: openTaskCount })}
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Link>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {lastUpdated ? (
-            <span className="text-xs text-slate-500">
-              {t('office.briefing.updated', {
-                time: lastUpdated.toLocaleTimeString(i18n.language, {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-              })}
-            </span>
-          ) : null}
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            {t('errors.retry')}
-          </Button>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.v3.office.title')}</h1>
       </header>
 
-      {error ? (
-        <PageError error={error} titleKey="errors.dashboardLoadFailed" onRetry={() => void load()} />
-      ) : null}
-
-      {!error ? (
-        <>
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              {t('dashboard.criticalAlerts')}
-            </h2>
-            {loading ? (
-              <div className="grid gap-3 lg:grid-cols-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-14 rounded-lg" />
-                ))}
-              </div>
-            ) : !summary || summary.criticalAlerts.length === 0 ? (
-              <Card className="border-emerald-200 bg-emerald-50/50">
-                <CardContent className="p-4 text-sm text-emerald-800">
-                  {t('office.briefing.noAlerts')}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-2">
-              <div className="flex justify-end">
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={officeQueueHref()}>{t('office.briefing.viewQueue')}</Link>
-                </Button>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                {summary.criticalAlerts.map((alert) => (
-                  <Link
-                    key={alert.id}
-                    href={alertHref(alert)}
-                    className={`rounded-lg border px-4 py-3 text-sm shadow-sm transition hover:shadow ${alertClass(alert.priority)}`}
-                  >
-                    <div className="flex items-start justify-between gap-2 sm:items-center sm:gap-3">
-                      <span className="flex min-w-0 flex-1 items-start gap-2 font-medium sm:items-center">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                        <span className="break-words">{alert.message}</span>
-                      </span>
-                      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-              </div>
-            )}
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              {t('office.briefing.quickActions')}
-            </h2>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              {QUICK_ACTIONS.map(({ href, labelKey, icon: Icon, color }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={`flex min-h-[5.5rem] flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center text-[11px] font-medium leading-tight transition hover:shadow-sm sm:min-h-0 sm:gap-2 sm:p-3 sm:text-xs ${color}`}
-                >
-                  <Icon className="h-5 w-5 shrink-0" />
-                  <span className="line-clamp-2">{t(labelKey)}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          <FleetOverviewWidgets widgets={summary?.fleetWidgets} loading={loading} />
-
-          <WatchedExpensesWidget />
-
-          <RecentMessagesWidget />
-
-          {summary?.priorityTrends ? (
-            <RepairPriorityTrendsChart trends={summary.priorityTrends} />
-          ) : null}
-
-          {summary?.costAnalytics ? <FleetCostCharts analytics={summary.costAnalytics} /> : null}
-
-          <DailyEinsatzplanTable
-            rows={summary?.todayOperations}
-            loading={loading}
-            officeMode
-          />
-
-          {!loading && summary ? (
-            <section className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
-              {officeKpis.map((kpi) => (
-                <button
-                  key={kpi.id}
-                  type="button"
-                  onClick={() => router.push(kpi.href)}
-                  className={`rounded-xl border p-3 text-left transition hover:shadow-md ${
-                    kpi.urgent ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'
-                  }`}
-                >
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                    {kpi.label}
-                  </p>
-                  <p className="mt-1 text-2xl font-bold text-slate-900">{kpi.value}</p>
-                </button>
-              ))}
-            </section>
-          ) : null}
-
-          <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-            <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.tomorrowPlanning')}</h2>
-            {loading ? (
-              <Skeleton className="h-16" />
-            ) : summary ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap gap-4 text-sm">
-                  <span>
-                    <strong>{summary.tomorrowPlanning.plannedDrivers}</strong> {t('dashboard.plannedDrivers')}
-                  </span>
-                  <span>
-                    <strong>{summary.tomorrowPlanning.availableDrivers}</strong>{' '}
-                    {t('dashboard.availableDrivers')}
-                  </span>
-                  <span className={summary.tomorrowPlanning.missingAssignments > 0 ? 'text-amber-700' : ''}>
-                    <strong>{summary.tomorrowPlanning.missingAssignments}</strong>{' '}
-                    {t('dashboard.missingAssignments')}
-                  </span>
-                </div>
-                <Button asChild className="w-full sm:w-auto">
-                  <Link href={einsatzplanHref({ office: true, tab: 'morgen' })}>
-                    {t('dashboard.openEinsatzplan')}
-                  </Link>
-                </Button>
-              </div>
-            ) : null}
-          </section>
-
-          <section>
-            <button
-              type="button"
-              onClick={() => setShowMore((v) => !v)}
-              className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              {t('office.briefing.showMore')}
-              <ChevronDown className={`h-4 w-4 transition ${showMore ? 'rotate-180' : ''}`} />
-            </button>
-            {showMore && summary ? (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <MiniStat
-                  label={t('dashboard.activeDrivers')}
-                  value={summary.kpis.activeDrivers}
-                  icon={Users}
-                />
-                <MiniStat
-                  label={t('dashboard.vehiclesInUse')}
-                  value={summary.kpis.vehiclesInUse}
-                  icon={CalendarDays}
-                />
-                <MiniStat
-                  label={t('dashboard.openAccidents')}
-                  value={summary.kpis.openAccidents}
-                  icon={AlertTriangle}
-                />
-                <MiniStat
-                  label={t('dashboard.driversVacation')}
-                  value={summary.kpis.driversOnVacation}
-                  icon={Users}
-                />
-              </div>
-            ) : null}
-          </section>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: number;
-  icon: typeof Users;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-3">
-        <Icon className="h-5 w-5 text-slate-400" />
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-          <p className="text-xl font-bold text-slate-900">{value}</p>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {healthStrip.map((item) => (
+            <Link key={item.key} href={item.href} className="rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{item.scope}</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">{item.value}</p>
+              <p className="mt-1 text-sm text-slate-600">{item.label}</p>
+            </Link>
+          ))}
         </div>
-      </CardContent>
-    </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">{t('dashboard.v3.office.checkinTrend')}</CardTitle>
+          </CardHeader>
+          <CardContent className="h-20">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={checkinTrend}>
+                <XAxis dataKey="day" hide />
+                <YAxis hide domain={[0, 100]} />
+                <Tooltip formatter={(value) => [`${value}%`, t('dashboard.v3.office.checkinTrend')]} />
+                <Line type="monotone" dataKey="ratio" stroke="#0f766e" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dashboard.v3.office.missingCheckins')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {missingCheckins.length === 0 ? (
+              <p className="text-sm text-emerald-700">{t('dashboard.v3.office.everyoneCheckedIn')}</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {missingCheckins.map((row) => (
+                  <li key={row.assignment_id} className="flex items-center justify-between">
+                    <span>{row.driver_name}</span>
+                    <span className="text-slate-500">{row.start_time}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dashboard.v3.office.unassignedTasks')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {unassigned.slice(0, 8).map((row) => (
+                <li key={row.id}>
+                  <Link
+                    href={`/assignments?tab=betrieb&transportId=${row.id}`}
+                    className="flex items-center justify-between rounded-md border p-2 hover:bg-slate-50"
+                  >
+                    <span className="truncate pr-2">{row.startTime} · {row.company?.name ?? row.companyId}</span>
+                    <span className="text-slate-500">{row.requestedDate}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dashboard.v3.office.tomorrowCapacity')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>
+              {t('dashboard.v3.office.tomorrowPlanned', { count: summary?.tomorrowPlanning.plannedDrivers ?? 0 })}
+            </p>
+            <p>
+              {t('dashboard.v3.office.tomorrowAvailable', { count: summary?.tomorrowPlanning.availableDrivers ?? 0 })}
+            </p>
+            {tomorrowGap > 0 ? (
+              <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-amber-800">
+                {t('dashboard.v3.office.capacityGap', { count: tomorrowGap })}
+              </p>
+            ) : (
+              <p className="text-emerald-700">{t('dashboard.v3.office.capacityOk')}</p>
+            )}
+            <Link href="/assignments?tab=morgen" className="text-blue-700 underline">
+              {t('dashboard.v3.office.openTomorrowPlan')}
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dashboard.v3.office.criticalStream')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {streamRows.map((row) => (
+                <li key={row.id}>
+                  <Link href={row.href} className="flex items-center justify-between rounded-md border p-2 hover:bg-slate-50">
+                    <span className={row.severity === 'critical' ? 'text-red-700' : row.severity === 'high' ? 'text-amber-700' : 'text-slate-700'}>{row.title}</span>
+                    <span className="text-xs text-slate-500">{new Date(row.at).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' })}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Link href="/office/queue" className="mt-3 inline-block text-blue-700 underline">
+              {t('dashboard.v3.office.viewAll')}
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
