@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { getTodayDate, getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { companiesApi, companyEmailsApi } from '@/lib/api';
 import type { CompanyEmail, CompanyEmailStatus } from '@/lib/types';
+import { formatFleetDateTime } from '@/lib/locale-format';
 import {
   FLEET_LIST_CARD,
   FLEET_RAW_TABLE,
@@ -108,9 +109,8 @@ function mapApiStatus(status?: CompanyEmailStatus): EmailStatus {
 
 function formatLastSent(value?: string | null) {
   if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleString('de-DE');
+  const formatted = formatFleetDateTime(value);
+  return formatted === value ? null : formatted;
 }
 
 export function CompanyNotifications({ onAttentionCountChange }: CompanyNotificationsProps) {

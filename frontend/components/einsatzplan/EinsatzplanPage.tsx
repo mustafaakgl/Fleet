@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,8 +10,6 @@ import {
   Wallet,
   ClipboardCheck,
   Sun,
-  Users,
-  X,
   Plus,
 } from 'lucide-react';
 import { getUser } from '@/lib/auth';
@@ -27,37 +25,27 @@ import { cn } from '@/lib/utils';
 
 const Tagesplanung = dynamic(
   () => import('./Tagesplanung').then((mod) => mod.Tagesplanung),
-  { loading: () => <div className="text-sm text-slate-500">Lade Tagesplanung...</div> },
+  { loading: () => <div className="text-sm text-slate-500">...</div> },
 );
 const RevenueSummary = dynamic(
   () => import('./RevenueSummary').then((mod) => mod.RevenueSummary),
-  { loading: () => <div className="text-sm text-slate-500">Lade Revenue...</div> },
-);
-const Benutzerverwaltung = dynamic(
-  () => import('./Benutzerverwaltung').then((mod) => mod.Benutzerverwaltung),
-  { loading: () => <div className="text-sm text-slate-500">Lade Benutzerverwaltung...</div> },
+  { loading: () => <div className="text-sm text-slate-500">...</div> },
 );
 const UrlaubsplanerPanel = dynamic(
   () => import('./UrlaubsplanerPanel').then((mod) => mod.UrlaubsplanerPanel),
-  { loading: () => <div className="text-sm text-slate-500">Lade Urlaubsplaner...</div> },
+  { loading: () => <div className="text-sm text-slate-500">...</div> },
 );
 
-type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue' | 'users';
+type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue';
 type UrlaubSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
 type PlanningSubtab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
 
-const baseTopTabs: Array<{ id: TopTab; label: string; icon: typeof Gauge }> = [
-  { id: 'dashboard', label: 'Dashboard', icon: Gauge },
-  { id: 'urlaub', label: 'Urlaubsplaner', icon: Sun },
-  { id: 'tagesplanung', label: 'Tagesplanung', icon: ClipboardCheck },
-  { id: 'revenue', label: 'Revenue Summary', icon: Wallet },
+const topTabs: Array<{ id: TopTab; labelKey: string; icon: typeof Gauge }> = [
+  { id: 'dashboard', labelKey: 'einsatzplan.tab.dashboard', icon: Gauge },
+  { id: 'urlaub', labelKey: 'einsatzplan.tab.vacationPlanner', icon: Sun },
+  { id: 'tagesplanung', labelKey: 'einsatzplan.tab.dailyPlanning', icon: ClipboardCheck },
+  { id: 'revenue', labelKey: 'einsatzplan.tab.revenueSummary', icon: Wallet },
 ];
-
-const adminTab: { id: TopTab; label: string; icon: typeof Gauge } = {
-  id: 'users',
-  label: 'Benutzerverwaltung',
-  icon: Users,
-};
 
 export function EinsatzplanPage() {
   const user = getUser();
@@ -69,15 +57,11 @@ export function EinsatzplanPage() {
 
 function EinsatzplanFullView() {
   const { t } = useTranslation();
+  const router = useRouter();
+  const pathname = usePathname();
   const { assignments, drivers } = useFleetData();
   const searchParams = useSearchParams();
   const tomorrowDate = getTomorrowDate();
-
-  const isAdmin = getUser()?.role === 'admin';
-  const topTabs = useMemo(
-    () => (isAdmin ? [...baseTopTabs, adminTab] : baseTopTabs),
-    [isAdmin],
-  );
 
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
 
@@ -119,7 +103,7 @@ function EinsatzplanFullView() {
   const absenceFromQuery = searchParams.get('absence');
 
   const initialTopTab = useMemo<TopTab>(() => {
-    if (panelFromQuery === 'users') return 'users';
+    if (panelFromQuery === 'revenue') return 'revenue';
     if (panelFromQuery === 'urlaubsplaner') return 'urlaub';
     if (panelFromQuery === 'tagesplanung' || panelFromQuery === 'company_notifications') return 'tagesplanung';
     return 'dashboard';
@@ -144,6 +128,11 @@ function EinsatzplanFullView() {
 
   const [activeTab, setActiveTab] = useState<TopTab>(initialTopTab);
 
+  useEffect(() => {
+    if (panelFromQuery !== 'users') return;
+    router.replace(`/settings/users?from=${encodeURIComponent(pathname)}`);
+  }, [panelFromQuery, pathname, router]);
+
   return (
     <div className="space-y-5 bg-surface">
       <div className="rounded-xl border border-slate-300 bg-white shadow-sm">
@@ -163,20 +152,10 @@ function EinsatzplanFullView() {
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             );
           })}
-
-          <div className="ml-auto flex items-center pr-2">
-            <button
-              type="button"
-              className="rounded border border-slate-300 bg-white p-2 text-slate-500 hover:bg-slate-50"
-              aria-label="Close tab bar"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
         </div>
 
         <div className="p-4 sm:p-5">
@@ -232,10 +211,6 @@ function EinsatzplanFullView() {
           {activeTab === 'tagesplanung' && <Tagesplanung initialSubTab={initialPlanningSubtab} />}
 
           {activeTab === 'revenue' && <RevenueSummary />}
-
-          {activeTab === 'users' && (
-            <Benutzerverwaltung />
-          )}
         </div>
       </div>
     </div>

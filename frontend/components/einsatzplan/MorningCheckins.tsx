@@ -8,6 +8,7 @@ import type { MorningCheckin } from '@/context/FleetDataContext';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { morningCheckinsApi } from '@/lib/api';
 import { liveTrackingHref } from '@/lib/office-deep-links';
+import { formatFleetDateTime } from '@/lib/locale-format';
 import {
   FLEET_LIST_CARD,
   FLEET_RAW_TABLE,
@@ -59,6 +60,18 @@ function statusPill(status: MorningCheckin['status']) {
     default:
       return 'bg-slate-100 text-slate-700 border-slate-200';
   }
+}
+
+function formatCheckinTime(value: string) {
+  const directTime = value.match(/^(\d{1,2}):(\d{2})/);
+  if (directTime) {
+    const hours = directTime[1].padStart(2, '0');
+    return `${hours}:${directTime[2]}`;
+  }
+
+  const formatted = formatFleetDateTime(value);
+  if (formatted === value) return value;
+  return formatted.slice(-5);
 }
 
 interface SummaryCardProps {
@@ -260,7 +273,7 @@ export function MorningCheckins() {
                   <tr key={checkin.id} className={FLEET_RAW_TR}>
                     <td className={FLEET_RAW_TD_PRIMARY}>{driver?.name ?? checkin.driverId}</td>
                     <td className={FLEET_RAW_TD_MUTED}>{driver?.department ?? '-'}</td>
-                    <td className={FLEET_RAW_TD_MUTED}>{checkin.submittedAt}</td>
+                    <td className={FLEET_RAW_TD_MUTED}>{formatCheckinTime(checkin.submittedAt)}</td>
                     <td className={FLEET_RAW_TD_MUTED}>{checkin.vehiclePlate || '-'}</td>
                     <td className={FLEET_RAW_TD_MUTED}>{checkin.company || '-'}</td>
                     <td className={FLEET_RAW_TD_MUTED}>{checkin.cargoName || '-'}</td>
@@ -353,7 +366,7 @@ export function MorningCheckins() {
                         </span>
                       </div>
                     </div>
-                    <DetailRow label={t('checkins.colSubmittedAt')} value={selectedCheckin.submittedAt} />
+                    <DetailRow label={t('checkins.colSubmittedAt')} value={formatCheckinTime(selectedCheckin.submittedAt)} />
 
                     {editMode ? (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

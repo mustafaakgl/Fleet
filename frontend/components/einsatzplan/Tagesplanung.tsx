@@ -25,7 +25,7 @@ import {
   FLEET_RAW_THEAD,
   FLEET_RAW_TR,
 } from '@/lib/fleet-table';
-import { BRAND_BTN_OUTLINE, BRAND_FOCUS, BRAND_KPI, BRAND_TAB_ACTIVE_PLAIN, BRAND_TAB_BADGE } from '@/lib/brand-colors';
+import { BRAND_BTN_OUTLINE, BRAND_FOCUS, BRAND_KPI } from '@/lib/brand-colors';
 import { StructuredAddressCell } from '@/components/shared/StructuredAddressCell';
 import { buildAssignmentRouteName, parseFormattedAddress } from '@/lib/address-format';
 import { cn } from '@/lib/utils';
@@ -461,91 +461,6 @@ export function Tagesplanung({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 border-b border-slate-200">
-        {!operationsOnly ? (
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('daily-overview')}
-          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
-            activeSubTab === 'daily-overview'
-              ? BRAND_TAB_ACTIVE_PLAIN
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          {t('subtab.dailyOverview')}
-        </button>
-        ) : null}
-        {!operationsOnly ? (
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('planning')}
-          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
-            activeSubTab === 'planning'
-              ? BRAND_TAB_ACTIVE_PLAIN
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          {t('subtab.planning')}
-        </button>
-        ) : (
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('planning')}
-          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
-            activeSubTab === 'planning'
-              ? BRAND_TAB_ACTIVE_PLAIN
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          {t('subtab.transportRequests')}
-        </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('morning-checkins')}
-          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
-            activeSubTab === 'morning-checkins'
-              ? BRAND_TAB_ACTIVE_PLAIN
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          {t('subtab.morningCheckins')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('vehicle-handovers')}
-          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
-            activeSubTab === 'vehicle-handovers'
-              ? BRAND_TAB_ACTIVE_PLAIN
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          {t('subtab.vehicleHandovers')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('company-notifications')}
-          className={`rounded-t-md border px-4 py-2 text-sm font-semibold ${
-            activeSubTab === 'company-notifications'
-              ? BRAND_TAB_ACTIVE_PLAIN
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          <span className="inline-flex items-center gap-2">
-            {t('subtab.companyEmails')}
-            {companyEmailAttentionCount > 0 && (
-              <span
-                className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                  activeSubTab === 'company-notifications' ? BRAND_TAB_BADGE : 'bg-amber-100 text-amber-700'
-                }`}
-              >
-                {companyEmailAttentionCount}
-              </span>
-            )}
-          </span>
-        </button>
-      </div>
-
       <section className={activeSubTab === 'morning-checkins' ? 'block' : 'hidden'}>
         <MorningCheckins />
       </section>
@@ -594,7 +509,11 @@ export function Tagesplanung({
           active={kpiFilter === 'open'}
         />
         <SummaryCard label={t('planning.kpiExpectedRevenue')} value={currency(expectedDailyRevenue)} tone={BRAND_KPI} />
-        <SummaryCard label={t('planning.kpiLostRevenue')} value={currency(lostRevenueEstimate)} tone="text-red-700" />
+        <SummaryCard
+          label={t('planning.kpiLostRevenue')}
+          value={currency(lostRevenueEstimate)}
+          tone={lostRevenueEstimate > 0 ? 'text-red-700' : 'text-slate-900'}
+        />
       </div>
 
       <div className={cn(FLEET_LIST_CARD, 'bg-white')}>

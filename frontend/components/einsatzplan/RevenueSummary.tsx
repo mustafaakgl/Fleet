@@ -127,7 +127,7 @@ export function RevenueSummary() {
         <MetricCard
           label={t('revenue.lost')}
           value={currency(derived.lostRevenueThisMonth)}
-          tone="text-red-700"
+          tone={derived.lostRevenueThisMonth > 0 ? 'text-red-700' : 'text-slate-900'}
         />
       </div>
 

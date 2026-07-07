@@ -454,8 +454,10 @@ function calculateVacationOverview(
 }
 
 function formatDays(value: number) {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(2)} T`;
+  const sign = value < 0 ? '-' : '';
+  const absolute = Math.abs(value);
+  const normalized = Number.isInteger(absolute) ? String(absolute) : absolute.toFixed(1).replace(/\.0$/, '');
+  return `${sign}${normalized} T`;
 }
 
 function getStatusLabel(status: CalendarStatus) {

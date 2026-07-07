@@ -6,10 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { EmptyState } from '@/components/ui/empty-state';
 import { getUser } from '@/lib/auth';
 import { canEditVehicleHandovers } from '@/lib/permissions';
-import { vehicleHandoversApi, type VehicleHandoverRecord } from '@/lib/api';
+import { vehicleHandoversApi, vehiclesApi, type VehicleHandoverRecord } from '@/lib/api';
 import { HANDOVER_PHOTO_SLOTS } from '@/lib/driver-portal-utils';
 import type { DriverHandoverPhotoSlot } from '@/lib/types';
 import { HandoverPhotoPreview } from '@/components/handovers/HandoverPhotoPreview';
+import { formatFleetDate } from '@/lib/locale-format';
 import {
   FLEET_LIST_CARD,
   FLEET_RAW_TABLE,
@@ -28,9 +29,7 @@ type DisplayStatus = 'Completed' | 'Pending' | 'Missing';
 type PhotoStatus = VehicleHandoverRecord['photoStatus'];
 
 function toDisplayDate(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('de-DE');
+  return formatFleetDate(iso);
 }
 
 function photoStatusLabelKey(value: PhotoStatus) {
@@ -75,6 +74,7 @@ export function VehicleHandovers() {
   const [message, setMessage] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<VehicleHandoverRecord | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [vehiclePlateById, setVehiclePlateById] = useState<Record<string, string>>({});
 
   const currentUser = getUser();
   const canEdit = currentUser ? canEditVehicleHandovers(currentUser.role) : false;
@@ -96,6 +96,30 @@ export function VehicleHandovers() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    vehiclesApi
+      .list({ limit: 500 })
+      .then((response) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const vehicle of response.data) {
+          if (vehicle.id && vehicle.plate_number) {
+            map[vehicle.id] = vehicle.plate_number;
+          }
+        }
+        setVehiclePlateById(map);
+      })
+      .catch(() => {
+        if (!cancelled) setVehiclePlateById({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selected = useMemo(
     () => selectedDetail ?? rows.find((item) => item.id === selectedId) ?? null,
@@ -154,6 +178,15 @@ export function VehicleHandovers() {
       return matchesDate && matchesDriver && matchesVehicle && matchesStatus;
     });
   }, [dateFilter, driverQuery, rows, statusFilter, vehicleQuery]);
+
+  const resolveVehicleLabel = useCallback(
+    (vehicleId?: string | null, fallbackPlate?: string | null) => {
+      if (fallbackPlate && fallbackPlate.trim().length > 0) return fallbackPlate;
+      if (!vehicleId) return '-';
+      return vehiclePlateById[vehicleId] ?? vehicleId;
+    },
+    [vehiclePlateById],
+  );
 
   async function handleApprovePhoto() {
     if (!selected || !canEdit) return;
@@ -334,7 +367,7 @@ export function VehicleHandovers() {
                   const driverName = row.driver
                     ? `${row.driver.firstName} ${row.driver.lastName}`
                     : row.driverId;
-                  const vehiclePlate = row.vehicle?.plateNumber ?? row.vehicleId;
+                  const vehiclePlate = resolveVehicleLabel(row.vehicleId, row.vehicle?.plateNumber);
                   const displayStatus = getDisplayStatus(row);
                   return (
                     <tr key={row.id} className={FLEET_RAW_TR}>
@@ -343,7 +376,7 @@ export function VehicleHandovers() {
                       </td>
                       <td className={FLEET_RAW_TD_PRIMARY}>{driverName}</td>
                       <td className={FLEET_RAW_TD_MUTED}>
-                        {row.previousVehicleId ?? '-'}
+                        {resolveVehicleLabel(row.previousVehicleId, null)}
                       </td>
                       <td className={FLEET_RAW_TD_MUTED}>{vehiclePlate}</td>
                       <td className={FLEET_RAW_TD_MUTED}>
@@ -402,10 +435,10 @@ export function VehicleHandovers() {
                 }
               />
               <DetailRow label={t('handover.colDate')} value={toDisplayDate(selected.handoverDateTime)} />
-              <DetailRow label={t('handover.colPreviousVehicle')} value={selected.previousVehicleId ?? '-'} />
+              <DetailRow label={t('handover.colPreviousVehicle')} value={resolveVehicleLabel(selected.previousVehicleId, null)} />
               <DetailRow
                 label={t('handover.colCurrentVehicle')}
-                value={selected.vehicle?.plateNumber ?? selected.vehicleId}
+                value={resolveVehicleLabel(selected.vehicleId, selected.vehicle?.plateNumber)}
               />
               <DetailRow label={t('handover.handoverType')} value={selected.handoverType} />
               <DetailRow label={t('handover.colPhotoRequired')} value={selected.photoRequired ? t('handover.yes') : t('handover.no')} />

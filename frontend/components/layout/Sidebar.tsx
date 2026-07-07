@@ -66,6 +66,13 @@ const NAV_ITEMS: RoleNavItem[] = [
   { label: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
   { label: 'nav.officeQueue', href: '/office/queue', icon: ListTodo, roles: ['office'] },
   { label: 'nav.assignments', href: '/assignments', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.assignments.dailyOverview', href: '/assignments/daily-overview', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.assignments.planning', href: '/assignments/planning', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.assignments.morningCheckins', href: '/assignments/morning-checkins', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.assignments.vehicleHandovers', href: '/assignments/vehicle-handovers', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.assignments.companyNotifications', href: '/assignments/company-notifications', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.assignments.vacationPlanner', href: '/assignments/vacation-planner', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
+  { label: 'nav.assignments.revenueSummary', href: '/assignments/revenue-summary', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
   { label: 'nav.liveTracking', href: '/live-tracking', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
   { label: 'nav.reminders', href: '/reminders/service', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
   { label: 'nav.messenger', href: '/messenger', icon: MessageSquare, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
@@ -121,7 +128,7 @@ export function Sidebar() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [tabletCollapsed, setTabletCollapsed] = useState(true);
+  const [tabletCollapsed, setTabletCollapsed] = useState(false);
   const [user] = useState<AuthUser | null>(() => getUser());
   const unreadNotificationsQuery = useQuery({
     queryKey: ['notifications', 'unread-count'],

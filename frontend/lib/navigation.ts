@@ -81,8 +81,15 @@ export function isNavSectionActive(pathname: string, section: NavSection): boole
 
 const ALL_ITEMS: Record<string, NavItem> = {
   dashboard: { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
-  officeQueue: { href: '/office/queue', labelKey: 'nav.officeQueue', icon: ListTodo },
   assignments: { href: '/assignments', labelKey: 'nav.assignments', icon: CalendarDays },
+  assignmentsDailyOverview: { href: '/assignments/daily-overview', labelKey: 'nav.assignments.dailyOverview', icon: CalendarDays },
+  assignmentsPlanning: { href: '/assignments/planning', labelKey: 'nav.assignments.planning', icon: CalendarDays },
+  assignmentsMorningCheckins: { href: '/assignments/morning-checkins', labelKey: 'nav.assignments.morningCheckins', icon: CalendarDays },
+  assignmentsVehicleHandovers: { href: '/assignments/vehicle-handovers', labelKey: 'nav.assignments.vehicleHandovers', icon: CalendarDays },
+  assignmentsCompanyNotifications: { href: '/assignments/company-notifications', labelKey: 'nav.assignments.companyNotifications', icon: CalendarDays },
+  assignmentsVacationPlanner: { href: '/assignments/vacation-planner', labelKey: 'nav.assignments.vacationPlanner', icon: CalendarDays },
+  assignmentsRevenueSummary: { href: '/assignments/revenue-summary', labelKey: 'nav.assignments.revenueSummary', icon: CalendarDays },
+  officeQueue: { href: '/office/queue', labelKey: 'nav.officeQueue', icon: ListTodo },
   liveTracking: { href: '/live-tracking', labelKey: 'nav.liveTracking', icon: MapPinned },
   requests: { href: '/requests', labelKey: 'nav.requests', icon: ClipboardList },
   messenger: { href: '/messenger', labelKey: 'nav.messenger', icon: MessageSquare },
@@ -183,6 +190,21 @@ const REMINDERS_SECTION: NavSection = {
   ],
 };
 
+const EINSATZPLAN_SECTION: NavSection = {
+  id: 'einsatzplan',
+  labelKey: 'nav.assignments',
+  icon: CalendarDays,
+  items: [
+    { href: '/assignments/daily-overview', labelKey: 'nav.assignments.dailyOverview' },
+    { href: '/assignments/planning', labelKey: 'nav.assignments.planning' },
+    { href: '/assignments/morning-checkins', labelKey: 'nav.assignments.morningCheckins' },
+    { href: '/assignments/vehicle-handovers', labelKey: 'nav.assignments.vehicleHandovers' },
+    { href: '/assignments/company-notifications', labelKey: 'nav.assignments.companyNotifications' },
+    { href: '/assignments/vacation-planner', labelKey: 'nav.assignments.vacationPlanner' },
+    { href: '/assignments/revenue-summary', labelKey: 'nav.assignments.revenueSummary' },
+  ],
+};
+
 function item(key: keyof typeof ALL_ITEMS): NavItem {
   return ALL_ITEMS[key];
 }
@@ -235,7 +257,7 @@ const OFFICE_NAV: NavGroup[] = [
     [
       item('dashboard'),
       item('officeQueue'),
-      item('assignments'),
+      EINSATZPLAN_SECTION,
       REMINDERS_HUB_ITEM,
       item('messenger'),
       item('notifications'),
@@ -277,7 +299,7 @@ const DEFAULT_NAV: NavGroup[] = [
     'nav.group.heute',
     [
       item('dashboard'),
-      item('assignments'),
+      EINSATZPLAN_SECTION,
       REMINDERS_HUB_ITEM,
       item('messenger'),
       item('notifications'),

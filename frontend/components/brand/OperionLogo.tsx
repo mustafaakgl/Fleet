@@ -32,35 +32,15 @@ export function OperionLogo({
 
   const content =
     variant === 'sidebar' ? (
-      <div
-        className={cn(
-          'w-full rounded-lg bg-white px-2.5 py-1 shadow-sm',
-          compact && 'px-1.5 py-0.5 lg:px-2.5 lg:py-1',
-          className,
-        )}
-      >
-        <div
-          className={cn(
-            'relative w-full overflow-hidden',
-            compact ? 'h-8 lg:h-10' : 'h-10',
-          )}
-        >
-          <Image
-            src="/operion-logo.png"
-            alt="Operion"
-            fill
-            priority={priority}
-            sizes={compact ? '72px' : '240px'}
-            className={cn(
-              'object-cover',
-              compact ? 'object-[left_50%]' : 'object-[center_50%]',
-            )}
-            style={{
-              transform: 'scale(0.82)',
-              transformOrigin: compact ? 'left center' : 'center center',
-            }}
-          />
-        </div>
+      <div className={cn('relative w-full overflow-hidden', compact ? 'h-8 lg:h-10' : 'h-10', className)}>
+        <Image
+          src="/brand/operion-logo-white.svg"
+          alt="Operion"
+          fill
+          priority={priority}
+          sizes={compact ? '72px' : '240px'}
+          className={cn('object-contain', compact ? 'object-left' : 'object-center')}
+        />
       </div>
     ) : (
       <div className="inline-flex min-w-0 flex-col gap-1">

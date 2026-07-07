@@ -11,10 +11,10 @@ import { Antragsverwaltung } from './Antragsverwaltung';
 type PlannerSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
 type AbsenceFocus = 'UT' | 'KT';
 
-const subtabs: Array<{ id: PlannerSubtab; label: string }> = [
-  { id: 'jahreskalender', label: 'Jahreskalender' },
-  { id: 'abteilungskalender', label: 'Abteilungskalender' },
-  { id: 'antragsverwaltung', label: 'Antragsverwaltung' },
+const subtabs: Array<{ id: PlannerSubtab; labelKey: string }> = [
+  { id: 'jahreskalender', labelKey: 'vacationPlanner.tab.yearly' },
+  { id: 'abteilungskalender', labelKey: 'vacationPlanner.tab.department' },
+  { id: 'antragsverwaltung', labelKey: 'vacationPlanner.tab.requests' },
 ];
 
 export function UrlaubsplanerPanel({
@@ -31,7 +31,7 @@ export function UrlaubsplanerPanel({
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-slate-900">{t('einsatzplan.vacationPlanner')}</h2>
-        <p className="text-sm text-slate-600">Yearly and department leave planning with compact ERP-style calendar views.</p>
+        <p className="text-sm text-slate-600">{t('vacationPlanner.subtitle')}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -47,7 +47,7 @@ export function UrlaubsplanerPanel({
                 : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
             )}
           >
-            {tab.label}
+            {t(tab.labelKey)}
           </button>
         ))}
       </div>
