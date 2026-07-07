@@ -11,7 +11,6 @@ import {
   Plus,
   Search,
   Settings2,
-  Sparkles,
   Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -163,7 +162,7 @@ export function ServiceRemindersPage() {
     setError(null);
     try {
       const [vehiclePage, serviceRecords, rawReminders] = await Promise.all([
-        vehiclesApi.list({ limit: 200 }),
+        vehiclesApi.list({ limit: 100 }),
         serviceRecordsApi.list(),
         fetchActiveReminders(),
       ]);
@@ -261,6 +260,11 @@ export function ServiceRemindersPage() {
     { id: 'snoozed', count: counts.snoozed, tone: 'slate' },
   ];
 
+  const hasAnyReminders = rows.length > 0;
+  const complianceValue = hasAnyReminders
+    ? t('serviceReminders.complianceValue', { value: counts.averageCompliance })
+    : '—';
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className={FLEET_PAGE_HEADER}>
@@ -271,13 +275,6 @@ export function ServiceRemindersPage() {
           )}
         </div>
         <div className={FLEET_PAGE_HEADER_ACTIONS}>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-primary hover:underline"
-          >
-            <Sparkles className="h-4 w-4" />
-            {t('serviceReminders.enableForecasting')}
-          </button>
           <Button type="button" variant="outline" size="icon" aria-label={t('expenseHistory.moreActions')}>
             <Ellipsis className="h-4 w-4" />
           </Button>
@@ -390,13 +387,21 @@ export function ServiceRemindersPage() {
         </div>
 
         <div className="grid gap-3 border-t border-slate-200 px-4 py-3 sm:grid-cols-2 sm:px-5 xl:grid-cols-4">
-          <StatCard label={t('serviceReminders.statOverdueVehicles')} value={String(counts.overdueVehicles)} tone="red" />
-          <StatCard label={t('serviceReminders.statDueSoonVehicles')} value={String(counts.dueSoonVehicles)} tone="orange" />
+          <StatCard
+            label={t('serviceReminders.statOverdueVehicles')}
+            value={String(counts.overdueVehicles)}
+            tone={counts.overdueVehicles > 0 ? 'red' : undefined}
+          />
+          <StatCard
+            label={t('serviceReminders.statDueSoonVehicles')}
+            value={String(counts.dueSoonVehicles)}
+            tone={counts.dueSoonVehicles > 0 ? 'orange' : undefined}
+          />
           <StatCard label={t('serviceReminders.statSnoozedVehicles')} value={String(counts.snoozedVehicles)} />
           <StatCard
             label={t('serviceReminders.statCompliance')}
-            value={t('serviceReminders.complianceValue', { value: counts.averageCompliance })}
-            tone="brand"
+            value={complianceValue}
+            tone={hasAnyReminders ? 'brand' : undefined}
           />
         </div>
 
@@ -429,8 +434,10 @@ export function ServiceRemindersPage() {
             <div className="p-4">
               <EmptyState
                 icon={Wrench}
-                title={t('serviceReminders.emptyTitle')}
-                subtitle={t('serviceReminders.emptySubtitle')}
+                title={hasAnyReminders ? t('serviceReminders.emptyTitle') : t('serviceReminders.emptyNoDataTitle')}
+                subtitle={hasAnyReminders ? t('serviceReminders.emptySubtitle') : t('serviceReminders.emptyNoDataSubtitle')}
+                actionLabel={!hasAnyReminders ? t('serviceReminders.addReminder') : undefined}
+                onAction={!hasAnyReminders ? () => router.push('/reminders/service/new') : undefined}
               />
             </div>
           ) : (

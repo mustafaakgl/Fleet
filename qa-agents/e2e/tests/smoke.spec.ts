@@ -122,6 +122,37 @@ test.describe('Office smoke', () => {
     await expect(page).toHaveURL(/\/assignments/, { timeout: 20_000 });
   });
 
+  test('service reminders route opens and renders empty state when no data', async ({ page }) => {
+    await page.route(/\/api\/v1\/vehicles(\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [], total: 0, page: 1, limit: 100 }),
+      });
+    });
+    await page.route(/\/api\/v1\/service-records(\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route(/\/api\/v1\/reminders(\?|$)/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+
+    const response = await page.goto('/reminders/service');
+    expect(response, 'No navigation response was received for service reminders.').not.toBeNull();
+    expect(response?.status() ?? 0).toBe(200);
+
+    await expect(page.getByText(/No service reminders yet|No service reminders|Noch keine Service-Erinnerungen|Keine Service-Erinnerungen|Henüz servis hatırlatması yok|Servis hatırlatıcısı yok/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /Add Service Reminder|Service-Erinnerung hinzufügen|Servis Hatırlatıcısı Ekle/ })).toBeVisible();
+  });
+
   test('office message is visible to driver and driver reply increases office unread count', async ({ request }) => {
     const officeToken = readAccessToken(OFFICE_AUTH_STATE);
     const driverToken = readAccessToken(DRIVER_AUTH_STATE);
