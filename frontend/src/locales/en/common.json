@@ -2081,7 +2081,7 @@
   "messenger.newMessageCta": "New message",
   "messenger.conversations": "Conversations",
   "messenger.listSubtitle": "Scan active threads and reply without losing context.",
-  "messenger.searchPlaceholder": "Search by driver or subject",
+  "messenger.searchPlaceholder": "Search by name or message content",
   "messenger.filters.all": "All",
   "messenger.filters.drivers": "Drivers",
   "messenger.filters.customers": "Customers",

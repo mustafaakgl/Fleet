@@ -34,3 +34,4 @@
 [2026-07-06] [hazirlik] [kurulum-1-docker-provasi] [docker compose prod temiz kurulum dogrulandi; compose include/redis+dockeringore+backend runtime seed destegi ve env prod-valid varsayilanlariyla health+seed+login calisti]
 [2026-07-06] [hazirlik] [uat-fix-2] [driver work-session 500 kök nedeni tenant Prisma compound unique scope bug'i olarak duzeltildi; office/driver smoke + work-session lifecycle smoke yesil, tam batarya ve build kosuluyor]
 [2026-07-06] [hazirlik] [hotfix-statik] [frontend prod runner standalone + explicit .next/static/public kopyasi eklendi; landing rakip placeholder metni Fleet odakli de/en/tr locale ile degistirildi; compose temiz dogrulamada _next/static css/js 200]
+[2026-07-07] [ux-messenger] [list+mobile-a11y] [driver mesaj listesi ortak MessengerConversationList ile hizalandi; filtre/focus/dokunma hedefi iyilestirildi; arama metni de/en/tr isim+mesaj icerigi olarak guncellendi]

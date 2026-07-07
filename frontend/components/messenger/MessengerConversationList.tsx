@@ -81,8 +81,9 @@ export function MessengerConversationList({
                 key={filter}
                 type="button"
                 onClick={() => onPersonaFilterChange(filter)}
+                aria-pressed={active}
                 className={cn(
-                  'min-h-11 rounded-full border px-3 py-2 text-xs font-semibold transition-colors',
+                  'min-h-11 rounded-full border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 focus-visible:ring-offset-1',
                   active
                     ? 'border-brand-primary bg-brand-primary text-white'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
@@ -126,7 +127,7 @@ export function MessengerConversationList({
                     type="button"
                     onClick={() => onSelectConversation(conversation.id)}
                     className={cn(
-                      'w-full rounded-2xl border px-3 py-3 text-left transition-all duration-150',
+                      'w-full min-h-16 rounded-2xl border px-3 py-3 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/35 focus-visible:ring-offset-1',
                       active
                         ? 'border-brand-primary/30 bg-surface shadow-sm ring-1 ring-brand-primary/10'
                         : 'border-transparent hover:border-slate-200 hover:bg-slate-50',

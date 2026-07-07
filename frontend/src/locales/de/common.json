@@ -2087,7 +2087,7 @@
   "messenger.newMessageCta": "Neue Nachricht",
   "messenger.conversations": "Unterhaltungen",
   "messenger.listSubtitle": "Schneller Überblick über offene Gespräche und Antworten.",
-  "messenger.searchPlaceholder": "Nach Fahrer oder Betreff suchen",
+  "messenger.searchPlaceholder": "Nach Name oder Nachrichteninhalt suchen",
   "messenger.filters.all": "Alle",
   "messenger.filters.drivers": "Fahrer",
   "messenger.filters.customers": "Kunden",

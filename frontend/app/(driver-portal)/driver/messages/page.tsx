@@ -1,44 +1,46 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Loader2, MessageSquarePlus, Search } from 'lucide-react';
+import { Loader2, MessageSquarePlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import {
+  MessengerConversationList,
+} from '@/components/messenger/MessengerConversationList';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
 import { messengerApi } from '@/lib/api';
+import { getUser } from '@/lib/auth';
 import {
-  departmentBadgeClass,
   driverMessageAudienceLabelKey,
   DRIVER_MESSAGE_AUDIENCES,
-  formatMessengerRelativeTime,
   getConversationSearchText,
+  type MessengerConversationPersonaFilter,
   type DriverMessageAudience,
 } from '@/lib/messenger-utils';
 import type { ConversationListItem } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
-function previewText(item: ConversationListItem): string {
+function previewText(item: ConversationListItem, fallback: string): string {
   const msg = item.lastMessage;
-  if (!msg) return '';
+  if (!msg) return fallback;
   return msg.translatedText ?? msg.originalText;
 }
 
 export default function DriverMessagesPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
+  const currentUserId = getUser()?.id ?? null;
   const pollTimerRef = useRef<number | null>(null);
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [personaFilter, setPersonaFilter] = useState<MessengerConversationPersonaFilter>('all');
 
   const [audience, setAudience] = useState<DriverMessageAudience>('dispatch');
   const [subject, setSubject] = useState('');
@@ -59,9 +61,9 @@ export default function DriverMessagesPage() {
     const query = search.trim().toLowerCase();
     if (!query) return conversations;
     return conversations.filter((conversation) =>
-      getConversationSearchText(conversation, null).includes(query),
+      getConversationSearchText(conversation, currentUserId).includes(query),
     );
-  }, [conversations, search]);
+  }, [conversations, currentUserId, search]);
 
   useEffect(() => {
     let active = true;
@@ -185,80 +187,24 @@ export default function DriverMessagesPage() {
             </p>
           </CardHeader>
           <CardContent>
-            <div className="relative mb-4">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={search}
-                placeholder={t('messenger.searchPlaceholder')}
-                onChange={(e) => setSearch(e.target.value)}
-                className="min-h-11 pl-9"
+            {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
+            <div className="h-[60dvh] min-h-[420px] overflow-hidden rounded-2xl border border-slate-200">
+              <MessengerConversationList
+                conversations={filteredConversations}
+                selectedConversationId={null}
+                search={search}
+                personaFilter={personaFilter}
+                currentUserId={currentUserId}
+                loading={loading}
+                canCreateConversation={false}
+                onSearchChange={setSearch}
+                onPersonaFilterChange={setPersonaFilter}
+                onSelectConversation={(id) => {
+                  router.push(`/driver/messages/${id}`);
+                }}
+                previewText={(conversation) => previewText(conversation, t('driverPortal.messages.noMessages'))}
               />
             </div>
-            {loading ? (
-              <div className="space-y-3 py-2">
-                <Skeleton className="h-20 rounded-2xl" />
-                <Skeleton className="h-20 rounded-2xl" />
-                <Skeleton className="h-20 rounded-2xl" />
-              </div>
-            ) : error ? (
-              <p className="text-sm text-red-600">{error}</p>
-            ) : filteredConversations.length === 0 ? (
-              <p className="py-6 text-sm text-slate-500">{t('driverPortal.messages.empty')}</p>
-            ) : (
-              <ul className="space-y-2">
-                {filteredConversations.map((conversation) => {
-                  const dept = conversation.department as DriverMessageAudience | undefined;
-                  const audienceLabel =
-                    dept && DRIVER_MESSAGE_AUDIENCES.includes(dept)
-                      ? t(driverMessageAudienceLabelKey(dept))
-                      : null;
-                  const unreadThread = conversation.unreadCount > 0;
-
-                  return (
-                    <li key={conversation.id}>
-                      <Link
-                        href={`/driver/messages/${conversation.id}`}
-                        className="flex min-h-11 items-start justify-between gap-3 rounded-2xl border border-slate-200 px-4 py-3 hover:bg-slate-50"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className={cn('font-semibold text-slate-900', unreadThread && 'font-bold')}>
-                              {conversation.subject ?? t('driverPortal.messages.thread')}
-                            </p>
-                            {audienceLabel ? (
-                              <span
-                                className={cn(
-                                  'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                                  departmentBadgeClass(dept),
-                                )}
-                              >
-                                {audienceLabel}
-                              </span>
-                            ) : null}
-                            {conversation.unreadCount > 0 ? (
-                              <span className="rounded-full bg-[#1a4d7a] px-2 py-0.5 text-[10px] font-semibold text-white">
-                                {conversation.unreadCount}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className={cn('mt-1 line-clamp-2 text-sm text-slate-600', unreadThread && 'font-medium text-slate-800')}>
-                            {previewText(conversation) || t('driverPortal.messages.noMessages')}
-                          </p>
-                          {conversation.lastMessageAt ? (
-                            <p className="mt-2 text-xs text-slate-400">
-                              {formatMessengerRelativeTime(conversation.lastMessageAt, i18n.language, {
-                                yesterday: t('messenger.yesterdayShort'),
-                              })}
-                            </p>
-                          ) : null}
-                        </div>
-                        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
           </CardContent>
         </Card>
       </div>
