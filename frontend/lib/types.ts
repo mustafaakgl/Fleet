@@ -1518,7 +1518,17 @@ export interface MessengerMessage {
   targetLanguage: MessengerLanguage | null;
   translationStatus: MessageTranslationStatus;
   createdAt: string;
+  attachments: MessengerAttachment[];
   readByCurrentUser: boolean;
+}
+
+export interface MessengerAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  downloadUrl: string;
+  createdAt: string;
 }
 
 export type MessengerDepartment = 'dispatch' | 'hr' | 'accounting' | 'maintenance' | 'general';
@@ -1556,9 +1566,10 @@ export interface ConversationDetail {
 }
 
 export interface SendMessagePayload {
-  text: string;
+  text?: string;
   originalLanguage: MessengerLanguage;
   targetLanguage?: MessengerLanguage;
+  attachments?: File[];
 }
 
 export interface MessengerUnreadCount {

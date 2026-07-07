@@ -3,9 +3,10 @@ import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 const SUPPORTED_LANGUAGES = ['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru'] as const;
 
 export class SendMessageDto {
+  @IsOptional()
   @IsString()
   @MaxLength(5000)
-  text!: string;
+  text?: string;
 
   @IsEnum(SUPPORTED_LANGUAGES)
   originalLanguage!: (typeof SUPPORTED_LANGUAGES)[number];

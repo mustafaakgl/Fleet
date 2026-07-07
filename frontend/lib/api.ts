@@ -1131,6 +1131,22 @@ export interface MessengerListMessagesParams {
   limit?: number;
 }
 
+export interface MessengerSendOptions {
+  onUploadProgress?: (progressPercent: number) => void;
+}
+
+function normalizeMessengerMessage(message: MessengerMessage): MessengerMessage {
+  return {
+    ...message,
+    attachments: (message.attachments ?? []).map((attachment) => ({
+      ...attachment,
+      downloadUrl: attachment.downloadUrl.startsWith('http')
+        ? attachment.downloadUrl
+        : `${BASE_URL}${attachment.downloadUrl}`,
+    })),
+  };
+}
+
 export const messengerApi = {
   getStats: (params?: Pick<MessengerConversationListParams, 'search' | 'department'>) =>
     api.get<MessengerStats>('/messenger/stats', { params }).then((r) => r.data),
@@ -1154,16 +1170,55 @@ export const messengerApi = {
       .then((r) => r.data),
 
   getConversation: (id: string) =>
-    api.get<ConversationDetail>(`/messenger/conversations/${id}`).then((r) => r.data),
+    api.get<ConversationDetail>(`/messenger/conversations/${id}`).then((r) => ({
+      ...r.data,
+      messagesPreview: (r.data.messagesPreview ?? []).map(normalizeMessengerMessage),
+    })),
 
   listMessages: (conversationId: string, params?: MessengerListMessagesParams) =>
     api
       .get<MessengerMessage[]>(`/messenger/conversations/${conversationId}/messages`, { params })
-      .then((r) => r.data),
+      .then((r) => r.data.map(normalizeMessengerMessage)),
 
-  sendMessage: (conversationId: string, payload: SendMessagePayload) =>
-    api
+  sendMessage: (conversationId: string, payload: SendMessagePayload, options?: MessengerSendOptions) => {
+    const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0;
+
+    if (hasAttachments) {
+      const formData = new FormData();
+      if (payload.text && payload.text.trim().length > 0) {
+        formData.append('text', payload.text);
+      }
+      formData.append('originalLanguage', payload.originalLanguage);
+      if (payload.targetLanguage) {
+        formData.append('targetLanguage', payload.targetLanguage);
+      }
+      for (const file of payload.attachments ?? []) {
+        formData.append('attachments', file);
+      }
+
+      return api
+        .post<MessengerMessage>(`/messenger/conversations/${conversationId}/messages`, formData, {
+          onUploadProgress: (event) => {
+            if (!options?.onUploadProgress || !event.total || event.total <= 0) {
+              return;
+            }
+            const percent = Math.round((event.loaded / event.total) * 100);
+            options.onUploadProgress(Math.max(1, Math.min(100, percent)));
+          },
+        })
+        .then((r) => normalizeMessengerMessage(r.data));
+    }
+
+    return api
       .post<MessengerMessage>(`/messenger/conversations/${conversationId}/messages`, payload)
+      .then((r) => normalizeMessengerMessage(r.data));
+  },
+
+  getAttachmentDownloadUrl: (attachmentId: string) => `${BASE_URL}/messenger/attachments/${attachmentId}`,
+
+  downloadAttachment: (attachmentId: string) =>
+    api
+      .get<Blob>(`/messenger/attachments/${attachmentId}`, { responseType: 'blob' })
       .then((r) => r.data),
 
   markConversationRead: (conversationId: string) =>

@@ -23,6 +23,7 @@ import type { ConversationDetail, MessengerLanguage, MessengerMessage } from '@/
 export type MessengerUiMessage = MessengerMessage & {
   deliveryState?: 'sending' | 'sent' | 'error';
   clientId?: string;
+  pendingAttachments?: File[];
 };
 
 interface MessengerChatPanelProps {
@@ -33,13 +34,18 @@ interface MessengerChatPanelProps {
   loadingOlder: boolean;
   hasOlderMessages: boolean;
   composerText: string;
+  composerAttachments: File[];
+  uploadProgress?: number | null;
   originalLanguage: MessengerLanguage;
   sending: boolean;
   onBack: () => void;
   onComposerChange: (value: string) => void;
+  onComposerAttachmentsAdd: (files: FileList | File[]) => void;
+  onComposerAttachmentRemove: (index: number) => void;
   onOriginalLanguageChange: (language: MessengerLanguage) => void;
   onSend: () => void;
   onLoadOlder: () => void;
+  onDownloadAttachment?: (attachmentId: string, fileName: string) => void;
   onRetryMessage?: (messageId: string) => void;
 }
 
@@ -87,8 +93,10 @@ function MessageBubble({
   translationLabel,
   originalToggleLabel,
   translatedToggleLabel,
+  downloadAttachmentLabel,
   retryLabel,
   onRetry,
+  onDownloadAttachment,
 }: {
   message: MessengerUiMessage;
   own: boolean;
@@ -98,11 +106,17 @@ function MessageBubble({
   translationLabel: string;
   originalToggleLabel: string;
   translatedToggleLabel: string;
+  downloadAttachmentLabel: string;
   retryLabel: string;
   onRetry?: () => void;
+  onDownloadAttachment?: (attachmentId: string, fileName: string) => void;
 }) {
   const [showOriginal, setShowOriginal] = useState(false);
   const hasIncomingTranslation = !own && Boolean(message.translatedText);
+
+  function isImageAttachment(mimeType: string): boolean {
+    return mimeType.startsWith('image/');
+  }
 
   return (
     <div className={cn('flex gap-3', own ? 'justify-end' : 'justify-start')}>
@@ -152,6 +166,46 @@ function MessageBubble({
           {!own && message.translationStatus === 'failed' ? (
             <p className="mt-2 text-xs text-amber-700">{translatedToggleLabel}</p>
           ) : null}
+          {message.attachments.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {message.attachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className={cn(
+                    'rounded-xl border p-2',
+                    own ? 'border-white/35 bg-white/10' : 'border-slate-200 bg-slate-50',
+                  )}
+                >
+                  {isImageAttachment(attachment.mimeType) ? (
+                    <img
+                      src={attachment.downloadUrl}
+                      alt={attachment.fileName}
+                      className="mb-2 max-h-44 w-full rounded-lg object-cover"
+                      loading="lazy"
+                    />
+                  ) : null}
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{attachment.fileName}</p>
+                      <p className={cn('truncate', own ? 'text-white/80' : 'text-slate-500')}>
+                        {Math.max(1, Math.round(attachment.sizeBytes / 1024))} KB
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={cn(
+                        'shrink-0 rounded-md px-2 py-1 text-xs font-medium',
+                        own ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-200 text-slate-800 hover:bg-slate-300',
+                      )}
+                      onClick={() => onDownloadAttachment?.(attachment.id, attachment.fileName)}
+                    >
+                      {downloadAttachmentLabel}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className={cn('mt-1 flex items-center gap-2 px-1 text-[11px]', own ? 'justify-end' : 'justify-start')}>
           <span className="text-slate-400">{formatMessengerDateTime(message.createdAt, locale)}</span>
@@ -172,13 +226,18 @@ export function MessengerChatPanel({
   loadingOlder,
   hasOlderMessages,
   composerText,
+  composerAttachments,
+  uploadProgress,
   originalLanguage,
   sending,
   onBack,
   onComposerChange,
+  onComposerAttachmentsAdd,
+  onComposerAttachmentRemove,
   onOriginalLanguageChange,
   onSend,
   onLoadOlder,
+  onDownloadAttachment,
   onRetryMessage,
 }: MessengerChatPanelProps) {
   const { t, i18n } = useTranslation();
@@ -361,7 +420,9 @@ export function MessengerChatPanel({
                               ? t('messenger.translationFailed')
                               : t('messenger.showTranslation')
                           }
+                          downloadAttachmentLabel={t('messenger.downloadAttachment')}
                           retryLabel={t('messenger.retrySend')}
+                          onDownloadAttachment={onDownloadAttachment}
                           onRetry={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
                         />
                       ))}
@@ -377,11 +438,15 @@ export function MessengerChatPanel({
 
       <MessengerComposer
         value={composerText}
+        attachments={composerAttachments}
         originalLanguage={originalLanguage}
         driverLanguage={driverLanguage}
         sending={sending}
+        uploadProgress={uploadProgress}
         driverName={counterpart.name}
         onChange={onComposerChange}
+        onAddAttachments={onComposerAttachmentsAdd}
+        onRemoveAttachment={onComposerAttachmentRemove}
         onOriginalLanguageChange={onOriginalLanguageChange}
         onSend={onSend}
       />

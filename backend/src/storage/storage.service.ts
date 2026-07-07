@@ -3,7 +3,8 @@ export type StorageBucket =
   | 'vehicles'
   | 'license-photos'
   | 'defect-photos'
-  | 'fine-documents';
+  | 'fine-documents'
+  | 'message-attachments';
 
 export abstract class StorageService {
   /** Internal storage path persisted in the database (not publicly served). */
@@ -12,4 +13,6 @@ export abstract class StorageService {
   abstract buildDocumentDownloadPath(documentId: string): string;
 
   abstract buildVehiclePhotoDownloadPath(vehicleId: string): string;
+
+  abstract buildMessengerAttachmentDownloadPath(attachmentId: string): string;
 }

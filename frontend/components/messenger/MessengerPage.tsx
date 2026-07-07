@@ -69,6 +69,9 @@ export function MessengerPage() {
   const [toast, setToast] = useState<ToastState>(null);
 
   const [composerText, setComposerText] = useState('');
+  const [composerAttachments, setComposerAttachments] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
   const [originalLanguage, setOriginalLanguage] = useState<MessengerLanguage>('de');
 
   const [newConversationOpen, setNewConversationOpen] = useState(false);
@@ -302,7 +305,7 @@ export function MessengerPage() {
   const handleSendMessage = useCallback(async () => {
     if (!selectedConversationId) return;
     const text = composerText.trim();
-    if (!text) {
+    if (!text && composerAttachments.length === 0) {
       showToast(t('messenger.emptyMessage'), 'error');
       return;
     }
@@ -320,21 +323,42 @@ export function MessengerPage() {
       targetLanguage: null,
       translationStatus: 'pending',
       createdAt: new Date().toISOString(),
+      attachments: composerAttachments.map((file, index) => ({
+        id: `${tempId}-att-${index}`,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+        downloadUrl: typeof URL !== 'undefined' ? URL.createObjectURL(file) : '',
+        createdAt: new Date().toISOString(),
+      })),
       readByCurrentUser: true,
       deliveryState: 'sending',
+      pendingAttachments: composerAttachments,
     };
 
     setMessages((previous) => sortMessages([...previous, optimisticMessage]));
     patchConversationPreview(optimisticMessage);
     setComposerText('');
+    setComposerAttachments([]);
+    setUploadProgress(null);
+    setSending(true);
 
     try {
-      const created = await messengerApi.sendMessage(selectedConversationId, { text, originalLanguage });
+      const created = await messengerApi.sendMessage(
+        selectedConversationId,
+        { text: text || undefined, originalLanguage, attachments: composerAttachments },
+        {
+          onUploadProgress: (progressPercent) => {
+            setUploadProgress(progressPercent);
+          },
+        },
+      );
       const delivered = { ...created, deliveryState: 'sent' as const };
       setMessages((previous) =>
         sortMessages(previous.filter((message) => message.id !== tempId).concat(delivered)),
       );
       patchConversationPreview(delivered);
+      setUploadProgress(null);
       await refreshLeftPanel();
     } catch (e) {
       setMessages((previous) =>
@@ -344,9 +368,13 @@ export function MessengerPage() {
             : message,
         ),
       );
+      setUploadProgress(null);
       showToast(e instanceof Error ? e.message : t('messenger.sendError'), 'error');
+    } finally {
+      setSending(false);
     }
   }, [
+    composerAttachments,
     composerText,
     currentUserId,
     currentUserName,
@@ -366,11 +394,13 @@ export function MessengerPage() {
     setMessages((previous) => previous.map((message) => (
       message.id === messageId ? { ...message, deliveryState: 'sending' } : message
     )));
+    setSending(true);
 
     try {
       const created = await messengerApi.sendMessage(selectedConversationId, {
-        text: failed.originalText,
+        text: failed.originalText || undefined,
         originalLanguage: failed.originalLanguage,
+        attachments: failed.pendingAttachments,
       });
       const delivered = { ...created, deliveryState: 'sent' as const };
       setMessages((previous) =>
@@ -383,8 +413,57 @@ export function MessengerPage() {
         message.id === messageId ? { ...message, deliveryState: 'error' } : message
       )));
       showToast(e instanceof Error ? e.message : t('messenger.sendError'), 'error');
+    } finally {
+      setSending(false);
     }
   }, [messages, patchConversationPreview, refreshLeftPanel, selectedConversationId, showToast, sortMessages, t]);
+
+  const handleComposerAttachmentsAdd = useCallback((files: FileList | File[]) => {
+    const nextFiles = Array.from(files);
+    if (nextFiles.length === 0) return;
+
+    const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
+    setComposerAttachments((previous) => {
+      const accepted: File[] = [];
+      for (const file of nextFiles) {
+        if (file.size > 10 * 1024 * 1024) {
+          showToast(t('messenger.attachmentTooLarge'), 'error');
+          continue;
+        }
+        if (!allowedTypes.has(file.type)) {
+          showToast(t('messenger.attachmentTypeInvalid'), 'error');
+          continue;
+        }
+        accepted.push(file);
+      }
+
+      const merged = [...previous, ...accepted].slice(0, 3);
+      if (previous.length + accepted.length > 3) {
+        showToast(t('messenger.attachmentMaxCount'), 'error');
+      }
+      return merged;
+    });
+  }, [showToast, t]);
+
+  const handleComposerAttachmentRemove = useCallback((index: number) => {
+    setComposerAttachments((previous) => previous.filter((_, idx) => idx !== index));
+  }, []);
+
+  const handleDownloadAttachment = useCallback(async (attachmentId: string, fileName: string) => {
+    try {
+      const blob = await messengerApi.downloadAttachment(attachmentId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('messenger.attachmentDownloadError'), 'error');
+    }
+  }, [showToast, t]);
 
   const handleLoadOlderMessages = useCallback(async () => {
     if (!selectedConversationId || loadingOlder) return;
@@ -569,12 +648,17 @@ export function MessengerPage() {
             loadingOlder={loadingOlder}
             hasOlderMessages={hasOlderMessages}
             composerText={composerText}
+            composerAttachments={composerAttachments}
+            uploadProgress={uploadProgress}
             originalLanguage={originalLanguage}
-            sending={false}
+            sending={sending}
             onBack={() => setSelectedConversationId(null)}
             onComposerChange={setComposerText}
+            onComposerAttachmentsAdd={handleComposerAttachmentsAdd}
+            onComposerAttachmentRemove={handleComposerAttachmentRemove}
             onOriginalLanguageChange={setOriginalLanguage}
             onLoadOlder={() => void handleLoadOlderMessages()}
+            onDownloadAttachment={(id, name) => void handleDownloadAttachment(id, name)}
             onRetryMessage={(id) => void handleRetryMessage(id)}
             onSend={() => void handleSendMessage()}
           />

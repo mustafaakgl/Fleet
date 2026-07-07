@@ -4,12 +4,23 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { MessageTranslationStatus, Prisma, type UserRole } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
+import { uploadAbsoluteDirForBucket } from '../storage/local-storage.service';
+import { StorageService } from '../storage/storage.service';
 import { TranslationService } from '../translation/translation.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
+import {
+  assertMessengerAttachmentsInput,
+  buildStoredAttachmentFileName,
+  sanitizeAttachmentBuffer,
+  sanitizeAttachmentFileName,
+} from './messenger-attachments.util';
 import { SendMessageDto } from './dto/send-message.dto';
 import {
   allowedDepartmentsForRole,
@@ -127,6 +138,9 @@ const conversationDetailInclude = {
         },
       },
       reads: true,
+      attachments: {
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      },
     },
   },
 } satisfies Prisma.ConversationInclude;
@@ -139,6 +153,9 @@ const messageInclude = {
     },
   },
   reads: true,
+  attachments: {
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  },
 } satisfies Prisma.MessageInclude;
 
 const SUPPORTED_LANGUAGES = new Set(['de', 'tr', 'en', 'pl', 'nl', 'it', 'es', 'ru']);
@@ -152,6 +169,8 @@ export class MessengerService {
     private readonly translationService: TranslationService,
     private readonly auditService: AuditService,
     private readonly driverNotify: DriverNotifyService,
+    private readonly storageService: StorageService,
+    private readonly objectStorage: ObjectStorageService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -458,10 +477,54 @@ export class MessengerService {
       targetLanguage: message.targetLanguage,
       translationStatus: message.translationStatus,
       createdAt: message.createdAt.toISOString(),
+      attachments: message.attachments.map((attachment) => ({
+        id: attachment.id,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        downloadUrl: this.storageService.buildMessengerAttachmentDownloadPath(attachment.id),
+        createdAt: attachment.createdAt.toISOString(),
+      })),
       readByCurrentUser:
         message.senderUserId === currentUserId ||
         message.reads.some((messageRead) => messageRead.userId === currentUserId),
     };
+  }
+
+  private async persistAttachmentFiles(files: Express.Multer.File[]): Promise<
+    Array<{
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      storedPath: string;
+    }>
+  > {
+    const results: Array<{
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      storedPath: string;
+    }> = [];
+
+    for (const file of files) {
+      const safeFileName = sanitizeAttachmentFileName(file.originalname);
+      const buffer = await sanitizeAttachmentBuffer(file);
+      const storedFileName = buildStoredAttachmentFileName(safeFileName);
+      const storedPath = this.storageService.buildStoredPath('message-attachments', storedFileName);
+      const absolutePath = join(uploadAbsoluteDirForBucket('message-attachments'), storedFileName);
+
+      await writeFile(absolutePath, buffer);
+      await this.objectStorage.syncLocalFile(storedPath);
+
+      results.push({
+        fileName: safeFileName,
+        mimeType: file.mimetype,
+        sizeBytes: buffer.length,
+        storedPath,
+      });
+    }
+
+    return results;
   }
 
   private async unreadMapForUser(
@@ -889,13 +952,20 @@ export class MessengerService {
     return messages.map((message) => this.mapMessage(message, currentUser.id));
   }
 
-  async sendMessage(currentUserId: string, conversationId: string, dto: SendMessageDto) {
+  async sendMessage(
+    currentUserId: string,
+    conversationId: string,
+    dto: SendMessageDto,
+    attachments: Express.Multer.File[] = [],
+  ) {
     const currentUser = await this.resolveCurrentUser(currentUserId);
     await this.ensureConversationParticipantAccess(currentUser, conversationId);
 
-    const normalizedText = dto.text.trim();
-    if (!normalizedText) {
-      throw new BadRequestException('text must not be empty');
+    assertMessengerAttachmentsInput(attachments);
+
+    const normalizedText = dto.text?.trim() ?? '';
+    if (!normalizedText && attachments.length === 0) {
+      throw new BadRequestException('Either text or at least one attachment is required');
     }
 
     this.assertSupportedLanguage(dto.originalLanguage, 'originalLanguage');
@@ -952,6 +1022,8 @@ export class MessengerService {
       }
     }
 
+    const persistedAttachments = await this.persistAttachmentFiles(attachments);
+
     const createdMessage = await this.prisma.$transaction(async (tx) => {
       const message = await tx.message.create({
         data: {
@@ -963,6 +1035,16 @@ export class MessengerService {
           targetLanguage: effectiveTargetLanguage ?? null,
           translationStatus,
           translatedAt,
+          attachments: persistedAttachments.length
+            ? {
+                create: persistedAttachments.map((attachment) => ({
+                  fileName: attachment.fileName,
+                  mimeType: attachment.mimeType,
+                  sizeBytes: attachment.sizeBytes,
+                  storedPath: attachment.storedPath,
+                })),
+              }
+            : undefined,
         },
         include: messageInclude,
       });
@@ -986,6 +1068,7 @@ export class MessengerService {
       metadata: {
         conversationId,
         translationStatus: createdMessage.translationStatus,
+        attachmentCount: createdMessage.attachments.length,
       },
     });
 
@@ -1013,6 +1096,50 @@ export class MessengerService {
     }
 
     return this.mapMessage(createdMessage, currentUser.id);
+  }
+
+  async resolveAttachmentDownload(currentUserId: string, attachmentId: string) {
+    const currentUser = await this.resolveCurrentUser(currentUserId);
+
+    const attachment = await this.prisma.messageAttachment.findUnique({
+      where: { id: attachmentId },
+      include: {
+        message: {
+          select: {
+            conversationId: true,
+          },
+        },
+      },
+    });
+
+    if (!attachment) {
+      throw new NotFoundException('Attachment not found');
+    }
+
+    await this.ensureConversationParticipantAccess(currentUser, attachment.message.conversationId);
+
+    const object = await this.objectStorage.openStoredFile(attachment.storedPath);
+    if (!object) {
+      throw new NotFoundException('Attachment file is missing');
+    }
+
+    await this.safeAuditLog({
+      actorUserId: currentUser.id,
+      action: 'messenger.attachment_downloaded',
+      entityType: 'message_attachment',
+      entityId: attachment.id,
+      summary: 'Messenger attachment downloaded',
+      metadata: {
+        conversationId: attachment.message.conversationId,
+        messageId: attachment.messageId,
+      },
+    });
+
+    return {
+      stream: object.stream,
+      mimeType: object.contentType || attachment.mimeType || 'application/octet-stream',
+      fileName: attachment.fileName,
+    };
   }
 
   async markConversationRead(currentUserId: string, conversationId: string) {

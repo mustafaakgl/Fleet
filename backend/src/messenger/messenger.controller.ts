@@ -10,9 +10,14 @@ import {
   Query,
   Req,
   Res,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import { memoryStorage } from 'multer';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -20,6 +25,10 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { MessengerService } from './messenger.service';
+import {
+  MESSENGER_ATTACHMENT_MAX_COUNT,
+  MESSENGER_ATTACHMENT_MAX_SIZE_BYTES,
+} from './messenger-attachments.util';
 
 @Controller('messenger')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -151,12 +160,39 @@ export class MessengerController {
   }
 
   @Post('conversations/:id/messages')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FilesInterceptor('attachments', MESSENGER_ATTACHMENT_MAX_COUNT, {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: MESSENGER_ATTACHMENT_MAX_SIZE_BYTES,
+      },
+    }),
+  )
   sendMessage(
     @CurrentUser('id') userId: string,
     @Param('id') conversationId: string,
     @Body() dto: SendMessageDto,
+    @UploadedFiles() attachments?: Express.Multer.File[],
   ) {
-    return this.messengerService.sendMessage(userId, conversationId, dto);
+    return this.messengerService.sendMessage(userId, conversationId, dto, attachments ?? []);
+  }
+
+  @Get('attachments/:id')
+  async downloadAttachment(
+    @CurrentUser('id') userId: string,
+    @Param('id') attachmentId: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.messengerService.resolveAttachmentDownload(userId, attachmentId);
+
+    res.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(file.fileName)}"`,
+      'Cache-Control': 'private, no-store',
+    });
+
+    file.stream.pipe(res);
   }
 
   @Post('conversations/:id/read')

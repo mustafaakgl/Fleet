@@ -13,7 +13,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 const STORED_FILE_URL_PATTERN =
-  /^\/uploads\/(documents|vehicles|license-photos|defect-photos|fine-documents)\/([^/]+)$/;
+  /^\/uploads\/(documents|vehicles|license-photos|defect-photos|fine-documents|message-attachments)\/([^/]+)$/;
 
 export function mimeTypeFromFileName(fileName: string): string {
   const dotIdx = fileName.lastIndexOf('.');

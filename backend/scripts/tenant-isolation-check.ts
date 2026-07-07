@@ -132,6 +132,40 @@ async function main() {
       }
     }
 
+    const totalMessageAttachments = await base.messageAttachment.count();
+    const tenantAAttachmentCount = await base.messageAttachment.count({ where: { tenantId: tenantA } });
+    const tenantBAttachmentCount = await base.messageAttachment.count({ where: { tenantId: tenantB } });
+    const scopedAttachmentsA = await TenantContext.run(tenantA, () =>
+      scoped.messageAttachment.count(),
+    );
+    const scopedAttachmentsB = await TenantContext.run(tenantB, () =>
+      scoped.messageAttachment.count(),
+    );
+    console.log(`MessageAttachment total: ${totalMessageAttachments}, tenant A scoped: ${scopedAttachmentsA}`);
+
+    if (scopedAttachmentsA !== tenantAAttachmentCount) {
+      throw new Error('Isolation failure: tenant A scoped messageAttachment count mismatch');
+    }
+
+    if (scopedAttachmentsB !== tenantBAttachmentCount) {
+      throw new Error('Isolation failure: tenant B scoped messageAttachment count mismatch');
+    }
+
+    if (tenantA !== tenantB && scopedAttachmentsA + scopedAttachmentsB > totalMessageAttachments) {
+      throw new Error('Isolation failure: scoped messageAttachment counts exceed total');
+    }
+
+    if (tenantA !== tenantB) {
+      const crossAttachment = await TenantContext.run(tenantA, () =>
+        scoped.messageAttachment.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossAttachment) {
+        throw new Error('Isolation failure: tenant A context read tenant B message attachment');
+      }
+    }
+
     const totalDddFiles = await base.dddFile.count();
     const scopedDddFilesA = await TenantContext.run(tenantA, () =>
       scoped.dddFile.count(),

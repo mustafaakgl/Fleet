@@ -25,6 +25,9 @@ export default function DriverMessageThreadPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(true);
   const [composerText, setComposerText] = useState('');
+  const [composerAttachments, setComposerAttachments] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
   const [originalLanguage, setOriginalLanguage] = useState<MessengerLanguage>('de');
   const [error, setError] = useState<string | null>(null);
 
@@ -117,7 +120,7 @@ export default function DriverMessageThreadPage() {
   const handleSend = useCallback(async () => {
     if (!conversationId) return;
     const text = composerText.trim();
-    if (!text) return;
+    if (!text && composerAttachments.length === 0) return;
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: MessengerUiMessage = {
@@ -132,28 +135,51 @@ export default function DriverMessageThreadPage() {
       targetLanguage: null,
       translationStatus: 'pending',
       createdAt: new Date().toISOString(),
+      attachments: composerAttachments.map((file, index) => ({
+        id: `${tempId}-att-${index}`,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+        downloadUrl: typeof URL !== 'undefined' ? URL.createObjectURL(file) : '',
+        createdAt: new Date().toISOString(),
+      })),
       readByCurrentUser: true,
       deliveryState: 'sending',
+      pendingAttachments: composerAttachments,
     };
 
     setMessages((previous) => sortMessages([...previous, optimisticMessage]));
     setComposerText('');
+    setComposerAttachments([]);
+    setUploadProgress(null);
+    setSending(true);
 
     try {
-      const created = await messengerApi.sendMessage(conversationId, {
-        text,
-        originalLanguage,
-      });
+      const created = await messengerApi.sendMessage(
+        conversationId,
+        {
+          text: text || undefined,
+          originalLanguage,
+          attachments: composerAttachments,
+        },
+        {
+          onUploadProgress: (progressPercent) => setUploadProgress(progressPercent),
+        },
+      );
       setMessages((previous) =>
         sortMessages(previous.filter((message) => message.id !== tempId).concat({ ...created, deliveryState: 'sent' })),
       );
+      setUploadProgress(null);
     } catch (err) {
       setMessages((previous) => previous.map((message) => (
         message.id === tempId ? { ...message, deliveryState: 'error', translationStatus: 'failed' } : message
       )));
+      setUploadProgress(null);
       setError(err instanceof Error ? err.message : t('driverPortal.messages.sendFailed'));
+    } finally {
+      setSending(false);
     }
-  }, [composerText, conversationId, currentUserId, currentUserName, originalLanguage, sortMessages, t]);
+  }, [composerAttachments, composerText, conversationId, currentUserId, currentUserName, originalLanguage, sortMessages, t]);
 
   const handleRetry = useCallback(async (messageId: string) => {
     const failed = messages.find((message) => message.id === messageId);
@@ -162,11 +188,13 @@ export default function DriverMessageThreadPage() {
     setMessages((previous) => previous.map((message) => (
       message.id === messageId ? { ...message, deliveryState: 'sending' } : message
     )));
+    setSending(true);
 
     try {
       const created = await messengerApi.sendMessage(conversationId, {
-        text: failed.originalText,
+        text: failed.originalText || undefined,
         originalLanguage: failed.originalLanguage,
+        attachments: failed.pendingAttachments,
       });
       setMessages((previous) =>
         sortMessages(previous.filter((message) => message.id !== messageId).concat({ ...created, deliveryState: 'sent' })),
@@ -176,8 +204,57 @@ export default function DriverMessageThreadPage() {
         message.id === messageId ? { ...message, deliveryState: 'error' } : message
       )));
       setError(err instanceof Error ? err.message : t('driverPortal.messages.sendFailed'));
+    } finally {
+      setSending(false);
     }
   }, [conversationId, messages, sortMessages, t]);
+
+  const handleComposerAttachmentsAdd = useCallback((files: FileList | File[]) => {
+    const nextFiles = Array.from(files);
+    if (nextFiles.length === 0) return;
+
+    const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
+    setComposerAttachments((previous) => {
+      const accepted: File[] = [];
+      for (const file of nextFiles) {
+        if (file.size > 10 * 1024 * 1024) {
+          setError(t('messenger.attachmentTooLarge'));
+          continue;
+        }
+        if (!allowedTypes.has(file.type)) {
+          setError(t('messenger.attachmentTypeInvalid'));
+          continue;
+        }
+        accepted.push(file);
+      }
+
+      const merged = [...previous, ...accepted].slice(0, 3);
+      if (previous.length + accepted.length > 3) {
+        setError(t('messenger.attachmentMaxCount'));
+      }
+      return merged;
+    });
+  }, [t]);
+
+  const handleComposerAttachmentRemove = useCallback((index: number) => {
+    setComposerAttachments((previous) => previous.filter((_, idx) => idx !== index));
+  }, []);
+
+  const handleDownloadAttachment = useCallback(async (attachmentId: string, fileName: string) => {
+    try {
+      const blob = await messengerApi.downloadAttachment(attachmentId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('messenger.attachmentDownloadError'));
+    }
+  }, [t]);
 
   const handleLoadOlder = useCallback(async () => {
     if (!conversationId || loadingOlder) return;
@@ -220,13 +297,18 @@ export default function DriverMessageThreadPage() {
           loadingOlder={loadingOlder}
           hasOlderMessages={hasOlderMessages}
           composerText={composerText}
+          composerAttachments={composerAttachments}
+          uploadProgress={uploadProgress}
           originalLanguage={originalLanguage}
-          sending={false}
+          sending={sending}
           onBack={() => router.push('/driver/messages')}
           onComposerChange={setComposerText}
+          onComposerAttachmentsAdd={handleComposerAttachmentsAdd}
+          onComposerAttachmentRemove={handleComposerAttachmentRemove}
           onOriginalLanguageChange={setOriginalLanguage}
           onSend={() => void handleSend()}
           onLoadOlder={() => void handleLoadOlder()}
+          onDownloadAttachment={(id, name) => void handleDownloadAttachment(id, name)}
           onRetryMessage={(id) => void handleRetry(id)}
         />
       </div>

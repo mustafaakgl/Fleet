@@ -494,6 +494,7 @@ model Tenant {
   morningCheckins       MorningCheckin[]
   serviceRecords        ServiceRecord[]
   conversations         Conversation[]
+  messageAttachments    MessageAttachment[]
   auditLogs             AuditLog[]
   driverLocationHistory DriverLocationHistory[]
   driverLocationLatest  DriverLocationLatest[]
@@ -1498,9 +1499,27 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation("MessageSentBy", fields: [senderUserId], references: [id], onDelete: Restrict)
   reads        MessageRead[]
+  attachments  MessageAttachment[]
 
   @@index([conversationId, createdAt])
   @@index([senderUserId, createdAt])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default-tenant")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  messageId String
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+  storedPath String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([messageId])
 }
 
 model MessageRead {
