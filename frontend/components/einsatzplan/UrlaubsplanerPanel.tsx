@@ -12,9 +12,9 @@ type PlannerSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltun
 type AbsenceFocus = 'UT' | 'KT';
 
 const subtabs: Array<{ id: PlannerSubtab; labelKey: string }> = [
-  { id: 'jahreskalender', labelKey: 'vacationPlanner.tab.yearly' },
-  { id: 'abteilungskalender', labelKey: 'vacationPlanner.tab.department' },
-  { id: 'antragsverwaltung', labelKey: 'vacationPlanner.tab.requests' },
+  { id: 'jahreskalender', labelKey: 'vacationPlanner.yearly' },
+  { id: 'abteilungskalender', labelKey: 'vacationPlanner.department' },
+  { id: 'antragsverwaltung', labelKey: 'vacationPlanner.requests' },
 ];
 
 export function UrlaubsplanerPanel({

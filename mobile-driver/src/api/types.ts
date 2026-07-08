@@ -236,6 +236,28 @@ export type DriverNotification = {
   updatedAt: string;
 };
 
+export type DriverEquipmentIssuance = {
+  id: string;
+  driverId: string;
+  issuedById: string;
+  title: string;
+  items: Array<{ name: string; quantity: number; notes?: string }>;
+  formDocumentPath: string;
+  formDownloadUrl: string;
+  status: 'pending_signature' | 'signed' | 'manual_uploaded' | 'approved' | 'cancelled';
+  issuedAt: string;
+  signedAt?: string | null;
+  approvedAt?: string | null;
+  finalDocument?: {
+    id: string;
+    fileName: string;
+    fileUrl?: string | null;
+    download_url?: string | null;
+    documentType: string;
+    createdAt: string;
+  } | null;
+};
+
 export type MessengerLanguage =
   | 'de'
   | 'tr'

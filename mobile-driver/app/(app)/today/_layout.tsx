@@ -19,6 +19,7 @@ export default function TodayStackLayout() {
       <Stack.Screen name="assignment/[id]" />
       <Stack.Screen name="morning-checkin" />
       <Stack.Screen name="handover-upload" />
+      <Stack.Screen name="equipment-issuance" />
       <Stack.Screen name="accident-report" />
       <Stack.Screen name="cargo-damage-report" />
       <Stack.Screen name="leave-request" options={{ presentation: 'modal' }} />

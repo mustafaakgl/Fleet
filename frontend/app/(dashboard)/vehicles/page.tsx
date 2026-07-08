@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { VehicleActionsMenu } from '@/components/vehicles/VehicleActionsMenu';
 import { VehicleImportDialog } from '@/components/vehicles/VehicleImportDialog';
 import { vehiclesApi } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/api-errors';
 import { getUser } from '@/lib/auth';
 import { canImportCsv } from '@/lib/permissions';
 import { downloadVehiclesCsv } from '@/lib/vehicles-csv';
@@ -80,7 +81,7 @@ export default function VehiclesPage() {
     } catch (e) {
       setVehicles([]);
       setTotal(0);
-      setError(e instanceof Error ? e.message : 'Failed to load vehicles');
+      setError(getApiErrorMessage(e, t('vehicles.loadFailedTitle')));
     } finally {
       setLoading(false);
     }

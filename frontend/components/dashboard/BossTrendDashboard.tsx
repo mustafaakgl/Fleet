@@ -39,15 +39,20 @@ export function BossTrendDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [summaryRes, infringementsRes, finesRes, fuelEntries] = await Promise.all([
+      const [summaryResult, infringementsResult, finesResult, fuelEntriesResult] = await Promise.allSettled([
         dashboardApi.getSummary(),
         tachographApi.listInfringements({ status: 'open', limit: 1 }),
         finesApi.list({ from: iso(-185), to: iso(0) }),
         fleetFuelEntriesApi.list({ from: iso(-185), to: iso(0) }),
       ]);
 
+      const summaryRes = summaryResult.status === 'fulfilled' ? summaryResult.value : null;
+      const infringementsRes = infringementsResult.status === 'fulfilled' ? infringementsResult.value : null;
+      const finesRes = finesResult.status === 'fulfilled' ? finesResult.value : [];
+      const fuelEntries = fuelEntriesResult.status === 'fulfilled' ? fuelEntriesResult.value : [];
+
       setSummary(summaryRes);
-      setOpenInfringements(infringementsRes.total);
+      setOpenInfringements(infringementsRes?.total ?? 0);
 
       const map = new Map<string, { fuel: number; fines: number; damage: number }>();
       for (const entry of fuelEntries) {
@@ -62,7 +67,7 @@ export function BossTrendDashboard() {
         prev.fines += fine.amount ?? 0;
         map.set(key, prev);
       }
-      const damageSeries = summaryRes.chartAnalytics?.monthlyAccidents ?? [];
+      const damageSeries = summaryRes?.chartAnalytics?.monthlyAccidents ?? [];
       for (const row of damageSeries.slice(-6)) {
         const key = row.label;
         const prev = map.get(key) ?? { fuel: 0, fines: 0, damage: 0 };

@@ -4,9 +4,10 @@ import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const isProductionBuild = process.env.NODE_ENV === 'production';
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  output: isProductionBuild ? 'standalone' : undefined,
   outputFileTracingRoot: repoRoot,
   allowedDevOrigins: ['http://localhost:3001', 'http://127.0.0.1:3001'],
   experimental: {

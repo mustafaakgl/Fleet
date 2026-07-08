@@ -122,7 +122,7 @@ export class VehiclesService {
 
   async findAll(query: ListVehiclesQueryDto) {
     const page = Number.isFinite(query.page) ? Math.max(1, Number(query.page)) : 1;
-    const limit = Number.isFinite(query.limit) ? Math.min(100, Math.max(1, Number(query.limit))) : 20;
+    const limit = Number.isFinite(query.limit) ? Math.min(500, Math.max(1, Number(query.limit))) : 20;
     const where = this.buildVehicleWhere(query);
     const sortByMap: Record<string, Prisma.VehicleOrderByWithRelationInput> = {
       plateNumber: { plateNumber: 'asc' },
@@ -166,7 +166,7 @@ export class VehiclesService {
     }
 
     const page = Number.isFinite(query.page) ? Math.max(1, Number(query.page)) : 1;
-    const limit = Number.isFinite(query.limit) ? Math.min(100, Math.max(1, Number(query.limit))) : 20;
+    const limit = Number.isFinite(query.limit) ? Math.min(500, Math.max(1, Number(query.limit))) : 20;
     const where = this.buildVehicleWhere(query, { includeDeleted: true });
     const sortByMap: Record<string, Prisma.VehicleOrderByWithRelationInput> = {
       plateNumber: { plateNumber: 'asc' },

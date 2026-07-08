@@ -64,6 +64,18 @@
     "message": "Fine for {{plate}} on {{date}} — please acknowledge in the app.",
     "default_plate": "vehicle"
   },
+  "equipment_issuance_created": {
+    "title": "Equipment issuance ready",
+    "message": "Please review and sign your equipment issuance in the app."
+  },
+  "equipment_issuance_reminder": {
+    "title": "Reminder: sign equipment issuance",
+    "message": "Your equipment issuance has been pending for 7 days. Please sign it today."
+  },
+  "equipment_issuance_approved": {
+    "title": "Approved by office",
+    "message": "Your equipment issuance was approved by the office."
+  },
   "tacho_infringement": {
     "title": "Tachograph infringement recorded",
     "message": "A {{severityLabel}} tachograph infringement was recorded for {{subject}}. Please review and acknowledge it."

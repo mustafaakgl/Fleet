@@ -15,6 +15,7 @@ import type { ConnectionBannerStatus } from '@/components/connection/ConnectionB
 import { useRegisterConnection } from '@/components/connection/ConnectionBannerProvider';
 import { tachographApi, telematicsApi, trackingApi } from '@/lib/api';
 import { connectionBackoffDelay } from '@/lib/connection-backoff';
+import { USE_MOCK_FLEET_DATA } from '@/lib/fleet-data-config';
 import { isInitialLoad } from '@/lib/is-initial-load';
 import { usePageTitle } from '@/lib/use-page-title';
 import { openSseStream } from '@/lib/sse-stream';
@@ -22,6 +23,7 @@ import type { LiveTrackingItem, LiveTrackingTrailPoint, TachographRemainingDrive
 import { LiveTrackingDetail } from './LiveTrackingDetail';
 import { LocationSourceBadge } from './LocationSourceBadge';
 import { LiveTrackingSidebar } from './LiveTrackingSidebar';
+import { getMockLiveTrackingItems, getMockLiveTrackingTrail } from './mock-live-tracking';
 import { filterBySource, filterByStatus, isAlarmItem, type SourceFilter, type LiveTrackingStateFilter } from './tracking-utils';
 
 const LiveTrackingMap = dynamic(
@@ -33,6 +35,7 @@ const LiveTrackingMap = dynamic(
 );
 
 const STALE_AFTER_SEC = 300;
+const CAN_FALLBACK_TO_DEV_MOCK = process.env.NODE_ENV !== 'production';
 
 export function LiveTrackingPage() {
   const { t } = useTranslation();
@@ -55,6 +58,7 @@ export function LiveTrackingPage() {
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
   const [fitBoundsRequestId, setFitBoundsRequestId] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionBannerStatus>('reconnecting');
+  const [usingMockData, setUsingMockData] = useState(false);
   const retryAttemptRef = useRef(0);
   const hasLoadedOnceRef = useRef(false);
 
@@ -70,6 +74,24 @@ export function LiveTrackingPage() {
     if (driverId) setSelectedDriverId(driverId);
   }, [searchParams]);
 
+  const resolveLiveTrackingItems = useCallback(
+    (data: LiveTrackingItem[]) => {
+      const mockItems = getMockLiveTrackingItems({
+        includeOffline,
+        search: debouncedSearch,
+      });
+      const shouldUseMock =
+        (USE_MOCK_FLEET_DATA || (CAN_FALLBACK_TO_DEV_MOCK && data.length === 0))
+        && mockItems.length > 0;
+
+      return {
+        items: shouldUseMock ? mockItems : data,
+        usingMock: shouldUseMock,
+      };
+    },
+    [debouncedSearch, includeOffline],
+  );
+
   const fetchLiveTracking = useCallback(
     async (options?: { manual?: boolean; fitMap?: boolean; initial?: boolean }) => {
       if (options?.manual) setRefreshing(true);
@@ -81,14 +103,28 @@ export function LiveTrackingPage() {
           includeOffline,
           search: debouncedSearch || undefined,
         });
-        setItems(data);
+        const resolved = resolveLiveTrackingItems(data);
+        setItems(resolved.items);
+        setUsingMockData(resolved.usingMock);
         setLastFetchedAt(new Date());
         hasLoadedOnceRef.current = true;
         setConnectionStatus('connected');
         setError(null);
         if (options?.fitMap) setFitBoundsRequestId((current) => current + 1);
       } catch (fetchError) {
-        if (!hasLoadedOnceRef.current) {
+        const mockItems = CAN_FALLBACK_TO_DEV_MOCK
+          ? getMockLiveTrackingItems({ includeOffline, search: debouncedSearch })
+          : [];
+
+        if (mockItems.length > 0) {
+          setItems(mockItems);
+          setUsingMockData(true);
+          setLastFetchedAt(new Date());
+          hasLoadedOnceRef.current = true;
+          setConnectionStatus('connected');
+          setError(null);
+          if (options?.fitMap) setFitBoundsRequestId((current) => current + 1);
+        } else if (!hasLoadedOnceRef.current) {
           setError(fetchError instanceof Error ? fetchError.message : 'Failed to load live tracking');
         } else {
           setConnectionStatus('disconnected');
@@ -98,7 +134,7 @@ export function LiveTrackingPage() {
         setRefreshing(false);
       }
     },
-    [debouncedSearch, includeOffline],
+    [debouncedSearch, includeOffline, resolveLiveTrackingItems],
   );
 
   useEffect(() => {
@@ -126,7 +162,9 @@ export function LiveTrackingPage() {
       stopStream = openSseStream<LiveTrackingItem[]>(streamUrl, {
         onMessage: (payload) => {
           retryAttemptRef.current = 0;
-          setItems(payload);
+          const resolved = resolveLiveTrackingItems(payload);
+          setItems(resolved.items);
+          setUsingMockData(resolved.usingMock);
           setLastFetchedAt(new Date());
           hasLoadedOnceRef.current = true;
           setLoading(false);
@@ -159,7 +197,20 @@ export function LiveTrackingPage() {
       if (retryTimer != null) window.clearTimeout(retryTimer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [debouncedSearch, fetchLiveTracking, includeOffline]);
+  }, [debouncedSearch, fetchLiveTracking, includeOffline, resolveLiveTrackingItems]);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      if (selectedDriverId !== null) {
+        setSelectedDriverId(null);
+      }
+      return;
+    }
+
+    if (!selectedDriverId || !items.some((item) => item.driverId === selectedDriverId)) {
+      setSelectedDriverId(items[0]?.driverId ?? null);
+    }
+  }, [items, selectedDriverId]);
 
   const filteredItems = useMemo(
     () => filterByStatus(filterBySource(items, sourceFilter), statusFilter),
@@ -200,6 +251,13 @@ export function LiveTrackingPage() {
       return;
     }
 
+    if (usingMockData) {
+      setTrailPoints(getMockLiveTrackingTrail(selectedDriverId));
+      setSelectedRemaining(null);
+      setSelectedVehicleHealth(null);
+      return;
+    }
+
     setTrailPoints([]);
     void (async () => {
       try {
@@ -217,7 +275,7 @@ export function LiveTrackingPage() {
         setTrailPoints([]);
       }
     })();
-  }, [items, selectedDriverId]);
+  }, [items, selectedDriverId, usingMockData]);
 
   const mappableCount = filteredItems.filter(
     (item) => item.latitude !== null && item.longitude !== null,
@@ -259,6 +317,13 @@ export function LiveTrackingPage() {
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      ) : null}
+
+      {usingMockData ? (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <p className="font-medium">{t('liveTracking.demoDataTitle')}</p>
+          <p>{t('liveTracking.demoDataSubtitle')}</p>
+        </div>
       ) : null}
 
       {showInitialSkeleton ? (

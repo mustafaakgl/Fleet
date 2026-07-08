@@ -43,6 +43,9 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 
 const VEHICLE_DOCUMENT_TYPES = ['TUV', 'SP', 'Registration', 'Insurance', 'Service Report'] as const;
+const VEHICLE_DOCUMENT_ACCEPT =
+  '.pdf,.jpg,.jpeg,.png,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const VEHICLE_EQUIPMENT_PHOTO_ACCEPT = '.jpg,.jpeg,.png,image/jpeg,image/png';
 const SPEED_LIMIT_KMH = 90;
 const LOW_BATTERY_VOLTAGE = 11.8;
 
@@ -544,7 +547,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               </label>
               <Input
                 type="file"
-                accept=".pdf,image/*"
+                accept={VEHICLE_DOCUMENT_ACCEPT}
                 onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
               />
             </div>
@@ -641,7 +644,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <Input
                 id="equipment-add-photo"
                 type="file"
-                accept="image/*"
+                accept={VEHICLE_EQUIPMENT_PHOTO_ACCEPT}
                 onChange={(e) => setEquipmentPhotoFile(e.target.files?.[0] ?? null)}
               />
             </div>
@@ -681,7 +684,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                           : t('vehicleDetail.equipmentPhotoUpload')}
                       <input
                         type="file"
-                        accept="image/*"
+                        accept={VEHICLE_EQUIPMENT_PHOTO_ACCEPT}
                         className="hidden"
                         disabled={equipmentPhotoUploadingId === item.id}
                         onChange={(e) => {

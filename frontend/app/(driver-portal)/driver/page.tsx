@@ -24,6 +24,7 @@ export default function DriverPortalHomePage() {
     assignmentId: string;
     vehicleId: string;
   } | null>(null);
+  const [pendingEquipmentIssuanceId, setPendingEquipmentIssuanceId] = useState<string | null>(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
@@ -33,10 +34,11 @@ export default function DriverPortalHomePage() {
       driverPortalApi.me(),
       driverPortalApi.todayAssignments(today),
       driverPortalApi.listHandovers({ date: today, photoStatus: 'missing' }),
+      driverPortalApi.listEquipmentIssuances(),
       messengerApi.getUnreadCount(),
       driverPortalApi.unreadNotifications(),
     ])
-      .then(([profile, assignments, handovers, messages, notifications]) => {
+      .then(([profile, assignments, handovers, equipmentIssuances, messages, notifications]) => {
         setDriverName(profile.driver.firstName);
         setDriverStatus(profile.driver.status);
         setFirstAssignment(assignments[0] ?? null);
@@ -47,6 +49,9 @@ export default function DriverPortalHomePage() {
           pending?.assignmentId && pending.vehicleId
             ? { assignmentId: pending.assignmentId, vehicleId: pending.vehicleId }
             : null,
+        );
+        setPendingEquipmentIssuanceId(
+          equipmentIssuances.find((row) => row.status === 'pending_signature')?.id ?? null,
         );
         setUnreadMessages(messages.total);
         setUnreadNotifications(notifications.count);
@@ -123,6 +128,14 @@ export default function DriverPortalHomePage() {
                   >
                     <Camera className="mr-2 h-4 w-4" />
                     {t('driverPortal.home.handoverPhoto')}
+                  </Link>
+                </Button>
+              ) : null}
+              {pendingEquipmentIssuanceId ? (
+                <Button asChild variant="outline" className="justify-start">
+                  <Link href={`/driver/equipment-issuance?id=${pendingEquipmentIssuanceId}`}>
+                    <ClipboardCheck className="mr-2 h-4 w-4" />
+                    {t('driverPortal.home.equipmentIssuance')}
                   </Link>
                 </Button>
               ) : null}

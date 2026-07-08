@@ -51,6 +51,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'TachoInfringement',
   'TachoDownloadSchedule',
   'TelemetryQuarantine',
+  'EquipmentIssuance',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

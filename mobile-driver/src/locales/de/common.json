@@ -67,6 +67,7 @@
     "handoverPhoto": "Übergabe-Foto",
     "reportAccident": "Unfall melden",
     "reportCargo": "Ladungsschaden",
+    "equipmentIssuance": "Aushändigung unterschreiben",
     "openRequests": "Anträge",
     "loadError": "Einsätze konnten nicht geladen werden.",
     "summaryAssignments": "Heutiger Einsatz",
@@ -356,6 +357,25 @@
     "type_contract": "Arbeitsvertrag",
     "type_salary_document": "Gehaltsabrechnung",
     "officeProvidedHint": "Folgende Dokumente stellt das Büro bereit und erscheinen hier nach Upload:"
+  },
+  "equipmentIssuance": {
+    "title": "Aushändigungsbestätigung",
+    "subtitle": "Formular öffnen, prüfen und direkt in der App unterschreiben.",
+    "loadError": "Aushändigung konnte nicht geladen werden.",
+    "notFound": "Aushändigung nicht gefunden.",
+    "openForm": "Formular öffnen",
+    "formOpenError": "Formular konnte nicht geöffnet werden.",
+    "items": "Ausgegebene Gegenstände",
+    "signature": "Unterschrift",
+    "signatureHint": "Hier mit dem Finger unterschreiben.",
+    "signatureRequired": "Bitte zuerst unterschreiben.",
+    "capture": "Unterschrift übernehmen",
+    "clear": "Leeren",
+    "sign": "Digital unterschreiben",
+    "signSuccess": "Aushändigung unterschrieben.",
+    "signError": "Unterschrift fehlgeschlagen.",
+    "openFinal": "Finales PDF öffnen",
+    "finalOpenError": "Finales PDF konnte nicht geöffnet werden."
   },
   "licenseCheck": {
     "title": "Führerscheinkontrolle",

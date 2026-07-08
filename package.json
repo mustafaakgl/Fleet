@@ -18,6 +18,7 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "docker:seed": "docker compose exec backend npx prisma db seed",
+    "verify:gateway": "npm --prefix backend run verify:gateway",
     "qa:mobile-driver": "node scripts/qa-mobile-driver.mjs",
     "loop:verify": "node scripts/loop-verify.mjs"
   },

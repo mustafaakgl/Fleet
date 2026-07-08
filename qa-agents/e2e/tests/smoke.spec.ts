@@ -106,6 +106,7 @@ test.describe('Smoke', () => {
 
 const OFFICE_AUTH_STATE = path.resolve(__dirname, '..', '.auth', 'office.json');
 const DRIVER_AUTH_STATE = path.resolve(__dirname, '..', '.auth', 'driver.json');
+const MINIMAL_PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF', 'utf8');
 
 function readAccessToken(storageStatePath: string): string | null {
   if (!fs.existsSync(storageStatePath)) {
@@ -358,5 +359,84 @@ test.describe('Driver smoke', () => {
     });
     expect(currentAfterEnd.ok()).toBeTruthy();
     expect((await currentAfterEnd.json() as { active: boolean }).active).toBe(false);
+  });
+});
+
+test.describe('Equipment issuance smoke', () => {
+  test('office create -> driver sign -> office approve', async ({ request }) => {
+    const officeToken = readAccessToken(OFFICE_AUTH_STATE);
+    const driverToken = readAccessToken(DRIVER_AUTH_STATE);
+
+    test.skip(!officeToken || !driverToken, 'Missing office/driver auth state for equipment issuance smoke.');
+
+    const officeHeaders = { Authorization: `Bearer ${officeToken}` };
+    const driverHeaders = { Authorization: `Bearer ${driverToken}` };
+
+    const meResponse = await request.get(`${API_BASE_URL}/driver/me`, {
+      headers: driverHeaders,
+    });
+    expect(meResponse.ok(), await meResponse.text()).toBeTruthy();
+    const me = await meResponse.json() as {
+      driver: { id: string };
+    };
+
+    const createResponse = await request.post(`${API_BASE_URL}/equipment-issuances`, {
+      headers: officeHeaders,
+      multipart: {
+        driverId: me.driver.id,
+        title: 'Arbeitskleidung Ausgabe',
+        itemsJson: JSON.stringify([{ name: `Warnweste-${Date.now()}`, quantity: 1 }]),
+        file: {
+          name: 'office-form.pdf',
+          mimeType: 'application/pdf',
+          buffer: MINIMAL_PDF,
+        },
+      },
+    });
+    expect(createResponse.ok(), await createResponse.text()).toBeTruthy();
+    const created = await createResponse.json() as { id: string; status: string };
+    expect(created.status).toBe('pending_signature');
+
+    const forbiddenApprove = await request.post(`${API_BASE_URL}/equipment-issuances/${created.id}/approve`, {
+      headers: driverHeaders,
+      data: { note: 'should fail' },
+    });
+    expect(forbiddenApprove.status()).toBe(403);
+
+    const signResponse = await request.post(`${API_BASE_URL}/driver/equipment-issuances/${created.id}/sign`, {
+      headers: driverHeaders,
+      data: {
+        signatureDataUrl:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xn8sAAAAASUVORK5CYII=',
+      },
+    });
+    expect(signResponse.ok(), await signResponse.text()).toBeTruthy();
+    const signed = await signResponse.json() as {
+      status: string;
+      finalDocument: { id: string; fileName: string } | null;
+    };
+    expect(signed.status).toBe('signed');
+    expect(signed.finalDocument).not.toBeNull();
+
+    const docsResponse = await request.get(`${API_BASE_URL}/driver/documents`, {
+      headers: driverHeaders,
+    });
+    expect(docsResponse.ok(), await docsResponse.text()).toBeTruthy();
+    const docs = await docsResponse.json() as { items: Array<{ documentType: string }> };
+    expect(docs.items.some((item) => item.documentType === 'equipment_issuance_final')).toBeTruthy();
+
+    const approveResponse = await request.post(`${API_BASE_URL}/equipment-issuances/${created.id}/approve`, {
+      headers: officeHeaders,
+      data: { note: 'e2e approval' },
+    });
+    expect(approveResponse.ok(), await approveResponse.text()).toBeTruthy();
+    const approved = await approveResponse.json() as {
+      status: string;
+      approvedAt: string | null;
+      finalDocument: { id: string } | null;
+    };
+    expect(approved.status).toBe('approved');
+    expect(approved.approvedAt).toBeTruthy();
+    expect(approved.finalDocument?.id).toBeTruthy();
   });
 });

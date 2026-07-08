@@ -283,6 +283,42 @@ async function main() {
       }
     }
 
+    const totalEquipmentIssuances = await base.equipmentIssuance.count();
+    const tenantAEquipmentIssuanceCount = await base.equipmentIssuance.count({ where: { tenantId: tenantA } });
+    const tenantBEquipmentIssuanceCount = await base.equipmentIssuance.count({ where: { tenantId: tenantB } });
+    const scopedEquipmentIssuancesA = await TenantContext.run(tenantA, () =>
+      scoped.equipmentIssuance.count(),
+    );
+    const scopedEquipmentIssuancesB = await TenantContext.run(tenantB, () =>
+      scoped.equipmentIssuance.count(),
+    );
+    console.log(
+      `EquipmentIssuance total: ${totalEquipmentIssuances}, tenant A scoped: ${scopedEquipmentIssuancesA}`,
+    );
+
+    if (scopedEquipmentIssuancesA !== tenantAEquipmentIssuanceCount) {
+      throw new Error('Isolation failure: tenant A scoped equipmentIssuance count mismatch');
+    }
+
+    if (scopedEquipmentIssuancesB !== tenantBEquipmentIssuanceCount) {
+      throw new Error('Isolation failure: tenant B scoped equipmentIssuance count mismatch');
+    }
+
+    if (tenantA !== tenantB && scopedEquipmentIssuancesA + scopedEquipmentIssuancesB > totalEquipmentIssuances) {
+      throw new Error('Isolation failure: scoped equipmentIssuance counts exceed total');
+    }
+
+    if (tenantA !== tenantB) {
+      const crossEquipmentIssuance = await TenantContext.run(tenantA, () =>
+        scoped.equipmentIssuance.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossEquipmentIssuance) {
+        throw new Error('Isolation failure: tenant A context read tenant B equipment issuance');
+      }
+    }
+
     console.log('Tenant isolation check passed.');
   } finally {
     await base.$disconnect();

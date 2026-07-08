@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { getPostLoginPath, getUser, isAuthenticated } from '@/lib/auth';
 
 interface ProtectedRouteProps {
@@ -10,10 +10,19 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [canRender, setCanRender] = useState(false);
+
+  const allowDevLiveTrackingPreview =
+    process.env.NODE_ENV !== 'production' && pathname === '/live-tracking';
 
   useEffect(() => {
     if (!isAuthenticated()) {
+      if (allowDevLiveTrackingPreview) {
+        setCanRender(true);
+        return;
+      }
+
       router.replace('/login');
       setCanRender(false);
       return;
@@ -27,7 +36,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     setCanRender(true);
-  }, [router]);
+  }, [allowDevLiveTrackingPreview, router]);
 
   if (!canRender) {
     return null;

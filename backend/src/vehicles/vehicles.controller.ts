@@ -55,8 +55,8 @@ export class VehiclesController {
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'sortBy', required: false, type: String, example: 'plateNumber' })
   @ApiQuery({ name: 'sortOrder', required: false, type: String, enum: ['asc', 'desc'] })
-  listVehicles(@Query() paginationDto: PaginationDto, @Query() query: ListVehiclesQueryDto) {
-    return this.vehiclesService.list({ ...query, ...paginationDto });
+  listVehicles(@Query() query: ListVehiclesQueryDto) {
+    return this.vehiclesService.list(query);
   }
 
   @Get(':id/photo')

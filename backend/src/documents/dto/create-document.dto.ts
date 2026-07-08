@@ -12,6 +12,7 @@ const DOCUMENT_OWNER_TYPES = [
   'assignment',
   'service_record',
   'vehicle_equipment',
+  'equipment_issuance',
 ] as const;
 
 export class CreateDocumentDto {

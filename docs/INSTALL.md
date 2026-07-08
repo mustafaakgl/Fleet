@@ -113,7 +113,49 @@ curl -sS -H 'Content-Type: application/json' \
 ```
 Beklenen: HTTP 200 ve `accessToken` donmesi.
 
-## 8) Kurulum Sonrasi Gorsel Kontrol (Zorunlu)
+## 8) Gateway Uctan Uca Dogrulama (Codec8)
+
+Bu adim docker stack icinde telematik gateway'in gercekten paket alip API tarafina yansittigini kanitlar.
+
+1. Stack'i kaldir:
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+2. Gateway dinleme dogrulamasi:
+```bash
+docker compose -f docker-compose.prod.yml logs gateway --tail 120
+```
+Beklenen log satiri:
+`Teltonika Codec8 gateway listening on 0.0.0.0:5027`
+
+3. Device binding'i compose DB icinde dogrula (IMEI red durumunda):
+```bash
+docker compose -f docker-compose.prod.yml exec gateway node -e 'const {PrismaClient}=require("@prisma/client"); const p=new PrismaClient(); (async()=>{const rows=await p.device.findMany({where:{imei:"359339080000101"},select:{tenantId:true,vehicleId:true}}); console.log(rows); await p.$disconnect();})()'
+```
+Not: Gateway ayni IMEI icin tam 1 kayit ve `vehicleId` dolu bekler. Kayit yoksa veya birden fazla ise login reject olur.
+
+4. Simulasyon + ACK kontrolu:
+```bash
+npm run verify:gateway
+```
+Bu komut `backend/scripts/codec8-sim.mjs --scenario normal --seed 42` kosar ve JSON ozetinde `ackRecords > 0` oldugunu dogrular.
+
+5. Canli endpoint kaniti:
+```bash
+TOKEN=$(curl -sS -X POST http://localhost:3000/api/v1/auth/login \
+	-H 'Content-Type: application/json' \
+	-d '{"email":"admin@fleet.com","password":"Admin123!"}' \
+	| node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s); process.stdout.write(j.accessToken||"");})')
+
+curl -sS 'http://localhost:3000/api/v1/tracking/live?includeOffline=true&staleAfterSec=300' \
+	-H "Authorization: Bearer $TOKEN"
+```
+Beklenen: HTTP 200 ve en az bir arac/surucu satiri.
+
+Takilinan tipik kok neden: hostta seedlenen DB ile compose icindeki DB farkli oldugunda gateway `imei rejected` verir; kayit dogrudan compose DB'de olmalidir.
+
+## 9) Kurulum Sonrasi Gorsel Kontrol (Zorunlu)
 
 Temiz prod compose acildiktan sonra su kontroller yapilmadan kurulum tamamlandi sayilmaz:
 

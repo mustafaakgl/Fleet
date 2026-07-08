@@ -34,7 +34,8 @@ type DocumentOwnerType =
   | 'vehicle_handover'
   | 'assignment'
   | 'service_record'
-  | 'vehicle_equipment';
+  | 'vehicle_equipment'
+  | 'equipment_issuance';
 
 type DocumentStatus = 'valid' | 'expiring_soon' | 'expired' | 'missing' | 'archived';
 
@@ -50,6 +51,7 @@ const DOCUMENT_OWNER_TYPES: DocumentOwnerType[] = [
   'assignment',
   'service_record',
   'vehicle_equipment',
+  'equipment_issuance',
 ];
 
 const DOCUMENT_STATUSES: DocumentStatus[] = ['valid', 'expiring_soon', 'expired', 'missing', 'archived'];
@@ -205,6 +207,16 @@ export class DocumentsService {
         if (assignment) {
           return;
         }
+      }
+    }
+
+    if (document.ownerType === 'equipment_issuance') {
+      const issuance = await this.prisma.equipmentIssuance.findUnique({
+        where: { id: document.ownerId },
+        select: { driverId: true },
+      });
+      if (issuance?.driverId === driver.id) {
+        return;
       }
     }
 

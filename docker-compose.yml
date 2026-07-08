@@ -59,6 +59,27 @@ services:
       - backend_uploads:/app/uploads/documents
     restart: unless-stopped
 
+  gateway:
+    image: fleet-backend
+    command: ["node", "dist/telematics-gateway/main.js"]
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://fleet:fleet123@postgres:5432/fleet}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-secret}
+      DEVICE_PORT: ${DEVICE_PORT:-5027}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    ports:
+      - "5027:5027"
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend

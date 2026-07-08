@@ -9,6 +9,7 @@ import type {
   VehicleCostsResponse,
   Driver,
   DriverDetail,
+  EquipmentIssuanceRecord,
   PaginatedDrivers,
   Vehicle,
   VehicleDetail,
@@ -42,6 +43,7 @@ import type {
   DriverMorningCheckin,
   DriverHandover,
   DriverHandoverPhotoSlot,
+  DriverEquipmentIssuance,
   DriverPortalRequest,
   DriverTransportRequest,
   DriverTransportFormOptions,
@@ -656,6 +658,50 @@ export const driversApi = {
 
   getRisk: (id: string) =>
     api.get<DriverRiskSummary>(`/drivers/${id}/risk`).then((r) => r.data),
+};
+
+export const equipmentIssuancesApi = {
+  list: (params?: { driverId?: string; status?: string }) =>
+    api.get<EquipmentIssuanceRecord[]>('/equipment-issuances', { params }).then((r) => r.data),
+
+  getById: (id: string) =>
+    api.get<EquipmentIssuanceRecord>(`/equipment-issuances/${id}`).then((r) => r.data),
+
+  create: (payload: {
+    driverId: string;
+    title: string;
+    items?: Array<{ name: string; quantity?: number; notes?: string }>;
+    issuedAt?: string;
+    file: File;
+  }) => {
+    const formData = new FormData();
+    formData.append('driverId', payload.driverId);
+    formData.append('title', payload.title);
+    formData.append('file', payload.file);
+    if (payload.issuedAt) formData.append('issuedAt', payload.issuedAt);
+    if (payload.items && payload.items.length > 0) {
+      formData.append('itemsJson', JSON.stringify(payload.items));
+    }
+    return api
+      .post<EquipmentIssuanceRecord>('/equipment-issuances', formData, { headers: driverMultipartHeaders() })
+      .then((r) => r.data);
+  },
+
+  manualUpload: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api
+      .post<EquipmentIssuanceRecord>(`/equipment-issuances/${id}/manual-upload`, formData, {
+        headers: driverMultipartHeaders(),
+      })
+      .then((r) => r.data);
+  },
+
+  approve: (id: string, note?: string) =>
+    api.post<EquipmentIssuanceRecord>(`/equipment-issuances/${id}/approve`, { note }).then((r) => r.data),
+
+  cancel: (id: string, reason?: string) =>
+    api.post<EquipmentIssuanceRecord>(`/equipment-issuances/${id}/cancel`, { reason }).then((r) => r.data),
 };
 
 // ─── Vehicles ─────────────────────────────────────────────────────────────────
@@ -2031,6 +2077,20 @@ export const driverPortalApi = {
     damageNotes?: string;
     notes?: string;
   }) => api.post<DriverHandover>('/driver/vehicle-handovers', payload).then((r) => r.data),
+
+  listEquipmentIssuances: () =>
+    api.get<DriverEquipmentIssuance[]>('/driver/equipment-issuances').then((r) => r.data),
+
+  getEquipmentIssuance: (id: string) =>
+    api.get<DriverEquipmentIssuance>(`/driver/equipment-issuances/${id}`).then((r) => r.data),
+
+  getEquipmentIssuanceFormBlob: (id: string) =>
+    api.get<Blob>(`/driver/equipment-issuances/${id}/form`, { responseType: 'blob' }).then((r) => r.data),
+
+  signEquipmentIssuance: (id: string, signatureDataUrl: string) =>
+    api
+      .post<DriverEquipmentIssuance>(`/driver/equipment-issuances/${id}/sign`, { signatureDataUrl })
+      .then((r) => r.data),
 
   uploadHandoverPhoto: (
     handoverId: string,

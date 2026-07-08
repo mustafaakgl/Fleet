@@ -66,6 +66,7 @@
     "handoverPhoto": "Devir fotoğrafı",
     "reportAccident": "Kaza bildir",
     "reportCargo": "Yük hasarı",
+    "equipmentIssuance": "Teslim tutanağını imzala",
     "openRequests": "Talepler",
     "loadError": "Einsatzlar yüklenemedi.",
     "summaryAssignments": "Bugünün einsatzları",
@@ -371,6 +372,25 @@
     "type_contract": "İş sözleşmesi",
     "type_salary_document": "Maaş bordrosu",
     "officeProvidedHint": "Aşağıdaki evraklar ofis tarafından yüklenir:"
+  },
+  "equipmentIssuance": {
+    "title": "Teslim tutanağı",
+    "subtitle": "Formu aç, kontrol et ve uygulamadan imzala.",
+    "loadError": "Teslim tutanağı yüklenemedi.",
+    "notFound": "Teslim tutanağı bulunamadı.",
+    "openForm": "Formu aç",
+    "formOpenError": "Form açılamadı.",
+    "items": "Teslim edilen kalemler",
+    "signature": "İmza",
+    "signatureHint": "Parmağınla bu alana imza at.",
+    "signatureRequired": "Önce imza atmalısın.",
+    "capture": "İmzayı kaydet",
+    "clear": "Temizle",
+    "sign": "Dijital imzala",
+    "signSuccess": "Teslim tutanağı imzalandı.",
+    "signError": "İmza atılamadı.",
+    "openFinal": "Nihai PDF'i aç",
+    "finalOpenError": "Nihai PDF açılamadı."
   },
   "licenseCheck": {
     "title": "Ehliyet kontrolü",

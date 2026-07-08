@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
+import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateServiceReminderDto } from './dto/create-service-reminder.dto';
@@ -33,6 +34,7 @@ export class RemindersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly driverNotifyService: DriverNotifyService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -345,6 +347,42 @@ export class RemindersService {
     });
   }
 
+  async getDueEquipmentIssuances(referenceDate = new Date()) {
+    const today = this.normalizeDate(referenceDate);
+
+    const rows = await this.prisma.equipmentIssuance.findMany({
+      where: { status: 'pending_signature' },
+      select: {
+        id: true,
+        driverId: true,
+        issuedAt: true,
+      },
+    });
+
+    return rows.flatMap((row) => {
+      const dueDate = this.normalizeDate(new Date(row.issuedAt));
+      dueDate.setDate(dueDate.getDate() + 7);
+
+      if (this.diffInDays(today, dueDate) > 0) {
+        return [];
+      }
+
+      return [
+        {
+          targetType: 'equipment_issuance',
+          targetId: row.id,
+          reminderType: 'custom' as ReminderType,
+          dueDate,
+          title: 'Equipment issuance signature pending',
+          description: `Equipment issuance ${row.id} pending signature`,
+          priority: 'high' as NotificationPriority,
+          notifyBeforeDays: 7,
+          driverId: row.driverId,
+        },
+      ];
+    });
+  }
+
   private async notifyDriverForDocumentExpiry(item: {
     targetId: string;
     reminderType: ReminderType;
@@ -403,12 +441,36 @@ export class RemindersService {
     });
   }
 
+  private async notifyDriverForEquipmentIssuance(item: {
+    targetId: string;
+    driverId: string;
+  }) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: item.driverId },
+      select: { userId: true },
+    });
+
+    if (!driver?.userId) {
+      return;
+    }
+
+    await this.driverNotifyService.notifyUser({
+      userId: driver.userId,
+      key: 'equipment_issuance_reminder',
+      type: 'system',
+      priority: 'high',
+      relatedEntityType: 'equipment_issuance',
+      relatedEntityId: item.targetId,
+    });
+  }
+
   async generateReminders(actorUserId?: string) {
     const dueDrivers = await this.getDueDrivers();
     const dueVehicles = await this.getDueVehicles();
     const dueDocuments = await this.getDueDocuments();
+    const dueEquipmentIssuances = await this.getDueEquipmentIssuances();
 
-    const candidates = [...dueDrivers, ...dueVehicles, ...dueDocuments];
+    const candidates = [...dueDrivers, ...dueVehicles, ...dueDocuments, ...dueEquipmentIssuances];
     const createdReminders: Array<unknown> = [];
 
     for (const item of candidates) {
@@ -439,6 +501,17 @@ export class RemindersService {
           && (item.reminderType === 'license_expiry' || item.reminderType === 'passport_expiry')
         ) {
           await this.notifyDriverForDocumentExpiry(item);
+        }
+
+        if (
+          item.targetType === 'equipment_issuance'
+          && 'driverId' in item
+          && typeof item.driverId === 'string'
+        ) {
+          await this.notifyDriverForEquipmentIssuance({
+            targetId: item.targetId,
+            driverId: item.driverId,
+          });
         }
       }
     }

@@ -23,6 +23,7 @@ import type {
   SubmitLocationResponse,
   DriverDocumentsResponse,
   DriverDocumentItem,
+  DriverEquipmentIssuance,
   LicenseCheckHistoryItem,
   LicenseCheckPhotoMeta,
   LicenseCheckStatusResponse,
@@ -142,6 +143,20 @@ export const driverApi = {
   },
   async listDocuments() {
     const { data } = await apiClient.get<DriverDocumentsResponse>('/driver/documents');
+    return data;
+  },
+  async listEquipmentIssuances() {
+    const { data } = await apiClient.get<DriverEquipmentIssuance[]>('/driver/equipment-issuances');
+    return data;
+  },
+  async getEquipmentIssuance(id: string) {
+    const { data } = await apiClient.get<DriverEquipmentIssuance>(`/driver/equipment-issuances/${id}`);
+    return data;
+  },
+  async signEquipmentIssuance(id: string, signatureDataUrl: string) {
+    const { data } = await apiClient.post<DriverEquipmentIssuance>(`/driver/equipment-issuances/${id}/sign`, {
+      signatureDataUrl,
+    });
     return data;
   },
   async uploadDocument(payload: {

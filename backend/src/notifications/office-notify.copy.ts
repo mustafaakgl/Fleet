@@ -3,7 +3,8 @@ export type OfficeNotifyKey =
   | 'transport_request_needs_review'
   | 'driver_request_created'
   | 'accident_report_created'
-  | 'cargo_damage_report_created';
+  | 'cargo_damage_report_created'
+  | 'equipment_issuance_pending_approval';
 
 type CopyTemplate = {
   title: string;
@@ -36,6 +37,10 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       message: (p) =>
         `${p.driverName} hat Ladungsschaden gemeldet (${p.plateNumber}${p.cargoSummary ? ` · ${p.cargoSummary}` : ''}).`,
     },
+    equipment_issuance_pending_approval: {
+      title: 'Aushändigung wartet auf Freigabe',
+      message: (p) => `${p.driverName} hat eine Aushändigung mit ${p.count} Position(en) eingereicht.`,
+    },
   },
   en: {
     transport_request_created: {
@@ -62,6 +67,10 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       message: (p) =>
         `${p.driverName} reported cargo damage (${p.plateNumber}${p.cargoSummary ? ` · ${p.cargoSummary}` : ''}).`,
     },
+    equipment_issuance_pending_approval: {
+      title: 'Equipment issuance pending approval',
+      message: (p) => `${p.driverName} submitted an issuance with ${p.count} item(s).`,
+    },
   },
   tr: {
     transport_request_created: {
@@ -87,6 +96,10 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'Yeni yük hasarı bildirimi',
       message: (p) =>
         `${p.driverName} yük hasarı bildirdi (${p.plateNumber}${p.cargoSummary ? ` · ${p.cargoSummary}` : ''}).`,
+    },
+    equipment_issuance_pending_approval: {
+      title: 'Teslim tutanağı onay bekliyor',
+      message: (p) => `${p.driverName}, ${p.count} kalemlik teslim tutanağı gönderdi.`,
     },
   },
 };

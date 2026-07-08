@@ -66,6 +66,7 @@
     "handoverPhoto": "Handover photo",
     "reportAccident": "Report accident",
     "reportCargo": "Cargo damage",
+    "equipmentIssuance": "Sign equipment issuance",
     "openRequests": "Requests",
     "loadError": "Could not load assignments.",
     "summaryAssignments": "Today's assignment",
@@ -371,6 +372,25 @@
     "type_contract": "Employment contract",
     "type_salary_document": "Payslip",
     "officeProvidedHint": "The following are provided by the office and appear here once uploaded:"
+  },
+  "equipmentIssuance": {
+    "title": "Equipment issuance",
+    "subtitle": "Open the form, review it, and sign directly in the app.",
+    "loadError": "Could not load the equipment issuance.",
+    "notFound": "Equipment issuance not found.",
+    "openForm": "Open form",
+    "formOpenError": "Could not open the form.",
+    "items": "Issued items",
+    "signature": "Signature",
+    "signatureHint": "Sign here with your finger.",
+    "signatureRequired": "Please sign first.",
+    "capture": "Use signature",
+    "clear": "Clear",
+    "sign": "Sign digitally",
+    "signSuccess": "Equipment issuance signed.",
+    "signError": "Signing failed.",
+    "openFinal": "Open final PDF",
+    "finalOpenError": "Could not open the final PDF."
   },
   "licenseCheck": {
     "title": "License check",

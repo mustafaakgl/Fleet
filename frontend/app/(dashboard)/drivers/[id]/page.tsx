@@ -16,6 +16,7 @@ import {
   driversApi,
   documentsApi,
   driverLicensesApi,
+  equipmentIssuancesApi,
   finesApi,
   leaveRequestsApi,
   privacyApi,
@@ -24,7 +25,7 @@ import {
 import { FineStatusBadge } from '@/components/fines/FineStatusBadge';
 import type { Fine } from '@/lib/types';
 import { downloadBlob } from '@/lib/download-blob';
-import type { DriverDetail, Document, LeaveRequest } from '@/lib/types';
+import type { DriverDetail, Document, EquipmentIssuanceRecord, LeaveRequest } from '@/lib/types';
 import { getUser } from '@/lib/auth';
 import { canViewFinancials, canViewOperationalTachograph } from '@/lib/permissions';
 import { useTranslation } from 'react-i18next';
@@ -106,6 +107,16 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
   const [handovers, setHandovers] = useState<DriverHandoverRow[]>([]);
   const [handoversError, setHandoversError] = useState<string | null>(null);
+  const [equipmentIssuances, setEquipmentIssuances] = useState<EquipmentIssuanceRecord[]>([]);
+  const [equipmentError, setEquipmentError] = useState<string | null>(null);
+  const [approvingIssuanceId, setApprovingIssuanceId] = useState<string | null>(null);
+  const [equipmentTitle, setEquipmentTitle] = useState('Arbeitskleidung Ausgabe');
+  const [equipmentSummaryText, setEquipmentSummaryText] = useState('');
+  const [equipmentFormFile, setEquipmentFormFile] = useState<File | null>(null);
+  const [creatingEquipment, setCreatingEquipment] = useState(false);
+  const [equipmentCreateError, setEquipmentCreateError] = useState<string | null>(null);
+  const [manualUploadByIssuanceId, setManualUploadByIssuanceId] = useState<Record<string, File | null>>({});
+  const [manualUploadingId, setManualUploadingId] = useState<string | null>(null);
 
   const [incidents, setIncidents] = useState<DriverIncidentRow[]>([]);
   const [incidentsError, setIncidentsError] = useState<string | null>(null);
@@ -147,6 +158,10 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       .getHandovers(id)
       .then((rows) => setHandovers(rows as DriverHandoverRow[]))
       .catch((e) => setHandoversError(e?.message ?? 'Failed'));
+    equipmentIssuancesApi
+      .list({ driverId: id })
+      .then(setEquipmentIssuances)
+      .catch((e) => setEquipmentError(e?.message ?? 'Failed'));
     driversApi
       .getIncidents(id)
       .then((rows) => setIncidents(rows as DriverIncidentRow[]))
@@ -252,6 +267,88 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
     () => incidents.filter((i) => i.type === 'cargo_damage'),
     [incidents],
   );
+  const equipmentApprovedCount = equipmentIssuances.filter((item) => item.status === 'approved').length;
+  const equipmentPendingCount = equipmentIssuances.filter((item) => item.status !== 'approved' && item.status !== 'cancelled').length;
+  const canApproveEquipment = ['admin', 'boss', 'office'].includes(getUser()?.role ?? '');
+
+  async function handleApproveEquipmentIssuance(issuanceId: string) {
+    if (!window.confirm(t('driverDetail.equipmentApproveConfirm'))) {
+      return;
+    }
+    setApprovingIssuanceId(issuanceId);
+    try {
+      await equipmentIssuancesApi.approve(issuanceId);
+      const rows = await equipmentIssuancesApi.list({ driverId: id });
+      setEquipmentIssuances(rows);
+    } catch {
+      window.alert(t('driverDetail.equipmentApproveError'));
+    } finally {
+      setApprovingIssuanceId(null);
+    }
+  }
+
+  function parseEquipmentSummaryLines(input: string) {
+    return input
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [name, quantityRaw, ...notesParts] = line.split('|').map((part) => part.trim());
+        const quantity = Number.parseInt(quantityRaw ?? '1', 10);
+        return {
+          name,
+          quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+          notes: notesParts.join(' | ') || undefined,
+        };
+      });
+  }
+
+  async function reloadEquipmentIssuances() {
+    const rows = await equipmentIssuancesApi.list({ driverId: id });
+    setEquipmentIssuances(rows);
+  }
+
+  async function handleCreateEquipmentIssuance() {
+    if (!equipmentFormFile) {
+      setEquipmentCreateError(t('driverDetail.equipmentFormRequired'));
+      return;
+    }
+    setCreatingEquipment(true);
+    setEquipmentCreateError(null);
+    try {
+      await equipmentIssuancesApi.create({
+        driverId: id,
+        title: equipmentTitle,
+        items: parseEquipmentSummaryLines(equipmentSummaryText),
+        file: equipmentFormFile,
+      });
+      setEquipmentFormFile(null);
+      setEquipmentSummaryText('');
+      await reloadEquipmentIssuances();
+    } catch (error) {
+      setEquipmentCreateError(error instanceof Error ? error.message : t('driverDetail.equipmentCreateError'));
+    } finally {
+      setCreatingEquipment(false);
+    }
+  }
+
+  async function handleManualUpload(issuanceId: string) {
+    const file = manualUploadByIssuanceId[issuanceId];
+    if (!file) {
+      window.alert(t('driverDetail.equipmentManualUploadRequired'));
+      return;
+    }
+    setManualUploadingId(issuanceId);
+    try {
+      await equipmentIssuancesApi.manualUpload(issuanceId, file);
+      await reloadEquipmentIssuances();
+      setManualUploadByIssuanceId((current) => ({ ...current, [issuanceId]: null }));
+    } catch {
+      window.alert(t('driverDetail.equipmentManualUploadError'));
+    } finally {
+      setManualUploadingId(null);
+    }
+  }
 
   // Vehicle history derived from recent_assignments + handover photo status join
   const vehicleHistory = useMemo(() => {
@@ -752,6 +849,149 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                 )}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>{t('driverDetail.equipmentIssuances')}</CardTitle>
+          <Badge className="bg-slate-100 text-slate-700">
+            {t('driverDetail.equipmentSummary', {
+              approved: equipmentApprovedCount,
+              pending: equipmentPendingCount,
+            })}
+          </Badge>
+        </CardHeader>
+        <CardContent className="p-0">
+          {equipmentError ? (
+            <p className="p-4 text-sm text-gray-500">{t('driverDetail.equipmentLoadError')}</p>
+          ) : (
+            <div className="space-y-4 p-4">
+              <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-medium text-slate-600">{t('driverDetail.equipmentTitle')}</label>
+                  <Input value={equipmentTitle} onChange={(e) => setEquipmentTitle(e.target.value)} />
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-medium text-slate-600">{t('driverDetail.equipmentFormPdf')}</label>
+                  <Input type="file" accept="application/pdf" onChange={(e) => setEquipmentFormFile(e.target.files?.[0] ?? null)} />
+                </div>
+                <div className="space-y-1 md:col-span-3">
+                  <label className="text-xs font-medium text-slate-600">{t('driverDetail.equipmentSummaryInput')}</label>
+                  <textarea
+                    className="min-h-24 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                    value={equipmentSummaryText}
+                    onChange={(e) => setEquipmentSummaryText(e.target.value)}
+                    placeholder={t('driverDetail.equipmentSummaryPlaceholder')}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button type="button" className="w-full" disabled={creatingEquipment} onClick={() => void handleCreateEquipmentIssuance()}>
+                    {creatingEquipment ? t('common.loading') : t('driverDetail.equipmentCreate')}
+                  </Button>
+                </div>
+              </div>
+              {equipmentCreateError ? <p className="text-sm text-red-600">{equipmentCreateError}</p> : null}
+
+              <Table className={FLEET_TABLE}>
+                <TableHeader>
+                  <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.equipmentTitle')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.date')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.equipmentItems')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.status')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.equipmentPdf')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('driverDetail.actions')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={FLEET_TABLE_BODY}>
+                  {equipmentIssuances.length === 0 ? (
+                    <TableRow className={FLEET_TABLE_ROW}>
+                      <TableCell colSpan={6} className={cn(FLEET_TABLE_CELL_MUTED, 'text-center')}>
+                        {t('common.noRecords')}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    equipmentIssuances.map((issuance) => (
+                      <TableRow className={FLEET_TABLE_ROW} key={issuance.id}>
+                        <TableCell className={FLEET_TABLE_CELL}>{issuance.title}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{formatDate(issuance.issuedAt)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
+                          {issuance.items.length > 0
+                            ? issuance.items.map((item) => `${item.name} x${item.quantity}`).join(', ')
+                            : '—'}
+                        </TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
+                          <Badge className={
+                            issuance.status === 'approved'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : issuance.status === 'signed' || issuance.status === 'manual_uploaded'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-slate-100 text-slate-700'
+                          }>
+                            {issuance.status.replace(/_/g, ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
+                          {issuance.finalDocument ? (
+                            <DocumentFileLink
+                              variant="link"
+                              document={{
+                                id: issuance.finalDocument.id,
+                                fileName: issuance.finalDocument.fileName,
+                                fileUrl: issuance.finalDocument.fileUrl ?? undefined,
+                                download_url: issuance.finalDocument.download_url,
+                              }}
+                            />
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>
+                          <div className="flex flex-col gap-2">
+                            {canApproveEquipment && (issuance.status === 'signed' || issuance.status === 'manual_uploaded') ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={approvingIssuanceId === issuance.id}
+                                onClick={() => void handleApproveEquipmentIssuance(issuance.id)}
+                              >
+                                {approvingIssuanceId === issuance.id ? t('common.loading') : t('driverDetail.equipmentApprove')}
+                              </Button>
+                            ) : null}
+                            {issuance.status === 'pending_signature' ? (
+                              <>
+                                <Input
+                                  type="file"
+                                  accept="application/pdf"
+                                  onChange={(e) =>
+                                    setManualUploadByIssuanceId((current) => ({
+                                      ...current,
+                                      [issuance.id]: e.target.files?.[0] ?? null,
+                                    }))
+                                  }
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={manualUploadingId === issuance.id}
+                                  onClick={() => void handleManualUpload(issuance.id)}
+                                >
+                                  {manualUploadingId === issuance.id ? t('common.loading') : t('driverDetail.equipmentManualUpload')}
+                                </Button>
+                              </>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

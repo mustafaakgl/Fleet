@@ -155,6 +155,55 @@ export interface DriverDetail extends Driver {
   documents: Document[];
 }
 
+export type EquipmentIssuanceStatus =
+  | 'pending_signature'
+  | 'signed'
+  | 'manual_uploaded'
+  | 'approved'
+  | 'cancelled';
+
+export interface EquipmentIssuanceRecord {
+  id: string;
+  driverId: string;
+  issuedById: string;
+  title: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    notes?: string;
+  }>;
+  formDocumentPath: string;
+  formDownloadUrl: string;
+  status: EquipmentIssuanceStatus;
+  issuedAt: string;
+  signedAt?: string | null;
+  signatureMethod?: string | null;
+  signatureImagePath?: string | null;
+  finalDocumentId?: string | null;
+  approvedById?: string | null;
+  approvedAt?: string | null;
+  cancelledAt?: string | null;
+  clientMeta?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  driver?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    userId?: string | null;
+  };
+  issuedBy?: { id: string; fullName: string; email: string };
+  approvedBy?: { id: string; fullName: string; email: string } | null;
+  finalDocument?: {
+    id: string;
+    fileName: string;
+    fileUrl?: string | null;
+    download_url?: string | null;
+    documentType: string;
+    createdAt: string;
+  } | null;
+}
+
 export interface PaginatedDrivers {
   total: number;
   page: number;
@@ -1798,6 +1847,8 @@ export interface DriverPortalNotification {
   createdAt: string;
   updatedAt: string;
 }
+
+export type DriverEquipmentIssuance = EquipmentIssuanceRecord;
 
 export type DriverDocumentStatus = 'valid' | 'expiring_soon' | 'expired' | 'missing' | 'archived';
 

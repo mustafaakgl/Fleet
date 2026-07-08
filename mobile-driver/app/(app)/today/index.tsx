@@ -55,6 +55,13 @@ export default function HomeTodayScreen() {
   const pendingHandover = (handovers ?? []).find(
     (row) => row.photoRequired && row.status !== 'completed',
   );
+  const { data: equipmentIssuances } = useQuery({
+    queryKey: ['driver-equipment-issuances'],
+    queryFn: () => driverApi.listEquipmentIssuances(),
+  });
+  const pendingEquipmentIssuance = (equipmentIssuances ?? []).find(
+    (row) => row.status === 'pending_signature',
+  );
   const { data: unreadMessages } = useQuery({
     queryKey: ['messenger-unread-count'],
     queryFn: () => messengerApi.getUnreadCount(),
@@ -224,6 +231,14 @@ export default function HomeTodayScreen() {
                       router.push(
                         `/(app)/today/handover-upload?assignmentId=${pendingHandover.assignmentId}&vehicleId=${pendingHandover.vehicleId}`,
                       )
+                    }
+                  />
+                ) : null}
+                {pendingEquipmentIssuance ? (
+                  <ActionButton
+                    label={t('home.equipmentIssuance')}
+                    onPress={() =>
+                      router.push(`/(app)/today/equipment-issuance?id=${pendingEquipmentIssuance.id}`)
                     }
                   />
                 ) : null}

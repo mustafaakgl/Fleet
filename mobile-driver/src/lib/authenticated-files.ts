@@ -7,6 +7,10 @@ export function driverDocumentDownloadPath(documentId: string): string {
   return `/driver/documents/${documentId}/download`;
 }
 
+export function driverEquipmentIssuanceFormPath(issuanceId: string): string {
+  return `/driver/equipment-issuances/${issuanceId}/form`;
+}
+
 export function driverFineDocumentPath(fineId: string): string {
   return `/driver/fines/${fineId}/document`;
 }
@@ -29,6 +33,23 @@ export async function openAuthenticatedDocument(documentId: string): Promise<voi
   if (!response.ok) {
     throw new Error(`Download failed (${response.status})`);
   }
+}
+
+export async function openAuthenticatedEquipmentIssuanceForm(issuanceId: string): Promise<void> {
+  const token = authStore.getState().accessToken;
+  const apiPath = driverEquipmentIssuanceFormPath(issuanceId);
+  const dest = `${FileSystem.cacheDirectory}equipment-form-${issuanceId}.pdf`;
+  const result = await FileSystem.downloadAsync(resolveApiUrl(apiPath), dest, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (result.status !== 200) {
+    throw new Error(`Download failed (${result.status})`);
+  }
+  const canOpen = await Linking.canOpenURL(result.uri);
+  if (!canOpen) {
+    throw new Error('Cannot open document on this device');
+  }
+  await Linking.openURL(result.uri);
 }
 
 export async function openAuthenticatedFineDocument(fineId: string): Promise<void> {
