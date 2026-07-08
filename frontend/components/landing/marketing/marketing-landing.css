@@ -1291,13 +1291,23 @@
   line-height: 1.4;
 }
 
+.marketing-landing .m-compare-section {
+  padding: 56px 0 48px;
+}
+
+@media (max-width: 720px) {
+  .marketing-landing .m-compare-section {
+    padding: 40px 0 36px;
+  }
+}
+
 .marketing-landing .m-highlight {
   border-bottom: 4px solid var(--gelb);
 }
 
 .marketing-landing .m-vgl-tabelle {
   max-width: 680px;
-  margin: 42px auto 0;
+  margin: 26px auto 0;
   border: 1px solid var(--linie);
   border-radius: var(--radius);
   overflow: hidden;

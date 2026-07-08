@@ -8,7 +8,6 @@ import { LOGIN_HREF, TRIAL_CTA_LABEL, TRIAL_CTA_LINK } from './marketing-config'
 
 const navLinks = [
   { label: 'Funktionen', href: '/#funktionen' },
-  { label: 'Preise', href: '/#preise' },
   { label: 'Kostenlose Tools', href: '/#tools' },
   { label: 'FAQ', href: '/#faq' },
 ];

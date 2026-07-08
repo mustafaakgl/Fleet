@@ -8,6 +8,7 @@ const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: repoRoot,
+  allowedDevOrigins: ['http://localhost:3001', 'http://127.0.0.1:3001'],
   experimental: {
     // Prevent Next devtools segment explorer from injecting a client module
     // that intermittently goes missing from the RSC client manifest in dev.

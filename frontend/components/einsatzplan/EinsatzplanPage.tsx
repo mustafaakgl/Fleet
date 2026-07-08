@@ -41,10 +41,10 @@ type UrlaubSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung
 type PlanningSubtab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
 
 const topTabs: Array<{ id: TopTab; labelKey: string; icon: typeof Gauge }> = [
-  { id: 'dashboard', labelKey: 'einsatzplan.tab.dashboard', icon: Gauge },
-  { id: 'urlaub', labelKey: 'einsatzplan.tab.vacationPlanner', icon: Sun },
-  { id: 'tagesplanung', labelKey: 'einsatzplan.tab.dailyPlanning', icon: ClipboardCheck },
-  { id: 'revenue', labelKey: 'einsatzplan.tab.revenueSummary', icon: Wallet },
+  { id: 'dashboard', labelKey: 'einsatzplan.dashboard', icon: Gauge },
+  { id: 'urlaub', labelKey: 'einsatzplan.vacationPlanner', icon: Sun },
+  { id: 'tagesplanung', labelKey: 'einsatzplan.dailyPlanning', icon: ClipboardCheck },
+  { id: 'revenue', labelKey: 'einsatzplan.revenueSummary', icon: Wallet },
 ];
 
 export function EinsatzplanPage() {
@@ -56,7 +56,7 @@ export function EinsatzplanPage() {
 }
 
 function EinsatzplanFullView() {
-  const { t } = useTranslation();
+  const { t } = useTranslation('einsatzplan');
   const router = useRouter();
   const pathname = usePathname();
   const { assignments, drivers } = useFleetData();

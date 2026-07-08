@@ -61,12 +61,6 @@ const steps = [
   },
 ];
 
-const pricingTiers = [
-  { range: 'Bis 20 Fahrzeuge', price: '149', perVehicle: 'ab 7,45 € pro Fahrzeug', popular: false },
-  { range: '21 – 50 Fahrzeuge', price: '299', perVehicle: 'ab 5,98 € pro Fahrzeug', popular: true },
-  { range: '51 – 100 Fahrzeuge', price: '499', perVehicle: 'ab 4,99 € pro Fahrzeug', popular: false },
-];
-
 const compareRows = [
   ['Hardware nötig?', 'Nein', 'Ja, pro Fahrzeug'],
   ['Vertragslaufzeit', 'Monatlich', '24–36 Monate'],
@@ -239,47 +233,7 @@ export function HomeLandingPage() {
         </div>
       </section>
 
-      <section className="m-teaser m-section" id="preise">
-        <div className="m-wrap">
-          <span className="m-eyebrow">Transparent &amp; planbar</span>
-          <h2 className="m-h2">Ein Preis. Alles drin.</h2>
-          <div className="m-preise-grid">
-            {pricingTiers.map((tier) => (
-              <article key={tier.range} className={`m-preis${tier.popular ? ' m-preis-beliebt' : ''}`} data-reveal>
-                {tier.popular ? <div className="m-tag">Am beliebtesten</div> : null}
-                <div className="m-gruppe">{tier.range}</div>
-                <div className="m-betrag">
-                  {tier.price} €<small> /Monat</small>
-                </div>
-                <div className="m-pro-fahrzeug">{tier.perVehicle}</div>
-                <ul>
-                  <li>Alle Funktionen</li>
-                  <li>Unbegrenzte Fahrer</li>
-                  <li>Monatlich kündbar</li>
-                </ul>
-                <Link
-                  href={TRIAL_CTA_LINK}
-                  className={`m-btn ${tier.popular ? 'm-btn-primary' : 'm-btn-ghost'}`}
-                >
-                  Kostenlos testen
-                </Link>
-              </article>
-            ))}
-          </div>
-          <p className="m-alle-inkl">
-            <b>Alle Funktionen inklusive.</b> Keine Hardware · Keine Plattformgebühr · Keine Kosten pro Fahrer ·
-            Monatlich kündbar
-          </p>
-          <p className="m-enterprise-hint">
-            Mehr als 100 Fahrzeuge?{' '}
-            <a href={whatsAppHref()} target="_blank" rel="noopener noreferrer" data-track="pricing-enterprise-cta">
-              Sprechen Sie mit uns — wir erstellen ein individuelles Angebot.
-            </a>
-          </p>
-        </div>
-      </section>
-
-      <section className="m-section">
+      <section className="m-section m-compare-section">
         <div className="m-wrap">
           <p className="m-vergleich-satz">
             Telematik-Anbieter verwalten Ihre LKW.
@@ -287,7 +241,7 @@ export function HomeLandingPage() {
             Wir verwalten alles drumherum:{' '}
             <span className="m-highlight">Papiere, Fristen, Menschen.</span>
           </p>
-          <div className="m-vgl-tabelle" data-reveal>
+          <div className="m-vgl-tabelle">
             <div className="m-vgl-zeile m-vgl-kopf">
               <div />
               <div className="m-vgl-brand">TRANSIQ</div>

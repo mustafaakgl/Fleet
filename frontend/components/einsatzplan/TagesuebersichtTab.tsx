@@ -67,8 +67,7 @@ export async function exportCurrentTagesuebersichtToExcel({
   assignments: TagesuebersichtExportAssignment[];
 }) {
   // npm install xlsx
-  const moduleName = 'xlsx';
-  const XLSX = await import(moduleName);
+  const XLSX = await import('xlsx');
 
   const workbook = XLSX.utils.book_new();
 
