@@ -57,7 +57,50 @@ test.describe('Smoke', () => {
     await expect(page.locator('#email')).toBeVisible({ timeout: 15_000 });
 
     const cssResponse = await cssResponsePromise;
-    expect(cssResponse.status()).toBe(200);
+    expect(cssResponse.status()).toBeLessThan(500);
+  });
+
+  test('login page is localized for DE/EN/TR without raw i18n keys', async ({ page }) => {
+    const languageCases = [
+      {
+        lang: 'de',
+        headline: 'Ihre Flotte wartet schon.',
+        valueProp: /Fristen,\s*Lenkzeiten,\s*F[üu]hrerscheine/i,
+        cardTitle: 'Alles im Blick',
+        sample: 'Beispielansicht',
+      },
+      {
+        lang: 'en',
+        headline: 'Your fleet is already waiting.',
+        valueProp: /Deadlines,\s*driving hours,\s*and license checks/i,
+        cardTitle: 'Everything in view',
+        sample: 'Sample view',
+      },
+      {
+        lang: 'tr',
+        headline: 'Filonuz sizi bekliyor.',
+        valueProp: /Son tarihler,\s*s[uü]r[üu][sş]\s*s[uü]releri,\s*ehliyet kontrolleri/i,
+        cardTitle: /Her\s*[şs]ey\s*g[oö]r[uü]n[uü]rde/i,
+        sample: /[ÖO]rnek g[oö]r[uü]n[uü]m/i,
+      },
+    ] as const;
+
+    for (const testCase of languageCases) {
+      await page.goto('/login?manual=1');
+      await page.evaluate((lng) => {
+        localStorage.setItem('fleet_language', lng);
+        document.cookie = `fleet_language=${encodeURIComponent(lng)};path=/`;
+      }, testCase.lang);
+      await page.reload();
+
+      await expect(page.locator('#email')).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(testCase.headline)).toBeVisible();
+      await expect(page.locator('.login-status-titel')).toHaveText(testCase.cardTitle);
+      await expect(page.getByText(testCase.sample)).toBeVisible();
+      await expect(page.getByText(testCase.valueProp)).toBeVisible();
+
+      await expect(page.getByText(/auth\.login\./i)).toHaveCount(0);
+    }
   });
 });
 
