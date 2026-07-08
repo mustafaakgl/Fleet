@@ -9,7 +9,8 @@
     "dev": "node ../scripts/dev-next.mjs dev",
     "build": "next build",
     "start": "node ../scripts/dev-next.mjs start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify": "node scripts/i18n-check.mjs && tsc --noEmit && next build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
