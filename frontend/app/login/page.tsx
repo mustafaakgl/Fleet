@@ -224,25 +224,38 @@ export default function LoginPage() {
   }
 
   const credentialError = error?.includes('nicht korrekt');
+  const tr = (key: string, fallback: string) => {
+    const resolved = t(key);
+    return resolved === key ? fallback : resolved;
+  };
+
   const complianceRows = [
     {
       labelKey: 'auth.login.compliance.licenseChecks.label',
       valueKey: 'auth.login.compliance.licenseChecks.value',
+      labelFallback: 'Führerscheinkontrolle',
+      valueFallback: '✓ 43/44 geprüft',
       tone: 'ok' as const,
     },
     {
       labelKey: 'auth.login.compliance.cardReadout.label',
       valueKey: 'auth.login.compliance.cardReadout.value',
+      labelFallback: 'Kartenauslesung (28-Tage)',
+      valueFallback: 'in 6 Tagen · automatisch',
       tone: 'text' as const,
     },
     {
       labelKey: 'auth.login.compliance.huUvv.label',
       valueKey: 'auth.login.compliance.huUvv.value',
+      labelFallback: 'HU / UVV',
+      valueFallback: '2 fällig in 30 Tagen',
       tone: 'warn' as const,
     },
     {
       labelKey: 'auth.login.compliance.drivingViolations.label',
       valueKey: 'auth.login.compliance.drivingViolations.value',
+      labelFallback: 'Lenkzeit-Verstöße',
+      valueFallback: '0 diese Woche',
       tone: 'ok' as const,
     },
   ];
@@ -254,7 +267,7 @@ export default function LoginPage() {
           <div className="login-form-box" style={{ textAlign: 'center' }}>
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#15498A]" />
             <p className="login-unter" style={{ marginTop: 16 }}>
-              {t('auth.login.autoSigningIn')}
+              {tr('auth.login.autoSigningIn', 'Wird angemeldet…')}
             </p>
           </div>
         </main>
@@ -277,29 +290,29 @@ export default function LoginPage() {
         </Link>
 
         <div className="login-marke-mitte">
-          <h1>{t('auth.login.headline')}</h1>
-          <p>{t('auth.login.valueProp')}</p>
+          <h1>{tr('auth.login.headline', 'Ihre Flotte wartet schon.')}</h1>
+          <p>{tr('auth.login.valueProp', 'Fristen, Lenkzeiten, Führerscheine — alles im Blick, bevor es teuer wird.')}</p>
 
           <div className="login-status-karte">
-            <h3 className="login-status-titel">{t('auth.login.compliance.title')}</h3>
+            <h3 className="login-status-titel">{tr('auth.login.compliance.title', 'Alles im Blick')}</h3>
             {complianceRows.map((row) => (
               <div key={row.labelKey} className="login-status-zeile">
-                <span>{t(row.labelKey)}</span>
+                <span>{tr(row.labelKey, row.labelFallback)}</span>
                 {row.tone === 'text' ? (
-                  <b>{t(row.valueKey)}</b>
+                  <b>{tr(row.valueKey, row.valueFallback)}</b>
                 ) : (
                   <span className={`login-pill ${row.tone === 'warn' ? 'login-pill-warn' : 'login-pill-ok'}`}>
-                    {t(row.valueKey)}
+                    {tr(row.valueKey, row.valueFallback)}
                   </span>
                 )}
               </div>
             ))}
-            <span className="login-status-etiket">{t('auth.login.compliance.sample')}</span>
+            <span className="login-status-etiket">{tr('auth.login.compliance.sample', 'Beispielansicht')}</span>
           </div>
         </div>
 
         <div className="login-marke-fuss">
-          {t('auth.login.footerPrefix')} <b>{t('auth.login.footerStrong')}</b>
+          {tr('auth.login.footerPrefix', 'Entwickelt mit einem Spediteur —')} <b>{tr('auth.login.footerStrong', '70 Fahrzeuge, 20 Jahre Erfahrung')}</b>
         </div>
       </aside>
 
@@ -374,8 +387,8 @@ export default function LoginPage() {
             </>
           ) : (
             <>
-              <h2>{t('auth.login.title')}</h2>
-              <p className="login-unter">{t('auth.login.subtitle')}</p>
+              <h2>{tr('auth.login.title', 'Willkommen zurück')}</h2>
+              <p className="login-unter">{tr('auth.login.subtitle', 'Melden Sie sich an, um Ihre Flotte zu verwalten.')}</p>
 
               {error ? (
                 <div className="login-fehler" role="alert">
@@ -385,12 +398,12 @@ export default function LoginPage() {
 
               <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <div className="login-feld">
-                  <label htmlFor="email">{t('auth.login.emailLabel')}</label>
+                  <label htmlFor="email">{tr('auth.login.emailLabel', 'Geschäftliche E-Mail')}</label>
                   <input
                     id="email"
                     type="email"
                     autoComplete="username"
-                    placeholder={t('auth.login.emailPlaceholder')}
+                    placeholder={tr('auth.login.emailPlaceholder', 'max@mustermann-transporte.de')}
                     className={errors.email || credentialError ? 'login-fehler-rand' : undefined}
                     {...register('email')}
                   />
@@ -400,13 +413,13 @@ export default function LoginPage() {
                 </div>
 
                 <div className="login-feld">
-                  <label htmlFor="password">{t('auth.login.passwordLabel')}</label>
+                  <label htmlFor="password">{tr('auth.login.passwordLabel', 'Passwort')}</label>
                   <div className="login-pw-wrap">
                     <input
                       id="password"
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="current-password"
-                      placeholder={t('auth.login.passwordPlaceholder')}
+                      placeholder={tr('auth.login.passwordPlaceholder', '••••••••••')}
                       className={errors.password || credentialError ? 'login-fehler-rand' : undefined}
                       {...register('password')}
                     />
@@ -414,7 +427,9 @@ export default function LoginPage() {
                       type="button"
                       className="login-pw-auge"
                       aria-label={
-                        showPassword ? t('auth.login.hidePasswordAria') : t('auth.login.showPasswordAria')
+                        showPassword
+                          ? tr('auth.login.hidePasswordAria', 'Passwort verbergen')
+                          : tr('auth.login.showPasswordAria', 'Passwort anzeigen')
                       }
                       onClick={() => setShowPassword((open) => !open)}
                     >
@@ -429,10 +444,10 @@ export default function LoginPage() {
                 <div className="login-zeile">
                   <label className="login-merken">
                     <input type="checkbox" />
-                    {t('auth.login.rememberMe')}
+                    {tr('auth.login.rememberMe', 'Angemeldet bleiben')}
                   </label>
                   <Link href="/forgot-password" className="login-vergessen">
-                    {t('auth.login.forgotPassword')}
+                    {tr('auth.login.forgotPassword', 'Passwort vergessen?')}
                   </Link>
                 </div>
 
@@ -440,10 +455,10 @@ export default function LoginPage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      {t('auth.login.signingIn')}
+                      {tr('auth.login.signingIn', 'Wird angemeldet…')}
                     </>
                   ) : (
-                    t('auth.login.signIn')
+                    tr('auth.login.signIn', 'Anmelden')
                   )}
                 </button>
 
@@ -463,7 +478,7 @@ export default function LoginPage() {
                 ) : null}
               </form>
 
-              <div className="login-trenner">{t('auth.login.noAccount')}</div>
+              <div className="login-trenner">{tr('auth.login.noAccount', 'Noch kein Konto?')}</div>
               <p className="login-registrieren">
                 <Link href={TRIAL_CTA_LINK}>{TRIAL_CTA_LABEL} →</Link>
               </p>
@@ -471,10 +486,10 @@ export default function LoginPage() {
           )}
 
           <div className="login-panel-fuss">
-            <Link href="/impressum">{t('auth.login.legal.impressum')}</Link>
-            <Link href="/datenschutz">{t('auth.login.legal.privacy')}</Link>
+            <Link href="/impressum">{tr('auth.login.legal.impressum', 'Impressum')}</Link>
+            <Link href="/datenschutz">{tr('auth.login.legal.privacy', 'Datenschutz')}</Link>
             <a href={whatsAppHref()} target="_blank" rel="noopener noreferrer">
-              {t('auth.login.legal.whatsAppHelp')}
+              {tr('auth.login.legal.whatsAppHelp', 'Hilfe per WhatsApp')}
             </a>
           </div>
         </div>
