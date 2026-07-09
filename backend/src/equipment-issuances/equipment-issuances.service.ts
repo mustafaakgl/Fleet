@@ -31,6 +31,7 @@ import {
   ensureSignable,
   type EquipmentIssuanceStatus,
 } from './equipment-issuance-state.util';
+import { toWinAnsiSafeText } from './pdf-text.util';
 
 type RequestMeta = {
   ipAddress?: string | null;
@@ -255,24 +256,24 @@ export class EquipmentIssuancesService {
       font: bold,
       color: rgb(0.1, 0.2, 0.35),
     });
-    page.drawText(`Titel: ${params.title}`, { x: 50, y: 748, size: 12, font });
-    page.drawText(`Tutanak No: ${params.issuanceId}`, { x: 50, y: 728, size: 12, font });
-    page.drawText(`Sürücü: ${params.driverName}`, { x: 50, y: 708, size: 12, font });
-    page.drawText(`Imza Tarihi: ${params.signedAt.toISOString()}`, { x: 50, y: 688, size: 12, font });
-    page.drawText(`Issued At: ${params.issuedAt.toISOString()}`, { x: 50, y: 668, size: 12, font });
-    page.drawText('Özet Kalemler:', { x: 50, y: 638, size: 12, font: bold });
+    page.drawText(toWinAnsiSafeText(`Titel: ${params.title}`), { x: 50, y: 748, size: 12, font });
+    page.drawText(toWinAnsiSafeText(`Tutanak No: ${params.issuanceId}`), { x: 50, y: 728, size: 12, font });
+    page.drawText(toWinAnsiSafeText(`Sürücü: ${params.driverName}`), { x: 50, y: 708, size: 12, font });
+    page.drawText(toWinAnsiSafeText(`Imza Tarihi: ${params.signedAt.toISOString()}`), { x: 50, y: 688, size: 12, font });
+    page.drawText(toWinAnsiSafeText(`Issued At: ${params.issuedAt.toISOString()}`), { x: 50, y: 668, size: 12, font });
+    page.drawText(toWinAnsiSafeText('Özet Kalemler:'), { x: 50, y: 638, size: 12, font: bold });
     const summaryItems = params.items.length > 0
       ? params.items
       : [{ name: 'Form eki yok', quantity: 1 }];
     summaryItems.slice(0, 12).forEach((item, index) => {
-      page.drawText(`- ${item.name} x${item.quantity}${item.notes ? ` (${item.notes})` : ''}`, {
+      page.drawText(toWinAnsiSafeText(`- ${item.name} x${item.quantity}${item.notes ? ` (${item.notes})` : ''}`), {
         x: 60,
         y: 616 - index * 18,
         size: 11,
         font,
       });
     });
-    page.drawText('İmza:', { x: 50, y: 300, size: 12, font: bold });
+    page.drawText(toWinAnsiSafeText('İmza:'), { x: 50, y: 300, size: 12, font: bold });
     page.drawImage(signatureImage, {
       x: 50,
       y: 120,
