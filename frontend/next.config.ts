@@ -5,6 +5,7 @@ import type { NextConfig } from 'next';
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const isProductionBuild = process.env.NODE_ENV === 'production';
+const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN?.trim());
 
 const nextConfig: NextConfig = {
   output: isProductionBuild ? 'standalone' : undefined,
@@ -30,8 +31,6 @@ const nextConfig: NextConfig = {
     ],
   },
 };
-
-const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN?.trim());
 
 export default sentryEnabled
   ? withSentryConfig(nextConfig, {
