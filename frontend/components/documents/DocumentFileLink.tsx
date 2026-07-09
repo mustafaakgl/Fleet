@@ -10,9 +10,10 @@ import type { Document } from '@/lib/types';
 type DocumentFileLinkProps = {
   document: Pick<Document, 'id' | 'fileName' | 'download_url' | 'fileUrl'>;
   variant?: 'button' | 'link';
+  apiPath?: string;
 };
 
-export function DocumentFileLink({ document, variant = 'button' }: DocumentFileLinkProps) {
+export function DocumentFileLink({ document, variant = 'button', apiPath }: DocumentFileLinkProps) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +24,7 @@ export function DocumentFileLink({ document, variant = 'button' }: DocumentFileL
   async function handleOpen() {
     setLoading(true);
     try {
-      await openAuthenticatedDocument(document.id, document.fileName);
+      await openAuthenticatedDocument(document.id, document.fileName, apiPath);
     } finally {
       setLoading(false);
     }

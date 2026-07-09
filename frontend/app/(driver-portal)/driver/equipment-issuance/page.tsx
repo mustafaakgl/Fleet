@@ -7,6 +7,7 @@ import { Loader2, RotateCcw } from 'lucide-react';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
+import { driverDocumentDownloadApiPath } from '@/lib/file-access';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { driverPortalApi } from '@/lib/api';
@@ -229,6 +230,7 @@ export default function DriverEquipmentIssuancePage() {
                   <p className="mb-2 text-sm font-semibold text-slate-900">{t('driverPortal.equipmentIssuance.pdfReady')}</p>
                   <DocumentFileLink
                     variant="link"
+                    apiPath={driverDocumentDownloadApiPath(selected.finalDocument.id)}
                     document={{
                       id: selected.finalDocument.id,
                       fileName: selected.finalDocument.fileName,

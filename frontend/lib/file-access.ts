@@ -30,8 +30,9 @@ export async function fetchAuthenticatedBlob(apiPath: string): Promise<Blob> {
 export async function openAuthenticatedDocument(
   documentId: string,
   fileName?: string,
+  apiPath?: string,
 ): Promise<void> {
-  const blob = await fetchAuthenticatedBlob(`/documents/${documentId}/download`);
+  const blob = await fetchAuthenticatedBlob(apiPath ?? `/documents/${documentId}/download`);
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
@@ -50,6 +51,10 @@ export function vehiclePhotoApiPath(vehicleId: string): string {
 
 export function documentDownloadApiPath(documentId: string): string {
   return `/documents/${documentId}/download`;
+}
+
+export function driverDocumentDownloadApiPath(documentId: string): string {
+  return `/driver/documents/${documentId}/download`;
 }
 
 export function fineDocumentApiPath(fineId: string): string {
