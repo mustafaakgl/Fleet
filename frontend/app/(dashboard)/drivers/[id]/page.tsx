@@ -110,6 +110,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   const [equipmentIssuances, setEquipmentIssuances] = useState<EquipmentIssuanceRecord[]>([]);
   const [equipmentError, setEquipmentError] = useState<string | null>(null);
   const [approvingIssuanceId, setApprovingIssuanceId] = useState<string | null>(null);
+  const [cancellingIssuanceId, setCancellingIssuanceId] = useState<string | null>(null);
   const [equipmentTitle, setEquipmentTitle] = useState('Arbeitskleidung Ausgabe');
   const [equipmentSummaryText, setEquipmentSummaryText] = useState('');
   const [equipmentFormFile, setEquipmentFormFile] = useState<File | null>(null);
@@ -284,6 +285,23 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
       window.alert(t('driverDetail.equipmentApproveError'));
     } finally {
       setApprovingIssuanceId(null);
+    }
+  }
+
+  async function handleCancelEquipmentIssuance(issuanceId: string) {
+    if (!window.confirm(t('driverDetail.equipmentCancelConfirm'))) {
+      return;
+    }
+    const reason = window.prompt(t('driverDetail.equipmentCancelReasonPrompt')) ?? undefined;
+    setCancellingIssuanceId(issuanceId);
+    try {
+      await equipmentIssuancesApi.cancel(issuanceId, reason?.trim() || undefined);
+      const rows = await equipmentIssuancesApi.list({ driverId: id });
+      setEquipmentIssuances(rows);
+    } catch {
+      window.alert(t('driverDetail.equipmentCancelError'));
+    } finally {
+      setCancellingIssuanceId(null);
     }
   }
 
@@ -983,6 +1001,18 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
                                   {manualUploadingId === issuance.id ? t('common.loading') : t('driverDetail.equipmentManualUpload')}
                                 </Button>
                               </>
+                            ) : null}
+                            {canApproveEquipment && issuance.status !== 'approved' && issuance.status !== 'cancelled' ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                                disabled={cancellingIssuanceId === issuance.id}
+                                onClick={() => void handleCancelEquipmentIssuance(issuance.id)}
+                              >
+                                {cancellingIssuanceId === issuance.id ? t('common.loading') : t('driverDetail.equipmentCancel')}
+                              </Button>
                             ) : null}
                           </div>
                         </TableCell>
