@@ -8,6 +8,9 @@ const isProductionBuild = process.env.NODE_ENV === 'production';
 const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN?.trim());
 
 const nextConfig: NextConfig = {
+  // Allow verify/CI builds to write into an isolated dist dir so they don't
+  // clobber the running dev server's .next runtime chunks.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   output: isProductionBuild ? 'standalone' : undefined,
   outputFileTracingRoot: repoRoot,
   allowedDevOrigins: ['http://localhost:3001', 'http://127.0.0.1:3001'],
