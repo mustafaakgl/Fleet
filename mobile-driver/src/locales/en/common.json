@@ -374,6 +374,8 @@
     "officeProvidedHint": "The following are provided by the office and appear here once uploaded:"
   },
   "equipmentIssuance": {
+    "taskTitle": "Equipment issuance awaiting signature",
+    "taskBody": "The office has prepared an equipment issuance form for you. Review the document and sign it digitally.",
     "title": "Equipment issuance",
     "subtitle": "Open the form, review it, and sign directly in the app.",
     "loadError": "Could not load the equipment issuance.",

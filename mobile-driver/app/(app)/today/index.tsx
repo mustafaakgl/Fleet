@@ -163,6 +163,20 @@ export default function HomeTodayScreen() {
         </View>
       ) : null}
 
+      {pendingEquipmentIssuance ? (
+        <View style={styles.equipmentTaskCard}>
+          <Text style={styles.equipmentTaskTitle}>{t('equipmentIssuance.taskTitle')}</Text>
+          <Text style={styles.equipmentTaskText}>{t('equipmentIssuance.taskBody')}</Text>
+          <ActionButton
+            label={t('home.equipmentIssuance')}
+            onPress={() =>
+              router.push(`/(app)/today/equipment-issuance?id=${pendingEquipmentIssuance.id}`)
+            }
+            variant="primary"
+          />
+        </View>
+      ) : null}
+
       <SectionHeader title={t('home.locationSection')} />
       <LocationTrackingCard />
       <FleetTripCard />
@@ -407,6 +421,25 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   departureTaskText: {
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+  },
+  equipmentTaskCard: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  equipmentTaskTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  equipmentTaskText: {
     fontSize: 13,
     color: colors.muted,
     lineHeight: 18,

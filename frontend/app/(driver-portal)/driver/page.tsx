@@ -84,6 +84,25 @@ export default function DriverPortalHomePage() {
 
         <DriverDayStatusBanner />
 
+        {pendingEquipmentIssuanceId ? (
+          <Card className="border-amber-300 bg-amber-50">
+            <CardContent className="space-y-2 p-4">
+              <p className="text-sm font-semibold text-amber-900">
+                {t('driverPortal.home.equipmentIssuanceTaskTitle')}
+              </p>
+              <p className="text-sm text-amber-800">
+                {t('driverPortal.home.equipmentIssuanceTaskBody')}
+              </p>
+              <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700">
+                <Link href={`/driver/equipment-issuance?id=${pendingEquipmentIssuanceId}`}>
+                  <ClipboardCheck className="mr-2 h-4 w-4" />
+                  {t('driverPortal.home.equipmentIssuance')}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <DriverLocationSharingCard />
 
         <div className="grid grid-cols-2 gap-2">

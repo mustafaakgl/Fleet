@@ -374,6 +374,8 @@
     "officeProvidedHint": "Aşağıdaki evraklar ofis tarafından yüklenir:"
   },
   "equipmentIssuance": {
+    "taskTitle": "İmza bekleyen teslim tutanağı",
+    "taskBody": "Ofis senin için bir ekipman teslim tutanağı hazırladı. Belgeyi kontrol et ve dijital olarak imzala.",
     "title": "Teslim tutanağı",
     "subtitle": "Formu aç, kontrol et ve uygulamadan imzala.",
     "loadError": "Teslim tutanağı yüklenemedi.",

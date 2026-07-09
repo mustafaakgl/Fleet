@@ -378,6 +378,8 @@
   "driverDetail.equipmentManualUploadError": "The signed paper form could not be uploaded.",
   "driverDetail.actions": "Actions",
   "driverPortal.home.equipmentIssuance": "Sign equipment issuance",
+  "driverPortal.home.equipmentIssuanceTaskTitle": "Equipment issuance awaiting signature",
+  "driverPortal.home.equipmentIssuanceTaskBody": "The office has prepared an equipment issuance form for you. Review the document and sign it digitally.",
   "driverPortal.equipmentIssuance.title": "Equipment issuance confirmation",
   "driverPortal.equipmentIssuance.subtitle": "Review the issued items and sign directly on the device.",
   "driverPortal.equipmentIssuance.loadError": "Equipment issuances could not be loaded.",

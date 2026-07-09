@@ -359,6 +359,8 @@
     "officeProvidedHint": "Folgende Dokumente stellt das Büro bereit und erscheinen hier nach Upload:"
   },
   "equipmentIssuance": {
+    "taskTitle": "Aushändigung wartet auf Unterschrift",
+    "taskBody": "Das Büro hat eine Aushändigungsbestätigung für dich vorbereitet. Bitte prüfe das Dokument und unterschreibe digital.",
     "title": "Aushändigungsbestätigung",
     "subtitle": "Formular öffnen, prüfen und direkt in der App unterschreiben.",
     "loadError": "Aushändigung konnte nicht geladen werden.",

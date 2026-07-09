@@ -378,6 +378,8 @@
   "driverDetail.equipmentManualUploadError": "Das signierte Formular konnte nicht hochgeladen werden.",
   "driverDetail.actions": "Aktionen",
   "driverPortal.home.equipmentIssuance": "Aushändigung unterschreiben",
+  "driverPortal.home.equipmentIssuanceTaskTitle": "Aushändigung wartet auf Unterschrift",
+  "driverPortal.home.equipmentIssuanceTaskBody": "Das Büro hat eine Aushändigungsbestätigung für dich vorbereitet. Bitte prüfe das Dokument und unterschreibe digital.",
   "driverPortal.equipmentIssuance.title": "Aushändigungsbestätigung",
   "driverPortal.equipmentIssuance.subtitle": "Prüfe die ausgegebenen Gegenstände und unterschreibe direkt auf dem Gerät.",
   "driverPortal.equipmentIssuance.loadError": "Aushändigungen konnten nicht geladen werden.",

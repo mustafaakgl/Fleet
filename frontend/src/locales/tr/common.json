@@ -378,6 +378,8 @@
   "driverDetail.equipmentManualUploadError": "Islak imzalı form yüklenemedi.",
   "driverDetail.actions": "İşlemler",
   "driverPortal.home.equipmentIssuance": "Teslim tutanağını imzala",
+  "driverPortal.home.equipmentIssuanceTaskTitle": "İmza bekleyen teslim tutanağı",
+  "driverPortal.home.equipmentIssuanceTaskBody": "Ofis senin için bir ekipman teslim tutanağı hazırladı. Belgeyi kontrol et ve dijital olarak imzala.",
   "driverPortal.equipmentIssuance.title": "Teslim tutanağı",
   "driverPortal.equipmentIssuance.subtitle": "Teslim edilen kalemleri kontrol et ve cihaz üzerinde imzala.",
   "driverPortal.equipmentIssuance.loadError": "Teslim tutanakları yüklenemedi.",
