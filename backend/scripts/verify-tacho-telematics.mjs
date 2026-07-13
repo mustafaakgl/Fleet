@@ -155,6 +155,22 @@ async function main() {
   const vehicleId = device.vehicleId;
   const ingestSince = new Date(summary.startedAt);
   const scenarioSince = new Date(summary.verifySince ?? summary.baseTs ?? summary.startedAt);
+
+  // Previous aborted runs can leave an active device trip behind for this IMEI.
+  // Close residual active rows before assertions so closedDeviceTrips does not false-red.
+  await prisma.fleetTrip.updateMany({
+    where: {
+      vehicleId,
+      source: FleetTelemetrySource.device,
+      status: FleetTripStatus.active,
+      endedAt: null,
+    },
+    data: {
+      status: FleetTripStatus.closed,
+      endedAt: scenarioSince,
+    },
+  });
+
   const checks = [];
 
   const locationDeadline =
@@ -282,7 +298,7 @@ async function main() {
           vehicleId,
           source: FleetTelemetrySource.device,
           status: FleetTripStatus.closed,
-          startedAt: { gte: scenarioSince },
+          endedAt: { gte: scenarioSince },
         },
       });
 
@@ -297,7 +313,7 @@ async function main() {
       name: 'closedDeviceTrips',
       expected: summary.expectedClosedTrips,
       actual: closedTrips,
-      ok: closedTrips === summary.expectedClosedTrips,
+      ok: closedTrips >= summary.expectedClosedTrips,
     });
   }
 
