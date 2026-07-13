@@ -12,16 +12,23 @@ export function DriverPortalRoute({ children }: DriverPortalRouteProps) {
   const router = useRouter();
   const [canRender, setCanRender] = useState(false);
 
+  const redirectTo = (target: string) => {
+    router.replace(target);
+    if (typeof window !== 'undefined' && window.location.pathname !== target) {
+      window.location.replace(target);
+    }
+  };
+
   useEffect(() => {
     if (!isAuthenticated()) {
-      router.replace('/login');
+      redirectTo('/login');
       setCanRender(false);
       return;
     }
 
     const user = getUser();
     if (user?.role !== 'driver') {
-      router.replace(getPostLoginPath(user?.role ?? 'office'));
+      redirectTo(getPostLoginPath(user?.role ?? 'office'));
       setCanRender(false);
       return;
     }
