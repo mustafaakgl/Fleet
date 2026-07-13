@@ -61,3 +61,4 @@
 [2026-07-13] [DRIVER-3] [kapanis] [prisma migrate status temiz, ilgili migration'lar resolve --applied ile kayda gecti; frontend verify + e2e smoke (start/stop + reconcile) yesil]
 [2026-07-13] [M1-A] [test-kesfi] [scripts/run-tests.mjs ile backend/src altindaki 56 spec otomatik kesfedilip kosuldu; daha once atlanan messenger/attachments/downsample/motion-state/trail-sampling/fleet gap-odometer-stops/trip-purpose-lock/tachograph-queue spec'leri dahil 212 test yesil]
 [2026-07-13] [M1-A] [ci-trigger] [.github/workflows/ci.yml push/pr hedef dallarina faz-a ve feature/** eklendi; push sonrasi Actions run takibi alinacak]
+[2026-07-13] [M1-A] [verify-fail-fast] [codec8-sim ve verify-tacho-telematics gateway kapaliyken anlamli komut onerisiyle hizli fail olacak sekilde timeout/probe mantigi eklendi]

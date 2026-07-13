@@ -10,6 +10,9 @@ import {
   stepMotionState,
 } from './lib/codec8-frames.mjs';
 
+const DEFAULT_TIMEOUT_MS = Number(process.env.TELEMATICS_TIMEOUT_MS || 60_000);
+const GATEWAY_START_COMMAND = 'PATH=/opt/homebrew/opt/node@22/bin:$PATH npm --prefix backend run start:dev';
+
 function parseArgs(argv) {
   const args = {
     scenario: 'normal',
@@ -19,6 +22,7 @@ function parseArgs(argv) {
     port: Number(process.env.DEVICE_PORT || 5027),
     count: Number(process.env.CODEC8_SIM_COUNT || 5),
     intervalMs: Number(process.env.CODEC8_SIM_INTERVAL_MS || 2000),
+    timeoutMs: DEFAULT_TIMEOUT_MS,
   };
 
   for (let i = 2; i < argv.length; i += 1) {
@@ -47,6 +51,10 @@ function parseArgs(argv) {
       args.count = Number(argv[++i]);
       continue;
     }
+    if (token === '--timeout-ms') {
+      args.timeoutMs = Number(argv[++i]);
+      continue;
+    }
   }
 
   return args;
@@ -56,19 +64,31 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createSessionSocket(host, port) {
+function gatewayUnavailableMessage(host, port, error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `gateway kapali — su komutla baslat: ${GATEWAY_START_COMMAND} (host=${host} port=${port}; detay=${detail})`;
+}
+
+function createSessionSocket(host, port, timeoutMs) {
   const socket = new Socket();
   socket.setNoDelay(true);
   return new Promise((resolve, reject) => {
-    socket.once('error', reject);
+    socket.setTimeout(timeoutMs);
+    socket.once('timeout', () => {
+      socket.destroy();
+      reject(new Error(gatewayUnavailableMessage(host, port, new Error(`baglanti timeout ${timeoutMs}ms`))));
+    });
+    socket.once('error', (error) => {
+      reject(new Error(gatewayUnavailableMessage(host, port, error)));
+    });
     socket.connect(port, host, () => {
-      socket.off('error', reject);
+      socket.setTimeout(0);
       resolve(socket);
     });
   });
 }
 
-async function loginAndWait(socket, imei) {
+async function loginAndWait(socket, imei, timeoutMs) {
   const ackBuffer = { chunks: [] };
   let loggedIn = false;
   let ackRecords = 0;
@@ -95,7 +115,13 @@ async function loginAndWait(socket, imei) {
   });
 
   socket.write(loginPacket(imei));
-  await sleep(150);
+  const deadline = Date.now() + timeoutMs;
+  while (!loggedIn && Date.now() < deadline) {
+    await sleep(25);
+  }
+  if (!loggedIn) {
+    throw new Error(`gateway kapali — su komutla baslat: ${GATEWAY_START_COMMAND} (imei login ack timeout ${timeoutMs}ms)`);
+  }
 
   return {
     getAckRecords: () => ackRecords,
@@ -179,8 +205,8 @@ async function runNormal(args) {
   const motion = createInitialMotionState(args.seed);
   const window = scenarioWindow(args.count, args.intervalMs);
 
-  const socket = await createSessionSocket(args.host, args.port);
-  const session = await loginAndWait(socket, args.imei);
+  const socket = await createSessionSocket(args.host, args.port, args.timeoutMs);
+  const session = await loginAndWait(socket, args.imei, args.timeoutMs);
 
   const records = [];
   for (let i = 0; i < args.count; i += 1) {
@@ -227,8 +253,8 @@ async function runBurstReconnect(args) {
     stepMotionState(motion, rng, args.intervalMs);
   }
 
-  const socket1 = await createSessionSocket(args.host, args.port);
-  await loginAndWait(socket1, args.imei);
+  const socket1 = await createSessionSocket(args.host, args.port, args.timeoutMs);
+  await loginAndWait(socket1, args.imei, args.timeoutMs);
   await sendRecords(socket1, firstRecords, { batch: false });
   socket1.destroy();
 
@@ -242,8 +268,8 @@ async function runBurstReconnect(args) {
     stepMotionState(motion, rng, args.intervalMs);
   }
 
-  const socket2 = await createSessionSocket(args.host, args.port);
-  await loginAndWait(socket2, args.imei);
+  const socket2 = await createSessionSocket(args.host, args.port, args.timeoutMs);
+  await loginAndWait(socket2, args.imei, args.timeoutMs);
   await sendRecords(socket2, secondRecords, { batch: true });
   await sleep(300);
   socket2.destroy();
@@ -268,8 +294,8 @@ async function runCorruptFrames(args) {
   const window = scenarioWindow(total, args.intervalMs);
   const corruptIndices = pickCorruptIndices(total, 0.05, args.seed + 17);
 
-  const socket = await createSessionSocket(args.host, args.port);
-  await loginAndWait(socket, args.imei);
+  const socket = await createSessionSocket(args.host, args.port, args.timeoutMs);
+  await loginAndWait(socket, args.imei, args.timeoutMs);
 
   const records = [];
   for (let i = 0; i < total; i += 1) {
@@ -307,8 +333,8 @@ async function runFuelTheft(args) {
   const intervalMs = durationMs / steps;
   const window = scenarioWindow(steps, intervalMs);
 
-  const socket = await createSessionSocket(args.host, args.port);
-  await loginAndWait(socket, args.imei);
+  const socket = await createSessionSocket(args.host, args.port, args.timeoutMs);
+  await loginAndWait(socket, args.imei, args.timeoutMs);
 
   const records = [];
   for (let i = 0; i < steps; i += 1) {
@@ -355,8 +381,8 @@ async function runDtcStorm(args) {
   const labels = ['set-1', 'set-2', 'set-3', 'set-4', 'set-5', 'clear-1', 'clear-2'];
   const window = scenarioWindow(dtcCodes.length, 3000);
 
-  const socket = await createSessionSocket(args.host, args.port);
-  await loginAndWait(socket, args.imei);
+  const socket = await createSessionSocket(args.host, args.port, args.timeoutMs);
+  await loginAndWait(socket, args.imei, args.timeoutMs);
 
   const records = dtcCodes.map((dtcRaw, index) => {
     const pos = interpolateRoute(route, index / dtcCodes.length);
@@ -398,8 +424,8 @@ async function runLoad(args) {
   const intervalMs = 20;
   const window = scenarioWindow(count, intervalMs);
 
-  const socket = await createSessionSocket(args.host, args.port);
-  await loginAndWait(socket, args.imei);
+  const socket = await createSessionSocket(args.host, args.port, args.timeoutMs);
+  await loginAndWait(socket, args.imei, args.timeoutMs);
 
   const batchSize = 50;
   let sent = 0;

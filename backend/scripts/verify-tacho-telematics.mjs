@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
+import { Socket } from 'node:net';
 import { FleetTelemetrySource, FleetTripStatus, PrismaClient, LocationSource } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const DEFAULT_TIMEOUT_MS = Number(process.env.TELEMATICS_TIMEOUT_MS || 60_000);
+const GATEWAY_START_COMMAND = 'PATH=/opt/homebrew/opt/node@22/bin:$PATH npm --prefix backend run start:dev';
 
 function parseArgs(argv) {
   const args = {
     scenario: null,
     summaryPath: null,
+    host: process.env.DEVICE_HOST || '127.0.0.1',
+    port: Number(process.env.DEVICE_PORT || 5027),
+    timeoutMs: DEFAULT_TIMEOUT_MS,
   };
 
   for (let i = 2; i < argv.length; i += 1) {
@@ -21,9 +27,84 @@ function parseArgs(argv) {
       args.summaryPath = argv[++i];
       continue;
     }
+    if (token === '--host') {
+      args.host = argv[++i];
+      continue;
+    }
+    if (token === '--port') {
+      args.port = Number(argv[++i]);
+      continue;
+    }
+    if (token === '--timeout-ms') {
+      args.timeoutMs = Number(argv[++i]);
+      continue;
+    }
   }
 
   return args;
+}
+
+function gatewayUnavailableMessage(host, port, error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `gateway kapali — su komutla baslat: ${GATEWAY_START_COMMAND} (host=${host} port=${port}; detay=${detail})`;
+}
+
+function readStdinWithTimeout(timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let buffer = '';
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for summary JSON on stdin after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      process.stdin.off('data', onData);
+      process.stdin.off('end', onEnd);
+      process.stdin.off('error', onError);
+    };
+
+    const onData = (chunk) => {
+      buffer += chunk.toString();
+    };
+
+    const onEnd = () => {
+      cleanup();
+      resolve(buffer);
+    };
+
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+
+    process.stdin.on('data', onData);
+    process.stdin.on('end', onEnd);
+    process.stdin.on('error', onError);
+    process.stdin.resume();
+  });
+}
+
+function probeGateway(host, port, timeoutMs) {
+  return new Promise((resolve) => {
+    const socket = new Socket();
+    let settled = false;
+
+    const finish = (error = null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.destroy();
+      resolve(error);
+    };
+
+    socket.setTimeout(Math.min(timeoutMs, 1000));
+    socket.once('connect', () => finish(null));
+    socket.once('timeout', () => finish(new Error(`baglanti timeout ${Math.min(timeoutMs, 1000)}ms`)));
+    socket.once('error', (error) => finish(error));
+    socket.connect(port, host);
+  });
 }
 
 async function readSummary(args) {
@@ -31,8 +112,19 @@ async function readSummary(args) {
     return JSON.parse(readFileSync(args.summaryPath, 'utf8'));
   }
 
-  const stdin = readFileSync(0, 'utf8').trim();
+  if (process.stdin.isTTY) {
+    const gatewayError = await probeGateway(args.host, args.port, args.timeoutMs);
+    if (gatewayError) {
+      throw new Error(gatewayUnavailableMessage(args.host, args.port, gatewayError));
+    }
+  }
+
+  const stdin = (await readStdinWithTimeout(args.timeoutMs)).trim();
   if (!stdin) {
+    const gatewayError = await probeGateway(args.host, args.port, args.timeoutMs);
+    if (gatewayError) {
+      throw new Error(gatewayUnavailableMessage(args.host, args.port, gatewayError));
+    }
     throw new Error('No summary JSON on stdin; pass --summary <file> or pipe sim output');
   }
 
