@@ -2448,3 +2448,80 @@ $ for i in 1 2; do PATH=/opt/homebrew/opt/node@22/bin:$PATH node scripts/codec8-
   "ok": true
 }
 
+$ rg "test\.skip\(|\.skip\(" tests -n
+tests/generated/priority-auth-rbac.generated.spec.ts:14:  test.skip(!state, 'Missing .auth/admin.json — configure ADMIN_* credentials to enable TM-001.');
+tests/generated/priority-auth-rbac.generated.spec.ts:17:    test.skip(!browser, 'Browser context unavailable for TM-001.');
+tests/generated/priority-auth-rbac.generated.spec.ts:40:  test.skip(!state, 'Missing .auth/office.json — configure OFFICE_* credentials to enable TM-004.');
+tests/documents.rbac.spec.ts:8: * Phase 7A shipped these as unconditional `test.skip(true, ...)` placeholders.
+tests/documents.rbac.spec.ts:41:    test.skip(
+tests/documents.rbac.spec.ts:65:    test.skip(
+tests/documents.rbac.spec.ts:92:    test.skip(
+tests/documents.rbac.spec.ts:105:    test.skip(
+tests/documents.rbac.spec.ts:117:    test.skip(
+tests/smoke.spec.ts:158:  test.skip(!fs.existsSync(OFFICE_AUTH_STATE), 'Missing .auth/office.json — run auth setup with OFFICE_EMAIL/OFFICE_PASSWORD first.');
+tests/smoke.spec.ts:205:    test.skip(!officeToken || !driverToken || !driverUser, 'Missing office/driver auth state for messenger smoke.');
+tests/smoke.spec.ts:281:  test.skip(!fs.existsSync(DRIVER_AUTH_STATE), 'Missing .auth/driver.json — run auth setup with DRIVER_EMAIL/DRIVER_PASSWORD first.');
+tests/smoke.spec.ts:294:    test.skip(!token, 'Missing driver access token in .auth/driver.json.');
+tests/smoke.spec.ts:366:    test.skip(!token, 'Missing driver access token in .auth/driver.json.');
+tests/smoke.spec.ts:419:    test.skip(!officeToken || !driverToken, 'Missing office/driver auth state for equipment issuance smoke.');
+tests/tacho-telematics/ui-cila.spec.ts:32:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/ui-cila.spec.ts:79:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/ui-cila.spec.ts:94:      test.skip(!driverId, 'No infringements with driver in seed data');
+tests/tacho-telematics/ui-cila.spec.ts:115:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/ui-cila.spec.ts:122:      test.skip((await firstVehicleRow.count()) < 1, 'No vehicle row in list');
+tests/tacho-telematics/ui-cila.spec.ts:127:      test.skip(!vehicleId, 'No vehicle in list');
+tests/tacho-telematics/ui-cila.spec.ts:139:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/ui-cila.spec.ts:146:      test.skip((await firstVehicleRow.count()) < 1, 'No vehicle row in list');
+tests/tacho-telematics/ui-cila.spec.ts:151:      test.skip(!vehicleId, 'No vehicle in list');
+tests/tacho-telematics/ui-cila.spec.ts:182:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/telematics-health-scores.spec.ts:22:    test.skip(!state, 'Missing .auth/admin.json — set ADMIN_EMAIL/ADMIN_PASSWORD in e2e/.env.e2e');
+tests/tacho-telematics/telematics-health-scores.spec.ts:39:      test.skip((await criticalDtcBadge.count()) < 1, 'No critical DTC row in current seeded telematics state');
+tests/tacho-telematics/telematics-health-scores.spec.ts:51:    test.skip(!E2E_FULL, 'Runs only with E2E_FULL=1');
+tests/tacho-telematics/telematics-health-scores.spec.ts:54:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/telematics-health-scores.spec.ts:75:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/telematics-health-scores.spec.ts:100:    test.skip(!E2E_FULL, 'Runs only with E2E_FULL=1');
+tests/tacho-telematics/telematics-health-scores.spec.ts:103:    test.skip(!state, 'Missing .auth/driver.json');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:21:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:33:      test.skip(cardCount < 1, 'No remaining-driving cards in current dataset');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:45:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:56:      test.skip((await staleCard.count()) < 1, 'No stale remaining-driving card in current dataset');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:66:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:77:      test.skip((await band.count()) < 1, 'No warning band in current assignment/remaining state');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:89:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:100:      test.skip((await invalidRow.count()) < 1, 'No invalid-signature DDD row in current dataset');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:110:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/tacho-remaining-ddd.spec.ts:122:      test.skip(!hasUnassigned, 'No unassigned DDD file in seed');
+tests/tacho-telematics/premium-cila.spec.ts:16:  test.skip(rowCount < 1, 'No live locations in current seed/sim state');
+tests/tacho-telematics/premium-cila.spec.ts:24:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/premium-cila.spec.ts:50:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/premium-cila.spec.ts:67:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/premium-cila.spec.ts:83:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/premium-cila.spec.ts:103:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/premium-cila.spec.ts:104:    test.skip(
+tests/tacho-telematics/premium-cila.spec.ts:126:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/premium-cila.spec.ts:127:    test.skip(
+tests/tacho-telematics/premium-cila.spec.ts:149:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/premium-cila.spec.ts:150:    test.skip(
+tests/tacho-telematics/tacho-compliance.spec.ts:33:    test.skip(!state, 'Missing .auth/admin.json — set ADMIN_EMAIL/ADMIN_PASSWORD in e2e/.env.e2e');
+tests/tacho-telematics/tacho-compliance.spec.ts:44:      test.skip((await openKpi.count()) < 1, 'No compliance KPI cards (likely no DDD files in dataset)');
+tests/tacho-telematics/tacho-compliance.spec.ts:59:      test.skip((await staleRow.count()) < 1, 'No stale driver row in current compliance dataset');
+tests/tacho-telematics/tacho-compliance.spec.ts:69:    test.skip(!state, 'Missing .auth/admin.json — set ADMIN_EMAIL/ADMIN_PASSWORD in e2e/.env.e2e');
+tests/tacho-telematics/tacho-compliance.spec.ts:84:      test.skip((await infringementsNav.count()) < 1, 'Tachograph sidebar links are not visible in current nav state');
+tests/tacho-telematics/tacho-compliance.spec.ts:113:    test.skip(!state, 'Missing .auth/admin.json — set ADMIN_EMAIL/ADMIN_PASSWORD in e2e/.env.e2e');
+tests/tacho-telematics/tacho-compliance.spec.ts:127:      test.skip(!hasRepeat, 'No repeat offender (3×) in seed for open queue');
+tests/tacho-telematics/tacho-compliance.spec.ts:137:    test.skip(!state, 'Missing .auth/admin.json — set ADMIN_EMAIL/ADMIN_PASSWORD in e2e/.env.e2e');
+tests/tacho-telematics/tacho-compliance.spec.ts:149:      test.skip(options.length < 2, 'No drivers in filter');
+tests/tacho-telematics/tacho-compliance.spec.ts:166:    test.skip(!state, 'Missing .auth/admin.json — set ADMIN_EMAIL/ADMIN_PASSWORD in e2e/.env.e2e');
+tests/tacho-telematics/tacho-compliance.spec.ts:186:      test.skip(!hasRow, 'No open infringements in seed data for acknowledge flow');
+tests/tacho-telematics/live-cockpit.spec.ts:21:  test.skip(rowCount < 1, 'No live locations in current seed/sim state');
+tests/tacho-telematics/live-cockpit.spec.ts:28:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/live-cockpit.spec.ts:40:      test.skip(count < 1, 'No moving vehicles in current seed/sim state');
+tests/tacho-telematics/live-cockpit.spec.ts:57:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/live-cockpit.spec.ts:69:      test.skip(alarmCount < 1, 'No alarm vehicles in current fuel-theft sim state');
+tests/tacho-telematics/live-cockpit.spec.ts:84:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/live-cockpit.spec.ts:105:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/live-cockpit.spec.ts:134:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/live-cockpit.spec.ts:146:      test.skip(rowCount < 25, 'Need mock-fleet >=25 visible markers for clustering');
+tests/tacho-telematics/live-cockpit.spec.ts:158:    test.skip(!state, 'Missing .auth/admin.json');
+tests/tacho-telematics/live-cockpit.spec.ts:159:    test.skip(
+
