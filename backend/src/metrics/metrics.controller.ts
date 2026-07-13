@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
-import { isProductionEnv } from '../config/env.validation';
 import { SkipTenant } from '../tenant/skip-tenant.decorator';
 import { MetricsService } from './metrics.service';
 
@@ -22,7 +21,7 @@ export class MetricsController {
   @Header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
   async getMetrics(@Headers('authorization') authorization?: string): Promise<string> {
     const token = process.env.METRICS_TOKEN?.trim();
-    if (isProductionEnv() && token) {
+    if (token) {
       const expected = `Bearer ${token}`;
       if (authorization !== expected) {
         throw new UnauthorizedException('Invalid metrics token');
