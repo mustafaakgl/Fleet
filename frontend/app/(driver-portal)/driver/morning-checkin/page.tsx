@@ -23,13 +23,26 @@ export default function DriverMorningCheckinPage() {
   const [companyName, setCompanyName] = useState('');
   const [cargoName, setCargoName] = useState('');
   const [cargoQuantity, setCargoQuantity] = useState('');
+  const [prefilled, setPrefilled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    driverPortalApi
-      .listMorningCheckins(driverTodayIso())
-      .then((rows) => setExisting(rows[0] ?? null))
+    Promise.all([
+      driverPortalApi.listMorningCheckins(driverTodayIso()),
+      driverPortalApi.todayAssignments(driverTodayIso()).catch(() => []),
+    ])
+      .then(([rows, assignments]) => {
+        setExisting(rows[0] ?? null);
+        const assignment = assignments[0];
+        if (!rows[0] && assignment) {
+          const plate = assignment.vehicle?.plateNumber ?? '';
+          const company = assignment.company?.name ?? '';
+          if (plate) setVehiclePlate(plate);
+          if (company) setCompanyName(company);
+          setPrefilled(Boolean(plate || company));
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -95,6 +108,11 @@ export default function DriverMorningCheckinPage() {
           ) : (
             <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
               <p className="text-sm text-slate-600">{t('driverPortal.morningCheckin.locationHint')}</p>
+              {prefilled ? (
+                <p className="rounded-md border border-sky-200 bg-sky-50 p-2 text-xs text-sky-900">
+                  {t('driverPortal.morningCheckin.prefilledFromAssignment')}
+                </p>
+              ) : null}
               <div className="space-y-2">
                 <Label>{t('driverPortal.morningCheckin.vehiclePlate')} *</Label>
                 <Input

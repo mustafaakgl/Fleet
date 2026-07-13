@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ChevronRight, Loader2, MapPin, Truck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { translateStatus } from '@/lib/driver-portal-utils';
 import { driverPortalApi } from '@/lib/api';
 import { buildAssignmentRouteName } from '@/lib/address-format';
 import type { DriverPortalAssignment } from '@/lib/types';
@@ -86,7 +87,7 @@ export function DriverAssignmentsPanel() {
                           statusClass(assignment.status),
                         )}
                       >
-                        {assignment.status.replace(/_/g, ' ')}
+                        {t(translateStatus('assignment', assignment.status))}
                       </span>
                     </div>
                     <p className="mt-0.5 text-sm text-slate-600">{assignment.company.name}</p>

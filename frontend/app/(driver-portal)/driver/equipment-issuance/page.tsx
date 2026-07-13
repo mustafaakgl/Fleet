@@ -11,6 +11,7 @@ import { driverDocumentDownloadApiPath } from '@/lib/file-access';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { driverPortalApi } from '@/lib/api';
+import { translateStatus } from '@/lib/driver-portal-utils';
 import type { DriverEquipmentIssuance } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
@@ -169,7 +170,7 @@ export default function DriverEquipmentIssuancePage() {
                 </p>
                 <p className="text-slate-600">{formatDate(selected.issuedAt)}</p>
                 <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">
-                  {selected.status.replace(/_/g, ' ')}
+                  {t(translateStatus('equipmentIssuance', selected.status))}
                 </p>
               </div>
 

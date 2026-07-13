@@ -55,6 +55,7 @@ export function DriverFileInput({
         ref={inputRef}
         type="file"
         className="hidden"
+        capture="environment"
         accept={accept}
         multiple={multiple}
         onChange={handlePick}

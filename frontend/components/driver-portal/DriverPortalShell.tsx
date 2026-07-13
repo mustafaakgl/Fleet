@@ -4,7 +4,9 @@ import { Navigation } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MyFleetLogo } from '@/components/brand/MyFleetLogo';
 import { DriverLanguageSync } from '@/components/driver-portal/DriverLanguageSync';
+import { DriverOfflineStatusBar } from '@/components/driver-portal/DriverOfflineStatusBar';
 import { DriverPortalNav } from '@/components/driver-portal/DriverPortalNav';
+import { DriverPortalUpdateBanner } from '@/components/driver-portal/DriverPortalUpdateBanner';
 import { getUser } from '@/lib/auth';
 
 interface DriverPortalShellProps {
@@ -20,6 +22,7 @@ export function DriverPortalShell({ children, hideHeader, hideNav }: DriverPorta
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <DriverLanguageSync />
+      <DriverPortalUpdateBanner />
       {!hideHeader ? (
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
@@ -37,6 +40,7 @@ export function DriverPortalShell({ children, hideHeader, hideNav }: DriverPorta
         </header>
       ) : null}
       <main className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-6">{children}</main>
+      {!hideNav ? <DriverOfflineStatusBar /> : null}
       {!hideNav ? <DriverPortalNav /> : null}
     </div>
   );

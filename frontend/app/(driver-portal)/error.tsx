@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 
 type DriverPortalErrorProps = {
@@ -10,6 +11,8 @@ type DriverPortalErrorProps = {
 };
 
 export default function DriverPortalError({ error, reset }: DriverPortalErrorProps) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     console.error('[driver-portal] route error', error);
   }, [error]);
@@ -19,12 +22,10 @@ export default function DriverPortalError({ error, reset }: DriverPortalErrorPro
       <div className="rounded-full bg-red-50 p-3">
         <AlertTriangle className="h-7 w-7 text-red-600" />
       </div>
-      <h2 className="text-xl font-semibold text-slate-900">Something went wrong</h2>
-      <p className="text-sm text-slate-600">
-        We could not load this page. Please try again.
-      </p>
+      <h2 className="text-xl font-semibold text-slate-900">{t('common.error')}</h2>
+      <p className="text-sm text-slate-600">{t('common.pageErrorBody')}</p>
       <Button type="button" onClick={reset}>
-        Try again
+        {t('common.retry')}
       </Button>
     </div>
   );

@@ -360,6 +360,55 @@ test.describe('Driver smoke', () => {
     expect(currentAfterEnd.ok()).toBeTruthy();
     expect((await currentAfterEnd.json() as { active: boolean }).active).toBe(false);
   });
+
+  test('driver can reconcile an active work session', async ({ request }) => {
+    const token = readAccessToken(DRIVER_AUTH_STATE);
+    test.skip(!token, 'Missing driver access token in .auth/driver.json.');
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    await request.post(`${API_BASE_URL}/driver/work-sessions/end`, {
+      headers,
+      data: { reason: 'manual' },
+    });
+
+    const startResponse = await request.post(`${API_BASE_URL}/driver/work-sessions/start`, {
+      headers,
+    });
+    expect(startResponse.ok(), await startResponse.text()).toBeTruthy();
+
+    const reconcileAt = new Date();
+    reconcileAt.setMinutes(reconcileAt.getMinutes() + 1);
+
+    const reconcileResponse = await request.post(`${API_BASE_URL}/driver/work-sessions/reconcile`, {
+      headers,
+      data: {
+        ended_at: reconcileAt.toISOString(),
+        reason: 'E2E stale session reconciliation check',
+      },
+    });
+    expect(reconcileResponse.ok(), await reconcileResponse.text()).toBeTruthy();
+    const reconcileBody = await reconcileResponse.json() as {
+      session: {
+        status: string;
+        source: string;
+        correctionReason: string | null;
+        endedAt: string | null;
+      };
+    };
+    expect(reconcileBody.session.status).toBe('ended');
+    expect(reconcileBody.session.source).toBe('driver_reconciled');
+    expect(reconcileBody.session.correctionReason).toBe('E2E stale session reconciliation check');
+    expect(reconcileBody.session.endedAt).not.toBeNull();
+
+    const currentAfterReconcile = await request.get(`${API_BASE_URL}/driver/work-sessions/current`, {
+      headers,
+    });
+    expect(currentAfterReconcile.ok()).toBeTruthy();
+    expect((await currentAfterReconcile.json() as { active: boolean }).active).toBe(false);
+  });
 });
 
 test.describe('Equipment issuance smoke', () => {

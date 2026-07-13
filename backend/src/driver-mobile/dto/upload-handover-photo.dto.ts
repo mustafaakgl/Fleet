@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsISO8601, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsISO8601, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class UploadHandoverPhotoDto {
   @IsISO8601()
@@ -18,4 +18,8 @@ export class UploadHandoverPhotoDto {
   @IsOptional()
   @IsString()
   device_info?: string;
+
+  @IsOptional()
+  @IsUUID()
+  client_request_id?: string;
 }

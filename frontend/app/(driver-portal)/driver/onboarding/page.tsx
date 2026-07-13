@@ -93,12 +93,12 @@ export default function DriverOnboardingPage() {
                 <h2 className="text-sm font-semibold text-slate-900">{t('driverPortal.onboarding.contactSection')}</h2>
                 <div className="space-y-2">
                   <Label>{t('driverPortal.profile.phone')}</Label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+49 123 456 789" />
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('driverPortal.onboarding.phonePlaceholder')} />
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>{t('driverPortal.onboarding.licenseNumber')}</Label>
-                    <Input value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} />
+                    <Input value={licenseNumber} onChange={(e) => setLicenseNumber(e.target.value)} placeholder={t('driverPortal.onboarding.licenseNumberPlaceholder')} />
                   </div>
                   <div className="space-y-2">
                     <Label>{t('driverPortal.onboarding.licenseExpiry')}</Label>
@@ -111,21 +111,21 @@ export default function DriverOnboardingPage() {
                 <h2 className="text-sm font-semibold text-slate-900">{t('driverPortal.onboarding.addressSection')}</h2>
                 <div className="space-y-2">
                   <Label>{t('driverPortal.onboarding.street')} *</Label>
-                  <Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Musterstraße 12" />
+                  <Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder={t('driverPortal.onboarding.streetPlaceholder')} />
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>{t('driverPortal.onboarding.zipCode')} *</Label>
-                    <Input value={zipCode} onChange={(e) => setZipCode(e.target.value)} placeholder="12345" />
+                    <Input value={zipCode} onChange={(e) => setZipCode(e.target.value)} placeholder={t('driverPortal.onboarding.zipCodePlaceholder')} />
                   </div>
                   <div className="space-y-2">
                     <Label>{t('driverPortal.onboarding.city')} *</Label>
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Berlin" />
+                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder={t('driverPortal.onboarding.cityPlaceholder')} />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>{t('driverPortal.onboarding.country')} *</Label>
-                  <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Deutschland" />
+                  <Input value={country} onChange={(e) => setCountry(e.target.value)} placeholder={t('driverPortal.onboarding.countryPlaceholder')} />
                 </div>
               </section>
 

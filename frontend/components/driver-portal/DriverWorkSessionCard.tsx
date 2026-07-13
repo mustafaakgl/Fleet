@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Clock, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Clock, Loader2, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,8 +31,9 @@ export function DriverWorkSessionCard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [session, setSession] = useState<Awaited<ReturnType<typeof driverPortalApi.getCurrentWorkSession>>['session']>(null);
   const [active, setActive] = useState(false);
-  const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [needsReconciliation, setNeedsReconciliation] = useState(false);
   const [feierabendToday, setFeierabendToday] = useState(false);
 
   const reload = useCallback(async () => {
@@ -40,7 +42,8 @@ export function DriverWorkSessionCard() {
     try {
       const current = await driverPortalApi.getCurrentWorkSession();
       setActive(current.active);
-      setStartedAt(current.session?.startedAt ?? null);
+      setNeedsReconciliation(Boolean(current.needsReconciliation));
+      setSession(current.session);
       setFeierabendToday(isFeierabendPausedToday());
     } catch {
       setError(t('driverPortal.profile.workSessionLoadError'));
@@ -53,15 +56,39 @@ export function DriverWorkSessionCard() {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    if (!active) {
+      return undefined;
+    }
+
+    const heartbeat = () => {
+      if (document.visibilityState === 'visible') {
+        void driverPortalApi.heartbeatWorkSession().catch(() => undefined);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      heartbeat();
+    };
+
+    const timer = window.setInterval(heartbeat, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    heartbeat();
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [active]);
+
   async function handleEndShift() {
     setBusy(true);
     setError(null);
     try {
       await driverPortalApi.endWorkSession('manual');
       markFeierabendToday();
-      setActive(false);
-      setStartedAt(null);
       setFeierabendToday(true);
+      await reload();
     } catch {
       setError(t('driverPortal.profile.workSessionEndFailed'));
     } finally {
@@ -76,8 +103,10 @@ export function DriverWorkSessionCard() {
       clearFeierabendPause();
       const session = await driverPortalApi.startWorkSession();
       setActive(true);
-      setStartedAt(session.startedAt);
+      setSession(session);
       setFeierabendToday(false);
+      await driverPortalApi.heartbeatWorkSession().catch(() => undefined);
+      await reload();
     } catch {
       setError(t('driverPortal.profile.workSessionStartFailed'));
     } finally {
@@ -103,14 +132,29 @@ export function DriverWorkSessionCard() {
         ) : (
           <>
             <p className="text-sm font-medium text-slate-900">
-              {active
+              {active && session
                 ? t('driverPortal.profile.workSessionActive', {
-                    time: startedAt ? formatStartedAt(startedAt, i18n.language) : '—',
+                    time: formatStartedAt(session.startedAt, i18n.language),
                   })
                 : feierabendToday
                   ? t('driverPortal.profile.workSessionEndedToday')
                   : t('driverPortal.profile.workSessionInactive')}
             </p>
+            {needsReconciliation && session ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="flex items-start gap-2">
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="space-y-2">
+                    <p>{t('driverPortal.profile.workSessionReconcileHint')}</p>
+                    <Button asChild size="sm" variant="outline" className="border-amber-300 bg-white">
+                      <Link href={`/driver/work-session/reconcile?sessionId=${session.id}`}>
+                        {t('driverPortal.profile.workSessionReconcileAction')}
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {active ? (
               <Button
                 type="button"

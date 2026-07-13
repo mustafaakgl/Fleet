@@ -23,6 +23,7 @@ import { OperationalNotifyService } from '../notifications/operational-notify.se
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { WorkSessionsService } from '../work-sessions/work-sessions.service';
+import { CorrectWorkSessionDto } from '../work-sessions/dto/correct-work-session.dto';
 import { DepartureCheckService } from '../departure-check/departure-check.service';
 import type { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import {
@@ -934,17 +935,14 @@ export class DriverMobileService {
 
   async getCurrentWorkSession(userId: string) {
     const { driver } = await this.resolveDriver(userId);
-    const session = await this.workSessions.getActiveSessionForDriver(driver.id);
+    const session = await this.workSessions.getCurrentSessionForDriver(driver.id);
     if (!session) {
       return { active: false, session: null };
     }
     return {
       active: true,
-      session: {
-        id: session.id,
-        startedAt: session.startedAt.toISOString(),
-        status: session.status,
-      },
+      needsReconciliation: session.staleOpen,
+      session,
     };
   }
 
@@ -959,28 +957,87 @@ export class DriverMobileService {
         assignment_id: gate.assignment_id,
       });
     }
-    const session = await this.workSessions.startSession(driver.id);
-    return {
+    return this.workSessions.startSession(driver.id, userId).then((session) => ({
       id: session.id,
       startedAt: session.startedAt.toISOString(),
+      endedAt: session.endedAt?.toISOString() ?? null,
+      originalEndAt: session.originalEndAt?.toISOString() ?? null,
+      correctionReason: session.correctionReason ?? null,
+      lastSeenAt: session.lastSeenAt?.toISOString() ?? null,
+      source: session.source,
+      endReason: session.endReason,
       status: session.status,
-    };
+      staleOpen: false,
+      staleSince: null,
+    }));
   }
 
   async endWorkSession(userId: string, reason: 'manual' | 'app_background' | 'logout' = 'manual') {
     const { driver } = await this.resolveDriver(userId);
-    const session = await this.workSessions.endSession(driver.id, reason);
+    const session = await this.workSessions.endSession(driver.id, reason, userId);
     if (!session) {
       return { ended: false, session: null };
     }
     return {
       ended: true,
+      session: session
+        ? {
+            id: session.id,
+            startedAt: session.startedAt.toISOString(),
+            endedAt: session.endedAt?.toISOString() ?? null,
+            originalEndAt: session.originalEndAt?.toISOString() ?? null,
+            correctionReason: session.correctionReason ?? null,
+            lastSeenAt: session.lastSeenAt?.toISOString() ?? null,
+            source: session.source,
+            endReason: session.endReason,
+            status: session.status,
+            staleOpen: false,
+            staleSince: null,
+          }
+        : null,
+    };
+  }
+
+  async heartbeatWorkSession(userId: string) {
+    const { driver } = await this.resolveDriver(userId);
+    const heartbeat = await this.workSessions.heartbeatSession(driver.id);
+    const session = heartbeat ? await this.workSessions.getCurrentSessionForDriver(driver.id) : null;
+    return {
+      active: Boolean(session),
+      session: session
+        ? {
+            id: session.id,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            originalEndAt: session.originalEndAt,
+            correctionReason: session.correctionReason,
+            lastSeenAt: session.lastSeenAt,
+            source: session.source,
+            endReason: session.endReason,
+            status: session.status,
+            staleOpen: session.staleOpen,
+            staleSince: session.staleSince,
+          }
+        : null,
+    };
+  }
+
+  async reconcileWorkSession(userId: string, dto: CorrectWorkSessionDto) {
+    const { user, driver } = await this.resolveDriver(userId);
+    const session = await this.workSessions.correctActiveSessionForDriver(driver.id, dto, user.id);
+    return {
       session: {
         id: session.id,
-        startedAt: session.startedAt.toISOString(),
-        endedAt: session.endedAt?.toISOString() ?? null,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        originalEndAt: session.originalEndAt,
+        correctionReason: session.correctionReason,
+        lastSeenAt: session.lastSeenAt,
+        source: session.source,
         endReason: session.endReason,
         status: session.status,
+        staleOpen: session.staleOpen,
+        staleSince: session.staleSince,
       },
     };
   }
@@ -1177,6 +1234,21 @@ export class DriverMobileService {
       throw new BadRequestException('Photos are not required for this handover');
     }
 
+    if (metadata.client_request_id) {
+      const existingByClientRequestId = await this.prisma.handoverPhoto.findUnique({
+        where: { clientRequestId: metadata.client_request_id },
+        select: { id: true },
+      });
+      if (existingByClientRequestId) {
+        try {
+          unlinkSync(file.path);
+        } catch {
+          // ignore cleanup errors
+        }
+        return { handover: await this.getHandover(userId, handoverId) };
+      }
+    }
+
     const documentType = handoverPhotoDocumentType(slot);
     let buffer: Buffer;
 
@@ -1261,6 +1333,7 @@ export class DriverMobileService {
         documentType,
         fileName: file.originalname,
         fileUrl: this.storage.buildStoredPath('documents', file.filename),
+        clientRequestId: metadata.client_request_id ?? null,
         uploadedById: user.id,
       },
     });
@@ -1276,6 +1349,7 @@ export class DriverMobileService {
         gpsLat: validated.gpsLat,
         gpsLng: validated.gpsLng,
         deviceInfo: metadata.device_info ?? null,
+        clientRequestId: metadata.client_request_id ?? null,
         validationStatus,
       },
     });
@@ -1420,6 +1494,7 @@ export class DriverMobileService {
     userId: string,
     requestId: string,
     file: { originalname: string; filename: string },
+    clientRequestId?: string,
   ) {
     const { user, driver } = await this.resolveDriver(userId);
     const request = await this.prisma.request.findUnique({
@@ -1431,6 +1506,28 @@ export class DriverMobileService {
     }
     if (request.driverId !== driver.id) {
       throw new ForbiddenException('You can only upload files for your own requests');
+    }
+
+    if (clientRequestId) {
+      const existingAttachment = await this.prisma.document.findUnique({
+        where: { clientRequestId },
+        select: { id: true, fileName: true },
+      });
+      if (existingAttachment) {
+        const existingCount = await this.prisma.document.count({
+          where: {
+            ownerType: 'request',
+            ownerId: requestId,
+            status: { not: 'archived' },
+          },
+        });
+        return {
+          id: existingAttachment.id,
+          fileName: existingAttachment.fileName,
+          download_url: `/driver/documents/${existingAttachment.id}/download`,
+          attachmentCount: existingCount,
+        };
+      }
     }
 
     const existingCount = await this.prisma.document.count({
@@ -1450,6 +1547,7 @@ export class DriverMobileService {
         ownerId: requestId,
         documentType: requestAttachmentDocumentType(existingCount),
         notes: `Attachment for ${request.type} request`,
+        clientRequestId,
       },
       {
         originalName: file.originalname,
@@ -1671,6 +1769,7 @@ export class DriverMobileService {
     userId: string,
     transportRequestId: string,
     file: { originalname: string; filename: string },
+    clientRequestId?: string,
   ) {
     const { user, driver } = await this.resolveDriver(userId);
     const transportRequest = await this.prisma.transportRequest.findUnique({
@@ -1682,6 +1781,28 @@ export class DriverMobileService {
     }
     if (transportRequest.driverId !== driver.id) {
       throw new ForbiddenException('You can only upload files for your own transport requests');
+    }
+
+    if (clientRequestId) {
+      const existingAttachment = await this.prisma.document.findUnique({
+        where: { clientRequestId },
+        select: { id: true, fileName: true },
+      });
+      if (existingAttachment) {
+        const existingCount = await this.prisma.document.count({
+          where: {
+            ownerType: 'transport_request',
+            ownerId: transportRequestId,
+            status: { not: 'archived' },
+          },
+        });
+        return {
+          id: existingAttachment.id,
+          fileName: existingAttachment.fileName,
+          download_url: `/driver/documents/${existingAttachment.id}/download`,
+          attachmentCount: existingCount,
+        };
+      }
     }
 
     const existingCount = await this.prisma.document.count({
@@ -1701,6 +1822,7 @@ export class DriverMobileService {
         ownerId: transportRequestId,
         documentType: requestAttachmentDocumentType(existingCount),
         notes: 'Attachment for transport request',
+        clientRequestId,
       },
       {
         originalName: file.originalname,
@@ -1844,6 +1966,7 @@ export class DriverMobileService {
     accidentId: string,
     file: { originalname: string; filename: string },
     documentTypeInput?: string,
+    clientRequestId?: string,
   ) {
     const { user, driver } = await this.resolveDriver(userId);
     const accident = await this.prisma.accident.findUnique({
@@ -1855,6 +1978,29 @@ export class DriverMobileService {
     }
     if (accident.driverId !== driver.id) {
       throw new ForbiddenException('You can only upload files for your own incidents');
+    }
+
+    if (clientRequestId) {
+      const existingAttachment = await this.prisma.document.findUnique({
+        where: { clientRequestId },
+        select: { id: true, fileName: true, documentType: true },
+      });
+      if (existingAttachment) {
+        const existingCount = await this.prisma.document.count({
+          where: {
+            ownerType: 'accident',
+            ownerId: accidentId,
+            status: { not: 'archived' },
+          },
+        });
+        return {
+          id: existingAttachment.id,
+          fileName: existingAttachment.fileName,
+          documentType: existingAttachment.documentType,
+          download_url: `/driver/documents/${existingAttachment.id}/download`,
+          attachmentCount: existingCount,
+        };
+      }
     }
 
     const existingCount = await this.prisma.document.count({
@@ -1875,6 +2021,7 @@ export class DriverMobileService {
         ownerId: accidentId,
         documentType,
         notes: accidentAttachmentNotes(accident.type, documentType),
+        clientRequestId,
       },
       {
         originalName: file.originalname,

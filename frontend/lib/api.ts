@@ -779,14 +779,48 @@ export interface WorkSessionRow {
   driverId: string;
   startedAt: string;
   endedAt?: string | null;
+  originalEndAt?: string | null;
+  correctionReason?: string | null;
+  lastSeenAt?: string | null;
+  source: 'manual' | 'driver_reconciled' | 'office_correction';
   endReason?: 'manual' | 'app_background' | 'logout' | null;
   status: 'active' | 'ended';
+  staleOpen?: boolean;
+  staleSince?: string | null;
   driver?: { id: string; firstName: string; lastName: string; employeeNumber: string };
 }
 
+export interface DriverWorkSessionState {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  originalEndAt: string | null;
+  correctionReason: string | null;
+  lastSeenAt: string | null;
+  source: 'manual' | 'driver_reconciled' | 'office_correction';
+  endReason: 'manual' | 'app_background' | 'logout' | null;
+  status: 'active' | 'ended';
+  staleOpen: boolean;
+  staleSince: string | null;
+}
+
+export interface DriverWorkSessionCurrentResponse {
+  active: boolean;
+  needsReconciliation?: boolean;
+  session: DriverWorkSessionState | null;
+}
+
 export const workSessionsApi = {
-  list: (params?: { driver_id?: string; date_from?: string; date_to?: string; status?: 'active' | 'ended' }) =>
+  list: (params?: {
+    driver_id?: string;
+    date_from?: string;
+    date_to?: string;
+    status?: 'active' | 'ended';
+    stale_open?: boolean;
+  }) =>
     api.get<WorkSessionRow[]>('/work-sessions', { params }).then((r) => r.data),
+  correct: (id: string, payload: { ended_at: string; reason: string; note?: string }) =>
+    api.patch<WorkSessionRow>(`/work-sessions/${id}/correct`, payload).then((r) => r.data),
 };
 
 // ─── Companies ───────────────────────────────────────────────────────────────
@@ -1257,8 +1291,20 @@ export const messengerApi = {
         .then((r) => normalizeMessengerMessage(r.data));
     }
 
+    // Backend DTO'sunda `attachments` alanı yok (forbidNonWhitelisted) — JSON gövdesinden çıkar.
+    const jsonPayload: Record<string, string> = {};
+    if (payload.text && payload.text.trim().length > 0) {
+      jsonPayload.text = payload.text;
+    }
+    if (payload.originalLanguage) {
+      jsonPayload.originalLanguage = payload.originalLanguage;
+    }
+    if (payload.targetLanguage) {
+      jsonPayload.targetLanguage = payload.targetLanguage;
+    }
+
     return api
-      .post<MessengerMessage>(`/messenger/conversations/${conversationId}/messages`, payload)
+      .post<MessengerMessage>(`/messenger/conversations/${conversationId}/messages`, jsonPayload)
       .then((r) => normalizeMessengerMessage(r.data));
   },
 
@@ -2038,6 +2084,7 @@ export const driverPortalApi = {
     speedMps?: number;
     headingDeg?: number;
     recordedAt: string;
+    clientRequestId?: string;
   }) =>
     api
       .post<{
@@ -2101,6 +2148,7 @@ export const driverPortalApi = {
       gpsLat?: number;
       gpsLng?: number;
       deviceInfo?: string;
+      clientRequestId?: string;
     },
   ) => {
     const formData = new FormData();
@@ -2109,6 +2157,7 @@ export const driverPortalApi = {
     if (metadata.gpsLat != null) formData.append('gps_lat', String(metadata.gpsLat));
     if (metadata.gpsLng != null) formData.append('gps_lng', String(metadata.gpsLng));
     if (metadata.deviceInfo) formData.append('device_info', metadata.deviceInfo);
+    if (metadata.clientRequestId) formData.append('client_request_id', metadata.clientRequestId);
     return api
       .post<{ handover: DriverHandover }>(
         `/driver/vehicle-handovers/${handoverId}/photo?slot=${slot}`,
@@ -2158,9 +2207,10 @@ export const driverPortalApi = {
     reason?: string;
   }) => api.post<DriverPortalRequest>('/driver/requests', payload).then((r) => r.data),
 
-  uploadRequestAttachment: (requestId: string, file: File) => {
+  uploadRequestAttachment: (requestId: string, file: File, options?: { clientRequestId?: string }) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (options?.clientRequestId) formData.append('client_request_id', options.clientRequestId);
     return api
       .post(`/driver/requests/${requestId}/attachments`, formData, { headers: driverMultipartHeaders() })
       .then((r) => r.data);
@@ -2188,9 +2238,10 @@ export const driverPortalApi = {
     endTime: string;
   }) => api.post<DriverTransportRequest>('/driver/transport-requests', payload).then((r) => r.data),
 
-  uploadTransportAttachment: (transportRequestId: string, file: File) => {
+  uploadTransportAttachment: (transportRequestId: string, file: File, options?: { clientRequestId?: string }) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (options?.clientRequestId) formData.append('client_request_id', options.clientRequestId);
     return api
       .post(
         `/driver/transport-requests/${transportRequestId}/attachments`,
@@ -2216,9 +2267,15 @@ export const driverPortalApi = {
     cargoQuantity?: string;
   }) => api.post<DriverIncident>('/driver/accidents', payload).then((r) => r.data),
 
-  uploadAccidentAttachment: (accidentId: string, file: File, documentType?: string) => {
+  uploadAccidentAttachment: (
+    accidentId: string,
+    file: File,
+    documentType?: string,
+    options?: { clientRequestId?: string },
+  ) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (options?.clientRequestId) formData.append('client_request_id', options.clientRequestId);
     return api
       .post(`/driver/accidents/${accidentId}/attachments`, formData, {
         headers: driverMultipartHeaders(),
@@ -2242,18 +2299,19 @@ export const driverPortalApi = {
     api.post('/driver/notifications/read-all').then((r) => r.data),
 
   startWorkSession: () =>
-    api.post<{ id: string; startedAt: string; status: string }>('/driver/work-sessions/start').then((r) => r.data),
+    api.post<DriverWorkSessionState>('/driver/work-sessions/start').then((r) => r.data),
 
   getCurrentWorkSession: () =>
-    api
-      .get<{
-        active: boolean;
-        session: { id: string; startedAt: string; status: string } | null;
-      }>('/driver/work-sessions/current')
-      .then((r) => r.data),
+    api.get<DriverWorkSessionCurrentResponse>('/driver/work-sessions/current').then((r) => r.data),
 
   endWorkSession: (reason: 'manual' | 'app_background' | 'logout' = 'manual') =>
-    api.post('/driver/work-sessions/end', { reason }).then((r) => r.data),
+    api.post<{ ended: boolean; session: DriverWorkSessionState | null }>('/driver/work-sessions/end', { reason }).then((r) => r.data),
+
+  heartbeatWorkSession: () =>
+    api.post<DriverWorkSessionCurrentResponse>('/driver/work-sessions/heartbeat').then((r) => r.data),
+
+  reconcileWorkSession: (payload: { ended_at: string; reason: string; note?: string }) =>
+    api.post<{ session: DriverWorkSessionState }>('/driver/work-sessions/reconcile', payload).then((r) => r.data),
 };
 
 export const fleetFuelAnalyticsApi = {

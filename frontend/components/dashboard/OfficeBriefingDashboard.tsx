@@ -6,6 +6,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import {
   assignmentsApi,
   dashboardApi,
@@ -15,6 +16,7 @@ import {
   tachographApi,
   transportRequestsApi,
 } from '@/lib/api';
+import { RecentMessagesWidget } from '@/components/dashboard/RecentMessagesWidget';
 import type { DashboardSummary, Defect, MissingDepartureCheck, TransportRequest } from '@/lib/types';
 
 function iso(offsetDays = 0): string {
@@ -34,6 +36,31 @@ type StreamRow = {
   href: string;
   severity: 'critical' | 'high' | 'medium';
 };
+
+type UnassignedTaskRow = {
+  id: string;
+  startTime: string;
+  companyName: string;
+  requestedDate: string;
+  cargoName: string;
+};
+
+const demoUnassignedTasks: UnassignedTaskRow[] = [
+  {
+    id: 'demo-1',
+    startTime: '07:30',
+    companyName: 'Meyer Logistik GmbH',
+    requestedDate: '2026-07-13',
+    cargoName: 'Tautliner',
+  },
+  {
+    id: 'demo-2',
+    startTime: '13:15',
+    companyName: 'NordWind Spedition',
+    requestedDate: '2026-07-14',
+    cargoName: 'Kühlauflieger',
+  },
+];
 
 export function OfficeBriefingDashboard() {
   const { t, i18n } = useTranslation();
@@ -129,6 +156,16 @@ export function OfficeBriefingDashboard() {
   }, [criticalDefects, summary?.criticalAlerts]);
 
   const tomorrowGap = summary ? Math.max((summary.tomorrowPlanning.plannedDrivers ?? 0) - (summary.tomorrowPlanning.availableDrivers ?? 0), 0) : 0;
+  const showDemoPreview = true;
+  const unassignedPreview: UnassignedTaskRow[] = showDemoPreview
+    ? demoUnassignedTasks
+    : unassigned.slice(0, 8).map((row) => ({
+        id: row.id,
+        startTime: row.startTime,
+        companyName: row.company?.name ?? row.companyId,
+        requestedDate: row.requestedDate,
+        cargoName: row.cargoName,
+      }));
 
   const healthStrip = [
     {
@@ -224,15 +261,31 @@ export function OfficeBriefingDashboard() {
             <CardTitle>{t('dashboard.v3.office.unassignedTasks')}</CardTitle>
           </CardHeader>
           <CardContent>
+            {showDemoPreview ? (
+              <p className="mb-3 rounded-md border border-dashed border-sky-300 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                Demo görünüm açık: aşağıdaki kartlar örnek veridir.
+              </p>
+            ) : null}
             <ul className="space-y-2 text-sm">
-              {unassigned.slice(0, 8).map((row) => (
+              {unassignedPreview.map((row) => (
                 <li key={row.id}>
                   <Link
-                    href={`/assignments?tab=betrieb&transportId=${row.id}`}
-                    className="flex items-center justify-between rounded-md border p-2 hover:bg-slate-50"
+                    href={showDemoPreview ? '#' : `/assignments?tab=betrieb&transportId=${row.id}`}
+                    aria-disabled={showDemoPreview}
+                    onClick={showDemoPreview ? (event) => event.preventDefault() : undefined}
+                    className={cn(
+                      'flex items-center justify-between rounded-md border p-2 transition',
+                      showDemoPreview ? 'cursor-default border-sky-200 bg-sky-50/70' : 'hover:bg-slate-50',
+                    )}
                   >
-                    <span className="truncate pr-2">{row.startTime} · {row.company?.name ?? row.companyId}</span>
-                    <span className="text-slate-500">{row.requestedDate}</span>
+                    <span className="min-w-0 truncate pr-2">
+                      <span className="font-medium text-slate-900">{row.startTime}</span>
+                      <span className="text-slate-500"> · {row.companyName}</span>
+                      <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        {row.cargoName}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-slate-500">{row.requestedDate}</span>
                   </Link>
                 </li>
               ))}
@@ -287,6 +340,8 @@ export function OfficeBriefingDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <RecentMessagesWidget onlyUnread />
     </div>
   );
 }

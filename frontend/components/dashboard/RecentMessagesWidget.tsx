@@ -36,7 +36,11 @@ function messagePreview(conversation: ConversationListItem): string {
   return conversation.lastMessage.translatedText ?? conversation.lastMessage.originalText;
 }
 
-export function RecentMessagesWidget() {
+interface RecentMessagesWidgetProps {
+  onlyUnread?: boolean;
+}
+
+export function RecentMessagesWidget({ onlyUnread = false }: RecentMessagesWidgetProps) {
   const { t, i18n } = useTranslation();
   const hidden = getUser()?.role === 'driver';
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
@@ -54,7 +58,8 @@ export function RecentMessagesWidget() {
     Promise.all([messengerApi.listConversations(), messengerApi.getUnreadCount()])
       .then(([list, unread]) => {
         if (!active) return;
-        setConversations(sortConversations(list).slice(0, MAX_ITEMS));
+        const filtered = onlyUnread ? list.filter((conversation) => (conversation.unreadCount ?? 0) > 0) : list;
+        setConversations(sortConversations(filtered).slice(0, MAX_ITEMS));
         setUnreadTotal(unread.total);
       })
       .catch(() => {
@@ -70,16 +75,19 @@ export function RecentMessagesWidget() {
     return () => {
       active = false;
     };
-  }, [hidden]);
+  }, [hidden, onlyUnread]);
 
   const hasConversations = conversations.length > 0;
 
   const subtitle = useMemo(() => {
+    if (onlyUnread) {
+      return t('dashboard.recentMessages.subtitleOnlyUnread');
+    }
     if (unreadTotal > 0) {
       return t('dashboard.recentMessages.subtitleUnread', { count: unreadTotal });
     }
     return t('dashboard.recentMessages.subtitle');
-  }, [t, unreadTotal]);
+  }, [onlyUnread, t, unreadTotal]);
 
   if (hidden) return null;
 
@@ -117,7 +125,9 @@ export function RecentMessagesWidget() {
           ) : error ? (
             <p className="text-sm text-slate-500">{t('dashboard.recentMessages.unavailable')}</p>
           ) : !hasConversations ? (
-            <p className="text-sm text-slate-500">{t('dashboard.recentMessages.empty')}</p>
+            <p className="text-sm text-slate-500">
+              {onlyUnread ? t('dashboard.recentMessages.emptyUnread') : t('dashboard.recentMessages.empty')}
+            </p>
           ) : (
             <ul className="divide-y divide-slate-100">
               {conversations.map((conversation) => {

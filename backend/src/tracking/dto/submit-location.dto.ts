@@ -5,6 +5,7 @@ import {
   IsOptional,
   Max,
   Min,
+  IsUUID,
 } from 'class-validator';
 
 export class SubmitLocationDto {
@@ -46,4 +47,8 @@ export class SubmitLocationDto {
 
   @IsDateString()
   recordedAt!: string;
+
+  @IsOptional()
+  @IsUUID()
+  clientRequestId?: string;
 }

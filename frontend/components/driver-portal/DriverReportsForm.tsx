@@ -188,12 +188,13 @@ export function DriverReportsForm() {
             </div>
             <div className="space-y-2">
               <Label>{t('driverPortal.reports.location')}</Label>
-              <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t('driverPortal.reports.locationPlaceholder')} />
             </div>
             <div className="space-y-2">
               <Label>{t('driverPortal.reports.description')}</Label>
               <textarea
                 className="min-h-24 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('driverPortal.reports.descriptionPlaceholder')}
                 value={accidentDescription}
                 onChange={(e) => setAccidentDescription(e.target.value)}
               />
@@ -244,20 +245,21 @@ export function DriverReportsForm() {
             </div>
             <div className="space-y-2">
               <Label>{t('driverPortal.reports.cargoOwner')}</Label>
-              <Input value={cargoOwner} onChange={(e) => setCargoOwner(e.target.value)} />
+              <Input value={cargoOwner} onChange={(e) => setCargoOwner(e.target.value)} placeholder={t('driverPortal.reports.cargoOwnerPlaceholder')} />
             </div>
             <div className="space-y-2">
               <Label>{t('driverPortal.reports.cargoType')}</Label>
-              <Input value={cargoType} onChange={(e) => setCargoType(e.target.value)} />
+              <Input value={cargoType} onChange={(e) => setCargoType(e.target.value)} placeholder={t('driverPortal.reports.cargoTypePlaceholder')} />
             </div>
             <div className="space-y-2">
               <Label>{t('driverPortal.reports.cargoQuantity')}</Label>
-              <Input value={cargoQuantity} onChange={(e) => setCargoQuantity(e.target.value)} placeholder="z. B. 12 Paletten" />
+              <Input value={cargoQuantity} onChange={(e) => setCargoQuantity(e.target.value)} placeholder={t('driverPortal.reports.cargoQuantityPlaceholder')} />
             </div>
             <div className="space-y-2">
               <Label>{t('driverPortal.reports.description')}</Label>
               <textarea
                 className="min-h-24 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('driverPortal.reports.descriptionPlaceholder')}
                 value={cargoDescription}
                 onChange={(e) => setCargoDescription(e.target.value)}
               />

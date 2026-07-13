@@ -11,7 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { driverPortalApi } from '@/lib/api';
-import { DRIVER_REQUEST_TYPES, driverTodayIso } from '@/lib/driver-portal-utils';
+import {
+  enqueueRequestAttachmentQueueItem,
+  enqueueTransportAttachmentQueueItem,
+} from '@/lib/driver-offline-queue';
+import { isQueueableOfflineError } from '@/lib/driver-offline-queue-core';
+import { DRIVER_REQUEST_TYPES, driverTodayIso, translateStatus } from '@/lib/driver-portal-utils';
 import type { DriverPortalRequest, DriverRequestType, DriverTransportFormOptions, DriverTransportRequest } from '@/lib/types';
 
 export default function DriverRequestsPage() {
@@ -67,7 +72,19 @@ export default function DriverRequestsPage() {
     try {
       const created = await driverPortalApi.createRequest({ type, startDate, endDate, reason });
       for (const file of leaveFiles) {
-        await driverPortalApi.uploadRequestAttachment(created.id, file);
+        try {
+          await driverPortalApi.uploadRequestAttachment(created.id, file);
+        } catch (attachmentError) {
+          if (isQueueableOfflineError(attachmentError)) {
+            await enqueueRequestAttachmentQueueItem({
+              requestId: created.id,
+              file,
+              fileName: file.name,
+            });
+            continue;
+          }
+          throw attachmentError;
+        }
       }
       setStartDate('');
       setEndDate('');
@@ -121,7 +138,19 @@ export default function DriverRequestsPage() {
         endTime: routeEndTime,
       });
       for (const file of transportFiles) {
-        await driverPortalApi.uploadTransportAttachment(created.id, file);
+        try {
+          await driverPortalApi.uploadTransportAttachment(created.id, file);
+        } catch (attachmentError) {
+          if (isQueueableOfflineError(attachmentError)) {
+            await enqueueTransportAttachmentQueueItem({
+              transportRequestId: created.id,
+              file,
+              fileName: file.name,
+            });
+            continue;
+          }
+          throw attachmentError;
+        }
       }
       setCargoName('');
       setCargoOwner('');
@@ -262,7 +291,7 @@ export default function DriverRequestsPage() {
                   <li key={item.id} className="py-2">
                     <p className="font-medium">{t(`driverPortal.requests.types.${item.type}`)}</p>
                     <p className="text-slate-600">{item.startDate} – {item.endDate}</p>
-                    <p className="text-xs text-slate-500">{item.status}</p>
+                    <p className="text-xs text-slate-500">{t(translateStatus('request', item.status))}</p>
                   </li>
                 ))}
               </ul>
@@ -281,7 +310,7 @@ export default function DriverRequestsPage() {
                   <li key={item.id} className="py-2">
                     <p className="font-medium">{item.cargoName}</p>
                     <p className="text-slate-600">{item.requestedDate} · {item.startTime}–{item.endTime}</p>
-                    <p className="text-xs text-slate-500">{item.status}</p>
+                    <p className="text-xs text-slate-500">{t(translateStatus('request', item.status))}</p>
                   </li>
                 ))}
               </ul>

@@ -30,12 +30,14 @@ import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
 import { SubmitHandoverEquipmentChecklistDto } from './dto/submit-handover-equipment.dto';
 import { UploadHandoverPhotoDto } from './dto/upload-handover-photo.dto';
+import { UploadDriverAttachmentDto } from './dto/upload-driver-attachment.dto';
 import { UpdateDriverLanguageDto } from './dto/update-driver-language.dto';
 import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { RegisterPushTokenDto } from './dto/register-push-token.dto';
 import { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import { UploadDriverDocumentDto } from './dto/upload-driver-document.dto';
 import { DriverMobileService } from './driver-mobile.service';
+import { CorrectWorkSessionDto } from '../work-sessions/dto/correct-work-session.dto';
 import {
   DRIVER_FILE_UPLOAD_INTERCEPTOR,
   MAX_DRIVER_UPLOAD_BYTES,
@@ -183,6 +185,18 @@ export class DriverMobileController {
     return this.driverMobile.endWorkSession(userId, body.reason ?? 'manual');
   }
 
+  @Post('work-sessions/heartbeat')
+  @HttpCode(HttpStatus.OK)
+  heartbeatWorkSession(@CurrentUser('id') userId: string) {
+    return this.driverMobile.heartbeatWorkSession(userId);
+  }
+
+  @Post('work-sessions/reconcile')
+  @HttpCode(HttpStatus.OK)
+  reconcileWorkSession(@CurrentUser('id') userId: string, @Body() dto: CorrectWorkSessionDto) {
+    return this.driverMobile.reconcileWorkSession(userId, dto);
+  }
+
   @Get('vehicle-handovers')
   listHandovers(
     @CurrentUser('id') userId: string,
@@ -296,6 +310,7 @@ export class DriverMobileController {
   uploadLeaveRequestAttachment(
     @CurrentUser('id') userId: string,
     @Param('id') requestId: string,
+    @Body() dto: UploadDriverAttachmentDto,
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addMaxSizeValidator({
@@ -308,7 +323,7 @@ export class DriverMobileController {
     )
     file: UploadedImageFile,
   ) {
-    return this.driverMobile.uploadLeaveRequestAttachment(userId, requestId, file);
+    return this.driverMobile.uploadLeaveRequestAttachment(userId, requestId, file, dto.client_request_id);
   }
 
   @Get('transport-requests')
@@ -337,6 +352,7 @@ export class DriverMobileController {
   uploadTransportRequestAttachment(
     @CurrentUser('id') userId: string,
     @Param('id') transportRequestId: string,
+    @Body() dto: UploadDriverAttachmentDto,
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addMaxSizeValidator({
@@ -349,7 +365,12 @@ export class DriverMobileController {
     )
     file: UploadedImageFile,
   ) {
-    return this.driverMobile.uploadTransportRequestAttachment(userId, transportRequestId, file);
+    return this.driverMobile.uploadTransportRequestAttachment(
+      userId,
+      transportRequestId,
+      file,
+      dto.client_request_id,
+    );
   }
 
   @Get('accidents')
@@ -372,6 +393,7 @@ export class DriverMobileController {
     @CurrentUser('id') userId: string,
     @Param('id') accidentId: string,
     @Query('documentType') documentType: string | undefined,
+    @Body() dto: UploadDriverAttachmentDto,
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addMaxSizeValidator({
@@ -384,7 +406,13 @@ export class DriverMobileController {
     )
     file: UploadedImageFile,
   ) {
-    return this.driverMobile.uploadAccidentAttachment(userId, accidentId, file, documentType);
+    return this.driverMobile.uploadAccidentAttachment(
+      userId,
+      accidentId,
+      file,
+      documentType,
+      dto.client_request_id,
+    );
   }
 
   @Get('notifications')

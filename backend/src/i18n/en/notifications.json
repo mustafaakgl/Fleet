@@ -76,6 +76,10 @@
     "title": "Approved by office",
     "message": "Your equipment issuance was approved by the office."
   },
+  "work_session_corrected": {
+    "title": "Work session corrected",
+    "message": "Your work session was corrected by the office. Please review the shift record in the app."
+  },
   "tacho_infringement": {
     "title": "Tachograph infringement recorded",
     "message": "A {{severityLabel}} tachograph infringement was recorded for {{subject}}. Please review and acknowledge it."

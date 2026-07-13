@@ -319,6 +319,40 @@ async function main() {
       }
     }
 
+    const totalWorkSessions = await base.workSession.count();
+    const tenantAWorkSessionCount = await base.workSession.count({ where: { tenantId: tenantA } });
+    const tenantBWorkSessionCount = await base.workSession.count({ where: { tenantId: tenantB } });
+    const scopedWorkSessionsA = await TenantContext.run(tenantA, () =>
+      scoped.workSession.count(),
+    );
+    const scopedWorkSessionsB = await TenantContext.run(tenantB, () =>
+      scoped.workSession.count(),
+    );
+    console.log(`WorkSession total: ${totalWorkSessions}, tenant A scoped: ${scopedWorkSessionsA}`);
+
+    if (scopedWorkSessionsA !== tenantAWorkSessionCount) {
+      throw new Error('Isolation failure: tenant A scoped workSession count mismatch');
+    }
+
+    if (scopedWorkSessionsB !== tenantBWorkSessionCount) {
+      throw new Error('Isolation failure: tenant B scoped workSession count mismatch');
+    }
+
+    if (tenantA !== tenantB && scopedWorkSessionsA + scopedWorkSessionsB > totalWorkSessions) {
+      throw new Error('Isolation failure: scoped workSession counts exceed total');
+    }
+
+    if (tenantA !== tenantB) {
+      const crossWorkSession = await TenantContext.run(tenantA, () =>
+        scoped.workSession.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossWorkSession) {
+        throw new Error('Isolation failure: tenant A context read tenant B work session');
+      }
+    }
+
     console.log('Tenant isolation check passed.');
   } finally {
     await base.$disconnect();

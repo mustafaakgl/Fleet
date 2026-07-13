@@ -13,7 +13,7 @@ import { DriverAssignmentRouteMap } from '@/components/driver-portal/DriverAssig
 import { driverPortalApi } from '@/lib/api';
 import { buildAssignmentRouteName } from '@/lib/address-format';
 import { openMapsAddress } from '@/lib/driver-maps';
-import { driverAssignmentStatusClass } from '@/lib/driver-portal-utils';
+import { driverAssignmentStatusClass, translateStatus } from '@/lib/driver-portal-utils';
 import type { DriverPortalAssignment } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -76,7 +76,7 @@ export default function DriverAssignmentDetailPage() {
                     driverAssignmentStatusClass(assignment.status),
                   )}
                 >
-                  {assignment.status.replace(/_/g, ' ')}
+                  {t(translateStatus('assignment', assignment.status))}
                 </span>
               </div>
               <p className="text-sm text-slate-600">

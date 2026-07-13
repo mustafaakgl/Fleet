@@ -26,6 +26,7 @@ const enumPolyfills: Record<string, EnumShape> = {
   HandoverType: asEnum(['pickup', 'return']),
   HandoverPhotoStatus: asEnum(['not_required', 'missing', 'uploaded', 'approved', 'rejected']),
   HandoverStatus: asEnum(['pending', 'completed']),
+  WorkSessionSource: asEnum(['manual', 'driver_reconciled', 'office_correction']),
   EquipmentIssuanceStatus: asEnum(['pending_signature', 'signed', 'manual_uploaded', 'approved', 'cancelled']),
   IncidentType: asEnum(['vehicle_accident', 'cargo_damage']),
   IncidentStatus: asEnum(['reported', 'under_review', 'resolved', 'rejected']),

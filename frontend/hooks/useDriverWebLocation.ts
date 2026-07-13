@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { driverPortalApi } from '@/lib/api';
+import { enqueueLocationPointQueueItem } from '@/lib/driver-offline-queue';
+import { isQueueableOfflineError } from '@/lib/driver-offline-queue-core';
 import type { DriverLocationStatus } from '@/lib/types';
 
 function isGeolocationSupported() {
@@ -75,6 +77,11 @@ export function useDriverWebLocation() {
       setLastUploadAt(new Date().toISOString());
       setUploadError(null);
     } catch (error) {
+      if (isQueueableOfflineError(error)) {
+        await enqueueLocationPointQueueItem({ payload });
+        setUploadError(null);
+        return;
+      }
       setUploadError(error instanceof Error ? error.message : 'Failed to upload location');
     }
   }, []);

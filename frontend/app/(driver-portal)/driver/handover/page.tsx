@@ -11,7 +11,10 @@ import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { driverPortalApi } from '@/lib/api';
+import { enqueueHandoverPhotoQueueItem } from '@/lib/driver-offline-queue';
+import { isQueueableOfflineError } from '@/lib/driver-offline-queue-core';
 import { driverTodayIso, HANDOVER_PHOTO_SLOTS } from '@/lib/driver-portal-utils';
+import { useDriverOfflineQueue } from '@/hooks/useDriverOfflineQueue';
 import type { DriverHandover, DriverHandoverPhotoSlot } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +28,7 @@ export default function DriverHandoverPage() {
   const vehicleId = params.get('vehicleId') ?? '';
   const assignmentId = params.get('assignmentId') ?? '';
   const [handover, setHandover] = useState<DriverHandover | null>(null);
+  const { hasQueuedHandoverPhoto } = useDriverOfflineQueue();
   const [loading, setLoading] = useState(true);
   const [uploadingSlot, setUploadingSlot] = useState<DriverHandoverPhotoSlot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +126,18 @@ export default function DriverHandoverPage() {
       setHandover(result.handover);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('driverPortal.handover.uploadFailed'));
+      if (isQueueableOfflineError(err)) {
+        await enqueueHandoverPhotoQueueItem({
+          handoverId: handover.id,
+          slot,
+          file,
+          fileName: file.name,
+          metadata,
+        });
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : t('driverPortal.handover.uploadFailed'));
+      }
     } finally {
       setUploadingSlot(null);
     }
@@ -228,6 +243,7 @@ export default function DriverHandoverPage() {
                       <HandoverCameraCapture
                         slotLabel={uploaded ? t('driverPortal.handover.replacePhoto') : t('driverPortal.handover.openCamera')}
                         disabled={uploadingSlot === slot}
+                        queued={Boolean(handover?.id && hasQueuedHandoverPhoto(handover.id, slot))}
                         onError={(message) => setError(message)}
                         onCaptured={(file, metadata) => void uploadSlot(slot, file, metadata)}
                       />

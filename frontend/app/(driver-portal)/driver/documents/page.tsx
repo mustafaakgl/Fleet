@@ -15,6 +15,7 @@ import {
   DRIVER_UPLOAD_DOCUMENT_TYPES,
   driverDocumentTypeLabelKey,
 } from '@/lib/driver-portal-documents';
+import { translateStatus } from '@/lib/driver-portal-utils';
 import { openAuthenticatedFile } from '@/lib/file-access';
 import type { DriverDocumentsResponse } from '@/lib/types';
 
@@ -115,6 +116,7 @@ export default function DriverDocumentsPage() {
                     <Input
                       type="file"
                       accept="image/*,.pdf"
+                      capture="environment"
                       onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                     />
                   </div>
@@ -140,7 +142,7 @@ export default function DriverDocumentsPage() {
                     <div>
                       <p className="font-medium">{t(driverDocumentTypeLabelKey(item.documentType))}</p>
                       <p className="text-slate-600">{item.fileName}</p>
-                      <p className="text-xs text-slate-500">{item.status}</p>
+                      <p className="text-xs text-slate-500">{t(translateStatus('document', item.status))}</p>
                     </div>
                     {item.download_url ? (
                       <Button

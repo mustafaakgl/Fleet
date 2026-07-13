@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Home, MessageSquare, FileText, ClipboardList, User } from 'lucide-react';
+import { ClipboardList, FileText, Home, MessageSquare, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { driverPortalApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -21,10 +23,11 @@ const TABS = [
   { href: '/driver/requests', icon: FileText, labelKey: 'driverPortal.nav.requests', match: (path: string) =>
     path === '/driver/requests',
   },
-  { href: '/driver/reports', icon: ClipboardList, labelKey: 'driverPortal.nav.reports', match: (path: string) =>
+  { href: '/driver/reports', icon: ClipboardList, labelKey: 'driverPortal.nav.reportsNotifications', match: (path: string) =>
     path === '/driver/reports' ||
     path.startsWith('/driver/accident-report') ||
-    path.startsWith('/driver/cargo-damage-report'),
+    path.startsWith('/driver/cargo-damage-report') ||
+    path.startsWith('/driver/notifications'),
   },
   { href: '/driver/profile', icon: User, labelKey: 'driverPortal.nav.profile', match: (path: string) =>
     path === '/driver/profile',
@@ -34,6 +37,23 @@ const TABS = [
 export function DriverPortalNav() {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    driverPortalApi
+      .unreadNotifications()
+      .then((result) => {
+        if (active) setUnreadNotifications(result.count);
+      })
+      .catch(() => {
+        if (active) setUnreadNotifications(0);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur">
@@ -41,6 +61,7 @@ export function DriverPortalNav() {
         {TABS.map((tab) => {
           const active = tab.match(pathname);
           const Icon = tab.icon;
+          const showNotificationBadge = tab.href === '/driver/reports' && unreadNotifications > 0;
           return (
             <Link
               key={tab.href}
@@ -50,7 +71,14 @@ export function DriverPortalNav() {
                 active ? 'text-brand-primary' : 'text-slate-500 hover:text-slate-700',
               )}
             >
-              <Icon className={cn('h-5 w-5', active && 'stroke-[2.5px]')} />
+              <span className="relative inline-flex">
+                <Icon className={cn('h-5 w-5', active && 'stroke-[2.5px]')} />
+                {showNotificationBadge ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-4 text-white">
+                    {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                  </span>
+                ) : null}
+              </span>
               <span className="truncate">{t(tab.labelKey)}</span>
             </Link>
           );

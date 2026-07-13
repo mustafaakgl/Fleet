@@ -675,6 +675,24 @@ export class TrackingService {
 
     const recordedAt = this.parseRecordedAt(dto.recordedAt);
     const vehicleId = await this.resolveVehicleIdForToday(refreshed.id);
+
+    if (dto.clientRequestId) {
+      const existing = await this.prisma.driverLocationHistory.findUnique({
+        where: { clientRequestId: dto.clientRequestId },
+        select: { id: true },
+      });
+      if (existing) {
+        const nextUploadAfterSec = this.resolveNextUploadIntervalSec(dto.speedMps);
+        return {
+          accepted: true,
+          deduplicated: true,
+          vehicleId,
+          nextUploadAfterSec,
+          lowAccuracy: dto.accuracyM !== undefined && dto.accuracyM > 200,
+        };
+      }
+    }
+
     const deduplicated = await this.shouldDeduplicate(refreshed.id, dto, recordedAt);
 
     const locationData = {
@@ -702,6 +720,7 @@ export class TrackingService {
       await this.prisma.driverLocationHistory.create({
         data: {
           driverId: refreshed.id,
+          clientRequestId: dto.clientRequestId ?? null,
           ...locationData,
         },
       });

@@ -357,6 +357,7 @@ export class DocumentsService {
         expiryDate,
         status,
         notes: dto.notes ?? null,
+        clientRequestId: dto.clientRequestId ?? null,
         uploadedById: uploadedById ?? null,
       },
       include: {
@@ -388,6 +389,7 @@ export class DocumentsService {
       documentType: string;
       expiryDate?: string;
       notes?: string;
+      clientRequestId?: string;
     },
     file: {
       originalName: string;
@@ -407,6 +409,7 @@ export class DocumentsService {
         documentType: dto.documentType,
         expiryDate: dto.expiryDate,
         notes: dto.notes,
+        clientRequestId: dto.clientRequestId,
         fileName: file.originalName,
         fileUrl: file.fileUrl ?? this.storageService.buildStoredPath('documents', file.storedFileName),
       },

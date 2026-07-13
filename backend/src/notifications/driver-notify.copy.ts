@@ -17,6 +17,7 @@ export type DriverNotifyKey =
   | 'equipment_issuance_created'
   | 'equipment_issuance_reminder'
   | 'equipment_issuance_approved'
+  | 'work_session_corrected'
   | 'tacho_infringement'
   | 'tacho_infringement_ack_reminder'
   | 'tacho_download_due';

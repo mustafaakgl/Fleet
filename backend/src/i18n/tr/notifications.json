@@ -76,6 +76,10 @@
     "title": "Ofis tarafından onaylandı",
     "message": "Teslim tutanağın ofis tarafından onaylandı."
   },
+  "work_session_corrected": {
+    "title": "Mesai oturumu düzeltildi",
+    "message": "Mesai oturumun ofis tarafından düzeltildi. Lütfen uygulamadaki kayıtları kontrol et."
+  },
   "tacho_infringement": {
     "title": "Takograf ihlali kaydedildi",
     "message": "{{subject}} için {{severityLabel}} bir takograf ihlali kaydedildi. Lütfen inceleyip onaylayın."

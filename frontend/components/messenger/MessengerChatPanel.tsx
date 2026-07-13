@@ -136,7 +136,7 @@ function MessageBubble({
           className={cn(
             'rounded-3xl px-4 py-3 text-sm leading-6 shadow-sm',
             own
-              ? 'rounded-br-lg bg-brand-primary text-white'
+              ? 'rounded-br-lg border border-brand-primary/20 bg-slate-50 text-brand-primary'
               : 'rounded-bl-lg border border-slate-200 bg-white text-slate-900',
             message.deliveryState === 'sending' && 'opacity-70',
             message.deliveryState === 'error' && own && 'border border-red-300 bg-red-50 text-red-900',
@@ -172,7 +172,7 @@ function MessageBubble({
                   key={attachment.id}
                   className={cn(
                     'rounded-xl border p-2',
-                    own ? 'border-white/35 bg-white/10' : 'border-slate-200 bg-slate-50',
+                    own ? 'border-brand-primary/15 bg-white' : 'border-slate-200 bg-slate-50',
                   )}
                 >
                   {isImageAttachment(attachment.mimeType) ? (
@@ -186,7 +186,7 @@ function MessageBubble({
                   <div className="flex items-center justify-between gap-3 text-xs">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{attachment.fileName}</p>
-                      <p className={cn('truncate', own ? 'text-white/80' : 'text-slate-500')}>
+                      <p className={cn('truncate', own ? 'text-brand-primary/70' : 'text-slate-500')}>
                         {Math.max(1, Math.round(attachment.sizeBytes / 1024))} KB
                       </p>
                     </div>
@@ -194,7 +194,7 @@ function MessageBubble({
                       type="button"
                       className={cn(
                         'shrink-0 rounded-md px-2 py-1 text-xs font-medium',
-                        own ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-200 text-slate-800 hover:bg-slate-300',
+                        own ? 'bg-brand-primary text-white hover:bg-brand-secondary' : 'bg-slate-200 text-slate-800 hover:bg-slate-300',
                       )}
                       onClick={() => onDownloadAttachment?.(attachment.id, attachment.fileName)}
                     >

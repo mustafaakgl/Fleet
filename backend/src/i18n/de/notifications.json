@@ -76,6 +76,10 @@
     "title": "Bestätigt durch Büro",
     "message": "Deine Aushändigungsbestätigung wurde vom Büro freigegeben."
   },
+  "work_session_corrected": {
+    "title": "Arbeitszeit korrigiert",
+    "message": "Deine Arbeitszeit wurde durch das Büro korrigiert. Bitte prüfe die Schichtdaten in der App."
+  },
   "tacho_infringement": {
     "title": "Tachographenverstoß erfasst",
     "message": "Ein {{severityLabel}} Tachographenverstoß wurde für {{subject}} erfasst. Bitte prüfen und bestätigen."

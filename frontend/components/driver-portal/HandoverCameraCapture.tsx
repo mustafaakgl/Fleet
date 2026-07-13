@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 type HandoverCameraCaptureProps = {
   slotLabel: string;
   disabled?: boolean;
+  queued?: boolean;
   onCaptured: (file: File, metadata: { takenAt: string; gpsLat?: number; gpsLng?: number; deviceInfo: string }) => void;
   onError: (message: string) => void;
 };
@@ -17,6 +18,7 @@ type HandoverCameraCaptureProps = {
 export function HandoverCameraCapture({
   slotLabel,
   disabled,
+  queued,
   onCaptured,
   onError,
 }: HandoverCameraCaptureProps) {
@@ -110,17 +112,24 @@ export function HandoverCameraCapture({
 
   if (!open) {
     return (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-full"
-        disabled={disabled || starting}
-        onClick={() => void startCamera()}
-      >
-        {starting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-        {t('driverPortal.handover.openCamera')}
-      </Button>
+      <div className="space-y-2">
+        {queued ? (
+          <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+            {t('driverPortal.pwa.queued')}
+          </span>
+        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full"
+          disabled={disabled || starting}
+          onClick={() => void startCamera()}
+        >
+          {starting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+          {t('driverPortal.handover.openCamera')}
+        </Button>
+      </div>
     );
   }
 
@@ -140,7 +149,14 @@ export function HandoverCameraCapture({
           <X className="h-4 w-4" />
         </button>
       </div>
-      <p className="text-xs text-slate-500">{slotLabel}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-xs text-slate-500">{slotLabel}</p>
+        {queued ? (
+          <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+            {t('driverPortal.pwa.queued')}
+          </span>
+        ) : null}
+      </div>
       <Button
         type="button"
         className={cn('w-full')}

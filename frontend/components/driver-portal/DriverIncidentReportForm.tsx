@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { driverPortalApi } from '@/lib/api';
+import { enqueueAccidentAttachmentQueueItem } from '@/lib/driver-offline-queue';
+import { isQueueableOfflineError } from '@/lib/driver-offline-queue-core';
+import { translateStatus } from '@/lib/driver-portal-utils';
 import type { DriverIncident } from '@/lib/types';
 
 interface DriverIncidentReportFormProps {
@@ -67,11 +70,21 @@ export function DriverIncidentReportForm({
         cargoOwner: cargoOwner.trim() || undefined,
       });
       for (const file of attachments) {
-        await driverPortalApi.uploadAccidentAttachment(
-          created.id,
-          file,
-          type === 'vehicle_accident' ? 'Scene Photo' : 'Damage Photo',
-        );
+        const documentType = type === 'vehicle_accident' ? 'Scene Photo' : 'Damage Photo';
+        try {
+          await driverPortalApi.uploadAccidentAttachment(created.id, file, documentType);
+        } catch (attachmentError) {
+          if (isQueueableOfflineError(attachmentError)) {
+            await enqueueAccidentAttachmentQueueItem({
+              accidentId: created.id,
+              file,
+              fileName: file.name,
+              documentType,
+            });
+            continue;
+          }
+          throw attachmentError;
+        }
       }
       setDescription('');
       setLocation('');
@@ -146,7 +159,7 @@ export function DriverIncidentReportForm({
               <li key={item.id} className="px-3 py-2 text-sm text-slate-700">
                 <p className="font-medium">{new Date(item.incidentDateTime).toLocaleString()}</p>
                 <p className="line-clamp-2 text-slate-600">{item.description}</p>
-                <p className="text-xs text-slate-500">{item.status}</p>
+                <p className="text-xs text-slate-500">{t(translateStatus('incident', item.status))}</p>
               </li>
             ))}
           </ul>

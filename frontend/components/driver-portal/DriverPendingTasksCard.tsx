@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { Bell, Camera, FileText, MessageSquare } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Bell, Camera, FileText, Loader2, MessageSquare, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { driverPortalApi, messengerApi } from '@/lib/api';
 
 export function DriverPendingTasksCard() {
@@ -15,27 +16,71 @@ export function DriverPendingTasksCard() {
     notifications: 0,
     requests: 0,
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const loadCounts = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const [handovers, messages, notifications, requests] = await Promise.all([
+        driverPortalApi.listHandovers({ photoStatus: 'missing' }),
+        messengerApi.getUnreadCount(),
+        driverPortalApi.unreadNotifications(),
+        driverPortalApi.listRequests(),
+      ]);
+
+      setCounts({
+        handovers: handovers.length,
+        messages: messages.total,
+        notifications: notifications.count,
+        requests: requests.filter((r) => r.status === 'pending').length,
+      });
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    Promise.all([
-      driverPortalApi.listHandovers({ photoStatus: 'missing' }),
-      messengerApi.getUnreadCount(),
-      driverPortalApi.unreadNotifications(),
-      driverPortalApi.listRequests(),
-    ])
-      .then(([handovers, messages, notifications, requests]) => {
-        setCounts({
-          handovers: handovers.length,
-          messages: messages.total,
-          notifications: notifications.count,
-          requests: requests.filter((r) => r.status === 'pending').length,
-        });
-      })
-      .catch(() => undefined);
-  }, []);
+    void loadCounts();
+  }, [loadCounts]);
 
   const total =
     counts.handovers + counts.messages + counts.notifications + counts.requests;
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{t('driverPortal.pending.title')}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center gap-2 py-4 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {t('common.loading')}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="border-red-200 bg-red-50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{t('driverPortal.pending.title')}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-red-900">
+          <p>{t('driverPortal.pending.loadFailed')}</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void loadCounts()}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            {t('common.retry')}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (total === 0) return null;
 
   return (
