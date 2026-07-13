@@ -63,3 +63,4 @@
 [2026-07-13] [M1-A] [ci-trigger] [.github/workflows/ci.yml push/pr hedef dallarina faz-a ve feature/** eklendi; push sonrasi Actions run takibi alinacak]
 [2026-07-13] [M1-A] [verify-fail-fast] [codec8-sim ve verify-tacho-telematics gateway kapaliyken anlamli komut onerisiyle hizli fail olacak sekilde timeout/probe mantigi eklendi]
 [2026-07-13] [M1-B] [retention] [DriverLocationHistory 90g, TelemetryProcessedRecord 30g, FleetDrivingEvent 180g, TelemetryQuarantine 30g retention batch purge+metrics+audit ozeti eklendi; FleetTrip/TachoActivity/DddFile korunuyor; 57 spec/214 test yesil ve manuel retention job logu alindi]
+[2026-07-13] [TEST-AJANI-DUZELTME] [fix+triage] [verify-tacho kapatma/race duzeltmesi + metrics token dev zorunlu + documents RBAC guard fallback; backend batarya yesil, compose Docker local-kv.db I/O hatasiyla bloke; kanit dosyasi guncellendi]
