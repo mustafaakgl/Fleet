@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
@@ -11,9 +12,26 @@ import type { Response } from 'express';
 import archiver from 'archiver';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectStorageService } from '../storage/object-storage.service';
 import { resolveAbsolutePathFromStoredUrl } from '../storage/file-path.util';
+
+type RetentionPurgeResult = {
+  entity: string;
+  deleted: number;
+  cutoff: string;
+  retentionDays: number;
+  batches: number;
+};
+
+type TelemetryRetentionSummary = {
+  driverLocationHistory: RetentionPurgeResult;
+  telemetryProcessedRecord: RetentionPurgeResult;
+  fleetDrivingEvent: RetentionPurgeResult;
+  telemetryQuarantine: RetentionPurgeResult;
+  totalDeleted: number;
+};
 
 function jsonLine(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -66,11 +84,75 @@ function buildUserReadme(userId: string, exportedAt: Date): string {
 
 @Injectable()
 export class PrivacyService {
+  private readonly logger = new Logger(PrivacyService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly objectStorage: ObjectStorageService,
+    private readonly metrics: MetricsService,
   ) {}
+
+  private retentionDaysFromEnv(primaryKey: string, fallbackKey: string | null, fallbackDays: number): number {
+    const raw = process.env[primaryKey] ?? (fallbackKey ? process.env[fallbackKey] : undefined);
+    const parsed = Number(raw ?? fallbackDays);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackDays;
+  }
+
+  private retentionBatchSize(): number {
+    const parsed = Number(process.env.RETENTION_BATCH_SIZE ?? 10_000);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 10_000;
+  }
+
+  private buildCutoff(days: number): Date {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    return cutoff;
+  }
+
+  private async purgeIdsInBatches(options: {
+    entity: string;
+    retentionDays: number;
+    selectIds: () => Promise<Array<{ id: string }>>;
+    deleteIds: (ids: string[]) => Promise<{ count: number }>;
+  }): Promise<RetentionPurgeResult> {
+    const batchSize = this.retentionBatchSize();
+    const cutoff = this.buildCutoff(options.retentionDays);
+    let deleted = 0;
+    let batches = 0;
+
+    while (true) {
+      const rows = await options.selectIds();
+      if (rows.length === 0) {
+        break;
+      }
+
+      const ids = rows.slice(0, batchSize).map((row) => row.id);
+      const result = await options.deleteIds(ids);
+      deleted += result.count;
+      batches += 1;
+      if (result.count > 0) {
+        this.metrics.retentionDeletedRowsTotal.inc({ entity: options.entity }, result.count);
+      }
+      if (rows.length < batchSize) {
+        break;
+      }
+    }
+
+    const purgeResult = {
+      entity: options.entity,
+      deleted,
+      cutoff: cutoff.toISOString(),
+      retentionDays: options.retentionDays,
+      batches,
+    };
+
+    this.logger.log(
+      `Retention purge [${purgeResult.entity}]: deleted=${purgeResult.deleted}, cutoff=${purgeResult.cutoff}, batches=${purgeResult.batches}`,
+    );
+
+    return purgeResult;
+  }
 
   private async safeAuditLog(params: {
     actorUserId?: string;
@@ -514,30 +596,114 @@ export class PrivacyService {
     };
   }
 
-  async purgeOldLocationHistory(): Promise<{ deleted: number; cutoff: string }> {
-    const retentionDays = Number(process.env.LOCATION_HISTORY_RETENTION_DAYS ?? 90);
-    const days = Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : 90;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
+  async purgeOldLocationHistory(): Promise<RetentionPurgeResult> {
+    const retentionDays = this.retentionDaysFromEnv('DRIVER_LOCATION_HISTORY_RETENTION_DAYS', 'LOCATION_HISTORY_RETENTION_DAYS', 90);
+    const cutoff = this.buildCutoff(retentionDays);
+    const batchSize = this.retentionBatchSize();
+    return this.purgeIdsInBatches({
+      entity: 'driver_location_history',
+      retentionDays,
+      selectIds: () =>
+        this.prisma.driverLocationHistory.findMany({
+          where: { recordedAt: { lt: cutoff } },
+          select: { id: true },
+          orderBy: { recordedAt: 'asc' },
+          take: batchSize,
+        }),
+      deleteIds: (ids) => this.prisma.driverLocationHistory.deleteMany({ where: { id: { in: ids } } }),
+    });
+  }
 
-    const result = await this.prisma.driverLocationHistory.deleteMany({
-      where: { recordedAt: { lt: cutoff } },
+  async purgeOldTelemetryProcessedRecords(): Promise<RetentionPurgeResult> {
+    const retentionDays = this.retentionDaysFromEnv('TELEMETRY_PROCESSED_RECORD_RETENTION_DAYS', null, 30);
+    const cutoff = this.buildCutoff(retentionDays);
+    const batchSize = this.retentionBatchSize();
+    return this.purgeIdsInBatches({
+      entity: 'telemetry_processed_records',
+      retentionDays,
+      selectIds: () =>
+        this.prisma.telemetryProcessedRecord.findMany({
+          where: { createdAt: { lt: cutoff } },
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+          take: batchSize,
+        }),
+      deleteIds: (ids) => this.prisma.telemetryProcessedRecord.deleteMany({ where: { id: { in: ids } } }),
+    });
+  }
+
+  async purgeOldFleetDrivingEvents(): Promise<RetentionPurgeResult> {
+    const retentionDays = this.retentionDaysFromEnv('FLEET_DRIVING_EVENT_RETENTION_DAYS', null, 180);
+    const cutoff = this.buildCutoff(retentionDays);
+    const batchSize = this.retentionBatchSize();
+    return this.purgeIdsInBatches({
+      entity: 'fleet_driving_events',
+      retentionDays,
+      selectIds: () =>
+        this.prisma.fleetDrivingEvent.findMany({
+          where: { occurredAt: { lt: cutoff } },
+          select: { id: true },
+          orderBy: { occurredAt: 'asc' },
+          take: batchSize,
+        }),
+      deleteIds: (ids) => this.prisma.fleetDrivingEvent.deleteMany({ where: { id: { in: ids } } }),
+    });
+  }
+
+  async purgeOldTelemetryQuarantine(): Promise<RetentionPurgeResult> {
+    const retentionDays = this.retentionDaysFromEnv('TELEMETRY_QUARANTINE_RETENTION_DAYS', null, 30);
+    const cutoff = this.buildCutoff(retentionDays);
+    const batchSize = this.retentionBatchSize();
+    return this.purgeIdsInBatches({
+      entity: 'telemetry_quarantine',
+      retentionDays,
+      selectIds: () =>
+        this.prisma.telemetryQuarantine.findMany({
+          where: { createdAt: { lt: cutoff } },
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+          take: batchSize,
+        }),
+      deleteIds: (ids) => this.prisma.telemetryQuarantine.deleteMany({ where: { id: { in: ids } } }),
+    });
+  }
+
+  async purgeTelemetryRetentionData(actorUserId?: string): Promise<TelemetryRetentionSummary> {
+    const [driverLocationHistory, telemetryProcessedRecord, fleetDrivingEvent, telemetryQuarantine] =
+      await Promise.all([
+        this.purgeOldLocationHistory(),
+        this.purgeOldTelemetryProcessedRecords(),
+        this.purgeOldFleetDrivingEvents(),
+        this.purgeOldTelemetryQuarantine(),
+      ]);
+
+    const totalDeleted =
+      driverLocationHistory.deleted
+      + telemetryProcessedRecord.deleted
+      + fleetDrivingEvent.deleted
+      + telemetryQuarantine.deleted;
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'privacy.retention_daily_summary',
+      entityType: 'privacy_retention',
+      summary: `retention: ${driverLocationHistory.deleted} location, ${telemetryProcessedRecord.deleted} telemetry, ${fleetDrivingEvent.deleted} driving events, ${telemetryQuarantine.deleted} quarantine silindi`,
+      metadata: {
+        driverLocationHistory,
+        telemetryProcessedRecord,
+        fleetDrivingEvent,
+        telemetryQuarantine,
+        totalDeleted,
+      },
     });
 
-    if (result.count > 0) {
-      await this.safeAuditLog({
-        action: 'privacy.retention_purge',
-        entityType: 'driver_location_history',
-        summary: 'Location history retention purge',
-        metadata: {
-          deletedCount: result.count,
-          retentionDays: days,
-          cutoff: cutoff.toISOString(),
-        },
-      });
-    }
-
-    return { deleted: result.count, cutoff: cutoff.toISOString() };
+    return {
+      driverLocationHistory,
+      telemetryProcessedRecord,
+      fleetDrivingEvent,
+      telemetryQuarantine,
+      totalDeleted,
+    };
   }
 
   async purgeOldAuditLogs(): Promise<{ deleted: number; cutoff: string }> {

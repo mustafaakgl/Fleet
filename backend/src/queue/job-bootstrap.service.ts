@@ -32,9 +32,13 @@ export class JobBootstrapService implements OnModuleInit {
     });
 
     this.queue.registerHandler('privacy.retention', async () => {
+      const telemetryRetention = await this.privacy.purgeTelemetryRetentionData();
+      this.logger.log(
+        `Retention [telemetry]: location=${telemetryRetention.driverLocationHistory.deleted}, telemetry=${telemetryRetention.telemetryProcessedRecord.deleted}, driving_events=${telemetryRetention.fleetDrivingEvent.deleted}, quarantine=${telemetryRetention.telemetryQuarantine.deleted}, total=${telemetryRetention.totalDeleted}`,
+      );
+
       const tasks: Array<{ name: string; run: () => Promise<{ deleted: number; cutoff: string }> }> =
         [
-          { name: 'location_history', run: () => this.privacy.purgeOldLocationHistory() },
           { name: 'audit_logs', run: () => this.privacy.purgeOldAuditLogs() },
           { name: 'notifications', run: () => this.privacy.purgeOldNotifications() },
           { name: 'messages', run: () => this.privacy.purgeOldMessages() },

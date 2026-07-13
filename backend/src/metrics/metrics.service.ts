@@ -20,6 +20,7 @@ export class MetricsService {
   readonly telematicsQueueDepth: Gauge<string>;
   readonly tachographAckLatencyMs: Histogram<string>;
   readonly tachographQueueDepth: Gauge<string>;
+  readonly retentionDeletedRowsTotal: Counter<string>;
 
   constructor() {
     collectDefaultMetrics({ register: this.registry, prefix: 'fleet_' });
@@ -80,6 +81,13 @@ export class MetricsService {
     this.tachographQueueDepth = new Gauge({
       name: 'fleet_tachograph_queue_depth',
       help: 'Waiting + active DDD processing jobs',
+      registers: [this.registry],
+    });
+
+    this.retentionDeletedRowsTotal = new Counter({
+      name: 'fleet_retention_deleted_rows_total',
+      help: 'Rows deleted by retention jobs',
+      labelNames: ['entity'],
       registers: [this.registry],
     });
   }

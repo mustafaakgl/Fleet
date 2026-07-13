@@ -32,6 +32,29 @@ TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 ```
 Not: Bu iki deger her ortam (staging/production) icin farkli olmali ve `.env.example` icindeki varsayilanlarla ayni olmamalidir.
 
+## 2.1) Retention Politikasi
+
+Varsayilan retention degerleri backend `.env` uzerinden yonetilir:
+
+- `DRIVER_LOCATION_HISTORY_RETENTION_DAYS=90`
+- `TELEMETRY_PROCESSED_RECORD_RETENTION_DAYS=30`
+- `FLEET_DRIVING_EVENT_RETENTION_DAYS=180`
+- `TELEMETRY_QUARANTINE_RETENTION_DAYS=30`
+- `RETENTION_BATCH_SIZE=10000`
+
+Silinmeyen/veri is gerekcesiyle saklanan tablolar:
+
+- `FleetTrip` silinmez (is/verimlilik agregati)
+- `TachoActivity` silinmez
+- `DddFile` silinmez
+
+Musteriye verilecek kisa yanit:
+
+- Konum gecmisi 90 gun saklanir.
+- Telemetri dedupe ve quarantine kayitlari 30 gun saklanir.
+- Surus olaylari 180 gun saklanir.
+- Is kaydi olan FleetTrip ve yasal arsiv niteligindeki tachograph kayitlari bu purge kapsaminda silinmez.
+
 ## 3) Bagimliliklar
 
 ```bash
@@ -72,6 +95,12 @@ npx tsc -p tsconfig.json --noEmit
 npm test
 node scripts/codec8-sim.mjs --scenario normal --seed 42 | node scripts/verify-tacho-telematics.mjs
 npx ts-node --transpile-only scripts/tenant-isolation-check.ts
+```
+
+Retention job'ini manuel kosup log gormek icin:
+```bash
+cd backend
+node -r ts-node/register/transpile-only -e "const { NestFactory } = require('@nestjs/core'); const { AppModule } = require('./src/app.module'); const { QueueService } = require('./src/queue/queue.service'); (async()=>{const app = await NestFactory.createApplicationContext(AppModule); await app.get(QueueService).enqueue('privacy.retention'); await app.close();})().catch((error)=>{console.error(error); process.exit(1);});"
 ```
 
 ## 7) Uretim Benzeri Docker Kurulumu (Dogrulandi)
