@@ -460,6 +460,8 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
   const handleContextMenuAction = (action: CalendarCellContextMenuAction) => {
     if (!selectedEmptyCell) return;
 
+    const targetCell = selectedEmptyCell;
+
     if (action === 'delete') {
       void deleteManualEntry(selectedEmptyCell);
       closeContextMenu();
@@ -474,22 +476,35 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
     }
 
     if (action === 'urlaub') {
-      void applyManualStatus(selectedEmptyCell, 'UT');
+      void applyManualStatus(targetCell, 'UT');
       closeContextMenu();
       return;
     }
 
     if (action === 'krank') {
-      void applyManualStatus(selectedEmptyCell, 'KT');
+      void applyManualStatus(targetCell, 'KT');
       closeContextMenu();
       return;
     }
 
+    if (action === 'sonstige') {
+      closeContextMenu();
+      setTimeout(() => {
+        if (absenceTypes.length > 0) {
+          setPendingAbsenceSelection(targetCell);
+          setSelectedAbsenceTypeId(null);
+          return;
+        }
+        void applyManualStatus(targetCell, 'SA');
+      }, 0);
+      return;
+    }
+
     if (absenceTypes.length > 0) {
-      setPendingAbsenceSelection(selectedEmptyCell);
+      setPendingAbsenceSelection(targetCell);
       setSelectedAbsenceTypeId(null);
     } else {
-      void applyManualStatus(selectedEmptyCell, 'SA');
+      void applyManualStatus(targetCell, 'SA');
     }
 
     closeContextMenu();
@@ -1047,6 +1062,16 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
         onApply={() => {
           if (!pendingAbsenceSelection || !selectedAbsenceTypeId) return;
           const selectedAbsenceType = absenceTypes.find((item) => item.id === selectedAbsenceTypeId);
+          if (!selectedAbsenceType) return;
+
+          void applyManualStatus(pendingAbsenceSelection, selectedAbsenceType.abkuerzung);
+
+          setPendingAbsenceSelection(null);
+          setSelectedAbsenceTypeId(null);
+        }}
+        onApplyType={(typeId) => {
+          if (!pendingAbsenceSelection) return;
+          const selectedAbsenceType = absenceTypes.find((item) => item.id === typeId);
           if (!selectedAbsenceType) return;
 
           void applyManualStatus(pendingAbsenceSelection, selectedAbsenceType.abkuerzung);

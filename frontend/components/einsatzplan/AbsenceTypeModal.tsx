@@ -43,6 +43,7 @@ interface AbsenceTypeModalProps {
   onSelect: (typeId: string) => void;
   onClose: () => void;
   onApply: () => void;
+  onApplyType?: (typeId: string) => void;
 }
 
 export function AbsenceTypeModal({
@@ -52,13 +53,19 @@ export function AbsenceTypeModal({
   onSelect,
   onClose,
   onApply,
+  onApplyType,
 }: AbsenceTypeModalProps) {
   if (!open) return null;
 
+  const handleRowSelect = (typeId: string) => {
+    onSelect(typeId);
+    onApplyType?.(typeId);
+  };
+
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-slate-900/25" onClick={onClose} />
-      <div className="fixed left-1/2 top-1/2 z-50 w-[min(1200px,96vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white shadow-2xl">
+      <div className="fixed inset-0 z-[60] bg-slate-900/25" onClick={onClose} />
+      <div className="fixed left-1/2 top-1/2 z-[70] w-[min(1200px,96vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h3 className="text-base font-semibold text-slate-900">Abwesenheitstyp auswählen</h3>
           <button
@@ -106,11 +113,12 @@ export function AbsenceTypeModal({
                 return (
                   <tr
                     key={absenceType.id}
-                    onClick={() => onSelect(absenceType.id)}
+                    onPointerDown={() => handleRowSelect(absenceType.id)}
+                    onClick={() => handleRowSelect(absenceType.id)}
                     className={cn(
                       'cursor-pointer',
                       FLEET_RAW_TR,
-                      selected ? 'bg-surface' : 'bg-white',
+                      selected ? 'bg-surface ring-1 ring-inset ring-brand-primary/30' : 'bg-white',
                     )}
                   >
                     <td className={FLEET_RAW_TD_PRIMARY}>{absenceType.bezeichnung}</td>
