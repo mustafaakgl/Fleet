@@ -1,5 +1,7 @@
 import { router, Stack } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { AppState, type AppStateStatus, Linking } from 'react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ScreenLayout } from '@/components/ScreenLayout';
 import { driverApi } from '@/api/endpoints';
@@ -16,6 +18,11 @@ import type { MessengerLanguage } from '@/api/types';
 import { SUPPORTED_LOCALES, normalizeLocale, type AppLocale } from '@/i18n/languages';
 import { setAppLanguage } from '@/i18n/i18n';
 import { useTranslation } from '@/i18n/useTranslation';
+import {
+  enablePushNotificationsFromProfile,
+  getPushRuntimeState,
+  type PushRuntimeState,
+} from '@/lib/push-notifications';
 import { colors, radius, spacing, typography } from '@/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { showError, showSuccess } from '@/utils/feedback';
@@ -25,6 +32,8 @@ export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const clearSession = authStore((s) => s.clearSession);
+  const [pushState, setPushState] = useState<PushRuntimeState | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['driver-me'],
     queryFn: () => driverApi.me(),
@@ -48,6 +57,51 @@ export default function ProfileSettingsScreen() {
     queryClient.clear();
     await clearSession();
     router.replace('/(auth)/login');
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const refresh = async () => {
+      const state = await getPushRuntimeState().catch(() => null);
+      if (mounted && state) {
+        setPushState(state);
+      }
+    };
+
+    void refresh();
+
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') {
+        void refresh();
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  const onEnableNotifications = async () => {
+    setPushBusy(true);
+    try {
+      if (pushState?.permissionStatus === 'denied') {
+        await Linking.openSettings();
+      } else {
+        await enablePushNotificationsFromProfile();
+      }
+
+      const state = await getPushRuntimeState();
+      setPushState(state);
+      if (state.active) {
+        showSuccess(t('profile.notificationsEnabled'));
+      }
+    } catch (notificationError) {
+      showError(getErrorMessage(notificationError, t('profile.notificationsEnableFailed')));
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   const fullName = data ? `${data.driver.firstName} ${data.driver.lastName}`.trim() : '';
@@ -123,6 +177,24 @@ export default function ProfileSettingsScreen() {
               title={t('profile.notifications')}
               subtitle={t('notifications.subtitle')}
               onPress={() => router.push('/(app)/notifications')}
+            />
+
+            <ListRow
+              icon="bell"
+              title={t('profile.notificationsStatusTitle')}
+              subtitle={
+                pushState?.active
+                  ? t('profile.notificationsStatusActive')
+                  : t('profile.notificationsStatusInactiveAction')
+              }
+              onPress={() => {
+                if (!pushState?.active && !pushBusy) {
+                  void onEnableNotifications();
+                  return;
+                }
+                router.push('/(app)/notifications');
+              }}
+              showChevron={!pushState?.active}
             />
 
             <ListRow
