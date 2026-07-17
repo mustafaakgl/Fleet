@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   chip: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: colors.card,

@@ -291,6 +291,7 @@ export const driverApi = {
       | 'special_leave'
       | 'overtime_compensation'
       | 'free_day'
+      | 'uniform_delivery'
       | 'other';
     startDate: string;
     endDate: string;

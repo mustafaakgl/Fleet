@@ -9,6 +9,7 @@ const REQUEST_TYPES = [
   'special_leave',
   'overtime_compensation',
   'free_day',
+  'uniform_delivery',
   'other',
 ] as const;
 

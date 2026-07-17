@@ -15,6 +15,7 @@ type RequestType =
   | 'special_leave'
   | 'overtime_compensation'
   | 'free_day'
+  | 'uniform_delivery'
   | 'other';
 
 type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -28,6 +29,7 @@ const REQUEST_TYPES: RequestType[] = [
   'special_leave',
   'overtime_compensation',
   'free_day',
+  'uniform_delivery',
   'other',
 ];
 

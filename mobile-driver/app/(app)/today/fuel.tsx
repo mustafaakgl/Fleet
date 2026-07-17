@@ -259,7 +259,7 @@ export default function FleetFuelScreen() {
                   <View key={entry.id} style={styles.historyRow}>
                     <View style={styles.historyMain}>
                       <Text style={styles.historyDate}>
-                        {formatAppDate(entry.enteredAt, locale)}
+                        {formatAppDate(locale, new Date(entry.enteredAt))}
                       </Text>
                       <Text style={styles.historyMeta}>
                         {entry.liters.toFixed(1)} L · {entry.totalCost.toFixed(2)} {entry.currency}
