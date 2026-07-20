@@ -90,14 +90,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof response === 'string') {
         return response;
       }
-      if (
-        response &&
-        typeof response === 'object' &&
-        'message' in response &&
-        typeof (response as { message?: unknown }).message === 'string'
-      ) {
-        return (response as { message: string }).message;
+      if (response && typeof response === 'object' && 'message' in response) {
+        const message = (response as { message?: unknown }).message;
+        if (typeof message === 'string') {
+          return message;
+        }
+        // class-validator (ValidationPipe) reports errors as a string array;
+        // join them instead of masking them as "An unexpected error occurred".
+        if (
+          Array.isArray(message) &&
+          message.length > 0 &&
+          message.every((item): item is string => typeof item === 'string')
+        ) {
+          return message.join('; ');
+        }
       }
+      return exception.message;
     }
 
     return 'An unexpected error occurred';
