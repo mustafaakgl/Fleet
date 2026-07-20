@@ -28,6 +28,7 @@ import { CreateDriverRequestDto } from './dto/create-driver-request.dto';
 import { CreateDriverTransportRequestDto } from './dto/create-driver-transport-request.dto';
 import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
+import { EndWorkSessionDto } from './dto/end-work-session.dto';
 import { SubmitHandoverEquipmentChecklistDto } from './dto/submit-handover-equipment.dto';
 import { UploadHandoverPhotoDto } from './dto/upload-handover-photo.dto';
 import { UploadDriverAttachmentDto } from './dto/upload-driver-attachment.dto';
@@ -178,11 +179,8 @@ export class DriverMobileController {
 
   @Post('work-sessions/end')
   @HttpCode(HttpStatus.OK)
-  endWorkSession(
-    @CurrentUser('id') userId: string,
-    @Body() body: { reason?: 'manual' | 'app_background' | 'logout' },
-  ) {
-    return this.driverMobile.endWorkSession(userId, body.reason ?? 'manual');
+  endWorkSession(@CurrentUser('id') userId: string, @Body() body: EndWorkSessionDto) {
+    return this.driverMobile.endWorkSession(userId, body?.reason ?? 'manual');
   }
 
   @Post('work-sessions/heartbeat')

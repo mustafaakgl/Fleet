@@ -7,6 +7,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CompanyEmailsService } from './company-emails.service';
+import {
+  GenerateCompanyEmailDto,
+  GenerateCompanyEmailsForDateDto,
+} from './dto/generate-company-email.dto';
 import { UpdateCompanyEmailDto } from './dto/update-company-email.dto';
 
 @Controller('company-emails')
@@ -36,7 +40,7 @@ export class CompanyEmailsController {
   @Post('generate')
   @RequiresWrite()
   generateDraftForCompany(
-    @Body() body: { date: string; companyId: string },
+    @Body() body: GenerateCompanyEmailDto,
     @CurrentUser('id') currentUserId?: string,
   ) {
     return this.companyEmailsService.generateDraftForCompany(body.date, body.companyId, currentUserId);
@@ -44,7 +48,10 @@ export class CompanyEmailsController {
 
   @Post('generate-for-date')
   @RequiresWrite()
-  generateDraftsForDate(@Body() body: { date: string }, @CurrentUser('id') currentUserId?: string) {
+  generateDraftsForDate(
+    @Body() body: GenerateCompanyEmailsForDateDto,
+    @CurrentUser('id') currentUserId?: string,
+  ) {
     return this.companyEmailsService.generateDraftsForDate(body.date, currentUserId);
   }
 
