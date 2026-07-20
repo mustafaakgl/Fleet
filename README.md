@@ -218,6 +218,16 @@ Notes:
 - Backend dev startup runs Prisma generate automatically (`prestart:dev`).
 - Upload directory is created automatically (`backend/uploads/documents`).
 
+### Swagger / OpenAPI
+
+- Swagger UI is disabled by default and should stay off in production unless explicitly approved.
+- Default-off in production reduces unauthenticated contract discovery and keeps the operational API surface intentionally opt-in.
+- Enable it by setting `SWAGGER_ENABLED=true` in the backend environment.
+- Swagger UI URL: `http://localhost:3000/api/docs`
+- OpenAPI JSON URL: `http://localhost:3000/api/docs-json`
+- Use the `Authorize` button with a valid bearer access token. Refresh tokens are not documented for reuse in Swagger UI.
+- Docs are served separately from the REST prefix so they do not alter existing guards, RBAC, tenant isolation, or error handling behavior.
+
 ---
 
 ## 11) Seed Data

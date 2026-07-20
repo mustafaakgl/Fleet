@@ -99,3 +99,5 @@
 [2026-07-20] [QA-P0-FINAL-REVIEW] [request-prisma-types] [Approver akisi dosyasindaki 7 eski Prisma as-any cast generated client ve RequestWhere/UpdateInput tipleriyle kaldirildi]
 [2026-07-20] [QA-P0-FINAL-REVIEW] [workflow-evidence] [Cross-tenant 404 response PII sizintisi/persistence ve concurrency tek calendar-event cardinality assertionlari eklendi]
 [2026-07-20] [QA-P0-FINAL-REVIEW] [final-gates] [Backend 233/233, telematics 5/5, tenant isolation, P0 API 20/20, persona 6/6, RBAC drift 5/5, frontend verify/build ve lint 0 error PASS]
+[2026-07-20] [dev-run] [workspace-start] [Node 22 ile kokten npm run dev baslatildi; frontend 3001 HTTP 200, backend 3000 dinlemede (kok rota 404, /api/v1/health mevcut)]
+[2026-07-20] [swagger-openapi] [backend-docs] [SWAGGER_ENABLED kapili docs bootstrap + auth/tag/error zenginlestirme + Swagger spec eklendi; backend tsc + 236 test + codec8 verify + tenant isolation + drift + diff-check calisti]
