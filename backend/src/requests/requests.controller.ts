@@ -48,10 +48,9 @@ export class RequestsController {
 	@RequiresWrite()
 	approveRequest(
 		@Param('id') id: string,
-		@Body('currentUserId') currentUserId: string,
 		@CurrentUser('id') actorUserId?: string,
 	) {
-		return this.requestsService.approveRequest(id, currentUserId, actorUserId);
+		return this.requestsService.approveRequest(id, actorUserId);
 	}
 
 	@Post(':id/reject')

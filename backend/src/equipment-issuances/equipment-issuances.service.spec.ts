@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { ForbiddenException } from '@nestjs/common';
+import { PDFDocument } from 'pdf-lib';
 import { EquipmentIssuancesService } from './equipment-issuances.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AuditService } from '../audit/audit.service';
@@ -30,9 +34,28 @@ function buildService(deps?: {
   );
 }
 
+async function createPdfUpload(valid: boolean) {
+  const directory = mkdtempSync(join(tmpdir(), 'equipment-issuance-'));
+  const path = join(directory, 'form.pdf');
+
+  if (valid) {
+    const pdf = await PDFDocument.create();
+    pdf.addPage();
+    writeFileSync(path, await pdf.save());
+  } else {
+    writeFileSync(path, '%PDF-1.4\ntrailer<<>>\n%%EOF');
+  }
+
+  return {
+    file: { originalname: 'form.pdf', filename: 'form.pdf', mimetype: 'application/pdf', path },
+    cleanup: () => rmSync(directory, { recursive: true, force: true }),
+  };
+}
+
 describe('EquipmentIssuancesService', () => {
   it('notifies the driver when an issuance is created', async () => {
     const notifications: Array<{ userId: string; key: string }> = [];
+    const upload = await createPdfUpload(true);
 
     const service = buildService({
       prisma: {
@@ -78,16 +101,20 @@ describe('EquipmentIssuancesService', () => {
       },
     });
 
-    await service.create(
-      {
-        driverId: 'drv-1',
-        title: 'Arbeitskleidung Ausgabe',
-        itemsJson: JSON.stringify([{ name: 'Helmet', quantity: 1 }]),
-      },
-      { originalname: 'form.pdf', filename: 'form.pdf', mimetype: 'application/pdf' },
-      'usr-office',
-      {},
-    );
+    try {
+      await service.create(
+        {
+          driverId: 'drv-1',
+          title: 'Arbeitskleidung Ausgabe',
+          itemsJson: JSON.stringify([{ name: 'Helmet', quantity: 1 }]),
+        },
+        upload.file,
+        'usr-office',
+        {},
+      );
+    } finally {
+      upload.cleanup();
+    }
 
     assert.deepEqual(notifications, [{ userId: 'usr-driver', key: 'equipment_issuance_created' }]);
   });
@@ -147,10 +174,30 @@ describe('EquipmentIssuancesService', () => {
           driverId: 'drv-1',
           title: 'Arbeitskleidung Ausgabe',
         },
-        { originalname: 'form.png', filename: 'form.png', mimetype: 'image/png' },
+        { originalname: 'form.png', filename: 'form.png', mimetype: 'image/png', path: '' },
         'usr-office',
         {},
       ),
     );
+  });
+
+  it('rejects a malformed PDF before creating an issuance', async () => {
+    const service = buildService();
+    const upload = await createPdfUpload(false);
+
+    await assert.rejects(
+      service.create(
+        {
+          driverId: 'drv-1',
+          title: 'Arbeitskleidung Ausgabe',
+        },
+        upload.file,
+        'usr-office',
+        {},
+      ),
+      /Uploaded file is not a valid PDF/,
+    );
+
+    upload.cleanup();
   });
 });

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { CalendarStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
@@ -87,16 +87,16 @@ export class RequestsService {
     return value as RequestStatus;
   }
 
-  mapRequestTypeToCalendarStatus(type: RequestType): string {
-    if (type === 'vacation') return 'UT';
-    if (type === 'sick_leave') return 'KT';
-    if (type === 'training') return 'SCH';
-    if (type === 'business_trip') return 'GR';
-    if (type === 'doctor_appointment') return 'AZ';
-    if (type === 'special_leave') return 'SZ';
-    if (type === 'overtime_compensation') return 'US';
-    if (type === 'free_day') return 'FR';
-    return 'AB';
+  mapRequestTypeToCalendarStatus(type: RequestType): CalendarStatus {
+    if (type === 'vacation') return CalendarStatus.UT;
+    if (type === 'sick_leave') return CalendarStatus.KT;
+    if (type === 'training') return CalendarStatus.SCH;
+    if (type === 'business_trip') return CalendarStatus.GR;
+    if (type === 'doctor_appointment') return CalendarStatus.AZ;
+    if (type === 'special_leave') return CalendarStatus.SZ;
+    if (type === 'overtime_compensation') return CalendarStatus.US;
+    if (type === 'free_day') return CalendarStatus.FR;
+    return CalendarStatus.AB;
   }
 
   getDatesBetween(startDate: Date, endDate: Date): Date[] {
@@ -136,8 +136,7 @@ export class RequestsService {
       throw new NotFoundException('Driver not found');
     }
 
-    const db = this.prisma as any;
-    const created = await db.request.create({
+    const created = await this.prisma.request.create({
       data: {
         driverId: dto.driverId,
         type: requestType,
@@ -176,7 +175,7 @@ export class RequestsService {
     startDate?: string;
     endDate?: string;
   }) {
-    const where: Record<string, unknown> = {};
+    const where: Prisma.RequestWhereInput = {};
 
     if (filters.driverId) {
       where.driverId = filters.driverId;
@@ -205,8 +204,7 @@ export class RequestsService {
       where.startDate = dateRange;
     }
 
-    const db = this.prisma as any;
-    return db.request.findMany({
+    return this.prisma.request.findMany({
       where,
       include: {
         driver: true,
@@ -220,8 +218,7 @@ export class RequestsService {
   }
 
   async getRequestById(id: string) {
-    const db = this.prisma as any;
-    const request = await db.request.findUnique({
+    const request = await this.prisma.request.findUnique({
       where: { id },
       include: {
         driver: true,
@@ -240,7 +237,7 @@ export class RequestsService {
   async updateRequest(id: string, dto: UpdateRequestDto, actorUserId?: string) {
     await this.getRequestById(id);
 
-    const payload: Record<string, unknown> = {};
+    const payload: Prisma.RequestUpdateInput = {};
 
     if (dto.type !== undefined) {
       payload.type = this.ensureRequestType(dto.type);
@@ -264,8 +261,10 @@ export class RequestsService {
       payload.endDate = parsedEndDate;
     }
 
-    const db = this.prisma as any;
-    const current = await db.request.findUnique({ where: { id } });
+    const current = await this.prisma.request.findUnique({ where: { id } });
+    if (!current) {
+      throw new NotFoundException('Request not found');
+    }
 
     const effectiveStartDate: Date = parsedStartDate ?? current.startDate;
     const effectiveEndDate: Date = parsedEndDate ?? current.endDate;
@@ -274,7 +273,7 @@ export class RequestsService {
       throw new BadRequestException('endDate must be greater than or equal to startDate');
     }
 
-    const updated = await db.request.update({
+    const updated = await this.prisma.request.update({
       where: { id },
       data: payload,
       include: {
@@ -299,15 +298,13 @@ export class RequestsService {
     return updated;
   }
 
-  async approveRequest(id: string, currentUserId: string, actorUserId?: string) {
-    if (!currentUserId) {
-      throw new BadRequestException('currentUserId is required');
+  async approveRequest(id: string, approverUserId?: string) {
+    if (!approverUserId) {
+      throw new BadRequestException('Authenticated approver is required');
     }
 
     const approved = await this.prisma.$transaction(async (tx) => {
-      const db = tx as any;
-
-      const request = await db.request.findUnique({
+      const request = await tx.request.findUnique({
         where: { id },
         include: {
           driver: true,
@@ -330,7 +327,7 @@ export class RequestsService {
         throw new BadRequestException('endDate must be greater than or equal to startDate');
       }
 
-      const approver = await db.user.findUnique({ where: { id: currentUserId }, select: { id: true } });
+      const approver = await tx.user.findUnique({ where: { id: approverUserId }, select: { id: true } });
       if (!approver) {
         throw new NotFoundException('Approver user not found');
       }
@@ -339,7 +336,7 @@ export class RequestsService {
       const dates = this.getDatesBetween(request.startDate, request.endDate);
 
       for (const date of dates) {
-        await db.calendarEvent.create({
+        await tx.calendarEvent.create({
           data: {
             driverId: request.driverId,
             requestId: request.id,
@@ -350,16 +347,12 @@ export class RequestsService {
         });
       }
 
-      await db.request.update({
+      return tx.request.update({
         where: { id: request.id },
         data: {
           status: 'approved',
-          approvedById: currentUserId,
+          approvedById: approverUserId,
         },
-      });
-
-      return db.request.findUnique({
-        where: { id: request.id },
         include: {
           driver: true,
           approvedBy: true,
@@ -369,13 +362,13 @@ export class RequestsService {
     });
 
     await this.safeAuditLog({
-      actorUserId: actorUserId ?? currentUserId,
+      actorUserId: approverUserId,
       action: 'request.approved',
       entityType: 'request',
       entityId: approved.id,
       summary: 'Request approved',
       metadata: {
-        approvedById: currentUserId,
+        approvedById: approverUserId,
         status: approved.status,
       },
     });
@@ -394,8 +387,7 @@ export class RequestsService {
   }
 
   async rejectRequest(id: string, actorUserId?: string) {
-    const db = this.prisma as any;
-    const request = await db.request.findUnique({ where: { id } });
+    const request = await this.prisma.request.findUnique({ where: { id } });
 
     if (!request) {
       throw new NotFoundException('Request not found');
@@ -405,7 +397,7 @@ export class RequestsService {
       throw new BadRequestException('Only pending requests can be rejected');
     }
 
-    const rejected = await db.request.update({
+    const rejected = await this.prisma.request.update({
       where: { id },
       data: {
         status: 'rejected',
@@ -443,20 +435,18 @@ export class RequestsService {
 
   async cancelRequest(id: string, actorUserId?: string) {
     const cancelled = await this.prisma.$transaction(async (tx) => {
-      const db = tx as any;
-
-      const request = await db.request.findUnique({ where: { id } });
+      const request = await tx.request.findUnique({ where: { id } });
       if (!request) {
         throw new NotFoundException('Request not found');
       }
 
-      await db.calendarEvent.deleteMany({
+      await tx.calendarEvent.deleteMany({
         where: {
           requestId: id,
         },
       });
 
-      return db.request.update({
+      return tx.request.update({
         where: { id },
         data: {
           status: 'cancelled',

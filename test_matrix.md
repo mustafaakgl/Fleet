@@ -6,24 +6,24 @@ Each module is tested for happy path, invalid/boundary input, unauthenticated ac
 
 | ID | Module / flow | Unit | Integration / data | API / RBAC / tenant | E2E / exploratory | Priority | Status |
 |---|---|---|---|---|---|---|---|
-| TM-001 | Authentication/session | Token/expiry helpers | Refresh rotation/revocation | Unauthenticated redirect and 429 observed; expiry/refresh pending | Login and unauthenticated redirect pass; logout/expiry pending | P0 | PARTIAL |
-| TM-002 | Users and roles | Permission helpers | Role persistence | Admin-only CRUD, mass assignment | Admin/new-user persona, menu/page/API parity | P0 | NOT RUN |
-| TM-003 | Drivers | DTO/boundaries/status | Tenant unique employee, relations | CRUD, foreign tenant ID, pagination/filter/sort | Admin/office CRUD, accounting read-only, long input | P0 | NOT RUN |
-| TM-004 | Vehicles | DTO/year/status/expiry | Unique plate, assignment relations | CRUD, duplicate, foreign tenant ID | CRUD, TÜV/SP indicators, export | P0 | NOT RUN |
-| TM-005 | Companies | Validation | Relations and constraints | Financial fields by role, tenant isolation | CRUD and accounting visibility | P0 | NOT RUN |
-| TM-006 | Assignments/planning | Conflict/state logic | Transaction, driver/vehicle availability | CRUD, duplicate/concurrent assignment | Office route pass; drag/drop/concurrency pending | P0 | PARTIAL |
-| TM-007 | Requests to calendar | Transition/date logic | Create/update transaction | Role/tenant/not-found/idempotency | Request create/approve/reject/calendar | P0 | NOT RUN |
-| TM-008 | Leave to calendar | Date overlap/status | Approval/rejection consistency | Role, tenant, duplicate decision | Office request, boss decision, calendar update | P0 | NOT RUN |
-| TM-009 | Transport to assignment + AT | Transition/calculation | Atomic relation creation | Role, tenant, duplicate/concurrency | Office transport lifecycle | P0 | NOT RUN |
-| TM-010 | Documents/reminders | Expiry/reminder logic | Equipment final document creation pass | Malformed equipment PDF rejected; direct-ID/tenant document fixture blocked | Route guards and equipment lifecycle pass; privacy dataset blocked | P0 | PARTIAL |
+| TM-001 | Authentication/session | Token/expiry helpers | Rotation, reuse-chain revocation and logout verified | Missing/malformed/expired access, stale/expired refresh and 429 verified | Five-role login/session API suite 6/6 | P0 | PASS |
+| TM-002 | Users and roles | Permission matrix drift 5/5 | Role persistence | Admin-only CRUD, escalation/mass assignment and tenant scope verified | Five persona route guards 5/5 | P0 | PASS |
+| TM-003 | Drivers | Future/expired date boundary 2/2 | Tenant relations | CRUD, validation, duplicate, foreign tenant ID, pagination/filter/sort verified | Admin/office write and accounting read-only verified | P0 | PASS |
+| TM-004 | Vehicles | DTO/status validation | Unique conflict mapped to 409 | CRUD, duplicate, foreign tenant ID and sorting verified | Operational persona/API coverage complete; export remains P1 | P0 | PASS |
+| TM-005 | Companies | Validation | Relations and constraints | Financial mask, write roles, duplicate and tenant isolation verified | Accounting visibility and office masking verified | P0 | PASS |
+| TM-006 | Assignments/planning | Conflict/state logic | Serializable transaction, driver/vehicle availability and AT event verified | RBAC, tenant ID, transitions and true two-request race verified | Office planning route and current quick-assign contract verified | P0 | PASS |
+| TM-007 | Requests to calendar | Transition/date logic | Approval creates exact calendar days | Role/tenant/not-found/idempotency and approver spoofing regression verified | Office create/approve/calendar API flow pass | P0 | PASS |
+| TM-008 | Leave to calendar | Date/status validation | Approval/rejection consistency | Accounting deny, boss decision and duplicate decision verified | Office request, boss approval and KT event pass | P0 | PASS |
+| TM-009 | Transport to assignment + AT | Transition/calculation | Atomic assignment and AT creation verified | Role, cross-tenant relations and duplicate approval verified | Office lifecycle API pass | P0 | PASS |
+| TM-010 | Documents/reminders | Expiry/reminder logic | Equipment final document and generate-twice reminder dedupe pass | Four document classes, office-sensitive deny, direct-ID, own-data and tenant isolation verified | Admin/boss/accounting and owner-driver downloads pass; office sensitive types 404 | P0 | PASS |
 | TM-011 | Global search | Query normalization | Tenant-limited search | Injection, role filtering, pagination | Search, empty/long/special text | P1 | NOT RUN |
 | TM-012 | Exports | Formatting/escaping | Dataset consistency | Role/tenant and formula injection | Excel download/content | P1 | NOT RUN |
-| TM-013 | Driver portal | Status/availability helpers | Work-session start/stop/reconcile pass | Driver route guard and self issuance pass | Morning check-in, work session and reconcile pass; offline pending | P0 | PARTIAL |
+| TM-013 | Driver portal | Offline queue ordering/retry helpers pass | Work-session start/stop/reconcile pass | Driver route guard and self issuance pass | Persona route and service-worker offline shell pass | P0 | PASS |
 | TM-014 | Telematics/tachograph | 218-test suite includes parser/rule coverage | Normal Codec8 scenario 5/5 pass | Tenant isolation script pass; role exposure pending | UI flows pending | P1 | PARTIAL |
 | TM-015 | Notifications/reminders | Scheduling/dedup | Job idempotency/retry | Tenant/recipient scope | Empty/loading/error/read state | P1 | NOT RUN |
-| TM-016 | Audit/privacy | Redaction/serialization | Immutable audit persistence | Admin/boss only, no secret/PII leak | Audit filters/export | P0 | NOT RUN |
+| TM-016 | Audit/privacy | Error secret-reflection check | Immutable audit persistence | Admin/boss allow, other-role deny and tenant actor scope verified | Filter/export API checks pass | P0 | PASS |
 | TM-017 | i18n/responsive | Locale/status mapping | N/A | N/A | Login de/en/tr pass; responsive/overflow pending | P1 | PARTIAL |
-| TM-018 | File security | Equipment PDF structure regression pass | Malformed PDF cleanup/rejection pass | Header-only PDF now 400; traversal/polyglot/download matrix pending | Equipment success/failure paths pass | P0 | PARTIAL |
+| TM-018 | File security | Equipment PDF structure regression pass | Malformed PDF cleanup/rejection pass | MIME/signature mismatch with traversal name and oversized upload rejected; authorized/foreign downloads verified | Equipment and document failure paths pass | P0 | PASS |
 
 ## Role Expectations
 

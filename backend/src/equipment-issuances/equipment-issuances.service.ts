@@ -7,7 +7,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { safeAuditLog } from '../audit/audit-helper';
@@ -42,6 +42,7 @@ type UploadedScanFile = {
   originalname: string;
   filename: string;
   mimetype: string;
+  path: string;
 };
 
 type EquipmentIssuanceItem = {
@@ -225,6 +226,26 @@ export class EquipmentIssuancesService {
     return Buffer.concat(chunks);
   }
 
+  private async assertValidPdfUpload(file: UploadedScanFile | undefined): Promise<void> {
+    if (!file || file.mimetype !== 'application/pdf' || !file.path) {
+      throw new BadRequestException('A valid form PDF is required');
+    }
+
+    try {
+      const pdf = await PDFDocument.load(readFileSync(file.path), { updateMetadata: false });
+      if (pdf.getPageCount() < 1) {
+        throw new Error('PDF has no pages');
+      }
+    } catch {
+      try {
+        unlinkSync(file.path);
+      } catch {
+        // Multer cleanup is best effort; validation still fails closed.
+      }
+      throw new BadRequestException('Uploaded file is not a valid PDF');
+    }
+  }
+
   private async buildFinalPdfBuffer(params: {
     issuanceId: string;
     title: string;
@@ -377,16 +398,14 @@ export class EquipmentIssuancesService {
     actorUserId: string,
     meta: RequestMeta,
   ) {
+    await this.assertValidPdfUpload(file);
+
     const driver = await this.prisma.driver.findUnique({
       where: { id: dto.driverId },
       select: { id: true, firstName: true, lastName: true, userId: true },
     });
     if (!driver) {
       throw new NotFoundException('Driver not found');
-    }
-
-    if (!file || file.mimetype !== 'application/pdf') {
-      throw new BadRequestException('A form PDF is required');
     }
 
     const parsedItems = this.parseItems(dto.itemsJson);
@@ -535,6 +554,8 @@ export class EquipmentIssuancesService {
     actorUserId: string,
     meta: RequestMeta,
   ) {
+    await this.assertValidPdfUpload(file);
+
     const issuance = await this.getIssuanceRecord(issuanceId);
     ensureMutable(issuance.status);
     if (issuance.status !== 'pending_signature') {

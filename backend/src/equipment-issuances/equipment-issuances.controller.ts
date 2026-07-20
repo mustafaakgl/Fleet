@@ -61,6 +61,7 @@ type UploadedScanFile = {
   originalname: string;
   filename: string;
   mimetype: string;
+  path: string;
 };
 
 function requestMeta(req: Request) {

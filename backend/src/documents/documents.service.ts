@@ -55,6 +55,11 @@ const DOCUMENT_OWNER_TYPES: DocumentOwnerType[] = [
 ];
 
 const DOCUMENT_STATUSES: DocumentStatus[] = ['valid', 'expiring_soon', 'expired', 'missing', 'archived'];
+const OFFICE_RESTRICTED_DOCUMENT_TYPES = new Set(['private', 'salary', 'medical']);
+
+export function canAccessDocumentType(role: string, documentType?: string): boolean {
+  return role !== 'office' || !documentType || !OFFICE_RESTRICTED_DOCUMENT_TYPES.has(documentType.toLowerCase());
+}
 
 @Injectable()
 export class DocumentsService {
@@ -91,6 +96,10 @@ export class DocumentsService {
   ): Promise<void> {
     if (!document.fileUrl) {
       throw new NotFoundException('Document has no file');
+    }
+
+    if (!canAccessDocumentType(actor.role, document.documentType)) {
+      throw new NotFoundException('Document not found');
     }
 
     if (OPERATIONAL_ROLES.includes(actor.role as UserRole)) {
@@ -440,7 +449,7 @@ export class DocumentsService {
     search?: string;
     page?: number;
     limit?: number;
-  }) {
+  }, actorRole?: string) {
     const where: Record<string, unknown> = {};
 
     if (filters.ownerType) {
@@ -465,6 +474,10 @@ export class DocumentsService {
         { documentType: { contains: filters.search, mode: 'insensitive' } },
         { notes: { contains: filters.search, mode: 'insensitive' } },
       ];
+    }
+
+    if (actorRole === 'office') {
+      where.NOT = { documentType: { in: [...OFFICE_RESTRICTED_DOCUMENT_TYPES] } };
     }
 
     const usePagination =
@@ -519,12 +532,15 @@ export class DocumentsService {
     return document;
   }
 
-  async getDocumentByIdForClient(id: string) {
+  async getDocumentByIdForClient(id: string, actorRole?: string) {
     const document = await this.getDocumentById(id);
+    if (!canAccessDocumentType(actorRole ?? '', document.documentType)) {
+      throw new NotFoundException('Document not found');
+    }
     return this.mapDocumentToClient(document);
   }
 
-  async getDocumentsByOwner(ownerType: string, ownerId: string) {
+  async getDocumentsByOwner(ownerType: string, ownerId: string, actorRole?: string) {
     const normalizedOwnerType = this.ensureOwnerType(ownerType);
 
     const db = this.prisma as any;
@@ -532,6 +548,9 @@ export class DocumentsService {
       where: {
         ownerType: normalizedOwnerType,
         ownerId,
+        ...(actorRole === 'office'
+          ? { NOT: { documentType: { in: [...OFFICE_RESTRICTED_DOCUMENT_TYPES] } } }
+          : {}),
       },
       include: {
         uploadedBy: true,
@@ -798,7 +817,7 @@ export class DocumentsService {
     return this.mapDocumentToClient(archived);
   }
 
-  async getExpiringDocuments(days = 90) {
+  async getExpiringDocuments(days = 90, actorRole?: string) {
     if (!Number.isFinite(days) || days < 0) {
       throw new BadRequestException('days must be a non-negative number');
     }
@@ -812,6 +831,9 @@ export class DocumentsService {
     const db = this.prisma as any;
     const rows = await db.document.findMany({
       where: {
+        ...(actorRole === 'office'
+          ? { NOT: { documentType: { in: [...OFFICE_RESTRICTED_DOCUMENT_TYPES] } } }
+          : {}),
         OR: [
           {
             status: 'expired',

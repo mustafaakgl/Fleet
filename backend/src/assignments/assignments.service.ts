@@ -21,6 +21,13 @@ import { DepartureCheckService } from '../departure-check/departure-check.servic
 
 type DayRange = { start: Date; end: Date };
 
+export function mapAssignmentTransactionError(error: unknown): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+    throw new ConflictException('Assignment conflicts with another concurrent request');
+  }
+  throw error;
+}
+
 const ACTIVE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
   AssignmentStatus.planned,
   AssignmentStatus.confirmed,
@@ -575,7 +582,7 @@ export class AssignmentsService {
       return assignment;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    }).catch(mapAssignmentTransactionError);
 
     await this.companyEmailsService.updateEmailStatusAfterAssignmentChange(
       created.companyId,

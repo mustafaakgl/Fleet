@@ -107,6 +107,7 @@ export class DocumentsController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @CurrentUser('role') role?: string,
   ) {
     return this.documentsService.listDocuments({
       ownerType: owner_type,
@@ -116,13 +117,13 @@ export class DocumentsController {
       search,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
-    });
+    }, role);
   }
 
   @Get('expiring')
-  getExpiringDocuments(@Query('days') days?: string) {
+  getExpiringDocuments(@Query('days') days?: string, @CurrentUser('role') role?: string) {
     const parsedDays = days ? Number(days) : 90;
-    return this.documentsService.getExpiringDocuments(parsedDays);
+    return this.documentsService.getExpiringDocuments(parsedDays, role);
   }
 
   @Get('missing-required')
@@ -131,8 +132,12 @@ export class DocumentsController {
   }
 
   @Get('owner/:ownerType/:ownerId')
-  getDocumentsByOwner(@Param('ownerType') ownerType: string, @Param('ownerId') ownerId: string) {
-    return this.documentsService.getDocumentsByOwner(ownerType, ownerId);
+  getDocumentsByOwner(
+    @Param('ownerType') ownerType: string,
+    @Param('ownerId') ownerId: string,
+    @CurrentUser('role') role?: string,
+  ) {
+    return this.documentsService.getDocumentsByOwner(ownerType, ownerId, role);
   }
 
   @Get(':id/download')
@@ -155,8 +160,8 @@ export class DocumentsController {
   }
 
   @Get(':id')
-  getDocumentById(@Param('id') id: string) {
-    return this.documentsService.getDocumentByIdForClient(id);
+  getDocumentById(@Param('id') id: string, @CurrentUser('role') role?: string) {
+    return this.documentsService.getDocumentByIdForClient(id, role);
   }
 
   @Post()

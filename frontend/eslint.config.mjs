@@ -16,6 +16,7 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     "node_modules/**",
     ".next/**",
+    ".next-verify/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

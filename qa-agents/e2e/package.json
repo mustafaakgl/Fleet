@@ -6,6 +6,12 @@
   "scripts": {
     "check:env": "tsx scripts/check-e2e-env.ts",
     "test": "playwright test",
+    "test:p0:auth": "playwright test tests/p0-auth-session.api.spec.ts --project=chromium --no-deps",
+    "test:p0:master-data": "playwright test tests/p0-master-data.api.spec.ts --project=chromium --no-deps",
+    "test:p0:workflows": "playwright test tests/p0-critical-workflows.api.spec.ts --project=chromium --no-deps",
+    "test:p0:documents": "playwright test tests/p0-document-security.api.spec.ts --project=chromium --no-deps",
+    "test:p0:audit": "playwright test tests/p0-audit-privacy.api.spec.ts --project=chromium --no-deps",
+    "test:p0:personas": "playwright test tests/p0-personas.ui.spec.ts --project=chromium --no-deps",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:report": "playwright show-report"
@@ -14,6 +20,7 @@
     "@playwright/test": "^1.48.0",
     "@types/node": "^22.0.0",
     "dotenv": "^16.4.5",
+    "pdf-lib": "^1.17.1",
     "tsx": "^4.22.4",
     "typescript": "^5.6.0"
   }

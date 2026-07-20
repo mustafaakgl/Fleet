@@ -11,7 +11,7 @@ import {
 } from './lib/codec8-frames.mjs';
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.TELEMATICS_TIMEOUT_MS || 60_000);
-const GATEWAY_START_COMMAND = 'PATH=/opt/homebrew/opt/node@22/bin:$PATH npm --prefix backend run start:dev';
+const GATEWAY_START_COMMAND = 'PATH=/opt/homebrew/opt/node@22/bin:$PATH npm --prefix backend run start:gateway';
 
 function parseArgs(argv) {
   const args = {

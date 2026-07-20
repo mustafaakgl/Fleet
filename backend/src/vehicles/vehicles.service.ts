@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
@@ -17,7 +18,7 @@ import { ObjectStorageService } from '../storage/object-storage.service';
 import { StorageService } from '../storage/storage.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { loadHandoverPhotosBySlot } from '../vehicle-handovers/handover-photo.util';
-import { ADMIN_ONLY_ROLES } from '../common/utils/permissions';
+import { ADMIN_ONLY_ROLES, type UserRole } from '../common/utils/permissions';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { ListVehiclesQueryDto } from './dto/list-vehicles-query.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -50,6 +51,13 @@ function toClientVehicle(row: VehicleWithCurrentDriver) {
     photo_url: row.photoUrl ? `/vehicles/${row.id}/photo` : undefined,
     created_at: row.createdAt.toISOString(),
   };
+}
+
+export function mapVehicleCreateError(error: unknown): Error {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    return new ConflictException('Vehicle plate number, internal code, or VIN already exists');
+  }
+  return new InternalServerErrorException('Failed to create vehicle registration atomically');
 }
 
 const currentDriverInclude = {
@@ -112,9 +120,9 @@ export class VehiclesService {
 
   private async assertActiveExists(id: string): Promise<void> {
     const exists = await this.prisma.vehicle.findFirst({
-      where: { id, deletedAt: null } as Prisma.VehicleWhereInput,
+      where: { id, deletedAt: null },
       select: { id: true },
-    } as any);
+    });
     if (!exists) {
       throw new NotFoundException('Vehicle not found');
     }
@@ -138,14 +146,14 @@ export class VehiclesService {
     const orderBy = { [normalizedSort]: sortOrder } as Prisma.VehicleOrderByWithRelationInput;
 
     const [total, rows] = await Promise.all([
-      this.prisma.vehicle.count({ where } as any),
+      this.prisma.vehicle.count({ where }),
       this.prisma.vehicle.findMany({
         where,
         orderBy,
         skip: (page - 1) * limit,
         take: limit,
         include: currentDriverInclude,
-      } as any),
+      }),
     ]);
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
@@ -161,7 +169,7 @@ export class VehiclesService {
   }
 
   async findAllIncludingDeleted(query: ListVehiclesQueryDto, actorRole?: string) {
-    if (!actorRole || !ADMIN_ONLY_ROLES.includes(actorRole as any)) {
+    if (!actorRole || !ADMIN_ONLY_ROLES.includes(actorRole as UserRole)) {
       throw new ForbiddenException('Only admins can access deleted vehicles');
     }
 
@@ -182,14 +190,14 @@ export class VehiclesService {
     const orderBy = { [normalizedSort]: sortOrder } as Prisma.VehicleOrderByWithRelationInput;
 
     const [total, rows] = await Promise.all([
-      this.prisma.vehicle.count({ where } as any),
+      this.prisma.vehicle.count({ where }),
       this.prisma.vehicle.findMany({
         where,
         orderBy,
         skip: (page - 1) * limit,
         take: limit,
         include: currentDriverInclude,
-      } as any),
+      }),
     ]);
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
@@ -311,7 +319,7 @@ export class VehiclesService {
         return toClientVehicle(vehicle);
       });
     } catch (error) {
-      throw new InternalServerErrorException('Failed to create vehicle registration atomically');
+      throw mapVehicleCreateError(error);
     }
   }
 

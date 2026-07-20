@@ -11,9 +11,11 @@ Date: 2026-07-20
 | Frontend dependencies | PASS | Lint/verify/dev server completed |
 | PostgreSQL / Redis | PARTIAL | PostgreSQL integration passed; Redis unset, documented inline queue mode |
 | Backend type-check | PASS | Final `tsc --noEmit` exit 0 |
-| Backend tests | PASS | 58 specs, 218 tests, 0 failed |
+| Backend tests | PASS | 65 specs, 233 tests, 0 failed |
 | Frontend lint/type/build | PASS | 0 lint errors (21 warnings); i18n/type/build pass |
 | E2E environment | PASS | Base URL and five role credentials configured; values not recorded |
+
+Tooling note: VS Code's TypeScript 7 preview reports `moduleResolution: Node` as deprecated in the E2E harness. The repository-pinned `npx tsc --noEmit` passes; migration to Node16/NodeNext resolution is a separate toolchain change.
 
 ## Defect Record Template
 
@@ -52,3 +54,6 @@ Each verified issue will include:
 
 - Codec8 normal verification requires both a standalone gateway and a current-day demo assignment. After `seed-tacho-demo.mjs` and `start:gateway`, all five checks passed.
 - Re-running role auth setup immediately can hit the intended login throttle (429). RBAC suites can reuse fresh storage states with `--no-deps`.
+- Deterministic P0 seed now provisions two tenants, five roles per tenant, master data and four document privacy classes; workflow rows are reset on each run.
+- Second-round focused suites: auth 6/6, master-data 4/4, workflows 4/4, documents/reminders 4/4, audit/privacy 2/2 and persona/offline route guards 6/6.
+- Critical tenant finding: Tenant A could create a transport request referencing Tenant B entities and receive foreign PII. Scoped relation checks now fail with 404.

@@ -186,21 +186,32 @@ export class TransportRequestsService {
     endTime: string;
     notes?: string;
   }, actorUserId?: string) {
-    const created = await this.prisma.transportRequest.create({
-      data: {
-        driverId: input.driverId,
-        vehicleId: input.vehicleId,
-        companyId: input.companyId,
-        cargoName: input.cargoName,
-        cargoOwner: input.cargoOwner,
-        pickupAddress: input.pickupAddress,
-        deliveryAddress: input.deliveryAddress,
-        requestedDate: input.requestedDate,
-        startTime: input.startTime,
-        endTime: input.endTime,
-        status: TransportRequestStatus.pending,
-      },
-      include: { driver: true, vehicle: true, company: true },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const [driver, vehicle, company] = await Promise.all([
+        tx.driver.findUnique({ where: { id: input.driverId }, select: { id: true } }),
+        tx.vehicle.findUnique({ where: { id: input.vehicleId }, select: { id: true } }),
+        tx.company.findUnique({ where: { id: input.companyId }, select: { id: true } }),
+      ]);
+      if (!driver) throw new NotFoundException('Driver not found');
+      if (!vehicle) throw new NotFoundException('Vehicle not found');
+      if (!company) throw new NotFoundException('Company not found');
+
+      return tx.transportRequest.create({
+        data: {
+          driverId: input.driverId,
+          vehicleId: input.vehicleId,
+          companyId: input.companyId,
+          cargoName: input.cargoName,
+          cargoOwner: input.cargoOwner,
+          pickupAddress: input.pickupAddress,
+          deliveryAddress: input.deliveryAddress,
+          requestedDate: input.requestedDate,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          status: TransportRequestStatus.pending,
+        },
+        include: { driver: true, vehicle: true, company: true },
+      });
     });
 
     await this.safeAuditLog({

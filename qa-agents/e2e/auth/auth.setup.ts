@@ -72,8 +72,12 @@ async function login(page: Page, email: string, password: string): Promise<void>
 
   const accessToken = data.accessToken ?? data.access_token;
   const refreshToken = data.refreshToken ?? data.refresh_token ?? null;
-  expect(accessToken, `Missing access token in login response for ${email}.`).toBeTruthy();
-  expect(data.user, `Missing user payload in login response for ${email}.`).toBeTruthy();
+  if (!accessToken) {
+    throw new Error(`Missing access token in login response for ${email}.`);
+  }
+  if (!data.user) {
+    throw new Error(`Missing user payload in login response for ${email}.`);
+  }
 
   await page.goto(LOGIN_PATH);
   await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });

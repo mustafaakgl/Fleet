@@ -44,7 +44,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       timestamp,
       error: this.resolveErrorName(exception),
       details: this.resolveHttpExceptionDetails(exception),
-      stack: exception instanceof Error ? exception.stack : undefined,
     });
   }
 

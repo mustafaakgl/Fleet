@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '@playwright/test';
+import { PDFDocument } from 'pdf-lib';
 
 const API_BASE_URL = process.env.API_BASE_URL?.trim() || 'http://127.0.0.1:3000/api/v1';
 
@@ -106,7 +107,12 @@ test.describe('Smoke', () => {
 
 const OFFICE_AUTH_STATE = path.resolve(__dirname, '..', '.auth', 'office.json');
 const DRIVER_AUTH_STATE = path.resolve(__dirname, '..', '.auth', 'driver.json');
-const MINIMAL_PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF', 'utf8');
+
+async function createMinimalPdf(): Promise<Buffer> {
+  const pdf = await PDFDocument.create();
+  pdf.addPage();
+  return Buffer.from(await pdf.save());
+}
 
 function readAccessToken(storageStatePath: string): string | null {
   if (!fs.existsSync(storageStatePath)) {
@@ -194,7 +200,7 @@ test.describe('Office smoke', () => {
     expect(response?.status() ?? 0).toBe(200);
 
     await expect(page.getByText(/No service reminders yet|No service reminders|Noch keine Service-Erinnerungen|Keine Service-Erinnerungen|Henüz servis hatırlatması yok|Servis hatırlatıcısı yok/)).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('button', { name: /Add Service Reminder|Service-Erinnerung hinzufügen|Servis Hatırlatıcısı Ekle/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Add Service Reminder|Service-Erinnerung hinzufügen|Servis Hatırlatıcısı Ekle/ }).first()).toBeVisible();
   });
 
   test('office message is visible to driver and driver reply increases office unread count', async ({ request }) => {
@@ -438,7 +444,7 @@ test.describe('Equipment issuance smoke', () => {
         file: {
           name: 'office-form.pdf',
           mimeType: 'application/pdf',
-          buffer: MINIMAL_PDF,
+          buffer: await createMinimalPdf(),
         },
       },
     });

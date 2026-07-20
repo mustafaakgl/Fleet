@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import {
-  IsDateString,
+  IsDate,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -32,14 +32,6 @@ export enum DriverLicenseType {
 }
 
 const LICENSE_NUMBER_PATTERN = /^[A-Z0-9][A-Z0-9-]{4,31}$/i;
-
-const toIsoString = ({ value }: { value: unknown }) => {
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  return value;
-};
 
 export class CreateDriverDto {
   @ApiProperty({ description: 'Driver first name', example: 'Mustafa' })
@@ -91,10 +83,9 @@ export class CreateDriverDto {
     example: '2028-12-31',
   })
   @Type(() => Date)
-  @Transform(toIsoString, { toClassOnly: true })
-  @IsDateString()
+  @IsDate()
   @MinDate(new Date())
-  license_expiry_date!: string;
+  license_expiry_date!: string | Date;
 
   @ApiProperty({ required: false, description: 'Optional passport number', example: 'P1234567' })
   @IsOptional()
@@ -109,10 +100,9 @@ export class CreateDriverDto {
   })
   @IsOptional()
   @Type(() => Date)
-  @Transform(toIsoString, { toClassOnly: true })
-  @IsDateString()
+  @IsDate()
   @MinDate(new Date())
-  passport_expiry_date?: string;
+  passport_expiry_date?: string | Date;
 
   @ApiProperty({
     required: false,
@@ -121,10 +111,9 @@ export class CreateDriverDto {
   })
   @IsOptional()
   @Type(() => Date)
-  @Transform(toIsoString, { toClassOnly: true })
-  @IsDateString()
+  @IsDate()
   @MaxDate(new Date())
-  date_of_birth?: string;
+  date_of_birth?: string | Date;
 
   @ApiProperty({ required: false, description: 'Street address', example: 'Main Street 12' })
   @IsOptional()
