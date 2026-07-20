@@ -91,10 +91,13 @@ export class FinesController {
     @CurrentUser('tenantId') tenantId: string | undefined,
     @UploadedFile() file?: Express.Multer.File,
   ) {
+    if (!tenantId) {
+      throw new BadRequestException('Tenant context missing');
+    }
     return this.fines.create(
       dto,
       actorUserId,
-      tenantId ?? 'default-tenant',
+      tenantId,
       file ? { originalname: file.originalname, buffer: file.buffer } : undefined,
     );
   }

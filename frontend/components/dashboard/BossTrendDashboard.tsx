@@ -16,6 +16,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
+import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
+import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
 import { dashboardApi, finesApi, fleetFuelEntriesApi, tachographApi } from '@/lib/api';
 import type { DashboardSummary } from '@/lib/types';
 
@@ -29,7 +32,37 @@ function iso(daysOffset: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function BossTrendDashboard() {
+function KpiCard({
+  label,
+  value,
+  href,
+  tone,
+  subtitle,
+}: {
+  label: string;
+  value: string;
+  href: string;
+  tone: string;
+  subtitle: string;
+}) {
+  return (
+    <Link href={href} className="block">
+      <Card className="h-full rounded-lg border-slate-200 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
+        <CardHeader className="pb-2 pt-4">
+          <CardTitle className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            {label}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1 pb-4">
+          <p className={`text-2xl font-semibold ${tone}`}>{value}</p>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}
+
+export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolean }) {
   const { t, i18n } = useTranslation();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [openInfringements, setOpenInfringements] = useState(0);
@@ -118,15 +151,78 @@ export function BossTrendDashboard() {
     red: risk.filter((x) => x.riskLevel === 'red').length,
   };
 
+  const legacyKpis = summary
+    ? [
+        {
+          label: t('dashboard.v3.kpi.activeDrivers'),
+          value: String(summary.kpis.activeDrivers),
+          href: '/drivers?status=active',
+          tone: 'text-slate-900',
+          subtitle: t('dashboard.v3.scope.today'),
+        },
+        {
+          label: t('dashboard.v3.kpi.vehiclesInUse'),
+          value: String(summary.kpis.vehiclesInUse),
+          href: '/vehicles?status=active',
+          tone: 'text-blue-700',
+          subtitle: t('dashboard.v3.vehicleUtilization.title'),
+        },
+        {
+          label: t('dashboard.v3.kpi.workforceIssues'),
+          value: String(summary.kpis.driversOnVacation + summary.kpis.sickDrivers),
+          href: '/drivers?status=inactive',
+          tone: 'text-amber-700',
+          subtitle: `${summary.kpis.driversOnVacation} ${t('dashboard.v3.kpi.onVacation')} · ${summary.kpis.sickDrivers} ${t('dashboard.v3.kpi.sick')}`,
+        },
+        {
+          label: t('dashboard.v3.kpi.complianceIssues'),
+          value: String(summary.kpis.expiringDocuments + openInfringements),
+          href: '/documents?status=expiring_soon,expired',
+          tone: 'text-red-700',
+          subtitle: `${summary.kpis.expiringDocuments} ${t('dashboard.v3.compliance.documents')} · ${openInfringements} ${t('dashboard.v3.compliance.openInfringements')}`,
+        },
+        {
+          label: t('dashboard.v3.kpi.incidents'),
+          value: String(summary.kpis.openAccidents + summary.kpis.cargoDamages),
+          href: '/accidents',
+          tone: 'text-orange-600',
+          subtitle: `${summary.kpis.openAccidents} ${t('dashboard.v3.kpi.accidents')} · ${summary.kpis.cargoDamages} ${t('dashboard.v3.kpi.cargoDamages')}`,
+        },
+        {
+          label: t('dashboard.v3.kpi.unsentEmails'),
+          value: String(summary.kpis.unsentCompanyEmails),
+          href: '/assignments',
+          tone: 'text-teal-700',
+          subtitle: t('dashboard.v3.kpi.unsentEmailsSubtitle'),
+        },
+      ]
+    : [];
+
   if (loading && !summary) {
     return <Skeleton className="h-[460px] w-full" />;
   }
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <header>
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.v3.bossTitle')}</h1>
-      </header>
+      {hideHeader ? null : (
+        <header>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.v3.bossTitle')}</h1>
+        </header>
+      )}
+
+      {legacyKpis.length > 0 ? (
+        <section className="space-y-3">
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold text-slate-900">{t('dashboard.v3.legacyTitle')}</h2>
+            <p className="text-xs text-slate-500">{t('dashboard.v3.legacySubtitle')}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {legacyKpis.map((item) => (
+              <KpiCard key={item.label} {...item} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
@@ -269,6 +365,14 @@ export function BossTrendDashboard() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      {summary?.priorityTrends?.length ? (
+        <RepairPriorityTrendsChart trends={summary.priorityTrends} />
+      ) : null}
+
+      {summary?.chartAnalytics ? <DashboardCharts analytics={summary.chartAnalytics} /> : null}
+
+      {summary?.costAnalytics ? <FleetCostCharts analytics={summary.costAnalytics} /> : null}
     </div>
   );
 }

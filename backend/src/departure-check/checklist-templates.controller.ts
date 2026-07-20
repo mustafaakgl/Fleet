@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { VehicleCategory } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
@@ -22,7 +22,10 @@ export class ChecklistTemplatesController {
     @Query('vehicle_category') vehicleCategory?: VehicleCategory,
     @Query('active_only') activeOnly?: string,
   ) {
-    return this.templates.list(tenantId ?? 'default-tenant', {
+    if (!tenantId) {
+      throw new BadRequestException('Tenant context missing');
+    }
+    return this.templates.list(tenantId, {
       vehicle_category: vehicleCategory,
       active_only: activeOnly !== 'false',
     });
@@ -39,7 +42,10 @@ export class ChecklistTemplatesController {
     @CurrentUser('tenantId') tenantId: string | undefined,
     @Body() dto: CreateChecklistTemplateDto,
   ) {
-    return this.templates.create(tenantId ?? 'default-tenant', dto);
+    if (!tenantId) {
+      throw new BadRequestException('Tenant context missing');
+    }
+    return this.templates.create(tenantId, dto);
   }
 
   @Patch(':id')

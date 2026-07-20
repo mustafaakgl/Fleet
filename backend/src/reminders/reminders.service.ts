@@ -1,9 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantContext } from '../tenant/tenant-context';
 import type { CreateServiceReminderDto } from './dto/create-service-reminder.dto';
 import type { CreateVehicleReminderDto } from './dto/create-vehicle-reminder.dto';
 
@@ -31,6 +32,8 @@ const REMINDER_TYPES: ReminderType[] = [
 
 @Injectable()
 export class RemindersService {
+  private readonly logger = new Logger(RemindersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
@@ -108,13 +111,17 @@ export class RemindersService {
     dueDate: Date;
     notifyBeforeDays: number;
   }) {
-    const db = this.prisma as any;
+    const tenantId = TenantContext.getTenantId();
+    if (!tenantId) {
+      throw new Error('Tenant context required to create reminders');
+    }
+
     const dueDate = this.normalizeDate(data.dueDate);
 
-    const existing = await db.reminder.findUnique({
+    const existing = await this.prisma.reminder.findUnique({
       where: {
         tenantId_targetType_targetId_reminderType_title_dueDate_notifyBeforeDays: {
-          tenantId: 'default-tenant',
+          tenantId,
           targetType: data.targetType,
           targetId: data.targetId,
           reminderType: data.reminderType,
@@ -129,7 +136,7 @@ export class RemindersService {
       return { reminder: existing, created: false };
     }
 
-    const reminder = await db.reminder.create({
+    const reminder = await this.prisma.reminder.create({
       data: {
         targetType: data.targetType,
         targetId: data.targetId,
@@ -536,6 +543,37 @@ export class RemindersService {
     }
 
     return result;
+  }
+
+  /**
+   * Cron entry point: runs reminder generation for every active tenant, each inside
+   * its own TenantContext. One tenant failing must never block the others.
+   */
+  async generateRemindersForAllTenants() {
+    const tenants = await this.prisma.unscoped.tenant.findMany({
+      where: { status: 'active' },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    let totalCandidates = 0;
+    let created = 0;
+    const failedTenants: string[] = [];
+
+    for (const tenant of tenants) {
+      try {
+        const result = await TenantContext.run(tenant.id, () => this.generateReminders());
+        totalCandidates += result.totalCandidates;
+        created += result.created;
+      } catch (error) {
+        failedTenants.push(tenant.id);
+        this.logger.error(
+          `Reminder generation failed for tenant ${tenant.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return { tenants: tenants.length, totalCandidates, created, failedTenants };
   }
 
   async listReminders(filters: {

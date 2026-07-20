@@ -25,9 +25,10 @@ export class JobBootstrapService implements OnModuleInit {
 
   onModuleInit(): void {
     this.queue.registerHandler('reminders.generate', async () => {
-      const result = await this.reminders.generateReminders();
+      const result = await this.reminders.generateRemindersForAllTenants();
       this.logger.log(
-        `Compliance reminders: candidates=${result.totalCandidates}, created=${result.created}`,
+        `Compliance reminders: tenants=${result.tenants}, candidates=${result.totalCandidates}, created=${result.created}`
+        + (result.failedTenants.length > 0 ? `, FAILED_TENANTS=${result.failedTenants.join(',')}` : ''),
       );
     });
 
