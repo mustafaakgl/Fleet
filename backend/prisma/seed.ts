@@ -45,6 +45,7 @@ type SeedPasswordKey =
   | 'accounting'
   | 'office'
   | 'driver'
+  | 'fleetOps'
   | 'dhlCustomer'
   | 'amazonCustomer';
 
@@ -71,6 +72,7 @@ function loadSeedPasswords(): SeedPasswords {
     accounting: resolveSeedPassword('SEED_ACCOUNTING_PASSWORD'),
     office: resolveSeedPassword('SEED_OFFICE_PASSWORD'),
     driver: resolveSeedPassword('SEED_DRIVER_PASSWORD'),
+    fleetOps: resolveSeedPassword('SEED_FLEETOPS_PASSWORD'),
     dhlCustomer: resolveSeedPassword('SEED_DHL_CUSTOMER_PASSWORD'),
     amazonCustomer: resolveSeedPassword('SEED_AMAZON_CUSTOMER_PASSWORD'),
   };
@@ -82,6 +84,7 @@ function loadSeedPasswords(): SeedPasswords {
     console.info(`  accounting@fleet.com: ${passwords.accounting}`);
     console.info(`  office@fleet.com: ${passwords.office}`);
     console.info(`  driver@fleet.com: ${passwords.driver}`);
+    console.info(`  ops@myfleet.app: ${passwords.fleetOps} (Fleet Ops; FLEET_OPS_EMAILS ile eşleşmeli)`);
     console.info(`  dhl.customer@fleet.com: ${passwords.dhlCustomer}`);
     console.info(`  amazon.customer@fleet.com: ${passwords.amazonCustomer}`);
   }
@@ -976,6 +979,15 @@ async function main(): Promise<void> {
     email: 'office@fleet.com',
     password: seedPasswords.office,
     role: UserRole.office,
+  });
+
+  // Fleet Ops user: access is granted via FLEET_OPS_EMAILS env (see src/config/fleet-ops.ts),
+  // so the seed email must match the address configured there.
+  await upsertUser({
+    fullName: 'Fleet Ops',
+    email: 'ops@myfleet.app',
+    password: seedPasswords.fleetOps,
+    role: UserRole.admin,
   });
 
   const driverQaUser = await upsertUser({
