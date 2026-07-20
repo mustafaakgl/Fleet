@@ -101,3 +101,6 @@
 [2026-07-20] [QA-P0-FINAL-REVIEW] [final-gates] [Backend 233/233, telematics 5/5, tenant isolation, P0 API 20/20, persona 6/6, RBAC drift 5/5, frontend verify/build ve lint 0 error PASS]
 [2026-07-20] [dev-run] [workspace-start] [Node 22 ile kokten npm run dev baslatildi; frontend 3001 HTTP 200, backend 3000 dinlemede (kok rota 404, /api/v1/health mevcut)]
 [2026-07-20] [swagger-openapi] [backend-docs] [SWAGGER_ENABLED kapili docs bootstrap + auth/tag/error zenginlestirme + Swagger spec eklendi; backend tsc + 236 test + codec8 verify + tenant isolation + drift + diff-check calisti]
+[2026-07-20] [api-hardening] [500-fix+unmask] tsc yeşil; filter spec 2/2 yeşil; canlı 5/5 yeşil (generate 400-validasyon, ws/end 200, series 200, assignments gerçek mesaj); npm test + tenant-isolation-check VM'de koşamadı (darwin prisma engine + DB erişimi) — Mac'te koşulacak, commit bekliyor
+[2026-07-20] [api-hardening] [battery] [Mac'te tam batarya yeşil: tsc temiz, 237/237 test pass, tenant isolation passed — commitler atılıyor]
+[2026-07-20] [api-hardening] [commit] [4 faz0 commiti atıldı: filter unmask, DTO validasyonu, series 24h varsayılanı, fleet-ops seed]
