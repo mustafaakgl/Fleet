@@ -117,7 +117,7 @@ export function MessengerComposer({
   }
 
   return (
-    <div className="border-t border-slate-200 bg-white p-3 pb-3" style={{ paddingBottom: `${12 + bottomInset}px` }}>
+    <div className="border-t border-[#0b2342]/10 bg-[#e9eef4] p-3 pb-3" style={{ paddingBottom: `${12 + bottomInset}px` }}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {driverLanguage ? (
           <span
@@ -210,7 +210,7 @@ export function MessengerComposer({
           rows={1}
           placeholder={t('messenger.messagePlaceholder', { name: driverName ?? '' }).trim()}
           className={cn(
-            'min-h-11 flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-[15px] leading-6 text-slate-900 placeholder:text-slate-400',
+            'min-h-11 flex-1 resize-none rounded-3xl border border-slate-200 bg-white px-4 py-3 text-[15px] leading-6 text-slate-900 placeholder:text-slate-400 shadow-sm',
             BRAND_FOCUS,
           )}
           disabled={sending}

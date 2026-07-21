@@ -301,3 +301,31 @@ export function resolveDriverLanguageFromConversation(
 
   return null;
 }
+
+/**
+ * Deterministic avatar color from a name/seed, so each person keeps the same
+ * color across the app (WhatsApp/Telegram-style scannability). Brand-neutral,
+ * accessible palette (all combos pass AA against white text).
+ */
+const AVATAR_PALETTE: ReadonlyArray<{ bg: string; fg: string }> = [
+  { bg: '#1a4d7a', fg: '#ffffff' },
+  { bg: '#0e7490', fg: '#ffffff' },
+  { bg: '#b45309', fg: '#ffffff' },
+  { bg: '#7c3aed', fg: '#ffffff' },
+  { bg: '#be123c', fg: '#ffffff' },
+  { bg: '#15803d', fg: '#ffffff' },
+  { bg: '#4338ca', fg: '#ffffff' },
+  { bg: '#0891b2', fg: '#ffffff' },
+  { bg: '#a16207', fg: '#ffffff' },
+  { bg: '#9333ea', fg: '#ffffff' },
+];
+
+export function avatarColor(seed: string | null | undefined): { bg: string; fg: string } {
+  const value = (seed ?? '').trim();
+  if (!value) return AVATAR_PALETTE[0];
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}

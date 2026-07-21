@@ -582,30 +582,6 @@ export function MessengerPage() {
 
   return (
     <div className={FLEET_PAGE}>
-      <div className={FLEET_PAGE_HEADER}>
-        <div className={FLEET_PAGE_HEADER_TITLE}>
-          <MessageSquare className="h-5 w-5 shrink-0 text-brand-primary sm:h-6 sm:w-6" />
-          <h1 className="truncate text-xl font-bold text-gray-900 sm:text-2xl">{t('messenger.title')}</h1>
-          {unreadCount.total > 0 ? (
-            <span className="shrink-0 rounded-full bg-brand-primary px-2.5 py-0.5 text-xs font-semibold text-white">
-              {t('messenger.unread', { count: unreadCount.total })}
-            </span>
-          ) : null}
-        </div>
-        <div className={FLEET_PAGE_HEADER_ACTIONS}>
-          {canCreateConversation ? (
-            <Button
-              type="button"
-              className={cn(BRAND_BTN_PRIMARY, 'w-full sm:w-auto')}
-              onClick={() => setNewConversationOpen(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {t('messenger.newConversation')}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
       {error ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
           {error}
@@ -632,6 +608,7 @@ export function MessengerPage() {
             currentUserId={currentUserId}
             loading={loadingConversations}
             canCreateConversation={canCreateConversation}
+            unreadTotal={unreadCount.total}
             onSearchChange={setSearch}
             onPersonaFilterChange={setPersonaFilter}
             onSelectConversation={(id) => {

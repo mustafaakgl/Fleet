@@ -1,12 +1,13 @@
 'use client';
 
-import { MessageSquare, Search } from 'lucide-react';
+import { Building2, MessageSquare, Plus, Search, Truck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  avatarColor,
   conversationTitle,
   driverDisplayName,
   formatMessengerRelativeTime,
@@ -15,7 +16,6 @@ import {
   roleLabelKey,
   type MessengerConversationPersonaFilter,
 } from '@/lib/messenger-utils';
-import { FLEET_FILTER_INPUT } from '@/lib/fleet-table';
 import { cn } from '@/lib/utils';
 import type { ConversationListItem } from '@/lib/types';
 
@@ -27,6 +27,7 @@ interface MessengerConversationListProps {
   currentUserId: string | null;
   loading: boolean;
   canCreateConversation: boolean;
+  unreadTotal?: number;
   onSearchChange: (value: string) => void;
   onPersonaFilterChange: (value: MessengerConversationPersonaFilter) => void;
   onSelectConversation: (conversationId: string) => void;
@@ -44,6 +45,7 @@ export function MessengerConversationList({
   currentUserId,
   loading,
   canCreateConversation,
+  unreadTotal = 0,
   onSearchChange,
   onPersonaFilterChange,
   onSelectConversation,
@@ -54,28 +56,40 @@ export function MessengerConversationList({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="space-y-3 border-b border-slate-200 px-4 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">{t('messenger.conversations')}</h2>
-            <p className="text-xs text-slate-500">{t('messenger.listSubtitle')}</p>
+      {/* Unified navy header band — matches the chat panel header for one cohesive product feel. */}
+      <div className="bg-gradient-to-r from-[#0b2342] to-[#1a4d7a] px-4 pb-3 pt-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-white/90" aria-hidden />
+            <h2 className="text-base font-semibold text-white">{t('messenger.title')}</h2>
+            {unreadTotal > 0 ? (
+              <span className="inline-flex min-w-[1.4rem] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[11px] font-bold text-[#1a4d7a]">
+                {unreadTotal}
+              </span>
+            ) : null}
           </div>
           {canCreateConversation ? (
-            <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={onCreateConversation}>
-              {t('messenger.newMessageCta')}
+            <Button
+              type="button"
+              size="icon"
+              className="h-9 w-9 shrink-0 rounded-full bg-white/15 text-white hover:bg-white/25"
+              onClick={onCreateConversation}
+              aria-label={t('messenger.newConversation')}
+            >
+              <Plus className="h-5 w-5" />
             </Button>
           ) : null}
         </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
           <Input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder={t('messenger.searchPlaceholder')}
-            className={cn('min-h-11 pl-9', FLEET_FILTER_INPUT)}
+            className="min-h-11 rounded-full border-transparent bg-white pl-9 text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-white/60"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {FILTERS.map((filter) => {
             const active = personaFilter === filter;
             return (
@@ -85,10 +99,10 @@ export function MessengerConversationList({
                 onClick={() => onPersonaFilterChange(filter)}
                 aria-pressed={active}
                 className={cn(
-                  'min-h-11 rounded-full border px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 focus-visible:ring-offset-1',
+                  'min-h-11 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-1 focus-visible:ring-offset-[#1a4d7a]',
                   active
-                    ? 'border-brand-primary bg-brand-primary text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
+                    ? 'border-white bg-white text-[#1a4d7a] shadow-sm'
+                    : 'border-white/30 bg-white/10 text-white/85 hover:bg-white/20',
                 )}
               >
                 {t(`messenger.filters.${filter}`)}
@@ -98,12 +112,12 @@ export function MessengerConversationList({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-white p-2">
         {loading ? (
           <div className="space-y-2 p-1">
-            <Skeleton className="h-20 rounded-2xl" />
-            <Skeleton className="h-20 rounded-2xl" />
-            <Skeleton className="h-20 rounded-2xl" />
+            <Skeleton className="h-18 rounded-2xl" />
+            <Skeleton className="h-18 rounded-2xl" />
+            <Skeleton className="h-18 rounded-2xl" />
           </div>
         ) : conversations.length === 0 ? (
           <div className="p-4">
@@ -116,14 +130,16 @@ export function MessengerConversationList({
             />
           </div>
         ) : (
-          <ul className="space-y-1.5">
+          <ul className="space-y-0.5">
             {conversations.map((conversation) => {
               const active = conversation.id === selectedConversationId;
               const counterpart = getCounterpartInfo(conversation, currentUserId);
               const title = conversationTitle(conversation).replace(' · ', ' — ');
               const avatarName = counterpart.name || driverDisplayName(conversation);
               const initials = personInitials(avatarName);
+              const color = avatarColor(avatarName);
               const unread = conversation.unreadCount > 0;
+              const isCustomer = counterpart.role === 'customer';
 
               return (
                 <li key={conversation.id}>
@@ -131,47 +147,58 @@ export function MessengerConversationList({
                     type="button"
                     onClick={() => onSelectConversation(conversation.id)}
                     className={cn(
-                      'w-full min-h-16 rounded-2xl border px-3 py-3 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/35 focus-visible:ring-offset-1',
+                      'w-full min-h-16 rounded-xl px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a4d7a]/35 focus-visible:ring-offset-1',
                       active
-                        ? 'border-brand-primary/30 bg-surface shadow-sm ring-1 ring-brand-primary/10'
-                        : 'border-transparent hover:border-slate-200 hover:bg-slate-50',
+                        ? 'bg-[#e8f0f8]'
+                        : unread
+                          ? 'bg-[#f5f9fd] hover:bg-[#eef4fb]'
+                          : 'hover:bg-slate-50',
                     )}
                   >
                     <div className="flex items-start gap-3">
-                      <span
-                        className={cn(
-                          'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
-                          active ? 'bg-brand-primary text-white' : 'bg-slate-200 text-slate-700',
-                        )}
-                      >
-                        {initials}
+                      <span className="relative shrink-0">
+                        <span
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold"
+                          style={{ backgroundColor: color.bg, color: color.fg }}
+                        >
+                          {initials}
+                        </span>
+                        <span
+                          className={cn(
+                            'absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-white',
+                            isCustomer ? 'bg-amber-500' : 'bg-[#1a4d7a]',
+                          )}
+                          aria-hidden
+                          title={t(roleLabelKey(counterpart.role))}
+                        >
+                          {isCustomer ? (
+                            <Building2 className="h-2.5 w-2.5 text-white" />
+                          ) : (
+                            <Truck className="h-2.5 w-2.5 text-white" />
+                          )}
+                        </span>
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className={cn('truncate text-sm text-slate-900', unread && 'font-bold')}>
-                              {title}
-                            </p>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                              {t(roleLabelKey(counterpart.role))}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 flex-col items-end gap-1">
-                            <span className="text-xs text-slate-500">
-                              {formatMessengerRelativeTime(conversation.lastMessageAt, i18n.language, {
-                                yesterday: t('messenger.yesterdayShort'),
-                              })}
-                            </span>
-                            {unread ? (
-                              <span className="inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-brand-primary px-1.5 py-0.5 text-[10px] font-bold text-white">
-                                {conversation.unreadCount}
-                              </span>
-                            ) : null}
-                          </div>
+                          <p className={cn('min-w-0 truncate text-sm text-slate-900', unread ? 'font-bold' : 'font-medium')}>
+                            {title}
+                          </p>
+                          <span className={cn('shrink-0 text-[11px]', unread ? 'font-semibold text-[#1a4d7a]' : 'text-slate-400')}>
+                            {formatMessengerRelativeTime(conversation.lastMessageAt, i18n.language, {
+                              yesterday: t('messenger.yesterdayShort'),
+                            })}
+                          </span>
                         </div>
-                        <p className={cn('mt-2 truncate text-sm text-slate-600', unread && 'font-semibold text-slate-800')}>
-                          {previewText(conversation)}
-                        </p>
+                        <div className="mt-1 flex items-end justify-between gap-2">
+                          <p className={cn('min-w-0 truncate text-[13px]', unread ? 'font-medium text-slate-700' : 'text-slate-500')}>
+                            {previewText(conversation)}
+                          </p>
+                          {unread ? (
+                            <span className="inline-flex min-w-[1.35rem] shrink-0 items-center justify-center rounded-full bg-[#1a4d7a] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                              {conversation.unreadCount}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </button>
