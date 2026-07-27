@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mein-Bussgeld.de — Bußgeldrechner (Mockup v3)</title>
+<style>
+  :root{--navy:#0f2744;--navy2:#1a3f6b;--ink:#12243c;--muted:#6b7d93;--line:#e2e8f0;--bg:#eef2f7;--amber:#e8890c;--red:#c0392b;--green:#1e8e5a;--pad:#f4f7fb;--orange:#f39c12}
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
+  body{background:var(--bg);color:var(--ink)}
+  .top{background:#fff;border-bottom:3px solid var(--navy);padding:14px 28px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20}
+  .top .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+  .top h2{font-size:17px}.top small{display:block;font-size:11.5px;color:var(--muted);font-weight:400}
+  .layout{display:flex;gap:26px;max-width:1200px;margin:26px auto;padding:0 20px;align-items:flex-start}
+  aside{width:240px;flex-shrink:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;position:sticky;top:86px;max-height:calc(100vh - 110px);overflow-y:auto}
+  aside .sh{padding:13px 16px;font-size:13px;font-weight:700;background:var(--pad);border-bottom:1px solid var(--line)}
+  aside a{display:block;padding:9px 16px;font-size:13px;color:var(--ink);text-decoration:none;border-bottom:1px solid #f0f4f8;font-weight:600;cursor:pointer}
+  aside a:hover{background:#f5f9fd;color:var(--navy2)}
+  aside a.on{background:var(--navy2);color:#fff}
+  main{flex:1;min-width:0}
+  .crumb{font-size:12px;color:var(--muted);margin-bottom:8px}
+  h1{font-size:25px;margin-bottom:4px}
+  .meta{font-size:12px;color:var(--muted);margin-bottom:18px}
+  .meta b{color:var(--navy2)}
+  /* calc card */
+  .calc{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 16px 40px -20px rgba(15,39,68,.3);overflow:hidden;margin-bottom:26px}
+  .calc .chead{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:16px 22px}
+  .calc .chead h3{font-size:16.5px}.calc .chead p{font-size:12px;opacity:.85;margin-top:2px}
+  .cbody{padding:18px 22px 22px}
+  .steplbl{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+  .tile{border:1.5px solid var(--line);border-radius:13px;background:#fff;padding:14px 8px 11px;text-align:center;cursor:pointer;transition:.15s;position:relative}
+  .tile:hover{border-color:#b9c9dc;transform:translateY(-1px)}
+  .tile.on{border-color:var(--orange);box-shadow:0 6px 16px -8px rgba(243,156,18,.55)}
+  .tile .ic{font-size:26px;line-height:1;margin-bottom:7px}
+  .tile .nm{font-size:12px;font-weight:700}
+  .tile .rad{position:absolute;left:9px;top:9px;width:13px;height:13px;border-radius:50%;border:2px solid #cfd9e6}
+  .tile.on .rad{border-color:var(--orange);background:radial-gradient(circle at center,var(--orange) 45%,#fff 50%)}
+  .frm .row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:11px}
+  .frm .k{font-size:13.5px;flex:1}
+  .frm .ctl{width:300px;flex-shrink:0}
+  .frm input[type=number],.frm select{width:100%;padding:10px 12px;border:1px solid #c9d4e2;border-radius:10px;font-size:14px;background:#fff}
+  .frm input:focus,.frm select:focus{outline:2px solid rgba(26,63,107,.35)}
+  .pair{display:flex;border-radius:10px;overflow:hidden;border:1px solid #c9d4e2}
+  .pair button{flex:1;border:0;padding:10px;background:#f7f9fc;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:.15s}
+  .pair button.on{background:#4a7ab5;color:#fff}
+  .go{margin:8px 0 0 auto;display:block;padding:13px 34px;border:0;border-radius:11px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;font-size:14px;font-weight:700;letter-spacing:.5px;cursor:pointer;box-shadow:0 10px 22px -8px rgba(15,39,68,.6);transition:.15s}
+  .go:hover{transform:translateY(-1px)}
+  .result{margin-top:18px;border-radius:15px;background:#f7f9fc;border:1px solid var(--line);padding:18px;display:none;animation:rin .5s}
+  .result.show{display:block}
+  @keyframes rin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .summary{text-align:center;font-size:13.5px;color:var(--muted);margin-bottom:14px}
+  .summary b{color:var(--ink)}
+  .gaugeRow{display:flex;align-items:center;justify-content:center;gap:26px;flex-wrap:wrap}
+  .gauge{position:relative;width:110px;height:110px;flex-shrink:0}
+  .gauge svg{transform:rotate(-90deg)}
+  .gauge .c-bg{stroke:#e3e9f1}
+  .gauge .c-fg{stroke:var(--navy);stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.3,.9,.3,1),stroke 1s}
+  .gauge .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .gauge .center b{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+  .gauge .center span{font-size:10px;color:var(--muted)}
+  .metrics{display:flex;flex-direction:column;gap:10px;min-width:210px}
+  .metric{display:flex;align-items:center;justify-content:space-between;gap:20px}
+  .metric .m-k{font-size:12.5px;color:var(--muted)}
+  .metric .m-v{font-size:15px;font-weight:700}
+  .dots{display:flex;gap:5px}
+  .dot{width:11px;height:11px;border-radius:50%;background:#dce3ec;transition:.3s}
+  .dot.on{background:var(--amber)}
+  .note{margin-top:13px;border-radius:11px;padding:10px 14px;font-size:12.5px;font-weight:600;display:none;gap:8px;animation:rin .4s}
+  .note.warn{display:flex;background:#fdf1e2;color:#9a5b00;border:1px solid #f3ddba}
+  .note.crit{display:flex;background:#fdeceb;color:var(--red);border:1px solid #f2c9c5}
+  .cta{margin-top:14px;text-align:center;border:1.5px solid var(--navy2);border-radius:11px;padding:11px;background:#fff}
+  .cta a{color:var(--navy2);font-size:14px;font-weight:700;text-decoration:none;cursor:pointer}
+  .cta small{display:block;color:var(--muted);font-size:10.5px;margin-top:2px;font-weight:400}
+  .disc{text-align:center;font-size:11px;color:var(--muted);margin-top:12px}
+  /* tables */
+  .tbl-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:22px}
+  .tbl-card h3{font-size:16.5px;margin-bottom:10px}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer;user-select:none}
+  .chk input{width:16px;height:16px;accent-color:var(--navy2)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{background:var(--navy2);color:#fff;text-align:left;padding:11px 12px;font-size:13px}
+  tbody td{padding:11px 12px;border-bottom:1px solid #eef2f7;vertical-align:top}
+  tbody tr:hover{background:#f7fafd}
+  td.eur{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+  td .ep{color:var(--navy2);font-weight:700;font-size:12.5px;text-decoration:underline;cursor:pointer}
+  .grp td{background:#f1f5fa;font-weight:700;font-size:12.5px}
+  .fnote{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .faq{background:#fff;border:1.5px solid #b9cee6;border-radius:16px;padding:20px 22px;margin-bottom:40px}
+  .faq h3{font-size:17px;margin-bottom:12px}
+  .faq b{display:block;font-size:14px;margin:12px 0 4px}
+  .faq p{font-size:13.5px;color:#45586e;line-height:1.55}
+  /* promille panel */
+  .steppers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px}
+  .stp{display:flex;align-items:center;justify-content:space-between;background:var(--pad);border-radius:12px;padding:8px 10px}
+  .stp .lb{font-size:12.5px;font-weight:600}
+  .stp .lb small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+  .stp .bt{display:flex;align-items:center;gap:8px}
+  .stp button{width:30px;height:30px;border:0;border-radius:9px;background:#fff;font-size:17px;color:var(--navy);cursor:pointer;box-shadow:0 2px 5px rgba(15,39,68,.15)}
+  .stp b{min-width:18px;text-align:center;font-size:15px}
+  /* funnel modal */
+  .mbg{position:fixed;inset:0;background:rgba(10,22,40,.55);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .mbg.show{display:flex}
+  .modal{background:#f8fafc;border-radius:20px;width:100%;max-width:620px;max-height:92vh;overflow:auto;box-shadow:0 30px 80px -20px rgba(0,0,0,.5);animation:min .35s cubic-bezier(.2,.9,.3,1)}
+  @keyframes min{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+  .mhead{padding:22px 26px 0;position:relative}
+  .mhead h2{font-size:21px;color:var(--navy)}
+  .mhead h2 em{font-style:normal;color:var(--navy2)}
+  .mhead p{font-size:13px;color:var(--muted);margin-top:4px}
+  .mclose{position:absolute;right:16px;top:14px;border:0;background:#e8edf4;width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;color:var(--muted)}
+  .pwrap{display:flex;align-items:center;gap:12px;margin:16px 0 0}
+  .pbar{flex:1;height:6px;border-radius:6px;background:#dbe3ee;overflow:hidden}
+  .pbar i{display:block;height:100%;width:0;background:var(--orange);transition:width .35s}
+  .pstep{font-size:11px;color:var(--muted);white-space:nowrap;font-weight:600}
+  .mbody{padding:18px 26px 26px}
+  .mstep{animation:sin .3s}
+  @keyframes sin{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+  .mq{text-align:center;font-size:16.5px;font-weight:700;margin:6px 0 16px}
+  .mtiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .mtile{border:1.5px solid var(--line);border-radius:13px;background:#fff;padding:16px 8px 12px;text-align:center;cursor:pointer;transition:.15s;position:relative}
+  .mtile:hover{transform:translateY(-1px)}
+  .mtile.on{border-color:var(--orange);box-shadow:0 6px 16px -8px rgba(243,156,18,.55)}
+  .mtile .ic{font-size:26px;margin-bottom:7px}
+  .mtile .nm{font-size:12px;font-weight:700}
+  .mtile .rad{position:absolute;left:9px;top:9px;width:13px;height:13px;border-radius:50%;border:2px solid #cfd9e6}
+  .mtile.on .rad{border-color:var(--orange);background:radial-gradient(circle at center,var(--orange) 45%,#fff 50%)}
+  .opts{display:flex;flex-direction:column;gap:9px;max-width:430px;margin:0 auto}
+  .opt{border:1.5px solid var(--line);border-radius:11px;background:#fff;padding:13px 16px;font-size:14px;font-weight:600;cursor:pointer;text-align:left;transition:.15s;display:flex;align-items:center;gap:11px}
+  .opt:hover{border-color:#b9c9dc;transform:translateY(-1px)}
+  .opt.on{border-color:var(--orange);box-shadow:0 5px 14px -7px rgba(243,156,18,.55)}
+  .opt .rad{width:14px;height:14px;border-radius:50%;border:2px solid #cfd9e6;flex-shrink:0}
+  .opt.on .rad{border-color:var(--orange);background:radial-gradient(circle at center,var(--orange) 45%,#fff 50%)}
+  .stepwarn{max-width:430px;margin:12px auto 0;border-radius:10px;background:#fdeceb;color:var(--red);border:1px solid #f2c9c5;font-size:12.5px;font-weight:600;padding:10px 13px;animation:sin .3s}
+  .sumbox{max-width:430px;margin:14px auto 0;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;text-align:left}
+  .sumbox .sr{display:flex;justify-content:space-between;gap:14px;font-size:12.5px;padding:5px 0;border-bottom:1px dashed #eef2f7}
+  .sumbox .sr:last-child{border-bottom:0}
+  .sumbox .sk{color:var(--muted)}.sumbox .sv{font-weight:700;text-align:right}
+  .mrow{margin-bottom:14px}
+  .minput{width:100%;padding:11px 13px;border:1px solid #c9d4e2;border-radius:10px;font-size:14px;background:#fff}
+  .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .mds{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--muted);margin-top:12px}
+  .mds input{margin-top:2px;accent-color:var(--navy2)}
+  .mnav{display:flex;justify-content:space-between;align-items:center;margin-top:20px}
+  .mback{border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;padding:10px}
+  .mnext{border:0;border-radius:11px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;font-size:14px;font-weight:700;padding:13px 30px;cursor:pointer;box-shadow:0 10px 22px -8px rgba(15,39,68,.6)}
+  .mnext:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+  .mok{text-align:center;padding:26px 10px}
+  .mok .big{width:64px;height:64px;border-radius:50%;background:#e9f6ef;color:var(--green);font-size:30px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;animation:pop2 .5s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes pop2{from{transform:scale(0)}to{transform:scale(1)}}
+  .mok h3{font-size:18px;margin-bottom:8px}
+  .mok p{font-size:13.5px;color:var(--muted);line-height:1.55}
+  .mfoot{text-align:center;font-size:10.5px;color:#9aa8bb;padding:0 26px 18px}
+  @media(max-width:940px){aside{display:none}.tiles{grid-template-columns:repeat(2,1fr)}.frm .ctl{width:56%}.mtiles{grid-template-columns:repeat(2,1fr)}.mgrid{grid-template-columns:1fr}.steppers{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="top"><div class="logo">MB</div><div><h2>Mein-Bussgeld.de<small>Aktueller Bußgeldrechner für das deutsche Verkehrsrecht</small></h2></div></div>
+
+<div class="layout">
+  <aside>
+    <div class="sh">Inhaltsverzeichnis</div>
+    <div id="sidenav"></div>
+  </aside>
+
+  <main>
+    <div class="crumb" id="crumb">mein-bussgeld.de » Bußgeldrechner</div>
+    <h1 id="pageTitle">Bußgeldrechner</h1>
+    <div class="meta">Von <b>Mustafa Akgül</b> · Letzte Aktualisierung: 20. Juli 2026 · Werte nach aktuellem Bußgeldkatalog</div>
+
+    <div class="calc">
+      <div class="chead"><h3 id="calcTitle">Bußgeldrechner</h3><p id="calcSub">Verstoß wählen, Angaben machen — Ergebnis rechnet mit Toleranzabzug.</p></div>
+      <div class="cbody" id="calcBody">
+        <div id="calcStd">
+          <div class="steplbl">1. Was wird Ihnen vorgeworfen?</div>
+          <div class="tiles" id="tiles"></div>
+          <div class="steplbl">2. Ihre Angaben</div>
+          <div class="frm" id="frm"></div>
+          <button class="go" id="go">Ausrechnen</button>
+        </div>
+        <div id="calcPromille" style="display:none">
+          <div class="steplbl">Promillerechner — Was haben Sie getrunken?</div>
+          <div class="frm">
+            <div class="row"><span class="k">Geschlecht</span><div class="ctl"><div class="pair" id="pGeschlecht"><button class="on" data-v="m">Mann</button><button data-v="f">Frau</button></div></div></div>
+            <div class="row"><span class="k">Körpergewicht (kg)</span><div class="ctl"><input type="number" id="pGewicht" value="80" min="35" max="200"></div></div>
+          </div>
+          <div class="steppers" id="drinks"></div>
+          <div class="frm"><div class="row"><span class="k">Stunden seit dem ersten Getränk</span><div class="ctl"><input type="number" id="pStunden" value="0" min="0" max="24"></div></div></div>
+          <button class="go" id="pGo">Promille berechnen</button>
+        </div>
+        <div class="result" id="result">
+          <div class="summary" id="summary"></div>
+          <div class="gaugeRow">
+            <div class="gauge">
+              <svg width="110" height="110" viewBox="0 0 110 110">
+                <circle class="c-bg" cx="55" cy="55" r="46" fill="none" stroke-width="11"/>
+                <circle class="c-fg" id="arc" cx="55" cy="55" r="46" fill="none" stroke-width="11" stroke-dasharray="289" stroke-dashoffset="289"/>
+              </svg>
+              <div class="center"><b id="gEur">0€</b><span id="gLbl">Bußgeld</span></div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><span class="m-k" id="mk1">Punkte in Flensburg</span><span class="dots" id="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+              <div class="metric"><span class="m-k">Fahrverbot</span><span class="m-v" id="banTxt">—</span></div>
+              <div class="metric"><span class="m-k">Details</span><span class="m-v" id="extraTxt" style="font-size:13px">—</span></div>
+            </div>
+          </div>
+          <div class="note" id="note"></div>
+          <div class="cta"><a id="ctaLink">Lohnt sich ein Einspruch gegen den Bußgeldbescheid? » Hier kostenlos prüfen «</a><small>* Anzeige</small></div>
+        </div>
+        <div class="disc">Richtwerte nach Bußgeldkatalog · Toleranz: 3 km/h unter 100 km/h, sonst 3 % · Alle Angaben ohne Gewähr</div>
+      </div>
+    </div>
+
+    <div id="tablesArea"></div>
+
+    <div class="faq">
+      <h3>FAQ</h3>
+      <b>Wird die Messtoleranz automatisch abgezogen?</b>
+      <p>Ja. Bei gemessenen Geschwindigkeiten unter 100 km/h werden 3 km/h abgezogen, darüber 3 Prozent. Der Abzug lässt sich im Rechner deaktivieren.</p>
+      <b>Was gilt in der Probezeit?</b>
+      <p>Ein A-Verstoß (z. B. mehr als 20 km/h zu schnell) führt zu Aufbauseminar und Verlängerung der Probezeit auf vier Jahre.</p>
+      <b>Sind die Ergebnisse verbindlich?</b>
+      <p>Nein, es handelt sich um Richtwerte nach dem aktuellen Bußgeldkatalog. Maßgeblich ist der Bußgeldbescheid der Behörde.</p>
+    </div>
+  </main>
+</div>
+
+<div class="mbg" id="mbg">
+  <div class="modal">
+    <div class="mhead">
+      <button class="mclose" id="mclose">✕</button>
+      <h2>Lohnt sich ein <em>Einspruch</em> gegen Bußgeld, Punkte oder Fahrverbot?</h2>
+      <p>» Prüfen Sie jetzt kostenlos Ihre Möglichkeiten — Bußgeldcheck starten</p>
+      <div class="pwrap"><div class="pbar"><i id="pfill"></i></div><span class="pstep" id="pstep"></span></div>
+    </div>
+    <div class="mbody" id="mflow"></div>
+    <div class="mfoot">Kostenlos &amp; unverbindlich · Ihre Daten werden verschlüsselt übertragen · (Mockup — es werden keine Daten versendet)</div>
+  </div>
+</div>
+
+<script>
+/* ================= DATA (scraped from bussgeldrechner.org) ================= */
+const DATA = {"30-zone": {"title": "Geblitzt in einer Tempo-30-Zone?", "tables": [{"heading": "Bußgeldtabelle: Geschwindigkeitsverstöße in der 30er-Zone innerorts", "footnote": "* Normalerweise droht nur ein Fahrverbot, wenn innerhalb von 12 Monaten zweimal eine Geschwindigkeitsüberschreitung von 26 km/h oder mehr begangen wurde.", "rows": [["... bis 10 km/h", "30 €", "", "", "eher nicht"], ["... 11 - 15 km/h", "50 €", "", "", "link"], ["... 16 - 20 km/h", "70 €", "", "", "link"], ["... 21 - 25 km/h", "115 €", "1", "", "link"], ["... 26 - 30 km/h", "180 €", "1", "(1 Monat)*", "link"], ["... 31 - 40 km/h", "260 €", "2", "1 Monat", "link"], ["... 41 - 50 km/h", "400 €", "2", "1 Monat", "link"], ["... 51 - 60 km/h", "560 €", "2", "2 Monate", "link"], ["... 61 - 70 km/h", "700 €", "2", "3 Monate", "link"], ["... über 70 km/h", "800 €", "2", "3 Monate", "link"]]}]}, "abbiegen": {"title": "Beim Abbiegen Gefahr erzeugt?", "tables": [{"heading": "Bußgeldtabelle: Falsches Abbiegen", "footnote": "", "rows": [["Abbiegen ohne sich vorher ordnungsgemäß einzuordnen", "10 €", "", "", "eher nicht"], ["... mit Gefährdung", "30 €", "", "", "eher nicht"], ["... mit Unfallfolge", "35 €", "", "", "eher nicht"], ["Abbiegen ohne entgegenkommende Fahrzeuge durchzulassen", "40 €", "", "", "eher nicht"], ["... mit Gefährdung", "140 €", "1", "1 Monat", "link"], ["... mit Unfallfolge", "170 €", "1", "1 Monat", "link"], ["Einfahren in eine Einmündung oder Kreuzung trotz stockendem Verkehr (mit Behinderung)", "20 €", "", "", "eher nicht"], ["Abbiegen ohne Rücksicht auf Fußgänger zu nehmen (mit Gefährdung)", "140 €", "1", "1 Monat", "link"], ["Gefährdung anderer Verkehrsteilnehmer beim Abbiegen in ein Grundstück", "80 €", "1", "", "link"], ["Beim Abbiegen nach links nicht voreinander abgebogen (mit Gefährdung)", "70 €", "1", "", "link"], ["Innerorts mit einem Lkw beim Rechtsabbiegen nicht Schrittgeschwindigkeit gefahren", "70 €", "1", "", "link"]]}]}, "abstand": {"title": "Abstand nicht eingehalten? Zu dicht aufgefahren?", "tables": [{"heading": "Bußgeldtabelle: Kosten für Abstandsverstöße im Überblick", "footnote": "", "rows": [["Abstandsverstoß bei weniger als 80 km/h", "25 €", "", "", "eher nicht"], ["... mit Gefährdung", "30 €", "", "", "eher nicht"], ["... mit Sachbeschädigung", "35 €", "", "", "eher nicht"], {"g": "Abstandsverstoß mit mehr als 80 km/h"}, ["... Abstand weniger als 5/10 des halben Tachowertes", "75 €", "1", "", "link"], ["... Abstand weniger als 4/10 des halben Tachowertes", "100 €", "1", "", "link"], ["... Abstand weniger als 3/10 des halben Tachowertes", "160 €", "1", "", "link"], ["... Abstand weniger als 2/10 des halben Tachowertes", "240 €", "1", "", "link"], ["... Abstand weniger als 1/10 des halben Tachowertes", "320 €", "1", "", "link"], {"g": "Abstandsverstoß mit mehr als 100 km/h"}, ["... Abstand weniger als 5/10 des halben Tachowertes", "75 €", "1", "", "link"], ["... Abstand weniger als 4/10 des halben Tachowertes", "100 €", "1", "", "link"], ["... Abstand weniger als 3/10 des halben Tachowertes", "160 €", "2", "1 Monat", "link"], ["... Abstand weniger als 2/10 des halben Tachowertes", "240 €", "2", "2 Monate", "link"], ["... Abstand weniger als 1/10 des halben Tachowertes", "320 €", "2", "3 Monate", "link"], {"g": "Abstandverstoß mit mehr als 130 km/h"}, ["... Abstand weniger als 5/10 des halben Tachowertes", "100 €", "1", "", "link"], ["... Abstand weniger als 4/10 des halben Tachowertes", "180 €", "1", "", "link"], ["... Abstand weniger als 3/10 des halben Tachowertes", "240 €", "2", "1 Monat", "link"], ["... Abstand weniger als 2/10 des halben Tachowertes", "320 €", "2", "2 Monate", "link"], ["... Abstand weniger als 1/10 des halben Tachowertes", "400 €", "2", "3 Monate", "link"]]}]}, "alkohol": {"title": "Alkohol am Steuer – Betrunken ein KFZ gefahren?", "tables": [{"heading": "Bußgeldtabelle: Alkohol am Steuer", "footnote": "1) Entziehung der Fahrerlaubnis, Geldstrafe oder Freiheitsstrafe", "rows": [["Promillegrenze von 0,0 überschritten (gilt für Fahrer unter 21 oder in der Probezeit)", "250 €", "1", "", "link"], ["Promillegrenze von 0,5 überschritten", "", "", "", ""], ["... beim 1. Mal", "500 €", "2", "1 Monat", "link"], ["... beim 2. Mal", "1.000 €", "2", "3 Monate", "link"], ["... beim 3. Mal", "1.500 €", "2", "3 Monate", "link"], ["Verkehr durch Alkohol am Steuer gefährdet (ab 0,3 Promille)", "", "3", "(1)", "link"], ["Promillegrenze von 1,09 überschritten", "", "3", "(1)", "link"]]}]}, "autobahn": {"title": "Ordnungswidrigkeit auf Autobahn & Kraftfahrstraßen?", "tables": [{"heading": "Bußgeldtabelle: Verstöße auf der Autobahn", "footnote": "", "rows": [["Als Fußgänger Autobahn betreten", "10 €", "", "", "eher nicht"], ["Unberechtigt auf der Autobahn gehalten", "30 €", "", "", "eher nicht"], ["... mit Behinderung", "35 €", "", "", "eher nicht"], ["Unberechtigt auf der Autobahn geparkt", "70 €", "1", "", ""], ["... mit Gefährdung", "85 €", "1", "", ""], ["... mit Sachbeschädigung", "105 €", "1", "", ""], ["Ein- oder Ausfahren an unzulässigen Stellen", "25 €", "", "", "eher nicht"], ["Bei stockendem Verkehr keine Rettungsgasse für Polizei oder Rettungsfahrzeuge gebildet", "200 €", "2", "1 Monat", "link"], ["... mit Behinderung", "240 €", "2", "1 Monat", "link"], ["... mit Gefährdung", "280 €", "2", "1 Monat", "link"], ["... mit Sachbeschädigung", "320 €", "2", "1 Monat", "link"], ["Neuer Tatbestand: Unberechtigt eine Rettungsgasse genutzt, die außerorts bei stockendem Verkehr gebildet worden war", "240 €", "2", "1 Monat", "link"], ["... mit Behinderung", "280 €", "2", "1 Monat", "link"], ["... mit Gefährdung", "300 €", "2", "1 Monat", "link"], ["... mit Sachbeschädigung", "320 €", "2", "1 Monat", "link"], ["Autobahn mit Fahrzeug befahren, dessen Höchstgeschwindigkeit geringer als 60 km/h ist", "20 €", "", "", "eher nicht"], ["... mit Sachbeschädigung", "35 €", "", "", "eher nicht"], ["Autobahn mit Fahrzeug befahren, dessen zulässige Höhe zusammen mit der Ladung überschritten ist (Gesamthöhe nicht mehr als 4,20 m)", "20 €", "", "", "eher nicht"], ["Autobahn mit Fahrzeug benutzt, dessen Höhe zusammen mit der Ladung mehr als 4,20 m beträgt", "70 €", "1", "", "link"], ["Seitenstreifen zum schnelleren Vorwärtskommen benutzen", "75 €", "1", "", "link"], ["Beim Einfahren Vorfahrt auf der durchgehenden Fahrbahn nicht beachtet", "75 €", "1", "", "link"], ["... mit Gefährdung", "90 €", "1", "", "link"], ["... mit Sachbeschädigung", "110 €", "1", "", "link"], ["Nicht weit genug rechts gefahren, obwohl dies möglich gewesen wäre (mit Gefährdung)", "80 €", "1", "", "link"]]}, {"heading": "Verstöße beim Rückwärtsfahren, Wenden und dem Fahren entgegen der Fahrtrichtung", "footnote": "", "rows": [["Entgegen der Fahrtrichtung oder rückwärts fahren in Ein- oder Ausfahrt", "75 €", "1", "", "link"], ["... mit Gefährdung", "90 €", "1", "", "link"], ["... mit Sachbeschädigung", "110 €", "1", "", "link"], ["Wenden auf Seitenstreifen oder Nebenstraße", "130 €", "1", "", "link"], ["... mit Gefährdung", "160 €", "1", "", "link"], ["... mit Sachbeschädigung", "195 €", "1", "", "link"], ["Wenden im Tunnel", "60 €", "1", "", "link"], ["Wenden in Ein- oder Ausfahrt", "75 €", "1", "", "link"], ["... mit Gefährdung", "90 €", "1", "", "link"], ["... mit Sachbeschädigung", "110 €", "1", "", "link"], ["Wenden auf durchgehender Fahrbahn", "200 €", "2", "1 Monat", "link"], ["... mit Gefährdung", "240 €", "2", "1 Monat", "link"], ["... mit Sachbeschädigung", "290 €", "2", "1 Monat", "link"], ["Ohne Bedenken rückwärts, entgegen der Fahrtrichtung fahren oder wenden", "", "3", "Führerscheinentzug", ""]]}]}, "beleidigung": {"title": "Beleidigung im Straßenverkehr: Emotionen können teuer werden!", "tables": [{"heading": "Tabelle: Beleidigungen und Strafen aus der Rechtsprechung", "footnote": "Jede dieser Strafen stammt aus einem individuellen Gerichtsurteil und wurde nach den Umständen des jeweiligen Falls festgesetzt. Auch das Einkommen des Verurteilten spielt eine Rolle, weshalb die Beträge lediglich eine Orientierung darstellen und nicht als allgemeingültig anzusehen sind.", "rows": [["„Du Schlampe!“", "1.900 €"], ["„Du blödes Schwein!“", "475 €"], ["„Dumme Kuh!“", "300 €"], ["„Hast du blödes Weib nichts Besseres zu tun?“", "500 €"], ["„Du Holzkopf!“", "750 €"], ["„Was willst du, du Vogel?“", "500 €"], ["„Bei dir piept's wohl!“", "750 €"], ["„Kasperleverein!“", "1.000 €"], ["„Du Wichser!“", "1.000 €"], ["„Am liebsten würde ich jetzt Arschloch zu dir sagen!“", "1.600 €"], ["Einen Polizisten duzen", "600 €"], ["„Asozialer!“", "550 €"], ["„Dir hat wohl die Sonne das Gehirn verbrannt!“", "600 €"], ["„Alte Sau!“", "2.500 €"], ["„Verfluchtes Wegelagerergesindel!“", "900 €"], ["„Fieses Miststück!“", "2.500 €"], {"g": "Gesten"}, ["Vogel zeigen", "750 €"], ["Mit der Hand vor dem Gesicht wedeln („Scheibenwischer-Geste“)", "1.000 €"], ["Mittelfinger zeigen", "4.000 €"], ["Zunge herausstrecken", "150 €"]], "cols": ["Beleidigung", "Strafe"]}]}, "beleuchtung": {"title": "Beleuchtung – was muss beachtet werden?", "tables": [{"heading": "Bußgeldtabelle: Was droht bei falscher Beleuchtung?", "footnote": "", "rows": [["Fahren mit Fernlicht bei ausreichender Beleuchtung der Straße", "10 €", "", "", "eher nicht"], ["Fahrzeug mit defekter Beleuchtung gefahren", "20 €", "", "", "eher nicht"], ["Missbräuchliche Nutzung der Nebelscheinwerfer/Nebelschlussleuchte", "20 €", "", "", "eher nicht"], ["Bei schlechter Sicht oder Dunkelheit ohne Beleuchtung gefahren", "20 €", "", "", "eher nicht"], ["... mit Gefährdung", "25 €", "", "", "eher nicht"], ["... mit Unfall", "35 €", "", "", "eher nicht"], ["Außerhalb einer geschlossenen Ortschaft ohne Abblendlicht gefahren, obwohl Sicht durch Regen, Schnee oder Nebel behindert war", "60 €", "1", "", "link"], ["... mit Gefährdung", "75 €", "1", "", "link"], ["... mit Unfall", "90 €", "1", "", "link"]]}]}, "drogen": {"title": "Mit Drogen am Steuer erwischt?", "tables": [{"heading": "Bußgeld für Drogen am Steuer", "footnote": "1) Entziehung der Fahrerlaubnis, Geld- oder Freiheitsstrafe", "rows": [["Verstoß gegen das Verbot von Drogen am Steuer beim ersten Mal", "500 €", "2", "1 Monat", "link"], ["... beim zweiten Mal", "1.000 €", "2", "3 Monate", "link"], ["... beim dritten Mal", "1.500 €", "2", "3 Monate", "link"], ["Gefährdung des Straßenverkehrs unter dem Einfluss von Drogen", "", "3", "1)", "link"]]}]}, "fahrstreifen": {"title": "Fahrstreifenbegrenzung: durchgezogene Linie überfahren?", "tables": [{"heading": "Bußgeldtabelle Fahrstreifenbegrenzung", "footnote": "", "rows": [["Verbots­widrig über die Fahr­streifen­begren­zung gefahren", "10 €", "", "", "eher nicht"], ["... beim Überholen", "30 €", "", "", "eher nicht"], ["... mit Unfall", "35 €", "", "", "eher nicht"], ["Beim Links­abbiegen / Wenden verbots­widrig über die Fahr­streifen­begren­zung gefahren", "30 €", "", "", "eher nicht"], ["... mit Gefähr­dung", "35 €", "", "", "eher nicht"], ["... mit Unfall", "40 €", "", "", "eher nicht"], ["Vebots­widrig beim Überholen über die Fahr­streifen­begren­zung gefahren, obwohl eine Behin­derung des Gegen­verkehrs nicht ausge­schlossen werden konnte, da die Strecke nicht einge­sehen werden konnte / die Verkehrs­lage unklar war", "150 €", "1", "", "link"], ["... mit Gefähr­dung", "250 €", "2", "1 Monat", "link"], ["... mit Unfall", "300 €", "2", "1 Monat", "link"], ["Verbots­widrig geparkt, obwohl zwischen Fahr­streifen­begren­zung und Fahrzeug ein Abstand von weniger als drei Metern bestand", "10 €", "", "", "eher nicht"], ["... mit Behin­derung", "15 €", "", "", "eher nicht"], ["... länger als drei Stunden", "20 €", "", "", "eher nicht"], ["... länger als drei Stunden mit Behin­derung", "30 €", "", "", "eher nicht"]]}]}, "fahrzeug": {"title": "Fahrzeugmängel und trotzdem gefahren?", "tables": [{"heading": "Tabelle: Zulässige und unzulässige Reifen-Kombinationen", "footnote": "", "rows": [["Reifen mit unterschiedlichen Modelbezeichnungen oder von unterschiedlichen Herstellern", "ja"], ["Sommer- und Winterreifen", "ja"], ["Deutlich unterschiedliche Profiltiefen", "ja"], ["Verschiedene Reifengrößen (soweit nicht in den Fahrzeugpapieren für Hinter- und Vorderachse eingetragen)", "nein"], ["Run Flat Reifen mit normalen Reifen (soweit die Spezialreifen in den Fahrzeugpapieren nicht vorgeschrieben sind)", "nein"]], "cols": ["Kombination", "Zulässig?"]}]}, "fussgaengerzone": {"title": "In der Fußgängerzone unterwegs?", "tables": [{"heading": "Bußgeldtabelle für die Fußgängerzone", "footnote": "", "rows": [["Aus einer Fußgängerzone auf die Straße gefahren mit Gefährdung anderer Verkehrsteilnehmer", "30 €", "", "", "eher nicht"], ["Aus einer Fußgängerzone auf die Straße gefahren mit Unfall", "35 €", "", "", "eher nicht"], ["Aus einer Fußgängerzone auf die Straße gefahren, ohne zu blinken", "10 €", "", "", "eher nicht"], ["In einer Fußgängerzone mit zulässigem Fahrzeugverkehr nicht Schrittgeschwindigkeit gefahren", "15 €", "", "", "eher nicht"], ["In einer Fußgängerzone mit zugelassenem Fahrzeugverkehr einen Fußgänger gefährdet", "60 €", "1", "", "link"], ["In einer Fußgängerzone ohne zugelassenen Fahrzeugverkehr einen Fußgänger gefährdet", "70 €", "1", "", "link"], ["In einer Fußgängerzone geparkt", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "", "", "eher nicht"], ["... länger als 3 Stunden", "70 €", "", "", "eher nicht"], ["In der Fußgängerzone ein Fahrzeug über 3,5 t genutzt (Lkw)", "100 €", "", "", "eher nicht"], ["In der Fußgängerzone ein Fahrzeug bis 3,5 t mit Anhänger oder einen Bus genutzt", "55 €", "", "", "eher nicht"], ["In der Fußgängerzone ein Motorrad genutzt", "50 €", "", "", "eher nicht"], ["In der Fußgängerzone mit dem Rad gefahren", "25 €", "", "", "eher nicht"], ["... mit Behinderung", "30 €", "", "", "eher nicht"], ["... mit Gefährdung", "35 €", "", "", "eher nicht"], ["... mit Unfall", "40 €", "", "", "eher nicht"]]}, {"heading": "Geschwindigkeitsüberschreitung in der Fußgängerzone", "footnote": "* Normalerweise droht nur ein Fahrverbot, wenn innerhalb von 12 Monaten zweimal eine Geschwindigkeitsüberschreitung von 26 km/h oder mehr begangen wurde.", "rows": [["... bis 10 km/h", "30 €", "", "", "eher nicht"], ["... 11 - 15 km/h", "50 €", "", "", "link"], ["... 16 - 20 km/h", "70 €", "", "", "link"], ["... 21 - 25 km/h", "115 €", "1", "", "link"], ["... 26 - 30 km/h", "180 €", "1", "(1 Monat)*", "link"], ["... 31 - 40 km/h", "260 €", "2", "1 Monat", "link"], ["... 41 - 50 km/h", "400 €", "2", "1 Monat", "link"], ["... 51 - 60 km/h", "560 €", "2", "2 Monate", "link"], ["... 61 - 70 km/h", "700 €", "2", "3 Monate", "link"], ["... über 70 km/h", "800 €", "2", "3 Monate", "link"]]}]}, "geschwindigkeit": {"title": "Geschwindigkeits­überschreitung: Zu schnell gefahren?", "tables": [{"heading": "Aktuelle Bußgelder für Geschwindigkeitsverstöße innerorts", "footnote": "* Normalerweise droht nur ein Fahrverbot, wenn innerhalb von 12 Monaten zweimal eine Geschwindigkeitsüberschreitung von 26 km/h oder mehr begangen wurde.", "rows": [["... bis 10 km/h", "30 €", "", "", "eher nicht"], ["... 11 - 15 km/h", "50 €", "", "", "link"], ["... 16 - 20 km/h", "70 €", "", "", "link"], ["... 21 - 25 km/h", "115 €", "1", "", "link"], ["... 26 - 30 km/h", "180 €", "1", "(1 Monat)*", "link"], ["... 31 - 40 km/h", "260 €", "2", "1 Monat", "link"], ["... 41 - 50 km/h", "400 €", "2", "1 Monat", "link"], ["... 51 - 60 km/h", "560 €", "2", "2 Monate", "link"], ["... 61 - 70 km/h", "700 €", "2", "3 Monate", "link"], ["... über 70 km/h", "800 €", "2", "3 Monate", "link"]]}, {"heading": "Aktuelle Bußgelder für Geschwindigkeitsverstöße außerorts", "footnote": "* Normalerweise droht nur ein Fahrverbot, wenn innerhalb von 12 Monaten zweimal eine Geschwindigkeitsüberschreitung von 26 km/h oder mehr begangen wurde.", "rows": [["... bis 10 km/h", "20 €", "", "", "eher nicht"], ["... 11 - 15 km/h", "40 €", "", "", "link"], ["... 16 - 20 km/h", "60 €", "", "", "link"], ["... 21 - 25 km/h", "100 €", "1", "", "link"], ["... 26 - 30 km/h", "150 €", "1", "(1 Monat)*", "link"], ["... 31 - 40 km/h", "200 €", "1", "(1 Monat)*", "link"], ["... 41 - 50 km/h", "320 €", "2", "1 Monat", "link"], ["... 51 - 60 km/h", "480 €", "2", "1 Monat", "link"], ["... 61 - 70 km/h", "600 €", "2", "2 Monate", "link"], ["... über 70 km/h", "700 €", "2", "3 Monate", "link"]]}, {"heading": "Bußgeldtabelle: Illegale Autorennen", "footnote": "", "rows": [["Teilnehmer oder Veranstalter", "3", "Freiheitsstrafe bis zu 2 Jahren oder Geldstrafe; Entziehung der Fahrerlaubnis"], ["... mit Gefährdung", "3", "Freiheitsstrafe bis zu 5 Jahren oder Geldstrafe; Entziehung der Fahrerlaubnis"], ["... mit Personenschaden", "3", "Freiheitsstrafe von 1 bis zu 10 Jahren; in minder schweren Fällen 6 Monate bis 5 Jahre"]], "cols": ["Verstoß", "Punkte", "Sanktion"]}]}, "halten-parken": {"title": "Im Park-/Halteverbot falsch gehalten/geparkt?", "tables": [{"heading": "Aktuelle Bußgeldtabelle: Verstöße beim Halten", "footnote": "", "rows": [["Auf der linken Fahrbahnseite bzw. dem linken Seitenstreifen gehalten, näher als 10 Meter vor Ampeln gehalten und diese dabei verdeckt, nicht am rechten Fahrbahnrand gehalten", "10 €", "", "", "eher nicht"], ["... mit Behinderung", "15 €", "", "", "eher nicht"], ["Halten an engen bzw. unübersichtlichen Stellen, in scharfen Kurven, auf Beschleunigungs- oder Verzögerungsstreifen, im Bereich von Fußgängerübergängen oder Bahnübergängen oder an Stellen, an denen es durch Markierungen, Lichtsignale oder Verkehrsschilder untersagt ist", "20 €", "", "", "eher nicht"], ["... mit Behinderung", "35 €", "", "", "eher nicht"], ["Halten vor oder in einer Feuerwehrzufahrt", "20 €", "", "", "eher nicht"], ["... mit Behinderung von Rettungsfahrzeugen", "35 €", "", "", "eher nicht"], ["Halten in zweiter Reihe", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "1", "", "link"], ["... mit Gefährdung", "80 €", "1", "", "link"], ["... mit Sachbeschädigung", "100 €", "1", "", "link"], ["Nicht platzsparend halten", "10 €", "", "", "eher nicht"], ["Unberechtigtes Halten in einer Nothalte- oder Pannenbucht", "20 €", "", "", "eher nicht"], ["Halten im Fahraum von Schienenfahrzeugen", "20 €", "", "", "eher nicht"], ["... mit Behinderung", "30 €", "", "", "eher nicht"], ["Unberechtigtes Halten auf Schutzstreifen für den Radverkehr", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "1", "", "link"], ["... mit Gefährdung", "80 €", "1", "", "link"], ["... mit Sachbeschädigung", "100 €", "1", "", "link"], ["Unberechtigtes Halten auf Busfahrstreifen oder an Bushaltestellen", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "", "", "eher nicht"], ["... mit Gefährdung", "80 €", "", "", "eher nicht"], ["... mit Sachbeschädigung", "100 €", "", "", "eher nicht"], ["Unerlaubtes Halten auf Autobahn oder Kraftfahrstraße", "30 €", "", "", "eher nicht"], ["... mit Behinderung", "35 €", "", "", "eher nicht"], ["Unerlaubtes Halten auf Gehweg, Radweg oder Fahrradstraße", "50 €", "", "", "eher nicht"], ["... mit Behinderung", "55 €", "", "", "eher nicht"], ["... mit Gefährdung", "70 €", "", "", "eher nicht"], ["... mit Sachbeschädigung", "90 €", "", "", "eher nicht"], ["Unerlaubtes Halten an einem Taxistand", "20 €", "", "", "eher nicht"], ["... mit Behinderung", "35 €", "", "", "eher nicht"]]}, {"heading": "Aktuelle Bußgeldtabelle: Verstöße beim Parken", "footnote": "", "rows": [["Parken im Bereich von Grundstücksein- und -ausfahrten, in verkehrsberuhigten Bereichen außerhalb der gekennzeichneten Flächen, weniger als 5 Meter vor oder hinter einer Kreuzung oder Einmündung, außerorts auf Vorfahrtsstraßen, über Schachtdeckeln, vor einem abgesenkten Bordstein oder innerhalb der Grenzmarkierung für ein Parkverbot", "10 €", "", "", "eher nicht"], ["... mit Behinderung", "15 €", "", "", "eher nicht"], ["... länger als drei Stunden", "20 €", "", "", "eher nicht"], ["... länger als drei Stunden mit Behinderung", "30 €", "", "", "eher nicht"], ["Auf der linken Fahrbahnseite oder dem linken Seitenstreifen geparkt, nicht am rechten Fahrbahnrand geparkt, näher als zehn Meter vor einer Ampel geparkt und diese dabei verdeckt", "15 €", "", "", "eher nicht"], ["... mit Behinderung", "25 €", "", "", "eher nicht"], ["... länger als eine Stunde", "25 €", "", "", "eher nicht"], ["... länger als eine Stunde mit Behinderung", "35 €", "", "", "eher nicht"], ["Unerlaubtes Parken auf Fußgängerübergängen bzw. weniger als fünf Meter davor, im Kreisverkehr, an einem Taxistand, im absoluten/eingeschränkten Halteverbot oder einer Halteverbotzone, links von der Fahrbahnbegrenzung, innerhalb einer Grenzmarkierung für ein Halteverbot oder näher als zehn Meter vor einem Andreaskreuz, Stoppschild oder 'Vorfahrt gewähren'-Schild und dieses dabei verdeckt", "25 €", "", "", "eher nicht"], ["... mit Behinderung", "40 €", "", "", "eher nicht"], ["... länger als eine Stunde", "40 €", "", "", "eher nicht"], ["... länger als eine Stunde mit Behinderung", "50 €", "", "", "eher nicht"], ["Parken an engen oder unübersichtlichen Straßenstellen oder im Bereich einer scharfen Kurve", "35 €", "", "", "eher nicht"], ["... mit Behinderung", "55 €", "", "", "eher nicht"], ["... länger als eine Stunde", "55 €", "", "", "eher nicht"], ["... länger als eine Stunde mit Behinderung", "55 €", "", "", "eher nicht"], ["... wodurch die Durchfahrt für Rettungsfahrzeuge nicht mehr gewährleistet war", "100 €", "1", "", "link"], ["Parken auf Verkehrsinsel, Fahrradstraße oder Grünstreifen", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "", "", "eher nicht"], ["... mit Gefährdung", "80 €", "", "", "eher nicht"], ["... mit Unfallfolge", "100 €", "", "", "eher nicht"], ["... länger als eine Stunde", "70 €", "", "", "eher nicht"], ["... länger als eine Stunde mit Behinderung", "80 €", "", "", "eher nicht"], ["Parken auf Gehweg oder Radweg", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "1", "", "link"], ["... mit Gefährdung", "80 €", "1", "", "link"], ["... mit Unfallfolge", "100 €", "1", "", "link"], ["... länger als eine Stunde", "70 €", "1", "", "link"], ["... länger als eine Stunde mit Behinderung", "80 €", "1", "", "link"], ["Parken vor oder in einer Feuerwehrzufahrt", "55 €", "", "", "eher nicht"], ["… mit Behinderung von Einsatzfahrzeugen", "100 €", "1", "", "link"], ["Parken auf einer Sperrfläche", "25 €", "", "", "eher nicht"], ["... mit Behinderung", "25 €", "", "", "eher nicht"], ["… länger als 15 Minuten", "30 €", "", "", "eher nicht"], ["… länger als 15 Minuten mit Behinderung", "35 €", "", "", "eher nicht"], ["Parken in zweiter Reihe", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "80 €", "1", "", "link"], ["... mit Gefährdung", "90 €", "1", "", "link"], ["... mit Unfallfolge", "110 €", "1", "", "link"], ["… länger als 15 Minuten", "85 €", "1", "", "link"], ["… länger als 15 Minuten mit Behinderung", "90 €", "1", "", "link"], {"g": "Parken ohne Parkscheibe oder Parkschein bzw. Überschreitung der Parkdauer"}, ["... um 30 Minuten", "20 €", "", "", "eher nicht"], ["... um eine Stunde", "25 €", "", "", "eher nicht"], ["... um zwei Stunden", "30 €", "", "", "eher nicht"], ["... um drei Stunden", "35 €", "", "", "eher nicht"], ["... um mehr als drei Stunden", "40 €", "", "", "eher nicht"], ["Parken auf einem Schwerbehindertenparkplatz", "55 €", "", "", "eher nicht"], ["Nicht platzsparend parken", "10 €", "", "", "eher nicht"], ["Parklückendiebstahl", "10 €", "", "", "eher nicht"], ["Parken in einem Fußgängerbereich", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "", "", "eher nicht"], ["… länger als 3 Stunden", "70 €", "", "", "eher nicht"], ["Versperren des Abfahrtsweges eines anderen Kfz durch das Parken oder Abstellen Ihres Kfz", "20 €", "", "", "eher nicht"], ["Unberechtigtes Parken in einer Nothalte- oder Pannenbucht", "25 €", "", "", "eher nicht"], ["Parken in einem geschützten Bereich während nicht zulässiger Zeiten mit einem Kfz über 7,5 Tonnen oder einem Anhänger über 2 Tonnen", "30 €", "", "", "eher nicht"], ["Abstellen eines Anhängers ohne Zugfahrzeug für mehr als zwei Wochen", "20 €", "", "", "eher nicht"], ["Parken im Fahraum von Schienenfahrzeugen", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "", "", "eher nicht"], ["Parken auf Autobahnen oder Kraftfahrstraßen", "70 €", "1", "", "link"], ["... mit Gefährdung", "85 €", "1", "", "link"], ["... mit Unfallfolge", "105 €", "1", "", "link"], ["Gefährdung anderer Verkehrsteilnehmer beim Ein- oder Aussteigen (Dooring)", "40 €", "", "", "eher nicht"], ["... mit Unfallfolge", "50 €", "", "", "eher nicht"], ["Unberechtigtes Parken auf Bussonderfallstreifen und an Haltestellen", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "", "", "eher nicht"], ["... mit Gefährdung", "80 €", "", "", "eher nicht"], ["... mit Unfallfolge", "100 €", "", "", "eher nicht"], ["… länger als drei Stunden", "70 €", "", "", "eher nicht"], ["… länger als drei Stunden mit Behinderung", "80 €", "", "", "eher nicht"], ["… länger als drei Stunden mit Gefährdung", "80 €", "", "", "eher nicht"], ["… länger als drei Stunden mit Unfallfolge", "100 €", "", "", "eher nicht"], ["Unberechtigtes Parken auf einem Parkplatz für E-Fahrzeuge", "55 €", "", "", "eher nicht"], ["Unberechtigtes Parken auf einem Parkplatz für Carsharing-Fahrzeuge", "55 €", "", "", "eher nicht"]]}]}, "handy": {"title": "Handy am Steuer benutzt?", "tables": [{"heading": "Bußgeldtabelle: Handy am Steuer", "footnote": "", "rows": [["Handy am Steuer ohne Freisprecheinrichtung benutzt", "100 €", "1", "", "link"], ["...mit Gefährdung", "150 €", "2", "1 Monat", "link"], ["...mit Sachbeschädigung", "200 €", "2", "1 Monat", "link"]]}]}, "rote-ampel": {"title": "Rote Ampel überfahren? Diese Konsequenzen drohen beim Rotlichtverstoß", "tables": [{"heading": "Bußgeldtabelle: Sanktionen bei einem Rotlichtverstoß", "footnote": "*je nach Tatumständen auch Geldstrafe, Führerscheinentzug und Freiheitsstrafe bis 5 Jahre gemäß § 315c StGB möglich", "rows": [["Ampel bei Rot überfahren (einfacher Rotlichtverstoss)", "90 €", "1", "", "link"], ["... andere dadurch gefährdet", "200 €", "2", "1 Monat", "link"], ["... Unfall verursacht", "240 €", "2", "1 Monat", "link"], ["Ampel stand schon länger als 1 Sekunde auf Rot (qualifizierter Rotlichtverstoss)", "200 €", "2", "1 Monat*", "link"], ["... andere dadurch gefährdet", "320 €", "2", "1 Monat*", "link"], ["... Unfall verursacht", "360 €", "2", "1 Monat*", "link"], ["beim Rechtsabbiegen an einem grünen Pfeil vorher nicht an der roten Ampel gehalten", "70 €", "1", "", "link"], ["... andere dadurch behindert", "100 €", "1", "", "link"], ["... andere dadurch gefährdet", "100 €", "1", "", "link"], ["... Unfall verursacht", "120 €", "1", "", "link"]]}]}, "seitenstreifen": {"title": "Seitenstreifen: Darf dieser befahren werden?", "tables": [{"heading": "Bußgeldkatalog für den Standstreifen", "footnote": "", "rows": [["Vorschriftswidrig Seitenstreifen benutzt", "55 €", "", "", "eher nicht"], ["... mit Behinderung", "70 €", "", "", "eher nicht"], ["... mit Gefährdung", "80 €", "", "", "eher nicht"], ["... mit Unfall", "100 €", "", "", "eher nicht"], ["Seitenstreifen zum schnelleren Vorwärtskommen benutzt", "75 €", "1", "", "link"], ["... mit Gefährdung", "90 €", "1", "", "link"], ["... mit Unfall", "110 €", "1", "", "link"], ["Entgegen der Fahrtrichtung auf dem Seitenstreifen der Autobahn/Kraftfahrtstraße gefahren", "130 €", "1", "", "link"], ["... mit Gefährdung", "160 €", "1", "", "link"], ["... mit Unfall", "195 €", "1", "", "link"], ["Verbotswidrig auf dem linken Seitenstreifen gehalten", "10 €", "", "", "eher nicht"], ["... mit Behinderung", "15 €", "", "", "eher nicht"], ["Verbotswidrig auf dem linken Seitenstreifen geparkt", "15 €", "", "", "eher nicht"], ["... mit Behinderung", "25 €", "", "", "eher nicht"], ["... länger als eine Stunde", "25 €", "", "", "eher nicht"], ["... mit Behinderung länger als eine Stunde", "35 €", "", "", "eher nicht"], ["Auf dem Seitenstreifen der Autobahn/Kraftfahrtstraße gewendet", "130 €", "1", "", "link"], ["... mit Gefährdung", "160 €", "1", "", "link"], ["... mit Unfall", "195 €", "1", "", "link"], ["Rückwärts auf dem Seitenstreifen der Autobahn/Kraftfahrtstraße gefahren", "130 €", "1", "", "link"], ["... mit Gefährdung", "160 €", "1", "", "link"], ["... mit Unfall", "195 €", "1", "", "link"]]}]}, "tuev": {"title": "TÜV bzw. Hauptuntersuchung überzogen?", "tables": [{"heading": "Bußgelder bei TÜV-Überschreitung", "footnote": "", "rows": [{"g": "TÜV überziehen (Motorrad, Auto, Anhänger)"}, ["… um 2 bis 4 Monate", "15 €", "", "", "eher nicht"], ["… um 4 bis 8 Monate", "25 €", "", "", "eher nicht"], ["… um mehr als 8 Monate", "60 €", "1", "", "link"], {"g": "TÜV überziehen (Lkw über 7,5 Tonnen und Busse)"}, ["… um bis zu 2 Monate", "15 €", "", "", "eher nicht"], ["… um 2 bis 4 Monate", "25 €", "", "", "eher nicht"], ["… um 4 bis 8 Monate", "60 €", "1", "", "link"], ["… um mehr als 8 Monate", "75 €", "1", "", "link"]]}, {"heading": "Tabelle: HU-Fristen nach Fahrzeugart", "footnote": "", "rows": [["Pkw", "erstmals nach 36 Monaten, danach alle 24 Monate"], ["Anhänger bis 750 kg", "erstmals nach 36 Monaten, danach alle 24 Monate"], ["Anhänger zwischen 750 und 3.500 kg", "alle 24 Monate"], ["Wohnmobil bis 3.500 kg", "erstmals nach 36 Monaten, danach alle 24 Monate"], ["Wohnmobil zwischen 3.500 und 7.500 kg", "alle 24 Monate, nach 6 Jahren alle 12 Monate"], ["Motorräder", "alle 24 Monate"]], "cols": ["Fahrzeugart", "HU-Frist"]}]}, "ueberladung": {"title": "Fahrzeug überladen? Bußgelder für Überladung", "tables": [{"heading": "Bußgelder bei Überladung – Pkw, Transporter, Wohnmobile und Anhänger (zulässiges Gesamtgewicht bis 7,5 Tonnen)", "footnote": "Fahrzeugführer und Fahrzeughalter können sanktioniert werden. Kein Fahrverbot vorgesehen.", "rows": [["Überladung um 5 bis 20 %", "Verwarnungsgeld", "", "", ""], ["Überladung um über 20 % (bis zu bestimmtem Prozentsatz)", "95–230 €", "1", "", ""]]}, {"heading": "Bußgelder bei Überladung: Lkw und deren Anhänger (zulässiges Gesamtgewicht über 7,5 Tonnen)", "footnote": "Ab 5 % Gewichtsüberschreitung. Unterschiedliche Strafen für Fahrzeugführer und Fahrzeughalter.", "rows": [["Überladung ab 5 % (Fahrzeugführer)", "80 €", "1", "", ""], ["Überladung ab 5 % (Fahrzeughalter)", "140 €", "1", "", ""], ["Überladung maximal (Fahrzeugführer)", "380 €", "1", "", ""], ["Überladung maximal (Fahrzeughalter)", "425 €", "1", "", ""]]}]}, "vorfahrt": {"title": "Vorfahrt missachtet? Welche Strafe droht?", "tables": [{"heading": "Auszug aus dem Bußgeldkatalog: Vorfahrt missachtet", "footnote": "", "rows": [["Zu schnell an eine Vorfahrtsstraße herangefahren", "10 €", "", "", "eher nicht"], ["An der Haltelinie nicht gehalten", "10 €", "", "", "eher nicht"], {"g": "Verstoß gegen die Vorfahrtsregel \"Rechts-vor-Links\""}, ["... mit Behinderung", "25 €", "", "", "eher nicht"], ["... mit Gefährdung", "100 €", "1", "", "link"], ["... mit Unfall", "120 €", "1", "", "link"], {"g": "Stoppschild überfahren"}, ["... mit Behinderung", "25 €", "", "", "eher nicht"], ["... mit Gefährdung", "100 €", "1", "", "link"], ["... mit Unfall", "120 €", "1", "", "link"], ["Zu schnell an einen Zebrastreifen herangefahren, obwohl Fußgänger ihn nutzen wollten", "80 €", "1", "", "link"]]}]}, "promillerechner": {"title": "Promillerechner – Wie viel Promille habe ich?", "tables": [{"heading": "Bußgeldtabelle: Alkohol am Steuer", "footnote": "1) Entziehung der Fahrerlaubnis, Geldstrafe oder Freiheitsstrafe", "rows": [["Promillegrenze von 0,0 überschritten (gilt für Fahrer unter 21 Jahren und in der Probezeit)", "250 €", "1", "", "link"], {"g": "Promillegrenze von 0,5 überschritten"}, ["... beim 1. Mal", "500 €", "2", "1 Monat", "link"], ["... beim 2. Mal", "1.000 €", "2", "3 Monate", "link"], ["... beim 3. Mal", "1.500 €", "2", "3 Monate", "link"], ["Gefährdung des Verkehrs nach Alkoholgenuss (ab 0,3 ‰)", "Strafe 1)", "3", "", "link"], ["Fahrten ab 1,1 ‰", "Strafe 1)", "3", "", "link"]]}]}};
+
+/* ================= topics / sidebar ================= */
+const TOPICS = [
+  ['30-zone','30-Zone','speed',{zul:30,ort:'a'}],
+  ['abbiegen','Abbiegen','sonst',null],
+  ['abstand','Abstand','abstand',null],
+  ['alkohol','Alkohol','alkohol',null],
+  ['autobahn','Autobahn','speed',{zul:120,ort:'b'}],
+  ['beleidigung','Beleidigung','beleidigung',null],
+  ['beleuchtung','Beleuchtung','technik',null],
+  ['drogen','Drogen','drogen',null],
+  ['fahrstreifen','Fahrstreifen','sonst',null],
+  ['fahrzeug','Fahrzeug','technik',null],
+  ['fussgaengerzone','Fußgängerzone','sonst',null],
+  ['geschwindigkeit','Geschwindigkeit','speed',null],
+  ['halten-parken','Halten & Parken','parken',null],
+  ['handy','Handy am Steuer','handy',null],
+  ['rote-ampel','Rote Ampel','ampel',null],
+  ['seitenstreifen','Seitenstreifen','sonst',null],
+  ['tuev','TÜV','technik',null],
+  ['ueberladung','Überladung','technik',null],
+  ['vorfahrt','Vorfahrt','sonst',null],
+  ['promillerechner','Promillerechner','alkohol',null],
+];
+const CALC_FOR = {speed:'speed',abstand:'abstand',alkohol:'alkohol',handy:'handy',ampel:'ampel',parken:'parken'};
+let topic='geschwindigkeit';
+
+/* ================= calculators ================= */
+const SPEED_T = {
+  in:[[10,30,0,0],[15,50,0,0],[20,70,0,0],[25,115,1,0],[30,180,1,0],[40,260,2,1],[50,400,2,1],[60,560,2,2],[70,700,2,3],[999,800,2,3]],
+  out:[[10,20,0,0],[15,40,0,0],[20,60,0,0],[25,100,1,0],[30,150,1,0],[40,200,2,0],[50,320,2,1],[60,480,2,1],[70,600,2,2],[999,700,2,3]]
+};
+const ABSTAND_T = [
+  [80,[[ '5/10',75,1,0],['4/10',100,1,0],['3/10',160,1,0],['2/10',240,1,0],['1/10',320,1,0]]],
+  [100,[['5/10',75,1,0],['4/10',100,1,0],['3/10',160,2,1],['2/10',240,2,2],['1/10',320,2,3]]],
+  [130,[['5/10',100,1,0],['4/10',180,1,0],['3/10',240,2,1],['2/10',320,2,2],['1/10',400,2,3]]]
+];
+const CATS = {
+  speed:{nm:'Geschwindigkeit',ic:'🚗💨',fields:[
+      {t:'num',id:'gef',k:'Gefahrene Geschwindigkeit',ph:'Bitte hier km/h Zahl eingeben'},
+      {t:'num',id:'zul',k:'Zugelassene Geschwindigkeit',ph:'Bitte hier km/h Zahl eingeben'},
+      {t:'pair',id:'probe',k:'In der Probezeit',a:'Nein',b:'Ja'},
+      {t:'pair',id:'ort',k:'Wo',a:'Innerorts',b:'Außerorts'},
+      {t:'pair',id:'kfz',k:'Fahrzeug',a:'PKW',b:'LKW'},
+      {t:'pair',id:'tol',k:'Toleranz abziehen',a:'Ja',b:'Nein'}],
+    calc(v){
+      const gef=+v.gef||0, zul=+v.zul||0;
+      if(!gef||!zul) return {err:'Bitte beide Geschwindigkeiten eingeben.'};
+      const tw = v.tol==='b'?0:(gef<100?3:Math.round(gef*0.03));
+      const over = Math.max(0,gef-tw-zul);
+      let eur=0,pt=0,ban=0;
+      if(over>0){const r=SPEED_T[v.ort==='b'?'out':'in'].find(x=>over<=x[0]);eur=r[1];pt=r[2];ban=r[3];
+        if(v.kfz==='b'){eur=Math.round(eur*1.4); if(over>20&&!ban)ban=1;}}
+      const notes=[];
+      if(v.probe==='b'&&over>20)notes.push({cls:'warn',txt:'⚠ Probezeit: A-Verstoß — Aufbauseminar, Probezeit verlängert sich auf 4 Jahre.'});
+      return {eur,pt,ban,notes,
+        sum:`<b>${gef} km/h</b> gemessen bei erlaubten <b>${zul} km/h</b> ${v.ort==='b'?'außerorts':'innerorts'}${tw?` — nach Toleranzabzug (−${tw})`:''}: <b>${over>0?over+' km/h zu schnell':'keine vorwerfbare Überschreitung'}</b>`,
+        extra:tw?`Toleranz −${tw} km/h`:'ohne Toleranzabzug'};
+    }},
+  ampel:{nm:'Rote Ampel',ic:'🚦',fields:[
+      {t:'pair',id:'dauer',k:'Ampel länger als 1 Sekunde rot',a:'Nein',b:'Ja'},
+      {t:'pair',id:'gefahr',k:'Mit Gefährdung',a:'Nein',b:'Ja'},
+      {t:'pair',id:'schaden',k:'Mit Sachbeschädigung',a:'Nein',b:'Ja'},
+      {t:'pair',id:'probe',k:'In der Probezeit',a:'Nein',b:'Ja'}],
+    calc(v){
+      let eur=90,pt=1,ban=0;
+      if(v.dauer==='b'){eur=200;pt=2;ban=1;}
+      if(v.gefahr==='b'){eur=v.dauer==='b'?320:200;pt=2;ban=1;}
+      if(v.schaden==='b'){eur=v.dauer==='b'?360:240;pt=2;ban=1;}
+      const notes=[];
+      if(v.probe==='b')notes.push({cls:'warn',txt:'⚠ Probezeit: A-Verstoß — Aufbauseminar, Probezeit verlängert sich auf 4 Jahre.'});
+      return {eur,pt,ban,notes,sum:`Rotlichtverstoß${v.dauer==='b'?' (qualifiziert, > 1 Sekunde)':''}${v.gefahr==='b'?' mit Gefährdung':''}${v.schaden==='b'?' mit Sachbeschädigung':''}`,extra:v.dauer==='b'?'qualifizierter Verstoß':'einfacher Verstoß'};
+    }},
+  abstand:{nm:'Abstand',ic:'↔️🚗',fields:[
+      {t:'num',id:'gef',k:'Gefahrene Geschwindigkeit',ph:'Bitte hier km/h Zahl eingeben'},
+      {t:'sel',id:'frac',k:'Abstand zum Fahrzeug',opts:['5/10 des halben Tachowertes','4/10 des halben Tachowertes','3/10 des halben Tachowertes','2/10 des halben Tachowertes','1/10 des halben Tachowertes']},
+      {t:'pair',id:'probe',k:'In der Probezeit',a:'Nein',b:'Ja'},
+      {t:'pair',id:'gefahr',k:'Mit Gefährdung',a:'Nein',b:'Ja'},
+      {t:'pair',id:'schaden',k:'Mit Sachbeschädigung',a:'Nein',b:'Ja'}],
+    calc(v){
+      const gef=+v.gef||0;
+      if(!gef) return {err:'Bitte Geschwindigkeit eingeben.'};
+      const fr=v.frac.slice(0,4);
+      let eur=25,pt=0,ban=0;
+      if(gef>80){
+        let band=ABSTAND_T[0][1]; if(gef>130)band=ABSTAND_T[2][1]; else if(gef>100)band=ABSTAND_T[1][1];
+        const r=band.find(x=>x[0]===fr); eur=r[1];pt=r[2];ban=r[3];
+      } else { if(v.gefahr==='b')eur=30; if(v.schaden==='b')eur=35; }
+      const notes=[];
+      if(v.probe==='b'&&pt>0)notes.push({cls:'warn',txt:'⚠ Probezeit: A-Verstoß möglich — Aufbauseminar droht.'});
+      return {eur,pt,ban,notes,sum:`Abstand weniger als <b>${fr}</b> des halben Tachowertes mit <b>${gef} km/h</b>${v.gefahr==='b'?' mit Gefährdung':''}${v.schaden==='b'?' mit Sachbeschädigung':''}`,extra:gef>130?'über 130 km/h':gef>100?'über 100 km/h':gef>80?'über 80 km/h':'unter 80 km/h'};
+    }},
+  handy:{nm:'Handy am Steuer',ic:'📱',fields:[
+      {t:'pair',id:'rad',k:'Fahrzeug',a:'Kfz',b:'Fahrrad'},
+      {t:'pair',id:'gefahr',k:'Mit Gefährdung',a:'Nein',b:'Ja'},
+      {t:'pair',id:'schaden',k:'Mit Sachbeschädigung',a:'Nein',b:'Ja'}],
+    calc(v){
+      let eur=100,pt=1,ban=0;
+      if(v.rad==='b'){eur=55;pt=0;}
+      else{ if(v.gefahr==='b'){eur=150;pt=2;ban=1;} if(v.schaden==='b'){eur=200;pt=2;ban=1;} }
+      return {eur,pt,ban,notes:[],sum:`Handy am Steuer (${v.rad==='b'?'Fahrrad':'Kfz'})${v.gefahr==='b'?' mit Gefährdung':''}${v.schaden==='b'?' mit Sachbeschädigung':''}`,extra:v.rad==='b'?'Radfahrer':'Kfz-Führer'};
+    }},
+  alkohol:{nm:'Alkohol am Steuer',ic:'🍷',fields:[
+      {t:'num',id:'promille',k:'Promillewert (z. B. 0,8)',ph:'Bitte Promille eingeben',step:'0.01'},
+      {t:'sel',id:'mal',k:'Wievielter Verstoß?',opts:['Erster Verstoß','Zweiter Verstoß','Dritter Verstoß']},
+      {t:'pair',id:'probe',k:'In der Probezeit / unter 21',a:'Nein',b:'Ja'}],
+    calc(v){
+      const p=parseFloat(String(v.promille).replace(',','.'))||0;
+      if(!p) return {err:'Bitte Promillewert eingeben.'};
+      const notes=[];let eur=0,pt=0,ban=0;
+      if(v.probe==='b'&&p>0){eur=250;pt=1;notes.push({cls:'warn',txt:'⚠ 0,0-Promille-Grenze in der Probezeit / unter 21 — zusätzlich Aufbauseminar.'});}
+      if(p>=1.1){notes.push({cls:'crit',txt:'⛔ Ab 1,1 ‰: Straftat — Geld-/Freiheitsstrafe, Führerscheinentzug, MPU. Anwalt dringend empfohlen.'});return {eur:0,pt:3,ban:0,notes,sum:`<b>${p.toFixed(2)} ‰</b> — absolute Fahruntüchtigkeit`,extra:'Straftat, keine OWi',noEur:true};}
+      if(p>=0.5){const m=v.mal.startsWith('Erster')?0:v.mal.startsWith('Zweiter')?1:2;eur=[500,1000,1500][m];pt=2;ban=[1,3,3][m];}
+      return {eur,pt,ban,notes,sum:`<b>${p.toFixed(2)} ‰</b> · ${v.mal}${v.probe==='b'?' · Probezeit':''}`,extra:p>=0.5?'Ordnungswidrigkeit':'unter 0,5 ‰'};
+    }},
+  parken:{nm:'Halten & Parken',ic:'🅿️',fields:[
+      {t:'sel',id:'was',k:'Verstoß',opts:['Unzulässig geparkt (bis 1 Std.)','Unzulässig geparkt (über 1 Std.)','Auf Geh-/Radweg geparkt','… mit Behinderung','In Feuerwehrzufahrt geparkt','… mit Behinderung von Rettungsfahrzeugen','Vor Ein-/Ausfahrt geparkt']}],
+    calc(v){
+      const M2={'Unzulässig geparkt (bis 1 Std.)':[25,0],'Unzulässig geparkt (über 1 Std.)':[40,0],'Auf Geh-/Radweg geparkt':[55,0],'… mit Behinderung':[70,1],'In Feuerwehrzufahrt geparkt':[55,0],'… mit Behinderung von Rettungsfahrzeugen':[100,1],'Vor Ein-/Ausfahrt geparkt':[20,0]};
+      const r=M2[v.was];return {eur:r[0],pt:r[1],ban:0,notes:[],sum:v.was,extra:r[1]?'mit Punkt':'ohne Punkt'};
+    }}
+};
+
+/* ================= UI state ================= */
+let cat='speed'; const vals={};
+const $=id=>document.getElementById(id); const C=2*Math.PI*46;
+
+function buildSidebar(){
+  const nav=$('sidenav');nav.innerHTML='';
+  TOPICS.forEach(([slug,label])=>{
+    const a=document.createElement('a');a.textContent=label;a.className=slug===topic?'on':'';
+    a.onclick=()=>{setTopic(slug);window.scrollTo({top:0,behavior:'smooth'});};
+    nav.appendChild(a);
+  });
+}
+function setTopic(slug){
+  topic=slug;
+  const [,label,funnel,preset]=TOPICS.find(t=>t[0]===slug);
+  const d=DATA[slug]||{title:label,tables:[]};
+  $('pageTitle').textContent=d.title||label;
+  $('crumb').textContent='mein-bussgeld.de » Bußgeldrechner » '+label;
+  document.title=label+' — Mein-Bussgeld.de';
+  buildSidebar();
+  $('result').classList.remove('show');
+  if(slug==='promillerechner'){
+    $('calcStd').style.display='none';$('calcPromille').style.display='block';
+    $('calcTitle').textContent='Promillerechner';
+    $('calcSub').textContent='Wie viel Promille haben Sie? Nach der Widmark-Formel berechnet.';
+  } else {
+    $('calcStd').style.display='block';$('calcPromille').style.display='none';
+    $('calcTitle').textContent='Bußgeldrechner';
+    $('calcSub').textContent='Verstoß wählen, Angaben machen — Ergebnis rechnet mit Toleranzabzug.';
+    const ck=CALC_FOR[funnel];
+    if(ck&&CATS[ck]){cat=ck;buildTiles();buildForm();
+      if(preset){
+        if(preset.zul!==undefined&&$('f_zul'))$('f_zul').value=preset.zul;
+        if(preset.ort&&$('f_ort')){const btns=$('f_ort').querySelectorAll('button');btns.forEach(b=>b.classList.toggle('on',b.dataset.v===preset.ort));vals.ort=preset.ort;}
+      }
+    } else {buildTiles();buildForm();}
+  }
+  renderTables();
+}
+function buildTiles(){
+  const c=$('tiles');c.innerHTML='';
+  Object.entries(CATS).forEach(([k,d])=>{
+    const t=document.createElement('div');t.className='tile'+(k===cat?' on':'');
+    t.innerHTML=`<span class="rad"></span><div class="ic">${d.ic}</div><div class="nm">${d.nm}</div>`;
+    t.onclick=()=>{cat=k;buildTiles();buildForm();$('result').classList.remove('show');};
+    c.appendChild(t);
+  });
+}
+function buildForm(){
+  const f=$('frm');f.innerHTML='';const d=CATS[cat];
+  d.fields.forEach(fd=>{
+    const row=document.createElement('div');row.className='row';
+    let ctl='';
+    if(fd.t==='num')ctl=`<input type="number" ${fd.step?`step="${fd.step}"`:''} id="f_${fd.id}" placeholder="${fd.ph}">`;
+    else if(fd.t==='sel')ctl=`<select id="f_${fd.id}">${fd.opts.map(o=>`<option>${o}</option>`).join('')}</select>`;
+    else ctl=`<div class="pair" id="f_${fd.id}"><button class="on" data-v="a">${fd.a}</button><button data-v="b">${fd.b}</button></div>`;
+    row.innerHTML=`<span class="k">${fd.k}</span><div class="ctl">${ctl}</div>`;
+    f.appendChild(row);
+    if(fd.t==='pair'){vals[fd.id]='a';row.querySelectorAll('button').forEach(b=>b.onclick=()=>{row.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');vals[fd.id]=b.dataset.v;});}
+  });
+}
+function readVals(){
+  const d=CATS[cat];const v={};
+  d.fields.forEach(fd=>{ v[fd.id]=fd.t==='pair'?(vals[fd.id]||'a'):$('f_'+fd.id).value; });
+  return v;
+}
+let animId=null;
+function countUp(el,to,suffix){cancelAnimationFrame(animId);const from=parseFloat(el.textContent)||0;const t0=performance.now();
+  function step(t){const p=Math.min(1,(t-t0)/700);const val=from+(to-from)*(1-Math.pow(1-p,3));
+    el.textContent=(suffix==='‰'?val.toFixed(2).replace('.',','):Math.round(val))+(suffix||'€');if(p<1)animId=requestAnimationFrame(step);}
+  animId=requestAnimationFrame(step);}
+function showResult(r){
+  $('result').classList.add('show');
+  $('summary').innerHTML=r.sum;
+  $('gLbl').textContent=r.gLbl||'Bußgeld';
+  if(r.noEur){$('gEur').textContent=r.center||'—';$('arc').style.strokeDashoffset=0;$('arc').style.stroke='#c0392b';}
+  else if(r.promille!==undefined){countUp($('gEur'),r.promille,'‰');const sev=Math.min(1,r.promille/1.6);$('arc').style.strokeDashoffset=C*(1-sev);$('arc').style.stroke=r.promille>=1.1?'#c0392b':(r.promille>=0.5?'#e8890c':(r.promille>=0.3?'#e8b90c':'#1e8e5a'));}
+  else{countUp($('gEur'),r.eur);const sev=Math.min(1,r.eur/800);$('arc').style.strokeDashoffset=C*(1-sev);$('arc').style.stroke=r.ban?'#c0392b':(r.pt?'#e8890c':'#1e8e5a');}
+  [...$('dots').children].forEach((d,i)=>{d.classList.remove('on');setTimeout(()=>d.classList.toggle('on',i<(r.pt||0)),120+i*110);});
+  $('banTxt').textContent=r.ban?`${r.ban} Monat${r.ban>1?'e':''}`:'kein';
+  $('extraTxt').textContent=r.extra||'—';
+  const n=$('note');n.className='note';n.innerHTML='';
+  if(r.notes&&r.notes.length){n.className='note '+r.notes[0].cls;n.innerHTML=r.notes.map(x=>x.txt).join('<br>');}
+}
+$('go').onclick=()=>{
+  const r=CATS[cat].calc(readVals());
+  if(r.err){alert(r.err);return;}
+  showResult(r);
+};
+
+/* ---------- Promillerechner ---------- */
+const DRINKS=[
+  {id:'bier5',nm:'Bier 0,5 l',sub:'ca. 5 % vol',g:19.8},
+  {id:'bier3',nm:'Bier 0,33 l',sub:'ca. 5 % vol',g:13.0},
+  {id:'wein',nm:'Wein 0,2 l',sub:'ca. 12 % vol',g:19.2},
+  {id:'sekt',nm:'Sekt 0,1 l',sub:'ca. 11 % vol',g:8.8},
+  {id:'schnaps',nm:'Schnaps 4 cl',sub:'ca. 40 % vol',g:12.8},
+];
+const drinkCount={};
+function buildDrinks(){
+  const c=$('drinks');c.innerHTML='';
+  DRINKS.forEach(d=>{
+    drinkCount[d.id]=drinkCount[d.id]||0;
+    const el=document.createElement('div');el.className='stp';
+    el.innerHTML=`<span class="lb">${d.nm}<small>${d.sub}</small></span><span class="bt"><button data-a="-">−</button><b id="dc_${d.id}">${drinkCount[d.id]}</b><button data-a="+">+</button></span>`;
+    el.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      drinkCount[d.id]=Math.max(0,drinkCount[d.id]+(b.dataset.a==='+'?1:-1));
+      $('dc_'+d.id).textContent=drinkCount[d.id];
+    });
+    c.appendChild(el);
+  });
+}
+let pg='m';
+document.querySelectorAll('#pGeschlecht button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#pGeschlecht button').forEach(x=>x.classList.remove('on'));b.classList.add('on');pg=b.dataset.v;});
+$('pGo').onclick=()=>{
+  const kg=+$('pGewicht').value||80, h=+$('pStunden').value||0;
+  const grams=DRINKS.reduce((s,d)=>s+drinkCount[d.id]*d.g,0);
+  if(!grams){alert('Bitte mindestens ein Getränk wählen.');return;}
+  const r=pg==='m'?0.68:0.55;
+  let bak=grams/(kg*r) - h*0.15; bak=Math.max(0,Math.round(bak*100)/100);
+  const notes=[];let extra='fahrtüchtig';
+  if(bak>=1.1){notes.push({cls:'crit',txt:'⛔ Absolute Fahruntüchtigkeit (ab 1,1 ‰): Straftat — Führerscheinentzug, MPU.'});extra='Straftat';}
+  else if(bak>=0.5){notes.push({cls:'warn',txt:'⚠ Ab 0,5 ‰: Ordnungswidrigkeit — 500 € / 2 Punkte / 1 Monat Fahrverbot (beim ersten Verstoß).'});extra='Ordnungswidrigkeit';}
+  else if(bak>=0.3){notes.push({cls:'warn',txt:'⚠ Ab 0,3 ‰: Bei Ausfallerscheinungen relative Fahruntüchtigkeit — Straftat möglich.'});extra='Graubereich';}
+  showResult({promille:bak,pt:bak>=0.5?2:0,ban:bak>=0.5&&bak<1.1?1:0,notes,gLbl:'Promille',
+    sum:`<b>${grams.toFixed(0)} g Alkohol</b> · ${kg} kg · ${pg==='m'?'Mann':'Frau'}${h?` · nach ${h} Std. Abbau (−${(h*0.15).toFixed(2).replace('.',',')} ‰)`:''}`,
+    extra});
+};
+
+/* ================= tables (scraped data) ================= */
+function feeVal(txt,fees){
+  if(!fees)return txt;
+  const m=/^(\d+(?:[.,]\d+)?)\s*€$/.exec(txt.trim());
+  if(!m)return txt;
+  const v=parseFloat(m[1].replace(',','.'))+28.5;
+  return v.toFixed(2).replace('.',',')+' €';
+}
+let feesOn=false;
+function renderTables(){
+  const area=$('tablesArea');area.innerHTML='';
+  const d=DATA[topic];
+  if(!d||!d.tables.length){area.innerHTML='<div class="tbl-card"><h3>Bußgeldtabelle</h3><p style="font-size:13.5px;color:#6b7d93">Für dieses Thema liegen die Werte im Ratgebertext vor — Tabelle folgt.</p></div>';return;}
+  let feesShown=false;
+  d.tables.forEach((t,ti)=>{
+    const card=document.createElement('div');card.className='tbl-card';
+    if(t.cols){ /* custom column table (2-3 cols, no fees/einspruch logic) */
+      const n=t.cols.length;
+      const rowsHtml=t.rows.map(r=>{
+        if(r.g!==undefined)return `<tr class="grp"><td colspan="${n}">${r.g}</td></tr>`;
+        return `<tr>${r.map((c,i)=>`<td${i===1&&/€/.test(c)?' class="eur"':''}>${c}</td>`).join('')}</tr>`;
+      }).join('');
+      card.innerHTML=`<h3>${t.heading||''}</h3>
+        <table><thead><tr>${t.cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rowsHtml}</tbody></table>
+        ${t.footnote?`<div class="fnote">${t.footnote}</div>`:''}`;
+      area.appendChild(card);return;
+    }
+    const rowsHtml=t.rows.map(r=>{
+      if(r.g!==undefined)return `<tr class="grp"><td colspan="5">${r.g}</td></tr>`;
+      const [v,e,p,b,ein]=r;
+      const einCell=ein==='link'?`<span class="ep" data-verstoss="${v.replace(/"/g,'&quot;')}">Hier prüfen **</span>`:(ein||'');
+      return `<tr><td>${v}</td><td class="eur">${feeVal(e,feesOn)}</td><td>${p}</td><td>${b}</td><td>${einCell}</td></tr>`;
+    }).join('');
+    card.innerHTML=`<h3>${t.heading||('Bußgeldtabelle: '+(DATA[topic].title||''))}</h3>
+      ${!feesShown?`<label class="chk"><input type="checkbox" class="feesChk" ${feesOn?'checked':''}> Bußgelder inkl. Auslagen und Bearbeitungsgebühr anzeigen (+28,50 €)</label>`:''}
+      <table><thead><tr><th>Tatbestand</th><th>Bußgeld</th><th>Punkte</th><th>Fahrverbot</th><th>Lohnt ein Einspruch?</th></tr></thead>
+      <tbody>${rowsHtml}</tbody></table>
+      ${t.footnote?`<div class="fnote">${t.footnote}</div>`:''}
+      <div class="fnote">** Anzeige</div>`;
+    feesShown=true;
+    area.appendChild(card);
+  });
+  area.querySelectorAll('.feesChk').forEach(c=>c.onchange=e=>{feesOn=e.target.checked;renderTables();});
+  area.querySelectorAll('.ep').forEach(ep=>ep.onclick=()=>{
+    const funnel=(TOPICS.find(t=>t[0]===topic)||[])[2]||'sonst';
+    openCheck(funnel,ep.dataset.verstoss||'');
+  });
+}
+
+/* ================= Einspruch-Check funnel ================= */
+const M={i:0,a:{},done:false,verstoss:''};
+const CHECK_TILES=[['speed','Geschwindig­keitsverstoß','🚗💨'],['ampel','Rotlichtverstoß','🚦'],['abstand','Abstandsverstoß','↔️🚗'],['handy','Handyverstoß','📱'],['alkohol','Alkoholverstoß','🍷'],['parken','Park- / Halteverstoß','🅿️'],['sonst','Sonstiger Verstoß','⚖️']];
+const NAMES={speed:'Geschwindigkeitsverstoß',ampel:'Rotlichtverstoß',abstand:'Abstandsverstoß',handy:'Handyverstoß',alkohol:'Alkoholverstoß',parken:'Park-/Halteverstoß',sonst:'Sonstiger Verstoß',drogen:'Drogenverstoß',technik:'Technischer Verstoß',beleidigung:'Beleidigung im Straßenverkehr'};
+const CATQ={
+  speed:[
+    {id:'v1',lbl:'Überschreitung',q:'Wie hoch war die Geschwindigkeits­überschreitung?',opts:['Bis 20 km/h','21 – 30 km/h','31 – 40 km/h','Mehr als 40 km/h']},
+    {id:'v2',lbl:'Ort',q:'Wo geschah der Verstoß?',opts:['Innerorts','Außerorts','Autobahn']}],
+  ampel:[
+    {id:'v1',lbl:'Rotphase',q:'Wie lange war die Ampel bereits rot?',opts:['Unter 1 Sekunde','Über 1 Sekunde','Weiß ich nicht']},
+    {id:'v2',lbl:'Folgen',q:'Kam es zu einer Gefährdung oder einem Unfall?',opts:['Nein','Gefährdung','Unfall']}],
+  abstand:[
+    {id:'v1',lbl:'Geschwindigkeit',q:'Wie schnell waren Sie unterwegs?',opts:['Unter 80 km/h','80 – 100 km/h','100 – 130 km/h','Über 130 km/h']},
+    {id:'v2',lbl:'Abstand',q:'Wie groß war der Abstand zum Vordermann?',opts:['5/10 des halben Tachowertes','3/10 – 4/10 des halben Tachowertes','1/10 – 2/10 des halben Tachowertes','Weiß ich nicht']}],
+  handy:[
+    {id:'v1',lbl:'Fahrzeug',q:'Womit waren Sie unterwegs?',opts:['Pkw','Lkw','Fahrrad / E-Scooter']},
+    {id:'v2',lbl:'Gefährdung',q:'Kam es zu einer Gefährdung?',opts:['Nein','Ja']}],
+  alkohol:[
+    {id:'v1',lbl:'Promille',q:'Wie hoch war der Promillewert?',opts:['Unter 0,5 ‰','0,5 – 1,09 ‰','1,1 ‰ oder mehr','Weiß ich nicht']},
+    {id:'v2',lbl:'Erster Verstoß',q:'War es Ihr erster Alkoholverstoß?',opts:['Ja','Nein']}],
+  parken:[
+    {id:'v1',lbl:'Verstoß',q:'Um welchen Verstoß geht es genau?',opts:['Parkverstoß','Halteverstoß','Abschleppkosten','Sonstiges']}],
+  sonst:[
+    {id:'v1',lbl:'Thema',q:'Worum geht es bei Ihrem Fall?',opts:['Vorfahrt / Abbiegen','Überholen / Fahrstreifen','Unfallflucht','Anderer Verstoß']}],
+  drogen:[
+    {id:'v1',lbl:'Substanz',q:'Welche Substanz wurde festgestellt?',opts:['Cannabis / THC','Amphetamine','Kokain','Andere / Mehrere']},
+    {id:'v2',lbl:'Erster Verstoß',q:'War es Ihr erster Drogenverstoß?',opts:['Ja','Nein']}],
+  technik:[
+    {id:'v1',lbl:'Bereich',q:'Worum geht es bei dem Vorwurf?',opts:['Beleuchtung','TÜV / HU überzogen','Überladung','Anderer technischer Mangel']},
+    {id:'v2',lbl:'Nutzung',q:'Wird das Fahrzeug gewerblich genutzt?',opts:['Ja','Nein']}],
+  beleidigung:[
+    {id:'v1',lbl:'Vorwurf',q:'Was wird Ihnen konkret vorgeworfen?',opts:['Geste (z. B. Mittelfinger)','Wörtliche Beleidigung','Nötigung','Anderes']},
+    {id:'v2',lbl:'Anzeige',q:'Wurde bereits Anzeige erstattet?',opts:['Ja','Nein','Weiß ich nicht']}]
+};
+function flow(){
+  const s=[{id:'cat',type:'tiles',lbl:'Vorwurf',q:'Was wird Ihnen vorgeworfen?'}];
+  if(M.a.cat)s.push(...(CATQ[M.a.cat]||CATQ.sonst));
+  s.push({id:'doc',lbl:'Erhalten',q:'Was haben Sie von der Behörde erhalten?',opts:['Zeugenfragebogen','Anhörungsbogen','Bußgeldbescheid','Bisher nichts erhalten']});
+  if(M.a.doc==='Bußgeldbescheid')s.push({id:'wann',lbl:'Zustellung',q:'Wann haben Sie den Bußgeldbescheid erhalten?',opts:['Heute','Vor wenigen Tagen','Vor etwa 1 Woche','Vor mehr als 2 Wochen'],warnOn:'Vor mehr als 2 Wochen',warn:'⚠ Achtung: Die Einspruchsfrist beträgt 14 Tage ab Zustellung — Ihr Fall ist eilig!'});
+  s.push({id:'droht',lbl:'Drohende Folgen',q:'Was droht Ihnen?',opts:['Nur Bußgeld','Punkte','Fahrverbot','Punkte und Fahrverbot','Bin mir unsicher']});
+  s.push({id:'beruf',lbl:'Beruflich angewiesen',q:'Sind Sie beruflich auf den Führerschein angewiesen?',opts:['Ja','Nein']});
+  s.push({id:'probe',lbl:'Probezeit',q:'Sind Sie in der Probezeit?',opts:['Ja','Nein']});
+  s.push({id:'rs',lbl:'Rechtsschutz',q:'Haben Sie eine Verkehrs­rechtsschutz­versicherung?',opts:['Ja','Nein','Unsicher']});
+  s.push({id:'contact',type:'contact',q:'Fast geschafft! Wohin dürfen wir die kostenlose Ersteinschätzung senden?'});
+  return s;
+}
+function mRender(){
+  const s=flow(),total=s.length,fl=$('mflow');
+  if(M.done){
+    $('pfill').style.width='100%';$('pstep').textContent='Fertig';
+    const rows=s.filter(x=>x.id!=='contact'&&M.a[x.id]!==undefined).map(x=>{
+      const v=x.id==='cat'?(NAMES[M.a.cat]||M.a.cat):M.a[x.id];
+      return `<div class="sr"><span class="sk">${x.lbl}</span><span class="sv">${v}</span></div>`;
+    }).join('');
+    const good=['Fahrverbot','Punkte und Fahrverbot','Punkte'].includes(M.a.droht)||M.a.beruf==='Ja'||M.a.probe==='Ja';
+    fl.innerHTML=`<div class="mstep"><div class="mok">
+      <div class="big">✓</div>
+      <h3>Vielen Dank, Ihre Anfrage ist eingegangen!</h3>
+      <p><b>${good?'Gute Erfolgsaussichten:':'Ersteinschätzung folgt:'}</b> ${good?'Bei drohendem Fahrverbot oder Punkten ist jeder dritte Bescheid angreifbar (Messfehler, Formfehler, Verjährung).':'Ein Partner-Anwalt prüft die Erfolgsaussichten Ihres Falls.'}
+      Ein Partner-Anwalt meldet sich innerhalb von 24 Stunden${M.contactName?` bei <b>${M.contactName}</b>`:''}.</p>
+      ${M.a.wann==='Vor mehr als 2 Wochen'?'<div class="stepwarn">⚠ Einspruchsfrist (14 Tage) möglicherweise abgelaufen — der Anwalt prüft, ob eine Wiedereinsetzung möglich ist.</div>':''}
+      ${M.verstoss?`<div class="sumbox"><div class="sr"><span class="sk">Tatbestand</span><span class="sv">${M.verstoss}</span></div>${rows}</div>`:`<div class="sumbox">${rows}</div>`}
+    </div></div>`;
+    return;
+  }
+  const st=s[M.i];
+  $('pstep').textContent=`Schritt ${M.i+1} von ${total}`;
+  $('pfill').style.width=(M.i/total*100)+'%';
+  let inner='';
+  if(st.type==='tiles'){
+    inner=`<div class="mq">${M.i+1}. ${st.q}</div><div class="mtiles">${CHECK_TILES.map(([k,nm,ic])=>`
+      <div class="mtile${M.a.cat===k?' on':''}" data-k="${k}"><span class="rad"></span><div class="ic">${ic}</div><div class="nm">${nm}</div></div>`).join('')}</div>
+      <div class="mnav">${M.i>0?'<button class="mback" id="mback">« Zurück</button>':'<span></span>'}<span></span></div>`;
+  } else if(st.type==='contact'){
+    inner=`<div class="mq">${st.q}</div>
+      <div class="mgrid">
+        <input class="minput" id="mvor" placeholder="Vorname">
+        <input class="minput" id="mnach" placeholder="Nachname">
+        <input class="minput" id="mmail" type="email" placeholder="E-Mail-Adresse">
+        <input class="minput" id="mtel" type="tel" placeholder="Telefonnummer">
+      </div>
+      <label class="mds"><input type="checkbox" id="mds"> Ich habe die Datenschutzbestimmungen gelesen und bin mit der Kontaktaufnahme durch einen Partner-Anwalt einverstanden.</label>
+      <div class="mnav"><button class="mback" id="mback">« Zurück</button><button class="mnext" id="msend" disabled>Jetzt kostenlos prüfen lassen</button></div>`;
+  } else {
+    inner=`<div class="mq">${M.i+1}. ${st.q}</div>
+      <div class="opts">${st.opts.map(o=>`<button class="opt${M.a[st.id]===o?' on':''}" data-v="${o.replace(/"/g,'&quot;')}"><span class="rad"></span>${o}</button>`).join('')}</div>
+      <div id="stepwarn"></div>
+      <div class="mnav">${M.i>0?'<button class="mback" id="mback">« Zurück</button>':'<span></span>'}<span></span></div>`;
+  }
+  fl.innerHTML=`<div class="mstep">${inner}</div>`;
+  fl.querySelectorAll('.mtile').forEach(t=>t.onclick=()=>{M.a.cat=t.dataset.k;t.classList.add('on');setTimeout(()=>{M.i++;mRender();},220);});
+  fl.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    fl.querySelectorAll('.opt').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    M.a[st.id]=b.dataset.v;
+    if(st.warnOn&&b.dataset.v===st.warnOn){$('stepwarn').innerHTML=`<div class="stepwarn">${st.warn}</div>`;setTimeout(()=>{M.i++;mRender();},1400);}
+    else setTimeout(()=>{M.i++;mRender();},240);
+  });
+  const back=fl.querySelector('#mback');if(back)back.onclick=()=>{M.i=Math.max(0,M.i-1);mRender();};
+  const send=fl.querySelector('#msend');
+  if(send){
+    const valid=()=>{
+      const mailOk=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test($('mmail').value.trim());
+      send.disabled=!($('mvor').value.trim()&&$('mnach').value.trim()&&mailOk&&$('mtel').value.trim().length>=6&&$('mds').checked);
+    };
+    ['mvor','mnach','mmail','mtel'].forEach(id=>$(id).addEventListener('input',valid));
+    $('mds').addEventListener('change',valid);
+    send.onclick=()=>{M.contactName=$('mvor').value.trim()+' '+$('mnach').value.trim();M.done=true;mRender();};
+  }
+}
+function openCheck(funnelKey,verstoss){
+  M.i=0;M.a={};M.done=false;M.verstoss=verstoss||'';M.contactName='';
+  if(funnelKey&&CATQ[funnelKey]){M.a.cat=funnelKey;M.i=1;}
+  mRender();$('mbg').classList.add('show');
+}
+function closeCheck(){$('mbg').classList.remove('show');}
+$('mclose').onclick=closeCheck;
+$('mbg').addEventListener('click',e=>{if(e.target===$('mbg'))closeCheck();});
+$('ctaLink').addEventListener('click',()=>{
+  const funnel=(TOPICS.find(t=>t[0]===topic)||[])[2]||'sonst';
+  openCheck(topic==='promillerechner'?'alkohol':funnel,'');
+});
+
+/* ================= init ================= */
+buildSidebar();buildDrinks();setTopic('geschwindigkeit');
+</script>
+</body>
+</html>
