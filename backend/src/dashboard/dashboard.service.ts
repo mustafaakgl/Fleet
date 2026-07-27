@@ -1,8 +1,20 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { AssignmentStatus } from '@prisma/client';
 import { maskFinancialFields, type UserRole } from '../common/utils/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 
 type AlertPriority = 'low' | 'medium' | 'high' | 'critical';
+
+/** Assignment states that count towards realised/committed revenue. */
+const REVENUE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
+  AssignmentStatus.planned,
+  AssignmentStatus.confirmed,
+  AssignmentStatus.in_progress,
+  AssignmentStatus.completed,
+];
+
+/** Upper bound for ad-hoc revenue range queries. */
+const MAX_REVENUE_RANGE_DAYS = 366;
 
 @Injectable()
 export class DashboardService {
@@ -623,6 +635,104 @@ export class DashboardService {
       lastWeekSameDayRevenue,
       prevMonthToDateRevenue,
       revenueByCompany: Array.from(byCompanyMap.values()).sort((a, b) => b.revenue - a.revenue),
+    };
+  }
+
+  /**
+   * Per-company revenue totals for an inclusive [from, to] work-date range.
+   * Defaults to the current ISO week (Mon-Sun) so the weekly close-out is one call.
+   */
+  async getRevenueByCompany(
+    from?: string,
+    to?: string,
+    currentUserRole?: UserRole | string,
+  ) {
+    if (!this.canViewFinancials(currentUserRole)) {
+      return null;
+    }
+
+    const week = this.getWeekRange();
+    const defaultTo = new Date(week.end);
+    defaultTo.setDate(defaultTo.getDate() - 1);
+
+    const start = from ? this.normalizeDate(from) : week.start;
+    const lastDay = to ? this.normalizeDate(to) : defaultTo;
+
+    if (lastDay.getTime() < start.getTime()) {
+      throw new BadRequestException('"to" must not be earlier than "from"');
+    }
+
+    const endExclusive = new Date(lastDay);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+
+    const rangeDays = Math.round(
+      (endExclusive.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    if (rangeDays > MAX_REVENUE_RANGE_DAYS) {
+      throw new BadRequestException(
+        `Date range must not exceed ${MAX_REVENUE_RANGE_DAYS} days`,
+      );
+    }
+
+    const rows = await this.prisma.assignment.findMany({
+      where: {
+        workDate: { gte: start, lt: endExclusive },
+        status: { in: REVENUE_ASSIGNMENT_STATUSES },
+      },
+      select: {
+        expectedDailyRevenue: true,
+        company: {
+          select: { id: true, name: true, defaultDailyRevenue: true },
+        },
+      },
+    });
+
+    const byCompany = new Map<
+      string,
+      {
+        companyId: string;
+        companyName: string;
+        assignments: number;
+        revenue: number;
+        assignmentsWithoutRevenue: number;
+      }
+    >();
+
+    let totalRevenue = 0;
+    let assignmentsWithoutRevenue = 0;
+
+    for (const row of rows) {
+      const revenue = this.assignmentRevenue(row);
+      totalRevenue += revenue;
+      if (revenue <= 0) {
+        assignmentsWithoutRevenue += 1;
+      }
+
+      const entry = byCompany.get(row.company.id);
+      if (entry) {
+        entry.assignments += 1;
+        entry.revenue += revenue;
+        if (revenue <= 0) {
+          entry.assignmentsWithoutRevenue += 1;
+        }
+      } else {
+        byCompany.set(row.company.id, {
+          companyId: row.company.id,
+          companyName: row.company.name,
+          assignments: 1,
+          revenue,
+          assignmentsWithoutRevenue: revenue <= 0 ? 1 : 0,
+        });
+      }
+    }
+
+    return {
+      from: this.toDateKey(start),
+      to: this.toDateKey(lastDay),
+      totalRevenue,
+      totalAssignments: rows.length,
+      assignmentsWithoutRevenue,
+      companies: Array.from(byCompany.values()).sort((a, b) => b.revenue - a.revenue),
     };
   }
 

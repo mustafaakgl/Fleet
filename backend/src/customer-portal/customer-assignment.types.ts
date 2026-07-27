@@ -4,8 +4,8 @@ export type CustomerAssignmentDto = {
   id: string;
   status: AssignmentStatus;
   workDate: string;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
   cargoName: string;
   cargoOwner: string;
   pickupAddress: string;
@@ -39,8 +39,8 @@ export type CustomerAssignmentRecord = {
   id: string;
   status: AssignmentStatus;
   workDate: Date;
-  startTime: string;
-  endTime: string;
+  startTime: string | null;
+  endTime: string | null;
   cargoName: string;
   cargoOwner: string;
   pickupAddress: string;

@@ -20,7 +20,7 @@ type EmailRow = {
   companyName: string;
   driverName: string;
   plateNumber: string;
-  startTime: string;
+  startTime: string | null;
   routeName: string | null;
   cargoName: string;
   pickupAddress: string;

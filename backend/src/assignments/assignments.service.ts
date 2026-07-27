@@ -185,7 +185,23 @@ export class AssignmentsService {
     return hours * 60 + minutes;
   }
 
-  private timesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+  // Times are optional; an empty string from the client means "all-day" and is stored as null.
+  private normalizeTime(value?: string | null): string | null {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  // Assignments without fixed times are treated as unbounded and never reported as
+  // overlapping, so all-day assignments can be double-booked on purpose.
+  private timesOverlap(
+    startA: string | null | undefined,
+    endA: string | null | undefined,
+    startB: string | null | undefined,
+    endB: string | null | undefined,
+  ): boolean {
+    if (!startA || !endA || !startB || !endB) {
+      return false;
+    }
     const aStart = this.parseMinutes(startA);
     const aEnd = this.parseMinutes(endA);
     const bStart = this.parseMinutes(startB);
@@ -202,8 +218,8 @@ export class AssignmentsService {
       driverId: string;
       vehicleId: string;
       date: Date;
-      startTime: string;
-      endTime: string;
+      startTime?: string | null;
+      endTime?: string | null;
       excludeAssignmentId?: string;
     },
   ): Promise<string | null> {
@@ -515,28 +531,34 @@ export class AssignmentsService {
       dto.expected_daily_revenue ?? toDecimalNumber(company?.defaultDailyRevenue ?? null) ?? undefined;
 
     const created = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const startTime = this.normalizeTime(dto.start_time);
+      const endTime = this.normalizeTime(dto.end_time);
       const conflict = await this.validateAvailability(tx, {
         driverId: dto.driver_id,
         vehicleId,
         date: workDate,
-        startTime: dto.start_time,
-        endTime: dto.end_time,
+        startTime,
+        endTime,
       });
       if (conflict) throw new BadRequestException(conflict);
 
       const { start, end } = this.getDayRange(workDate);
 
       // Reminder: enforce this at DB level too (partial unique index on active assignments per vehicle/time window).
-      const activeVehicleAssignment = await tx.assignment.findFirst({
-        where: {
-          vehicleId,
-          workDate: { gte: start, lt: end },
-          status: { in: ACTIVE_ASSIGNMENT_STATUSES },
-          startTime: { lt: dto.end_time },
-          endTime: { gt: dto.start_time },
-        },
-        select: { id: true },
-      });
+      // All-day assignments (no times) are intentionally exempt from this check.
+      const activeVehicleAssignment =
+        startTime && endTime
+          ? await tx.assignment.findFirst({
+              where: {
+                vehicleId,
+                workDate: { gte: start, lt: end },
+                status: { in: ACTIVE_ASSIGNMENT_STATUSES },
+                startTime: { lt: endTime },
+                endTime: { gt: startTime },
+              },
+              select: { id: true },
+            })
+          : null;
 
       if (activeVehicleAssignment) {
         throw new ConflictException('Vehicle is already assigned');
@@ -552,8 +574,8 @@ export class AssignmentsService {
           pickupAddress: dto.pickup_address,
           deliveryAddress: dto.delivery_address,
           workDate,
-          startTime: dto.start_time,
-          endTime: dto.end_time,
+          startTime,
+          endTime,
           routeName: dto.route_name,
           expectedDailyRevenue,
           status: AssignmentStatus.planned,
@@ -674,8 +696,8 @@ export class AssignmentsService {
           driverId: existing.driverId,
           vehicleId: nextVehicleId,
           date: newDate,
-          startTime: dto.start_time ?? existing.startTime,
-          endTime: dto.end_time ?? existing.endTime,
+          startTime: dto.start_time !== undefined ? this.normalizeTime(dto.start_time) : existing.startTime,
+          endTime: dto.end_time !== undefined ? this.normalizeTime(dto.end_time) : existing.endTime,
           excludeAssignmentId: id,
         });
         if (conflict) throw new BadRequestException(conflict);
@@ -694,8 +716,8 @@ export class AssignmentsService {
       if (dto.pickup_address !== undefined) data.pickupAddress = dto.pickup_address;
       if (dto.delivery_address !== undefined) data.deliveryAddress = dto.delivery_address;
       if (dto.work_date !== undefined) data.workDate = newDate;
-      if (dto.start_time !== undefined) data.startTime = dto.start_time;
-      if (dto.end_time !== undefined) data.endTime = dto.end_time;
+      if (dto.start_time !== undefined) data.startTime = this.normalizeTime(dto.start_time);
+      if (dto.end_time !== undefined) data.endTime = this.normalizeTime(dto.end_time);
       if (dto.route_name !== undefined) data.routeName = dto.route_name;
       if (dto.expected_daily_revenue !== undefined) {
         data.expectedDailyRevenue = dto.expected_daily_revenue;

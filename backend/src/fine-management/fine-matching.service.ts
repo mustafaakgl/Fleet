@@ -38,6 +38,10 @@ const ASSIGNMENT_STATUSES: AssignmentStatus[] = [
   AssignmentStatus.completed,
 ];
 
+// Assignments without fixed times are matched against the whole work day.
+const ALL_DAY_START = '00:00';
+const ALL_DAY_END = '23:59';
+
 @Injectable()
 export class FineMatchingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -153,14 +157,14 @@ export class FineMatchingService {
 
     for (const assignment of assignments) {
       const workDate = assignment.workDate;
-      const assignmentStart = addMinutes(parseTimeOnDate(workDate, assignment.startTime), -toleranceMinutes);
-      const assignmentEnd = addMinutes(parseTimeOnDate(workDate, assignment.endTime), toleranceMinutes);
+      const start = assignment.startTime ?? ALL_DAY_START;
+      const end = assignment.endTime ?? ALL_DAY_END;
+      const assignmentStart = addMinutes(parseTimeOnDate(workDate, start), -toleranceMinutes);
+      const assignmentEnd = addMinutes(parseTimeOnDate(workDate, end), toleranceMinutes);
       if (violationAt < assignmentStart || violationAt > assignmentEnd) continue;
 
       const midpoint =
-        (parseTimeOnDate(workDate, assignment.startTime).getTime() +
-          parseTimeOnDate(workDate, assignment.endTime).getTime()) /
-        2;
+        (parseTimeOnDate(workDate, start).getTime() + parseTimeOnDate(workDate, end).getTime()) / 2;
       const score = 100 - Math.abs(violationAt.getTime() - midpoint) / 60_000;
       if (score > bestScore) {
         bestScore = score;
@@ -176,8 +180,8 @@ export class FineMatchingService {
     session: { startedAt: Date; endedAt: Date | null },
     assignment: {
       workDate: Date;
-      startTime: string;
-      endTime: string;
+      startTime: string | null;
+      endTime: string | null;
     } | null,
     toleranceMinutes: number,
   ): number {
@@ -186,8 +190,11 @@ export class FineMatchingService {
     let score = 100 - Math.abs(violationAt.getTime() - sessionMidpoint) / 60_000;
 
     if (assignment) {
-      const assignmentStart = parseTimeOnDate(assignment.workDate, assignment.startTime);
-      const assignmentEnd = parseTimeOnDate(assignment.workDate, assignment.endTime);
+      const assignmentStart = parseTimeOnDate(
+        assignment.workDate,
+        assignment.startTime ?? ALL_DAY_START,
+      );
+      const assignmentEnd = parseTimeOnDate(assignment.workDate, assignment.endTime ?? ALL_DAY_END);
       if (
         violationAt >= addMinutes(assignmentStart, -toleranceMinutes) &&
         violationAt <= addMinutes(assignmentEnd, toleranceMinutes)

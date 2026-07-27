@@ -27,6 +27,16 @@ export class DashboardController {
     return this.dashboardService.getRevenueAnalytics(selectedDate, role);
   }
 
+  @Get('revenue-by-company')
+  @Roles(...FINANCIAL_ROLES)
+  getRevenueByCompany(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @CurrentUser('role') role?: string,
+  ) {
+    return this.dashboardService.getRevenueByCompany(from, to, role);
+  }
+
   @Get('vehicle-costs')
   @Roles(...FINANCIAL_ROLES)
   getVehicleCosts(@Query('months') months?: string) {

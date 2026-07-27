@@ -30,7 +30,11 @@ export function parseInfringementEvidence(notes: string | null | undefined): Rec
   }
 }
 
-export function parseAssignmentDurationSeconds(startTime: string, endTime: string): number {
+export function parseAssignmentDurationSeconds(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+): number {
+  if (!startTime || !endTime) return 0;
   const [sh, sm] = startTime.split(':').map((part) => Number(part));
   const [eh, em] = endTime.split(':').map((part) => Number(part));
   const startS = sh * 3600 + sm * 60;

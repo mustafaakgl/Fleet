@@ -638,8 +638,8 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
               <InfoItem label={t('driverDetail.vehicle')} value={currentAssignment.vehicle.plate_number} />
               <InfoItem label={t('driverDetail.company')} value={currentAssignment.company_name} />
               <InfoItem label={t('driverDetail.notes')} value={currentAssignment.notes || '—'} />
-              <InfoItem label={t('driverDetail.startTime')} value={currentAssignment.start_time} />
-              <InfoItem label={t('driverDetail.endTime')} value={currentAssignment.end_time} />
+              <InfoItem label={t('driverDetail.startTime')} value={currentAssignment.start_time || '—'} />
+              <InfoItem label={t('driverDetail.endTime')} value={currentAssignment.end_time || '—'} />
               <InfoItem label={t('driverDetail.status')} value={currentAssignment.status} />
             </dl>
           ) : (

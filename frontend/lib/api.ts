@@ -6,6 +6,7 @@ import type {
   MfaStatus,
   DashboardSummary,
   DashboardRevenueAnalytics,
+  DashboardRevenueByCompany,
   VehicleCostsResponse,
   Driver,
   DriverDetail,
@@ -484,6 +485,15 @@ export const dashboardApi = {
   getRevenueAnalytics: (date?: string) =>
     api
       .get<DashboardRevenueAnalytics | null>('/dashboard/revenue-analytics', { params: { date } })
+      .then((r) => r.data),
+
+  // Financial-roles only: per-company revenue totals for an inclusive date range.
+  // Defaults to the current ISO week (Mon-Sun) when no range is supplied.
+  getRevenueByCompany: (from?: string, to?: string) =>
+    api
+      .get<DashboardRevenueByCompany | null>('/dashboard/revenue-by-company', {
+        params: { from, to },
+      })
       .then((r) => r.data),
 
   // Financial-roles only: per-vehicle cost breakdown (TCO).

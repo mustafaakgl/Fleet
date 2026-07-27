@@ -15,6 +15,7 @@ import {
   FLEET_RAW_TR,
 } from '@/lib/fleet-table';
 import { cn } from '@/lib/utils';
+import { WeeklyCompanyRevenue } from './WeeklyCompanyRevenue';
 
 function currency(value: number) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
@@ -130,6 +131,8 @@ export function RevenueSummary() {
           tone={derived.lostRevenueThisMonth > 0 ? 'text-red-700' : 'text-slate-900'}
         />
       </div>
+
+      <WeeklyCompanyRevenue />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <RevenueTable title={t('revenue.byCompany')} rows={companyRows} />

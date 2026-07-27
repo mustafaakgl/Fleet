@@ -1,6 +1,7 @@
 import { IsDateString, IsNumber, IsOptional, IsString, Matches, Min, MinLength } from 'class-validator';
 
-const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Empty string is allowed and clears the time (all-day assignment).
+const TIME_REGEX = /^(([01]\d|2[0-3]):[0-5]\d)?$/;
 
 export class UpdateAssignmentDto {
   @IsOptional()

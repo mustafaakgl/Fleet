@@ -182,12 +182,14 @@ export function VehicleAssignmentsTimeline() {
     if (!activeDrag) return false;
     const existing = assignmentsByVehicle.get(activeDrag.vehicleId) ?? [];
     return existing.some((assignment) =>
-      rangesOverlap(
-        activeDrag.startMinutes,
-        activeDrag.endMinutes,
-        minutesFromTime(assignment.start_time),
-        minutesFromTime(assignment.end_time),
-      ),
+      assignment.start_time && assignment.end_time
+        ? rangesOverlap(
+            activeDrag.startMinutes,
+            activeDrag.endMinutes,
+            minutesFromTime(assignment.start_time),
+            minutesFromTime(assignment.end_time),
+          )
+        : false,
     );
   }, [activeDrag, assignmentsByVehicle]);
 
@@ -204,12 +206,14 @@ export function VehicleAssignmentsTimeline() {
 
       const existing = assignmentsByVehicle.get(state.vehicleId) ?? [];
       const conflict = existing.some((assignment) =>
-        rangesOverlap(
-          startMinutes,
-          normalizedEnd,
-          minutesFromTime(assignment.start_time),
-          minutesFromTime(assignment.end_time),
-        ),
+        assignment.start_time && assignment.end_time
+          ? rangesOverlap(
+              startMinutes,
+              normalizedEnd,
+              minutesFromTime(assignment.start_time),
+              minutesFromTime(assignment.end_time),
+            )
+          : false,
       );
       if (conflict) return;
 
@@ -463,8 +467,10 @@ export function VehicleAssignmentsTimeline() {
                         ) : null}
 
                         {vehicleAssignments.map((assignment) => {
-                          const start = minutesFromTime(assignment.start_time);
-                          const end = minutesFromTime(assignment.end_time);
+                          // Assignments without fixed times span the whole day.
+                          const allDay = !assignment.start_time || !assignment.end_time;
+                          const start = minutesFromTime(assignment.start_time ?? '00:00');
+                          const end = minutesFromTime(assignment.end_time ?? '23:59');
                           const box = positionPercent(start, end);
                           return (
                             <div
@@ -491,7 +497,10 @@ export function VehicleAssignmentsTimeline() {
                               title={`${assignment.driver.name} · ${assignment.company_name} · ${t('vehicleAssignments.openEinsatzplan')}`}
                             >
                               <span className="truncate">
-                                {assignment.driver.name} · {assignment.start_time}–{assignment.end_time}
+                                {assignment.driver.name} ·{' '}
+                                {allDay
+                                  ? t('vehicleAssignments.allDay')
+                                  : `${assignment.start_time}–${assignment.end_time}`}
                               </span>
                             </div>
                           );

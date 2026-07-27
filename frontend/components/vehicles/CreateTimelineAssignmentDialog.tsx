@@ -66,6 +66,7 @@ export function CreateTimelineAssignmentDialog({
   const [endTime, setEndTime] = useState('');
   const [driverId, setDriverId] = useState('');
   const [companyId, setCompanyId] = useState('');
+  const [expectedRevenue, setExpectedRevenue] = useState('');
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export function CreateTimelineAssignmentDialog({
     setEndTime(draft.endTime);
     setDriverId('');
     setCompanyId('');
+    setExpectedRevenue('');
     setComment('');
     setError(null);
   }, [open, draft]);
@@ -126,6 +128,13 @@ export function CreateTimelineAssignmentDialog({
       return;
     }
 
+    const trimmedRevenue = expectedRevenue.trim();
+    const parsedRevenue = trimmedRevenue === '' ? undefined : Number(trimmedRevenue);
+    if (parsedRevenue !== undefined && (!Number.isFinite(parsedRevenue) || parsedRevenue < 0)) {
+      setError(t('assignmentForm.revenueMin'));
+      return;
+    }
+
     const payload: AssignmentWritePayload = {
       driver_id: driverId,
       vehicle_id: selectedVehicle.id,
@@ -134,6 +143,7 @@ export function CreateTimelineAssignmentDialog({
       work_date: workDate,
       start_time: startTime,
       end_time: endTime,
+      ...(parsedRevenue !== undefined ? { expected_daily_revenue: parsedRevenue } : {}),
       cargo_name: t('vehicleAssignments.create.defaultCargo'),
       cargo_owner: company.name,
       pickup_address: t('vehicleAssignments.create.defaultPickup'),
@@ -320,6 +330,34 @@ export function CreateTimelineAssignmentDialog({
                 {t('vehicleAssignments.create.endHelper', { time: timePreview.end, date: formatDateUs(workDate) })}
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="timeline-revenue" className="text-sm font-semibold text-slate-800">
+              {t('assignmentForm.expectedRevenue')}
+            </Label>
+            <Input
+              id="timeline-revenue"
+              type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              value={expectedRevenue}
+              onChange={(event) => setExpectedRevenue(event.target.value)}
+              placeholder={
+                company?.default_daily_revenue != null
+                  ? String(company.default_daily_revenue)
+                  : t('assignmentForm.optional')
+              }
+            />
+            <p className="text-xs text-slate-500">
+              {company?.default_daily_revenue != null
+                ? t('vehicleAssignments.create.revenueHintDefault', {
+                    amount: company.default_daily_revenue,
+                    company: company.name,
+                  })
+                : t('vehicleAssignments.create.revenueHint')}
+            </p>
           </div>
 
           <div className="space-y-2">

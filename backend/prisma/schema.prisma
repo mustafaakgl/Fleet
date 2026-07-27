@@ -1008,8 +1008,8 @@ model Assignment {
   pickupAddress   String
   deliveryAddress String
   workDate        DateTime
-  startTime       String
-  endTime         String
+  startTime       String?
+  endTime         String?
   routeName            String?
   expectedDailyRevenue Decimal?         @db.Decimal(10, 2)
   status               AssignmentStatus @default(planned)

@@ -41,8 +41,8 @@ const schema = z.object({
   delivery_city: addressPart,
   delivery_country: z.string().min(1, 'assignmentForm.required'),
   work_date: z.string().min(1, 'assignmentForm.required'),
-  start_time: z.string().min(1, 'assignmentForm.required'),
-  end_time: z.string().min(1, 'assignmentForm.required'),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
   expected_daily_revenue: z.preprocess(
     (value) => (value === '' || value === null || value === undefined ? undefined : Number(value)),
     z.number().min(0, 'assignmentForm.revenueMin').optional(),
@@ -167,8 +167,8 @@ export default function NewAssignmentPage() {
           pickup_address: pickup,
           delivery_address: delivery,
           work_date: data.work_date,
-          start_time: data.start_time,
-          end_time: data.end_time,
+          start_time: data.start_time || undefined,
+          end_time: data.end_time || undefined,
           route_name: buildAssignmentRouteName(pickup, delivery) || undefined,
           expected_daily_revenue: data.expected_daily_revenue,
           notes: data.notes || undefined,
@@ -328,13 +328,14 @@ export default function NewAssignmentPage() {
               <Field label={`${t('assignmentForm.date')} *`} error={t(errors.work_date?.message ?? '')}>
                 <Input type="date" {...register('work_date')} />
               </Field>
-              <Field label={`${t('assignmentForm.startTime')} *`} error={t(errors.start_time?.message ?? '')}>
+              <Field label={t('assignmentForm.startTime')} error={t(errors.start_time?.message ?? '')}>
                 <Input type="time" {...register('start_time')} />
               </Field>
-              <Field label={`${t('assignmentForm.endTime')} *`} error={t(errors.end_time?.message ?? '')}>
+              <Field label={t('assignmentForm.endTime')} error={t(errors.end_time?.message ?? '')}>
                 <Input type="time" {...register('end_time')} />
               </Field>
             </div>
+            <p className="text-xs text-slate-500">{t('assignmentForm.timeOptionalHint')}</p>
 
             <Field label={t('assignmentForm.expectedRevenue')} error={t(errors.expected_daily_revenue?.message ?? '')}>
               <Input type="number" step="0.01" min="0" {...register('expected_daily_revenue')} placeholder={t('assignmentForm.optional')} />

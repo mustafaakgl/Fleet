@@ -312,8 +312,8 @@ export interface Assignment {
   company_id?: string;
   company_name: string;
   work_date: string;
-  start_time: string;
-  end_time: string;
+  start_time: string | null;
+  end_time: string | null;
   route_name?: string;
   expected_daily_revenue?: number | null;
   company_default_daily_revenue?: number | null;
@@ -1447,6 +1447,23 @@ export interface DashboardRevenueAnalytics {
     assignments: number;
     revenue: number;
   }>;
+}
+
+export interface DashboardRevenueByCompanyRow {
+  companyId: string;
+  companyName: string;
+  assignments: number;
+  revenue: number;
+  assignmentsWithoutRevenue: number;
+}
+
+export interface DashboardRevenueByCompany {
+  from: string;
+  to: string;
+  totalRevenue: number;
+  totalAssignments: number;
+  assignmentsWithoutRevenue: number;
+  companies: DashboardRevenueByCompanyRow[];
 }
 
 export interface DashboardChartPoint {
