@@ -9,6 +9,28 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 const DEFAULT_TENANT = 'default-tenant';
 
+async function verifyTenantScopedModel(params: {
+  label: string;
+  tenantA: string;
+  tenantB: string;
+  unscopedCountA: () => Promise<number>;
+  unscopedCountB: () => Promise<number>;
+  scopedCountA: () => Promise<number>;
+  scopedCountB: () => Promise<number>;
+}) {
+  const [expectedA, expectedB, actualA, actualB] = await Promise.all([
+    params.unscopedCountA(),
+    params.unscopedCountB(),
+    params.scopedCountA(),
+    params.scopedCountB(),
+  ]);
+
+  console.log(`${params.label} tenant A scoped: ${actualA}, tenant B scoped: ${actualB}`);
+  if (actualA !== expectedA || actualB !== expectedB) {
+    throw new Error(`Isolation failure: ${params.label} scoped count mismatch`);
+  }
+}
+
 async function main() {
   const scoped = new PrismaService();
   const base = scoped.unscoped;
@@ -352,6 +374,93 @@ async function main() {
         throw new Error('Isolation failure: tenant A context read tenant B work session');
       }
     }
+
+    await Promise.all([
+      verifyTenantScopedModel({
+        label: 'TenantBillingProfile', tenantA, tenantB,
+        unscopedCountA: () => base.tenantBillingProfile.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.tenantBillingProfile.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.tenantBillingProfile.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.tenantBillingProfile.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'RateCard', tenantA, tenantB,
+        unscopedCountA: () => base.rateCard.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.rateCard.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.rateCard.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.rateCard.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'RateCardItem', tenantA, tenantB,
+        unscopedCountA: () => base.rateCardItem.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.rateCardItem.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.rateCardItem.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.rateCardItem.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'Invoice', tenantA, tenantB,
+        unscopedCountA: () => base.invoice.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.invoice.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.invoice.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.invoice.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'InvoiceLine', tenantA, tenantB,
+        unscopedCountA: () => base.invoiceLine.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.invoiceLine.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.invoiceLine.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.invoiceLine.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'InvoiceAssignmentClaim', tenantA, tenantB,
+        unscopedCountA: () => base.invoiceAssignmentClaim.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.invoiceAssignmentClaim.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.invoiceAssignmentClaim.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.invoiceAssignmentClaim.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'InvoiceNumberSequence', tenantA, tenantB,
+        unscopedCountA: () => base.invoiceNumberSequence.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.invoiceNumberSequence.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.invoiceNumberSequence.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.invoiceNumberSequence.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'InvoicePayment', tenantA, tenantB,
+        unscopedCountA: () => base.invoicePayment.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.invoicePayment.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.invoicePayment.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.invoicePayment.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'InvoiceDeliveryAttempt', tenantA, tenantB,
+        unscopedCountA: () => base.invoiceDeliveryAttempt.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.invoiceDeliveryAttempt.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.invoiceDeliveryAttempt.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.invoiceDeliveryAttempt.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'InvoiceAuditEvent', tenantA, tenantB,
+        unscopedCountA: () => base.invoiceAuditEvent.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.invoiceAuditEvent.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.invoiceAuditEvent.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.invoiceAuditEvent.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'DunningNotice', tenantA, tenantB,
+        unscopedCountA: () => base.dunningNotice.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.dunningNotice.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.dunningNotice.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.dunningNotice.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'DatevExport', tenantA, tenantB,
+        unscopedCountA: () => base.datevExport.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.datevExport.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.datevExport.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.datevExport.count()),
+      }),
+    ]);
 
     console.log('Tenant isolation check passed.');
   } finally {

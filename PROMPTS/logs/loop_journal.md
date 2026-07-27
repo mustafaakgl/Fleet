@@ -105,3 +105,4 @@
 [2026-07-20] [api-hardening] [battery] [Mac'te tam batarya yeşil: tsc temiz, 237/237 test pass, tenant isolation passed — commitler atılıyor]
 [2026-07-20] [api-hardening] [commit] [4 faz0 commiti atıldı: filter unmask, DTO validasyonu, series 24h varsayılanı, fleet-ops seed]
 [2026-07-27] [ciro-atama] [faz3+faz2+faz1] [Haftalık şirket bazlı ciro raporu (endpoint+UI+3 dil), timeline dialogunda bedel alanı, atama saatleri opsiyonel (saatsiz=çakışma kontrolü atlanır). Seed yenilendi; tsc/test 237/237/sim+verify/tenant-isolation/frontend production build yeşil. Kanıt: PROMPTS/logs/kanit/haftalik-ciro-opsiyonel-saat.md]
+[2026-07-27] [invoicing] [schema] [12 tenant-scoped model, Company fatura alanları, immutable artifact hash alanları, assignment claim, numara serisi ve DB mali kontrolleri eklendi; migration uygulandı; tsc + 238/238 test + sim/verify + tenant isolation yeşil]

@@ -59,6 +59,60 @@ enum BillingMode {
   manual
 }
 
+enum InvoiceKind {
+  invoice
+  credit_note
+  cancellation
+}
+
+enum OutgoingInvoiceStatus {
+  draft
+  finalized
+  sent
+  partially_paid
+  paid
+  overdue
+  cancelled
+}
+
+enum InvoiceUnit {
+  day
+  hour
+  tour
+  km
+  flat
+}
+
+enum InvoiceLineSource {
+  assignment
+  manual
+  rate_card_item
+}
+
+enum InvoiceTaxCategory {
+  standard
+  reduced
+  exempt
+  reverse_charge
+}
+
+enum EInvoicePreference {
+  zugferd
+  xrechnung
+  both
+}
+
+enum InvoicePaymentMethod {
+  bank_transfer
+  cash
+  other
+}
+
+enum DatevExportStatus {
+  generated
+  downloaded
+}
+
 enum FuelCardTransactionStatus {
   imported
   matched
@@ -543,6 +597,60 @@ model Tenant {
   tachoDownloadSchedules TachoDownloadSchedule[]
   telemetryQuarantine   TelemetryQuarantine[]
   equipmentIssuances    EquipmentIssuance[]
+  billingProfile        TenantBillingProfile?
+  rateCards             RateCard[]
+  rateCardItems         RateCardItem[]
+  outgoingInvoices      Invoice[]
+  invoiceLines          InvoiceLine[]
+  invoiceAssignmentClaims InvoiceAssignmentClaim[]
+  invoiceNumberSequences InvoiceNumberSequence[]
+  invoicePayments       InvoicePayment[]
+  invoiceDeliveryAttempts InvoiceDeliveryAttempt[]
+  invoiceAuditEvents    InvoiceAuditEvent[]
+  dunningNotices        DunningNotice[]
+  datevExports          DatevExport[]
+}
+
+model TenantBillingProfile {
+  id                      String   @id @default(cuid())
+  tenantId                String   @unique
+  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  legalName               String
+  street                  String
+  postalCode              String
+  city                    String
+  countryCode             String   @default("DE")
+  taxNumber               String?
+  vatId                   String?
+  iban                    String
+  bic                     String?
+  bankName                String?
+  invoiceNumberFormat     String   @default("RE-{YYYY}-{00001}")
+  defaultPaymentTermDays  Int      @default(14)
+  defaultTaxRateBasisPoints Int    @default(1900)
+  smallBusinessRule       Boolean  @default(false)
+  logoStoredPath          String?
+  invoiceFooterText       String?
+  invoiceEmailCc          String?
+  dunningEnabled          Boolean  @default(true)
+  dunningLevel1Days       Int      @default(1)
+  dunningLevel2Days       Int      @default(14)
+  dunningLevel3Days       Int      @default(28)
+  dunningLevel1FeeCents   Int      @default(0)
+  dunningLevel2FeeCents   Int      @default(500)
+  dunningLevel3FeeCents   Int      @default(1000)
+  datevConsultantNumber   String?
+  datevClientNumber       String?
+  datevChart              String   @default("SKR03")
+  revenueAccount19        String   @default("8400")
+  revenueAccount7         String   @default("8300")
+  revenueAccount0         String   @default("8125")
+  revenueAccountReverseCharge String @default("8337")
+  debtorNumberStart       Int      @default(10000)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model TenantSubscription {
@@ -614,6 +722,10 @@ model User {
   payrollMarkedTachoInfringements TachoInfringement[] @relation("TachoInfringementPayrollMarkedBy")
   issuedEquipmentIssuances EquipmentIssuance[] @relation("EquipmentIssuanceIssuedBy")
   approvedEquipmentIssuances EquipmentIssuance[] @relation("EquipmentIssuanceApprovedBy")
+  createdInvoices          Invoice[] @relation("InvoiceCreatedBy")
+  finalizedInvoices        Invoice[] @relation("InvoiceFinalizedBy")
+  recordedInvoicePayments  InvoicePayment[] @relation("InvoicePaymentRecordedBy")
+  createdDatevExports      DatevExport[] @relation("DatevExportCreatedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -953,6 +1065,18 @@ model Company {
   contactPerson       String?
   defaultDailyRevenue Decimal? @db.Decimal(10, 2)
   notes               String?
+  billingName         String?
+  billingStreet       String?
+  billingPostalCode   String?
+  billingCity         String?
+  billingCountryCode  String   @default("DE")
+  vatId               String?
+  invoiceEmail        String?
+  leitwegId           String?
+  eInvoicePreference  EInvoicePreference @default(zugferd)
+  defaultTaxCategory  InvoiceTaxCategory @default(standard)
+  defaultPaymentTermDays Int?
+  datevDebtorNumber   Int?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -962,8 +1086,11 @@ model Company {
   companyEmails     CompanyEmail[]
   companyUsers      CompanyUser[]
   portalSettings    CompanyPortalSettings?
+  rateCards         RateCard[]
+  invoices          Invoice[]
 
   @@unique([tenantId, name])
+  @@unique([tenantId, datevDebtorNumber])
   @@index([tenantId])
 }
 
@@ -1031,11 +1158,260 @@ model Assignment {
   departureChecks  DepartureCheck[]
   matchedFines     Fine[]
   fleetTrips       FleetTrip[]
+  invoiceLines     InvoiceLine[]
+  invoiceClaim     InvoiceAssignmentClaim?
 
   @@index([tenantId])
   @@index([driverId, workDate])
   @@index([vehicleId, workDate])
   @@index([companyId, workDate])
+}
+
+model RateCard {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default-tenant")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  name      String
+  validFrom DateTime
+  validTo   DateTime?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     RateCardItem[]
+
+  @@index([tenantId])
+  @@index([companyId, validFrom, validTo])
+}
+
+model RateCardItem {
+  id                 String             @id @default(cuid())
+  tenantId           String             @default("default-tenant")
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  rateCardId          String
+  rateCard            RateCard           @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  description         String
+  unit                InvoiceUnit
+  unitPriceCents      Int
+  taxRateBasisPoints  Int                @default(1900)
+  taxCategory         InvoiceTaxCategory @default(standard)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  invoiceLines        InvoiceLine[]
+
+  @@index([tenantId])
+  @@index([rateCardId])
+}
+
+model Invoice {
+  id                     String                @id @default(cuid())
+  tenantId               String                @default("default-tenant")
+  tenant                 Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId              String
+  company                Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  kind                   InvoiceKind           @default(invoice)
+  status                 OutgoingInvoiceStatus @default(draft)
+  number                 String?
+  invoiceDate            DateTime
+  servicePeriodStart     DateTime
+  servicePeriodEnd       DateTime
+  paymentTermDays        Int                   @default(14)
+  dueDate                DateTime?
+  currency               String                @default("EUR")
+  netCents               Int                   @default(0)
+  taxCents               Int                   @default(0)
+  grossCents             Int                   @default(0)
+  paidCents              Int                   @default(0)
+  taxBreakdown           Json?
+  customerName           String?
+  customerStreet         String?
+  customerPostalCode     String?
+  customerCity           String?
+  customerCountryCode    String?
+  customerVatId          String?
+  customerEmail          String?
+  leitwegId              String?
+  supplierSnapshot       Json?
+  notes                  String?
+  originalInvoiceId      String?
+  originalInvoice        Invoice?              @relation("InvoiceCorrections", fields: [originalInvoiceId], references: [id], onDelete: Restrict)
+  corrections            Invoice[]             @relation("InvoiceCorrections")
+  pdfStoredPath          String?
+  pdfSha256              String?
+  zugferdXmlStoredPath   String?
+  zugferdXmlSha256       String?
+  xrechnungStoredPath    String?
+  xrechnungSha256        String?
+  finalizedAt            DateTime?
+  sentAt                 DateTime?
+  paidAt                 DateTime?
+  cancelledAt            DateTime?
+  dunningOptOut          Boolean               @default(false)
+  createdById            String
+  createdBy              User                  @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  finalizedById          String?
+  finalizedBy            User?                 @relation("InvoiceFinalizedBy", fields: [finalizedById], references: [id], onDelete: Restrict)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  lines                  InvoiceLine[]
+  payments               InvoicePayment[]
+  deliveryAttempts       InvoiceDeliveryAttempt[]
+  auditEvents            InvoiceAuditEvent[]
+  dunningNotices         DunningNotice[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@index([companyId, invoiceDate])
+  @@index([status, dueDate])
+  @@index([originalInvoiceId])
+}
+
+model InvoiceLine {
+  id                    String             @id @default(cuid())
+  tenantId              String             @default("default-tenant")
+  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId             String
+  invoice               Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  position              Int
+  description           String
+  quantity              Decimal            @db.Decimal(10, 3)
+  unit                  InvoiceUnit
+  unitPriceCents        Int
+  taxRateBasisPoints    Int
+  taxCategory           InvoiceTaxCategory
+  netCents              Int
+  taxCents              Int
+  grossCents            Int
+  source                InvoiceLineSource
+  assignmentId          String?
+  assignment            Assignment?        @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  rateCardItemId        String?
+  rateCardItem          RateCardItem?       @relation(fields: [rateCardItemId], references: [id], onDelete: SetNull)
+  serviceDate           DateTime?
+  sourceSnapshot        Json?
+  createdAt             DateTime            @default(now())
+  assignmentClaim       InvoiceAssignmentClaim?
+
+  @@unique([invoiceId, position])
+  @@index([tenantId])
+  @@index([assignmentId])
+  @@index([rateCardItemId])
+}
+
+model InvoiceAssignmentClaim {
+  id           String      @id @default(cuid())
+  tenantId     String      @default("default-tenant")
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  assignmentId String      @unique
+  assignment   Assignment  @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  invoiceLineId String     @unique
+  invoiceLine  InvoiceLine @relation(fields: [invoiceLineId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+
+  @@index([tenantId])
+}
+
+model InvoiceNumberSequence {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default-tenant")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  year      Int
+  lastValue Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, year])
+  @@index([tenantId])
+}
+
+model InvoicePayment {
+  id           String               @id @default(cuid())
+  tenantId     String               @default("default-tenant")
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId    String
+  invoice      Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  amountCents  Int
+  paidAt       DateTime
+  method       InvoicePaymentMethod @default(bank_transfer)
+  reference    String?
+  note         String?
+  recordedById String
+  recordedBy   User                 @relation("InvoicePaymentRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime             @default(now())
+
+  @@index([tenantId])
+  @@index([invoiceId, paidAt])
+}
+
+model InvoiceDeliveryAttempt {
+  id                String   @id @default(cuid())
+  tenantId          String   @default("default-tenant")
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId         String
+  invoice           Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  recipientEmail    String
+  ccEmail           String?
+  status            String
+  mailMode          String
+  providerMessageId String?
+  errorMessage      String?
+  attemptedAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([invoiceId, attemptedAt])
+}
+
+model InvoiceAuditEvent {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("default-tenant")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  actorUserId String?
+  action      String
+  snapshot    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([invoiceId, createdAt])
+}
+
+model DunningNotice {
+  id            String   @id @default(cuid())
+  tenantId      String   @default("default-tenant")
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId     String
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  level         Int
+  feeCents      Int      @default(0)
+  pdfStoredPath String
+  pdfSha256     String
+  recipientEmail String
+  sentAt        DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([invoiceId, level])
+  @@index([tenantId])
+  @@index([sentAt])
+}
+
+model DatevExport {
+  id          String            @id @default(cuid())
+  tenantId    String            @default("default-tenant")
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  periodStart DateTime
+  periodEnd   DateTime
+  createdById String
+  createdBy   User              @relation("DatevExportCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  fileStoredPath String
+  fileSha256  String
+  invoiceIds  Json
+  status      DatevExportStatus @default(generated)
+  createdAt   DateTime          @default(now())
+
+  @@index([tenantId])
+  @@index([periodStart, periodEnd])
 }
 
 model CustomerAssignmentMessage {

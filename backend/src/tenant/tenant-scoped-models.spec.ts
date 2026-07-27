@@ -40,4 +40,25 @@ describe('TENANT_SCOPED_MODELS', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('TachoDownloadSchedule'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('TelemetryQuarantine'), true);
   });
+
+  it('includes every outgoing invoicing model for tenant isolation', () => {
+    const models = [
+      'TenantBillingProfile',
+      'RateCard',
+      'RateCardItem',
+      'Invoice',
+      'InvoiceLine',
+      'InvoiceAssignmentClaim',
+      'InvoiceNumberSequence',
+      'InvoicePayment',
+      'InvoiceDeliveryAttempt',
+      'InvoiceAuditEvent',
+      'DunningNotice',
+      'DatevExport',
+    ];
+
+    for (const model of models) {
+      assert.equal(TENANT_SCOPED_MODELS.has(model), true, `${model} must be tenant scoped`);
+    }
+  });
 });
