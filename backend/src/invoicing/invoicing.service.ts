@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AssignmentStatus,
   InvoiceLineSource,
   InvoiceTaxCategory,
   InvoiceUnit,
@@ -28,6 +29,14 @@ import {
 
 const DEFAULT_PAYMENT_TERM_DAYS = 14;
 const DEFAULT_TAX_RATE_BASIS_POINTS = 1_900;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Statuses that still block an assignment from ever reaching the invoicing pipeline. */
+const OPEN_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
+  AssignmentStatus.planned,
+  AssignmentStatus.confirmed,
+  AssignmentStatus.in_progress,
+];
 
 function normalizeDay(value: string | Date, label: string): Date {
   const date = value instanceof Date ? new Date(value) : new Date(value);
@@ -228,6 +237,105 @@ export class InvoicingService {
     }
 
     return [...grouped.values()];
+  }
+
+  /**
+   * Assignments whose work date has passed but that were never closed by the office.
+   * They never reach the uninvoiced list, so without this view the revenue silently disappears.
+   */
+  async listOpenOverdue(asOf?: string) {
+    const today = normalizeDay(asOf ?? new Date(), 'asOf');
+
+    const assignments = await this.prisma.assignment.findMany({
+      where: {
+        status: { in: OPEN_ASSIGNMENT_STATUSES },
+        workDate: { lt: today },
+      },
+      select: {
+        id: true,
+        companyId: true,
+        status: true,
+        workDate: true,
+        cargoName: true,
+        routeName: true,
+        expectedDailyRevenue: true,
+        driver: { select: { id: true, firstName: true, lastName: true } },
+        company: {
+          select: { id: true, name: true, defaultDailyRevenue: true },
+        },
+      },
+      orderBy: [{ workDate: 'asc' }, { company: { name: 'asc' } }],
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        companyId: string;
+        companyName: string;
+        assignmentCount: number;
+        potentialNetCents: number;
+        oldestWorkDate: string;
+        assignments: Array<{
+          id: string;
+          status: AssignmentStatus;
+          workDate: string;
+          cargoName: string;
+          routeName: string | null;
+          driverName: string | null;
+          daysOverdue: number;
+          suggestedNetCents: number | null;
+        }>;
+      }
+    >();
+
+    let totalAssignmentCount = 0;
+    let totalPotentialNetCents = 0;
+
+    for (const assignment of assignments) {
+      const amount =
+        decimalEuroToCents(assignment.expectedDailyRevenue) ??
+        decimalEuroToCents(assignment.company.defaultDailyRevenue);
+      const workDate = assignment.workDate.toISOString();
+      const group = grouped.get(assignment.companyId) ?? {
+        companyId: assignment.companyId,
+        companyName: assignment.company.name,
+        assignmentCount: 0,
+        potentialNetCents: 0,
+        oldestWorkDate: workDate,
+        assignments: [],
+      };
+      group.assignmentCount += 1;
+      group.potentialNetCents += amount ?? 0;
+      group.assignments.push({
+        id: assignment.id,
+        status: assignment.status,
+        workDate,
+        cargoName: assignment.cargoName,
+        routeName: assignment.routeName,
+        driverName: assignment.driver
+          ? `${assignment.driver.firstName} ${assignment.driver.lastName}`.trim()
+          : null,
+        daysOverdue: Math.round((today.getTime() - assignment.workDate.getTime()) / DAY_MS),
+        suggestedNetCents: amount,
+      });
+      grouped.set(assignment.companyId, group);
+      totalAssignmentCount += 1;
+      totalPotentialNetCents += amount ?? 0;
+    }
+
+    const companies = [...grouped.values()].sort(
+      (a, b) => b.potentialNetCents - a.potentialNetCents,
+    );
+
+    return {
+      asOf: today.toISOString(),
+      totals: {
+        assignmentCount: totalAssignmentCount,
+        potentialNetCents: totalPotentialNetCents,
+        companyCount: companies.length,
+      },
+      companies,
+    };
   }
 
   async createDraft(dto: CreateInvoiceDraftDto, actorUserId: string) {
@@ -472,6 +580,142 @@ export class InvoicingService {
     });
   }
 
+  async invoiceSummaryByCompany(filters: {
+    from?: string;
+    to?: string;
+    groupBy?: string;
+    status?: string;
+  }) {
+    const groupBy = filters.groupBy === 'day' ? 'day' : filters.groupBy === 'week' ? 'week' : null;
+    if (!groupBy) {
+      throw new BadRequestException('groupBy must be either day or week');
+    }
+    const status = filters.status ? this.parseStatus(filters.status) : undefined;
+
+    const defaultTo = normalizeDay(new Date(), 'to');
+    const defaultFrom = new Date(defaultTo.getTime() - (groupBy === 'day' ? 6 : 27) * DAY_MS);
+
+    const from = filters.from ? normalizeDay(filters.from, 'from') : defaultFrom;
+    const to = filters.to ? normalizeDay(filters.to, 'to') : defaultTo;
+    if (to < from) {
+      throw new BadRequestException('to must be on or after from');
+    }
+
+    const toExclusive = new Date(to.getTime() + DAY_MS);
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        status,
+        invoiceDate: { gte: from, lt: toExclusive },
+      },
+      select: {
+        id: true,
+        status: true,
+        number: true,
+        invoiceDate: true,
+        netCents: true,
+        taxCents: true,
+        grossCents: true,
+        company: { select: { id: true, name: true } },
+      },
+      orderBy: [{ invoiceDate: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    const summaryByCompany = new Map<
+      string,
+      {
+        companyId: string;
+        companyName: string;
+        invoiceCount: number;
+        netCents: number;
+        taxCents: number;
+        grossCents: number;
+        periods: Map<
+          string,
+          {
+            periodKey: string;
+            periodStart: string;
+            periodEnd: string;
+            invoiceCount: number;
+            netCents: number;
+            taxCents: number;
+            grossCents: number;
+          }
+        >;
+      }
+    >();
+
+    const totals = {
+      invoiceCount: 0,
+      netCents: 0,
+      taxCents: 0,
+      grossCents: 0,
+    };
+
+    for (const invoice of invoices) {
+      totals.invoiceCount += 1;
+      totals.netCents += invoice.netCents;
+      totals.taxCents += invoice.taxCents;
+      totals.grossCents += invoice.grossCents;
+
+      const companyEntry =
+        summaryByCompany.get(invoice.company.id) ??
+        {
+          companyId: invoice.company.id,
+          companyName: invoice.company.name,
+          invoiceCount: 0,
+          netCents: 0,
+          taxCents: 0,
+          grossCents: 0,
+          periods: new Map(),
+        };
+
+      companyEntry.invoiceCount += 1;
+      companyEntry.netCents += invoice.netCents;
+      companyEntry.taxCents += invoice.taxCents;
+      companyEntry.grossCents += invoice.grossCents;
+
+      const period = this.periodForDate(invoice.invoiceDate, groupBy);
+      const periodEntry =
+        companyEntry.periods.get(period.key) ??
+        {
+          periodKey: period.key,
+          periodStart: period.start,
+          periodEnd: period.end,
+          invoiceCount: 0,
+          netCents: 0,
+          taxCents: 0,
+          grossCents: 0,
+        };
+      periodEntry.invoiceCount += 1;
+      periodEntry.netCents += invoice.netCents;
+      periodEntry.taxCents += invoice.taxCents;
+      periodEntry.grossCents += invoice.grossCents;
+      companyEntry.periods.set(period.key, periodEntry);
+
+      summaryByCompany.set(invoice.company.id, companyEntry);
+    }
+
+    return {
+      from: from.toISOString().slice(0, 10),
+      to: to.toISOString().slice(0, 10),
+      groupBy,
+      status: status ?? null,
+      totals,
+      companies: [...summaryByCompany.values()]
+        .map((entry) => ({
+          companyId: entry.companyId,
+          companyName: entry.companyName,
+          invoiceCount: entry.invoiceCount,
+          netCents: entry.netCents,
+          taxCents: entry.taxCents,
+          grossCents: entry.grossCents,
+          periods: [...entry.periods.values()].sort((a, b) => a.periodKey.localeCompare(b.periodKey)),
+        }))
+        .sort((a, b) => b.grossCents - a.grossCents),
+    };
+  }
+
   async getInvoice(id: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where: { id },
@@ -560,5 +804,31 @@ export class InvoicingService {
       throw new BadRequestException('Invalid invoice status');
     }
     return value as OutgoingInvoiceStatus;
+  }
+
+  private periodForDate(
+    value: Date,
+    groupBy: 'day' | 'week',
+  ): { key: string; start: string; end: string } {
+    const day = normalizeDay(value, 'invoiceDate');
+    if (groupBy === 'day') {
+      const key = day.toISOString().slice(0, 10);
+      return { key, start: key, end: key };
+    }
+
+    const monday = new Date(day);
+    const weekday = monday.getUTCDay();
+    const offset = weekday === 0 ? 6 : weekday - 1;
+    monday.setUTCDate(monday.getUTCDate() - offset);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(sunday.getUTCDate() + 6);
+
+    const start = monday.toISOString().slice(0, 10);
+    const end = sunday.toISOString().slice(0, 10);
+    return {
+      key: `${start}_${end}`,
+      start,
+      end,
+    };
   }
 }

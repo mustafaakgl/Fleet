@@ -39,6 +39,11 @@ export class InvoicingController {
     return this.invoicing.listUninvoiced(from, to);
   }
 
+  @Get('open-overdue')
+  listOpenOverdue(@Query('asOf') asOf?: string) {
+    return this.invoicing.listOpenOverdue(asOf);
+  }
+
   @Post('invoices')
   @RequiresWrite()
   createDraft(
@@ -56,6 +61,16 @@ export class InvoicingController {
     @Query('to') to?: string,
   ) {
     return this.invoicing.listInvoices({ status, companyId, from, to });
+  }
+
+  @Get('invoices/summary/by-company')
+  invoiceSummaryByCompany(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('groupBy') groupBy?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.invoicing.invoiceSummaryByCompany({ from, to, groupBy, status });
   }
 
   @Get('invoices/:id')

@@ -26,6 +26,7 @@ import {
   Droplets,
   Route,
   Cpu,
+  Receipt,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -365,11 +366,25 @@ const GETTING_STARTED_ITEM: NavItem = {
   icon: Rocket,
 };
 
+/** Outgoing invoices — separate from the Stripe subscription page at /billing. */
+const INVOICING_ITEM: NavItem = {
+  href: '/invoicing',
+  labelKey: 'nav.invoicing',
+  icon: Receipt,
+};
+
 export function getNavigationForRole(role: Role): NavGroup[] {
   const groups =
     role === 'office'
       ? OFFICE_NAV.map((group) => ({ ...group, items: [...group.items] }))
       : DEFAULT_NAV.map((group) => ({ ...group, items: [...group.items] }));
+
+  if (role === 'admin' || role === 'boss' || role === 'accounting') {
+    const verwaltungGroup = groups.find((g) => g.id === 'verwaltung');
+    if (verwaltungGroup) {
+      verwaltungGroup.items.push(INVOICING_ITEM);
+    }
+  }
 
   if (role === 'admin' || role === 'boss') {
     const verwaltungGroup = groups.find((g) => g.id === 'verwaltung');

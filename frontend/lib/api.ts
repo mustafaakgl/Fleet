@@ -73,6 +73,8 @@ import type {
   TelematicsDriverTripsResponse,
   TelemetryHistoryResponse,
   FleetTripTimelineResponse,
+  BulkCompleteAssignmentsResult,
+  OpenOverdueResponse,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -913,12 +915,28 @@ export const assignmentsApi = {
   transition: (id: string, to: 'confirmed' | 'in_progress' | 'completed') =>
     api.post<Assignment>(`/assignments/${id}/transition`, { to }).then((r) => r.data),
 
+  bulkComplete: (assignmentIds: string[]) =>
+    api
+      .post<BulkCompleteAssignmentsResult>('/assignments/bulk-complete', {
+        assignment_ids: assignmentIds,
+      })
+      .then((r) => r.data),
+
   listCustomerMessages: (id: string) =>
     api.get<CustomerAssignmentMessage[]>(`/assignments/${id}/customer-messages`).then((r) => r.data),
 
   sendCustomerMessage: (id: string, body: string) =>
     api
       .post<CustomerAssignmentMessage>(`/assignments/${id}/customer-messages`, { body })
+      .then((r) => r.data),
+};
+
+// ─── Outgoing invoicing ──────────────────────────────────────────────────────
+
+export const invoicingApi = {
+  listOpenOverdue: (asOf?: string) =>
+    api
+      .get<OpenOverdueResponse>('/invoicing/open-overdue', { params: asOf ? { asOf } : undefined })
       .then((r) => r.data),
 };
 

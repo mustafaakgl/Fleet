@@ -21,6 +21,7 @@ import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { CustomerMessagesService } from '../customer-portal/customer-messages.service';
 import { SendCustomerMessageDto } from '../customer-portal/dto/send-customer-message.dto';
 import { AssignmentsService } from './assignments.service';
+import { BulkCompleteAssignmentsDto } from './dto/bulk-complete-assignments.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { CopyDayDto } from './dto/copy-day.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
@@ -79,6 +80,13 @@ export class AssignmentsController {
   @HttpCode(HttpStatus.OK)
   copyDay(@Body() dto: CopyDayDto, @Req() req: AuthenticatedRequest) {
     return this.assignments.copyDay(dto.from_date, dto.to_date, req.user.id);
+  }
+
+  @Post('bulk-complete')
+  @RequiresWrite()
+  @HttpCode(HttpStatus.OK)
+  bulkComplete(@Body() dto: BulkCompleteAssignmentsDto, @Req() req: AuthenticatedRequest) {
+    return this.assignments.bulkComplete(dto.assignment_ids, req.user.id);
   }
 
   @Get(':id')

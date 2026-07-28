@@ -794,6 +794,60 @@ export class AssignmentsService {
     return toClientAssignment(updated);
   }
 
+  /**
+   * Closes assignments that the office forgot to complete, so they enter the invoicing pipeline.
+   * Intermediate states are collapsed on purpose: the work day has already passed.
+   */
+  async bulkComplete(assignmentIds: string[], actorUserId?: string) {
+    const uniqueIds = [...new Set(assignmentIds)];
+
+    const existing = await this.prisma.assignment.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, status: true },
+    });
+    const statusById = new Map(existing.map((row) => [row.id, row.status]));
+
+    const completed: string[] = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
+
+    for (const id of uniqueIds) {
+      const status = statusById.get(id);
+      if (!status) {
+        skipped.push({ id, reason: 'not_found' });
+        continue;
+      }
+      if (status === AssignmentStatus.completed) {
+        skipped.push({ id, reason: 'already_completed' });
+        continue;
+      }
+      if (status === AssignmentStatus.cancelled) {
+        skipped.push({ id, reason: 'cancelled' });
+        continue;
+      }
+
+      await this.prisma.assignment.update({
+        where: { id },
+        data: { status: AssignmentStatus.completed },
+      });
+      await this.safeAuditLog({
+        actorUserId,
+        action: 'assignment.bulk_completed',
+        entityType: 'assignment',
+        entityId: id,
+        summary: 'Assignment completed via bulk close',
+        metadata: { fromStatus: status, toStatus: AssignmentStatus.completed },
+      });
+      completed.push(id);
+    }
+
+    return {
+      requested: uniqueIds.length,
+      completedCount: completed.length,
+      completed,
+      skipped,
+    };
+  }
+
   async cancel(id: string, actorUserId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.assignment.findUnique({

@@ -2205,3 +2205,42 @@ export type DddUploadResponse = {
   file: { id: string; status: DddFileProcessingStatus };
   deduplicated: boolean;
 };
+
+// ─── Outgoing invoicing ──────────────────────────────────────────────────────
+
+export type BulkCompleteAssignmentsResult = {
+  requested: number;
+  completedCount: number;
+  completed: string[];
+  skipped: Array<{ id: string; reason: string }>;
+};
+
+export type OpenOverdueAssignment = {
+  id: string;
+  status: 'planned' | 'confirmed' | 'in_progress';
+  workDate: string;
+  cargoName: string;
+  routeName: string | null;
+  driverName: string | null;
+  daysOverdue: number;
+  suggestedNetCents: number | null;
+};
+
+export type OpenOverdueCompany = {
+  companyId: string;
+  companyName: string;
+  assignmentCount: number;
+  potentialNetCents: number;
+  oldestWorkDate: string;
+  assignments: OpenOverdueAssignment[];
+};
+
+export type OpenOverdueResponse = {
+  asOf: string;
+  totals: {
+    assignmentCount: number;
+    potentialNetCents: number;
+    companyCount: number;
+  };
+  companies: OpenOverdueCompany[];
+};
