@@ -16,6 +16,8 @@ export const FINE_DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'fine-documents
 export const FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), FINE_DOCUMENT_UPLOAD_RELATIVE_DIR);
 export const MESSENGER_ATTACHMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'message-attachments');
 export const MESSENGER_ATTACHMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), MESSENGER_ATTACHMENT_UPLOAD_RELATIVE_DIR);
+export const INVOICE_DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'invoice-documents');
+export const INVOICE_DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), INVOICE_DOCUMENT_UPLOAD_RELATIVE_DIR);
 
 const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
   documents: DOCUMENT_UPLOAD_ABSOLUTE_DIR,
@@ -24,6 +26,7 @@ const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
   'defect-photos': DEFECT_PHOTO_UPLOAD_ABSOLUTE_DIR,
   'fine-documents': FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR,
   'message-attachments': MESSENGER_ATTACHMENT_UPLOAD_ABSOLUTE_DIR,
+  'invoice-documents': INVOICE_DOCUMENT_UPLOAD_ABSOLUTE_DIR,
 };
 
 export function uploadAbsoluteDirForBucket(bucket: StorageBucket): string {

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { describe, it } from 'node:test';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
+  EInvoicePreference,
   InvoiceLineSource,
   InvoiceTaxCategory,
   InvoiceUnit,
@@ -10,6 +13,7 @@ import {
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { applyTenantScope } from '../tenant/tenant-prisma.extension';
 import { InvoicingService } from './invoicing.service';
@@ -25,6 +29,7 @@ type InvoiceRow = {
   servicePeriodEnd: Date;
   paymentTermDays: number;
   dueDate: Date | null;
+  currency: string;
   netCents: number;
   taxCents: number;
   grossCents: number;
@@ -40,6 +45,13 @@ type InvoiceRow = {
   supplierSnapshot: unknown;
   finalizedAt: Date | null;
   finalizedById: string | null;
+  leitwegId: string | null;
+  pdfStoredPath: string | null;
+  pdfSha256: string | null;
+  zugferdXmlStoredPath: string | null;
+  zugferdXmlSha256: string | null;
+  xrechnungStoredPath: string | null;
+  xrechnungSha256: string | null;
 };
 
 type LineRow = {
@@ -71,6 +83,8 @@ type CompanyRow = {
   billingCountryCode: string;
   vatId: string | null;
   invoiceEmail: string | null;
+  leitwegId: string | null;
+  eInvoicePreference: EInvoicePreference;
 };
 
 type ProfileRow = {
@@ -101,6 +115,7 @@ type Store = {
   sequences: Array<{ tenantId: string; year: number; lastValue: number }>;
   claims: Array<{ tenantId: string; assignmentId: string; invoiceLineId: string }>;
   auditEvents: Array<Record<string, unknown>>;
+  documents: Array<{ storedPath: string; contents: Buffer }>;
 };
 
 function matches(row: object, where: Record<string, unknown> | undefined): boolean {
@@ -275,10 +290,37 @@ function createFakePrisma(store: Store) {
   };
 }
 
+/** Records what finalize wrote instead of touching the disk, keeping the hashing real. */
+function createFakeDocumentStorage(store: Store) {
+  return {
+    buildStoredPath: (fileName: string) => `/uploads/invoice-documents/${fileName}`,
+    buildFileName: (invoiceNumber: string, kind: 'rechnung' | 'zugferd' | 'xrechnung') =>
+      `${invoiceNumber.replace(/[^A-Za-z0-9._-]+/g, '-')}-${kind}.${kind === 'rechnung' ? 'pdf' : 'xml'}`,
+    save: async (storedFileName: string, contents: Uint8Array | string) => {
+      const buffer =
+        typeof contents === 'string' ? Buffer.from(contents, 'utf8') : Buffer.from(contents);
+      const storedPath = `/uploads/invoice-documents/${storedFileName}`;
+      store.documents.push({ storedPath, contents: buffer });
+      return {
+        storedPath,
+        sha256: createHash('sha256').update(buffer).digest('hex'),
+        byteSize: buffer.byteLength,
+      };
+    },
+    open: async (storedPath: string) => {
+      const found = store.documents.find((document) => document.storedPath === storedPath);
+      return found ? { stream: Readable.from(found.contents) } : null;
+    },
+    mimeTypeFor: (storedPath: string) =>
+      storedPath.endsWith('.pdf') ? 'application/pdf' : 'application/xml',
+  };
+}
+
 function createService(store: Store): InvoicingService {
   return new InvoicingService(
     createFakePrisma(store) as unknown as PrismaService,
     { logAction: async () => undefined } as unknown as AuditService,
+    createFakeDocumentStorage(store) as unknown as InvoiceDocumentStorageService,
   );
 }
 
@@ -317,6 +359,8 @@ function company(overrides: Partial<CompanyRow> = {}): CompanyRow {
     billingCountryCode: 'DE',
     vatId: 'DE987654321',
     invoiceEmail: 'rechnung@acme.example',
+    leitwegId: null,
+    eInvoicePreference: EInvoicePreference.zugferd,
     ...overrides,
   };
 }
@@ -333,6 +377,7 @@ function invoice(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
     servicePeriodEnd: new Date('2026-07-26T00:00:00.000Z'),
     paymentTermDays: 14,
     dueDate: null,
+    currency: 'EUR',
     netCents: 0,
     taxCents: 0,
     grossCents: 0,
@@ -348,6 +393,13 @@ function invoice(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
     supplierSnapshot: null,
     finalizedAt: null,
     finalizedById: null,
+    leitwegId: null,
+    pdfStoredPath: null,
+    pdfSha256: null,
+    zugferdXmlStoredPath: null,
+    zugferdXmlSha256: null,
+    xrechnungStoredPath: null,
+    xrechnungSha256: null,
     ...overrides,
   };
 }
@@ -384,6 +436,7 @@ function createStore(overrides: Partial<Store> = {}): Store {
     sequences: [],
     claims: [],
     auditEvents: [],
+    documents: [],
     ...overrides,
   };
 }
@@ -692,6 +745,205 @@ describe('InvoicingService finalize', () => {
         error instanceof ConflictException &&
         error.message ===
           'An assignment on this invoice has already been finalized on another invoice',
+    );
+  });
+});
+
+describe('InvoicingService finalize document generation', () => {
+  async function collect(stream: Readable): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  function storedAt(store: Store, path: string | null): Buffer {
+    const found = store.documents.find((document) => document.storedPath === path);
+    assert.ok(found, `expected a stored document at ${path}`);
+    return found.contents;
+  }
+
+  it('stores a PDF and a ZUGFeRD XML for a zugferd customer', async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    const finalized = await TenantContext.run('tenant-a', () =>
+      service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a'),
+    );
+
+    assert.equal(store.documents.length, 2);
+    assert.equal(finalized.pdfStoredPath, '/uploads/invoice-documents/RE-2026-00001-rechnung.pdf');
+    assert.equal(
+      finalized.zugferdXmlStoredPath,
+      '/uploads/invoice-documents/RE-2026-00001-zugferd.xml',
+    );
+    assert.equal(finalized.xrechnungStoredPath, null);
+    assert.equal(finalized.xrechnungSha256, null);
+
+    // The persisted hashes must match the bytes that were actually written.
+    assert.equal(
+      finalized.pdfSha256,
+      createHash('sha256').update(storedAt(store, finalized.pdfStoredPath)).digest('hex'),
+    );
+    assert.equal(
+      finalized.zugferdXmlSha256,
+      createHash('sha256').update(storedAt(store, finalized.zugferdXmlStoredPath)).digest('hex'),
+    );
+
+    const xml = storedAt(store, finalized.zugferdXmlStoredPath).toString('utf8');
+    assert.ok(xml.includes('<rsm:CrossIndustryInvoice'));
+    assert.ok(xml.includes('<ram:ID>RE-2026-00001</ram:ID>'));
+    assert.ok(xml.includes('<ram:Name>Acme Logistik GmbH – Zentrale</ram:Name>'));
+    assert.ok(storedAt(store, finalized.pdfStoredPath).subarray(0, 5).toString('latin1') === '%PDF-');
+  });
+
+  it('stores an XRechnung UBL for a public-sector customer', async () => {
+    const store = createStore({
+      companies: [
+        company({
+          eInvoicePreference: EInvoicePreference.xrechnung,
+          leitwegId: '991-33333TEST-33',
+        }),
+      ],
+    });
+    const service = createService(store);
+
+    const finalized = await TenantContext.run('tenant-a', () =>
+      service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a'),
+    );
+
+    assert.equal(store.documents.length, 2);
+    assert.equal(finalized.zugferdXmlStoredPath, null);
+    assert.equal(
+      finalized.xrechnungStoredPath,
+      '/uploads/invoice-documents/RE-2026-00001-xrechnung.xml',
+    );
+    // The Leitweg-ID is snapshotted onto the invoice, not read live at render time.
+    assert.equal(finalized.leitwegId, '991-33333TEST-33');
+
+    const xml = storedAt(store, finalized.xrechnungStoredPath).toString('utf8');
+    assert.ok(xml.includes('urn:xoev-de:kosit:standard:xrechnung_3.0'));
+    assert.ok(xml.includes('<cbc:BuyerReference>991-33333TEST-33</cbc:BuyerReference>'));
+  });
+
+  it('stores all three documents when the customer wants both formats', async () => {
+    const store = createStore({
+      companies: [
+        company({
+          eInvoicePreference: EInvoicePreference.both,
+          leitwegId: '991-33333TEST-33',
+        }),
+      ],
+    });
+    const service = createService(store);
+
+    const finalized = await TenantContext.run('tenant-a', () =>
+      service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a'),
+    );
+
+    assert.equal(store.documents.length, 3);
+    assert.ok(finalized.pdfStoredPath);
+    assert.ok(finalized.zugferdXmlStoredPath);
+    assert.ok(finalized.xrechnungStoredPath);
+  });
+
+  it('refuses to finalize an XRechnung customer without a Leitweg-ID', async () => {
+    const store = createStore({
+      companies: [company({ eInvoicePreference: EInvoicePreference.xrechnung, leitwegId: null })],
+    });
+    const service = createService(store);
+
+    await assert.rejects(
+      TenantContext.run('tenant-a', () => service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a')),
+      (error: unknown) =>
+        error instanceof BadRequestException &&
+        error.message ===
+          'A Leitweg-ID is required on the customer before an XRechnung invoice can be finalized',
+    );
+
+    // No number burned, no invoice touched, no half-written documents left behind.
+    assert.deepEqual(store.sequences, []);
+    assert.deepEqual(store.documents, []);
+    assert.equal(store.invoices[0].status, OutgoingInvoiceStatus.draft);
+  });
+
+  it('records the document hashes on the finalize audit event', async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    const finalized = await TenantContext.run('tenant-a', () =>
+      service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a'),
+    );
+
+    const event = store.auditEvents[store.auditEvents.length - 1];
+    const snapshot = event.snapshot as { after: Record<string, unknown> };
+    assert.equal(snapshot.after.pdfSha256, finalized.pdfSha256);
+    assert.equal(snapshot.after.zugferdXmlSha256, finalized.zugferdXmlSha256);
+    assert.equal(snapshot.after.xrechnungXmlSha256 ?? null, null);
+  });
+
+  it('serves the stored bytes on download instead of rendering again', async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    const finalized = await TenantContext.run('tenant-a', () =>
+      service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a'),
+    );
+    const documentsAfterFinalize = store.documents.length;
+
+    const pdf = await TenantContext.run('tenant-a', () =>
+      service.downloadInvoiceDocument('invoice-a', 'pdf'),
+    );
+    assert.equal(pdf.fileName, 'RE-2026-00001.pdf');
+    assert.equal(pdf.mimeType, 'application/pdf');
+    assert.deepEqual(await collect(pdf.stream), storedAt(store, finalized.pdfStoredPath));
+
+    const xml = await TenantContext.run('tenant-a', () =>
+      service.downloadInvoiceDocument('invoice-a', 'xml'),
+    );
+    assert.equal(xml.fileName, 'RE-2026-00001.xml');
+    assert.deepEqual(await collect(xml.stream), storedAt(store, finalized.zugferdXmlStoredPath));
+
+    // Nothing was re-rendered or re-stored by serving the files.
+    assert.equal(store.documents.length, documentsAfterFinalize);
+  });
+
+  it('rejects an unknown xml format and reports a missing document', async () => {
+    const store = createStore();
+    const service = createService(store);
+    await TenantContext.run('tenant-a', () =>
+      service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a'),
+    );
+
+    await assert.rejects(
+      TenantContext.run('tenant-a', () =>
+        service.downloadInvoiceDocument('invoice-a', 'xml', 'peppol'),
+      ),
+      (error: unknown) =>
+        error instanceof BadRequestException &&
+        error.message === 'format must be either zugferd or xrechnung',
+    );
+
+    await assert.rejects(
+      TenantContext.run('tenant-a', () =>
+        service.downloadInvoiceDocument('invoice-a', 'xml', 'xrechnung'),
+      ),
+      (error: unknown) =>
+        error instanceof NotFoundException &&
+        error.message === 'The requested invoice document does not exist',
+    );
+  });
+
+  it('has no documents to serve while the invoice is still a draft', async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    await assert.rejects(
+      TenantContext.run('tenant-a', () => service.downloadInvoiceDocument('invoice-a', 'pdf')),
+      (error: unknown) =>
+        error instanceof ConflictException &&
+        error.message === 'Draft invoices have no legal documents yet',
     );
   });
 });

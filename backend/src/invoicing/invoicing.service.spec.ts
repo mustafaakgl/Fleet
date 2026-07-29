@@ -4,12 +4,15 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { InvoiceTaxCategory, OutgoingInvoiceStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
 import { InvoicingService } from './invoicing.service';
 
 function createService(prisma: object): InvoicingService {
   return new InvoicingService(
     prisma as unknown as PrismaService,
     { logAction: async () => undefined } as unknown as AuditService,
+    // These cases never reach document generation; finalize is covered separately.
+    {} as unknown as InvoiceDocumentStorageService,
   );
 }
 

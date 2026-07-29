@@ -6,15 +6,28 @@ import {
 } from '@nestjs/common';
 import {
   AssignmentStatus,
+  EInvoicePreference,
   InvoiceLineSource,
   InvoiceTaxCategory,
   InvoiceUnit,
   OutgoingInvoiceStatus,
   Prisma,
 } from '@prisma/client';
+import type { Readable } from 'node:stream';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
+import {
+  buildEInvoiceDocument,
+  EInvoiceValidationError,
+  renderInvoiceDocuments,
+  requiresUbl,
+  type EInvoiceTaxGroup,
+  type FinalizedInvoiceSnapshot,
+  type FinalizedLineSnapshot,
+  type SupplierSnapshot,
+} from './einvoice';
 import { CreateInvoiceDraftDto, ManualInvoiceLineDto } from './dto/create-invoice-draft.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
 import { UpsertBillingProfileDto } from './dto/upsert-billing-profile.dto';
@@ -94,6 +107,7 @@ export class InvoicingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly invoiceDocuments: InvoiceDocumentStorageService,
   ) {}
 
   async getBillingProfile() {
@@ -817,6 +831,10 @@ export class InvoicingService {
    * changing when the underlying master data is edited later.
    */
   async finalizeInvoice(id: string, tenantId: string, actorUserId: string) {
+    // One timestamp for the whole operation: it stamps the invoice and the rendered
+    // documents alike, so the PDF metadata and finalizedAt can never disagree.
+    const renderedAt = new Date();
+
     const invoice = await this.prisma.$transaction(async (tx) => {
       // Serializes concurrent finalize attempts on the same invoice; the status check
       // below is only meaningful while this row lock is held.
@@ -852,6 +870,13 @@ export class InvoicingService {
         throw new BadRequestException('A billing profile is required before finalizing');
       }
       if (!company) throw new NotFoundException('Company not found');
+      // Fail before a number is spent: an XRechnung without a Leitweg-ID cannot be routed
+      // to the authority, so the invoice must not become final in that state.
+      if (requiresUbl(company.eInvoicePreference) && !company.leitwegId?.trim()) {
+        throw new BadRequestException(
+          'A Leitweg-ID is required on the customer before an XRechnung invoice can be finalized',
+        );
+      }
 
       // §19 UStG: a small business never charges VAT, no matter what the draft lines say.
       const recalculated = lines.map((line) => {
@@ -918,6 +943,69 @@ export class InvoicingService {
         invoiceFooterText: profile.invoiceFooterText,
       };
 
+      const customerSnapshot = {
+        customerName: company.billingName?.trim() || company.name,
+        customerStreet: company.billingStreet,
+        customerPostalCode: company.billingPostalCode,
+        customerCity: company.billingCity,
+        customerCountryCode: company.billingCountryCode,
+        customerVatId: company.vatId,
+        customerEmail: company.invoiceEmail,
+        leitwegId: company.leitwegId,
+      };
+      const notes = profile.smallBusinessRule
+        ? appendNote(existing.notes, SMALL_BUSINESS_NOTE)
+        : existing.notes;
+
+      // Render-once, store-forever: the legal documents are produced here, inside the
+      // same transaction that assigns the number, so an invoice can never reach
+      // "finalized" without them. Nothing ever re-renders them afterwards.
+      const documents = await this.renderAndStoreDocuments({
+        preference: company.eInvoicePreference,
+        renderedAt,
+        invoice: {
+          ...customerSnapshot,
+          number: allocated.number,
+          invoiceDate: existing.invoiceDate,
+          dueDate,
+          servicePeriodStart: existing.servicePeriodStart,
+          servicePeriodEnd: existing.servicePeriodEnd,
+          paymentTermDays: existing.paymentTermDays,
+          currency: existing.currency,
+          netCents: totals.netCents,
+          taxCents: totals.taxCents,
+          grossCents: totals.grossCents,
+          notes,
+        },
+        supplier: {
+          legalName: profile.legalName,
+          street: profile.street,
+          postalCode: profile.postalCode,
+          city: profile.city,
+          countryCode: profile.countryCode,
+          taxNumber: profile.taxNumber,
+          vatId: profile.vatId,
+          iban: profile.iban,
+          bic: profile.bic,
+          bankName: profile.bankName,
+          smallBusinessRule: profile.smallBusinessRule,
+          invoiceFooterText: profile.invoiceFooterText,
+          invoiceEmailCc: profile.invoiceEmailCc,
+        },
+        lines: recalculated.map((entry) => ({
+          position: entry.line.position,
+          description: entry.line.description,
+          quantityMilliunits: entry.input.quantityMilliunits,
+          unit: entry.line.unit,
+          unitPriceCents: entry.input.unitPriceCents,
+          taxRateBasisPoints: entry.input.taxRateBasisPoints,
+          taxCategory: entry.taxCategory,
+          netCents: entry.calculated.netCents,
+          serviceDate: entry.line.serviceDate,
+        })),
+        taxBreakdown: totals.taxBreakdown,
+      });
+
       const updated = await tx.invoice.update({
         where: { id },
         data: {
@@ -928,18 +1016,16 @@ export class InvoicingService {
           taxCents: totals.taxCents,
           grossCents: totals.grossCents,
           taxBreakdown: totals.taxBreakdown,
-          customerName: company.billingName?.trim() || company.name,
-          customerStreet: company.billingStreet,
-          customerPostalCode: company.billingPostalCode,
-          customerCity: company.billingCity,
-          customerCountryCode: company.billingCountryCode,
-          customerVatId: company.vatId,
-          customerEmail: company.invoiceEmail,
+          ...customerSnapshot,
           supplierSnapshot,
-          notes: profile.smallBusinessRule
-            ? appendNote(existing.notes, SMALL_BUSINESS_NOTE)
-            : existing.notes,
-          finalizedAt: new Date(),
+          notes,
+          pdfStoredPath: documents.pdfStoredPath,
+          pdfSha256: documents.pdfSha256,
+          zugferdXmlStoredPath: documents.zugferdXmlStoredPath,
+          zugferdXmlSha256: documents.zugferdXmlSha256,
+          xrechnungStoredPath: documents.xrechnungStoredPath,
+          xrechnungSha256: documents.xrechnungSha256,
+          finalizedAt: renderedAt,
           finalizedById: actorUserId,
         },
         include: { company: true, lines: { orderBy: { position: 'asc' } } },
@@ -992,6 +1078,9 @@ export class InvoicingService {
               grossCents: updated.grossCents,
               dueDate: dueDate.toISOString(),
               customerName: updated.customerName,
+              pdfSha256: documents.pdfSha256,
+              zugferdXmlSha256: documents.zugferdXmlSha256,
+              xrechnungSha256: documents.xrechnungSha256,
             },
           },
         },
@@ -1009,6 +1098,132 @@ export class InvoicingService {
       metadata: { companyId: invoice.companyId, grossCents: invoice.grossCents },
     });
     return invoice;
+  }
+
+  /**
+   * Builds the legal documents for a freshly finalized invoice and writes them to
+   * immutable storage. Called exactly once per invoice, from inside the finalize
+   * transaction — if the transaction rolls back the files are simply orphaned, which is
+   * far safer than a finalized invoice whose documents were never written.
+   */
+  private async renderAndStoreDocuments(params: {
+    preference: EInvoicePreference;
+    renderedAt: Date;
+    invoice: FinalizedInvoiceSnapshot;
+    supplier: SupplierSnapshot;
+    lines: FinalizedLineSnapshot[];
+    taxBreakdown: EInvoiceTaxGroup[];
+  }): Promise<{
+    pdfStoredPath: string;
+    pdfSha256: string;
+    zugferdXmlStoredPath: string | null;
+    zugferdXmlSha256: string | null;
+    xrechnungStoredPath: string | null;
+    xrechnungSha256: string | null;
+  }> {
+    const invoiceNumber = params.invoice.number ?? '';
+    let rendered;
+    try {
+      rendered = await renderInvoiceDocuments({
+        document: buildEInvoiceDocument({
+          invoice: params.invoice,
+          supplier: params.supplier,
+          lines: params.lines,
+          taxBreakdown: params.taxBreakdown,
+        }),
+        preference: params.preference,
+        renderedAt: params.renderedAt,
+      });
+    } catch (error) {
+      if (error instanceof EInvoiceValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+
+    const pdf = await this.invoiceDocuments.save(
+      this.invoiceDocuments.buildFileName(invoiceNumber, 'rechnung'),
+      rendered.pdf,
+    );
+    const zugferd = rendered.ciiXml
+      ? await this.invoiceDocuments.save(
+          this.invoiceDocuments.buildFileName(invoiceNumber, 'zugferd'),
+          rendered.ciiXml,
+        )
+      : null;
+    const xrechnung = rendered.ublXml
+      ? await this.invoiceDocuments.save(
+          this.invoiceDocuments.buildFileName(invoiceNumber, 'xrechnung'),
+          rendered.ublXml,
+        )
+      : null;
+
+    return {
+      pdfStoredPath: pdf.storedPath,
+      pdfSha256: pdf.sha256,
+      zugferdXmlStoredPath: zugferd?.storedPath ?? null,
+      zugferdXmlSha256: zugferd?.sha256 ?? null,
+      xrechnungStoredPath: xrechnung?.storedPath ?? null,
+      xrechnungSha256: xrechnung?.sha256 ?? null,
+    };
+  }
+
+  /**
+   * Serves the document stored at finalize time. Nothing is ever re-rendered here: the
+   * bytes a customer receives today must be the bytes that were archived back then.
+   */
+  async downloadInvoiceDocument(
+    id: string,
+    kind: 'pdf' | 'xml',
+    requestedFormat?: string,
+  ): Promise<{ stream: Readable; fileName: string; mimeType: string }> {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      select: {
+        number: true,
+        status: true,
+        pdfStoredPath: true,
+        zugferdXmlStoredPath: true,
+        xrechnungStoredPath: true,
+      },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === OutgoingInvoiceStatus.draft) {
+      throw new ConflictException('Draft invoices have no legal documents yet');
+    }
+
+    const storedPath =
+      kind === 'pdf'
+        ? invoice.pdfStoredPath
+        : this.resolveXmlStoredPath(invoice, requestedFormat);
+    if (!storedPath) {
+      throw new NotFoundException('The requested invoice document does not exist');
+    }
+
+    const opened = await this.invoiceDocuments.open(storedPath);
+    if (!opened) {
+      throw new NotFoundException('The stored invoice document could not be read');
+    }
+
+    const extension = kind === 'pdf' ? 'pdf' : 'xml';
+    return {
+      stream: opened.stream,
+      fileName: `${invoice.number ?? id}.${extension}`,
+      mimeType: opened.contentType ?? this.invoiceDocuments.mimeTypeFor(storedPath),
+    };
+  }
+
+  private resolveXmlStoredPath(
+    invoice: { zugferdXmlStoredPath: string | null; xrechnungStoredPath: string | null },
+    requestedFormat?: string,
+  ): string | null {
+    if (requestedFormat === 'zugferd') return invoice.zugferdXmlStoredPath;
+    if (requestedFormat === 'xrechnung') return invoice.xrechnungStoredPath;
+    if (requestedFormat !== undefined) {
+      throw new BadRequestException('format must be either zugferd or xrechnung');
+    }
+    // XRechnung is the legally original document wherever it exists, so it wins by default.
+    return invoice.xrechnungStoredPath ?? invoice.zugferdXmlStoredPath;
   }
 
   private parseStatus(value: string): OutgoingInvoiceStatus {

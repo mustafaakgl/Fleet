@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import type { Request } from 'express';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import type { Readable } from 'node:stream';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -92,5 +93,33 @@ export class InvoicingController {
   @RequiresWrite()
   finalizeInvoice(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.invoicing.finalizeInvoice(id, request.user.tenantId, request.user.id);
+  }
+
+  @Get('invoices/:id/pdf')
+  async downloadPdf(@Param('id') id: string, @Res() response: Response) {
+    const file = await this.invoicing.downloadInvoiceDocument(id, 'pdf');
+    this.sendStoredDocument(response, file);
+  }
+
+  @Get('invoices/:id/xml')
+  async downloadXml(
+    @Param('id') id: string,
+    @Res() response: Response,
+    @Query('format') format?: string,
+  ) {
+    const file = await this.invoicing.downloadInvoiceDocument(id, 'xml', format);
+    this.sendStoredDocument(response, file);
+  }
+
+  private sendStoredDocument(
+    response: Response,
+    file: { stream: Readable; fileName: string; mimeType: string },
+  ): void {
+    response.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(file.fileName)}"`,
+      'Cache-Control': 'private, no-store',
+    });
+    file.stream.pipe(response);
   }
 }
