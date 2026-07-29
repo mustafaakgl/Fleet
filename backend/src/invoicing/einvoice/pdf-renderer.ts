@@ -11,14 +11,29 @@
  *  - the gross total (BT-112)
  * plus the § 13b reverse-charge statement and the § 19 small business note when they apply.
  *
- * PDF/A-3 note: this writes the PDF/A-3 identification XMP, the Factur-X extension schema
- * and the embedded file with AFRelationship=Alternative, which is what makes a reader treat
- * the file as a hybrid e-invoice. Byte-level PDF/A-3b validation additionally requires
- * embedded font programs and an ICC output intent; the standard-14 fonts used here are not
- * embeddable, so a validator will flag those two points until a font/ICC asset is shipped.
+ * PDF/A-3b: the file embeds its font programs (Liberation Sans, SIL OFL 1.1), carries an
+ * sRGB OutputIntent (CC0-1.0 profile), declares the PDF/A identification and the Factur-X
+ * extension schema in XMP, writes a trailer /ID, and attaches the CII XML with
+ * AFRelationship=Alternative. See pdf-assets.ts for the asset provenance and licences.
  */
-import { AFRelationship, PDFDocument, PDFFont, PDFName, PDFPage, StandardFonts, rgb } from 'pdf-lib';
-import { toWinAnsiSafeText } from '../../equipment-issuances/pdf-text.util';
+import { createHash } from 'node:crypto';
+import fontkit from '@pdf-lib/fontkit';
+import {
+  AFRelationship,
+  PDFArray,
+  PDFDocument,
+  PDFFont,
+  PDFHexString,
+  PDFName,
+  PDFPage,
+  rgb,
+} from 'pdf-lib';
+import {
+  loadBoldFont,
+  loadRegularFont,
+  loadSrgbProfile,
+  SRGB_OUTPUT_CONDITION,
+} from './pdf-assets';
 import {
   mergeTaxGroups,
   unitLabelDe,
@@ -63,10 +78,24 @@ export type InvoicePdfInput = {
 
 type Cursor = { page: PDFPage; y: number };
 
-type Fonts = { regular: PDFFont; bold: PDFFont };
+type Fonts = { regular: PDFFont; bold: PDFFont; encodable: Set<number> };
+
+/**
+ * The embedded font covers Latin including German and Turkish, but not every script a
+ * company name might use. Anything the font has no glyph for is replaced rather than
+ * allowed to abort the render — an invoice must always be producible.
+ */
+let activeFonts: Fonts | null = null;
 
 function safe(value: string): string {
-  return toWinAnsiSafeText(value);
+  const encodable = activeFonts?.encodable;
+  if (!encodable) return value;
+  let result = '';
+  for (const char of value) {
+    const codePoint = char.codePointAt(0);
+    result += codePoint !== undefined && encodable.has(codePoint) ? char : '?';
+  }
+  return result;
 }
 
 function drawLeft(
@@ -346,10 +375,64 @@ function drawNotes(pdf: PDFDocument, cursor: Cursor, fonts: Fonts, document: EIn
  * PDF/A-3 identification plus the Factur-X extension schema. Readers use the fx: block to
  * discover that the attachment is a structured invoice and which profile it follows.
  */
-function buildXmpMetadata(document: EInvoiceDocument, hasCiiAttachment: boolean): string {
+/**
+ * PDF/A only permits XMP properties from schemas it knows, so any custom namespace has to
+ * ship its own description in the pdfaExtension schema container. Without this block
+ * veraPDF rejects the file on clause 6.6.2.3.1 even though the fx: values are correct.
+ */
+const FACTUR_X_EXTENSION_SCHEMA = `
+      <rdf:Description rdf:about=""
+          xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/"
+          xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"
+          xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#">
+        <pdfaExtension:schemas>
+          <rdf:Bag>
+            <rdf:li rdf:parseType="Resource">
+              <pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>
+              <pdfaSchema:namespaceURI>urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#</pdfaSchema:namespaceURI>
+              <pdfaSchema:prefix>fx</pdfaSchema:prefix>
+              <pdfaSchema:property>
+                <rdf:Seq>
+                  <rdf:li rdf:parseType="Resource">
+                    <pdfaProperty:name>DocumentFileName</pdfaProperty:name>
+                    <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                    <pdfaProperty:category>external</pdfaProperty:category>
+                    <pdfaProperty:description>name of the embedded XML invoice file</pdfaProperty:description>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <pdfaProperty:name>DocumentType</pdfaProperty:name>
+                    <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                    <pdfaProperty:category>external</pdfaProperty:category>
+                    <pdfaProperty:description>INVOICE</pdfaProperty:description>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <pdfaProperty:name>Version</pdfaProperty:name>
+                    <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                    <pdfaProperty:category>external</pdfaProperty:category>
+                    <pdfaProperty:description>version of the Factur-X standard</pdfaProperty:description>
+                  </rdf:li>
+                  <rdf:li rdf:parseType="Resource">
+                    <pdfaProperty:name>ConformanceLevel</pdfaProperty:name>
+                    <pdfaProperty:valueType>Text</pdfaProperty:valueType>
+                    <pdfaProperty:category>external</pdfaProperty:category>
+                    <pdfaProperty:description>conformance level of the embedded invoice data</pdfaProperty:description>
+                  </rdf:li>
+                </rdf:Seq>
+              </pdfaSchema:property>
+            </rdf:li>
+          </rdf:Bag>
+        </pdfaExtension:schemas>
+      </rdf:Description>`;
+
+function buildXmpMetadata(
+  document: EInvoiceDocument,
+  hasCiiAttachment: boolean,
+  renderedAt: Date,
+): string {
   const title = `Rechnung ${document.number}`;
+  const timestamp = renderedAt.toISOString().replace(/\.\d{3}Z$/, 'Z');
   const facturX = hasCiiAttachment
-    ? `
+    ? `${FACTUR_X_EXTENSION_SCHEMA}
       <rdf:Description rdf:about=""
           xmlns:fx="urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#">
         <fx:DocumentType>INVOICE</fx:DocumentType>
@@ -377,19 +460,76 @@ function buildXmpMetadata(document: EInvoiceDocument, hasCiiAttachment: boolean)
           <rdf:li>${escapeXml(document.supplier.name)}</rdf:li>
         </rdf:Seq>
       </dc:creator>
+      <dc:description>
+        <rdf:Alt>
+          <rdf:li xml:lang="x-default">${escapeXml(`Rechnung ${document.number} an ${document.customer.name}`)}</rdf:li>
+        </rdf:Alt>
+      </dc:description>
+    </rdf:Description>
+    <rdf:Description rdf:about="" xmlns:pdf="http://ns.adobe.com/pdf/1.3/">
+      <pdf:Producer>Fleet Invoicing</pdf:Producer>
+    </rdf:Description>
+    <rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/">
+      <xmp:CreatorTool>Fleet Invoicing</xmp:CreatorTool>
+      <xmp:CreateDate>${timestamp}</xmp:CreateDate>
+      <xmp:ModifyDate>${timestamp}</xmp:ModifyDate>
     </rdf:Description>${facturX}
   </rdf:RDF>
 </x:xmpmeta>
 <?xpacket end="w"?>`;
 }
 
+/**
+ * PDF/A-3b forbids unqualified device colour spaces unless the file declares what device
+ * they refer to. The sRGB profile is embedded so the colours stay reproducible offline.
+ */
+function addSrgbOutputIntent(pdf: PDFDocument): void {
+  const profile = loadSrgbProfile();
+  const profileStream = pdf.context.flateStream(profile, { N: 3 });
+  const profileRef = pdf.context.register(profileStream);
+
+  const outputIntent = pdf.context.obj({
+    Type: 'OutputIntent',
+    S: 'GTS_PDFA1',
+    OutputConditionIdentifier: PDFHexString.fromText(SRGB_OUTPUT_CONDITION),
+    Info: PDFHexString.fromText(SRGB_OUTPUT_CONDITION),
+    DestOutputProfile: profileRef,
+  });
+
+  pdf.catalog.set(
+    PDFName.of('OutputIntents'),
+    pdf.context.obj([pdf.context.register(outputIntent)]),
+  );
+}
+
+/**
+ * ISO 19005-3 requires a file identifier in the trailer. pdf-lib does not write one, so
+ * derive it from the invoice number and render timestamp — stable for a given invoice,
+ * which keeps the output byte-identical across re-runs.
+ */
+function addFileIdentifier(pdf: PDFDocument, document: EInvoiceDocument, renderedAt: Date): void {
+  const seed = createHash('sha256')
+    .update(`${document.number}|${renderedAt.toISOString()}`)
+    .digest('hex')
+    .slice(0, 32)
+    .toUpperCase();
+  const identifier = PDFHexString.of(seed);
+  pdf.context.trailerInfo.ID = pdf.context.obj([identifier, identifier]) as PDFArray;
+}
+
 export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Uint8Array> {
   const { document, ciiXml, renderedAt } = input;
   const pdf = await PDFDocument.create();
+  // PDF/A-3b needs the font programs inside the file; the standard-14 fonts cannot do that.
+  pdf.registerFontkit(fontkit);
+  const regular = await pdf.embedFont(loadRegularFont(), { subset: true });
+  const bold = await pdf.embedFont(loadBoldFont(), { subset: true });
   const fonts: Fonts = {
-    regular: await pdf.embedFont(StandardFonts.Helvetica),
-    bold: await pdf.embedFont(StandardFonts.HelveticaBold),
+    regular,
+    bold,
+    encodable: new Set(regular.getCharacterSet()),
   };
+  activeFonts = fonts;
 
   pdf.setTitle(safe(`Rechnung ${document.number}`));
   pdf.setAuthor(safe(document.supplier.name));
@@ -416,12 +556,19 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arr
     });
   }
 
-  const xmp = buildXmpMetadata(document, Boolean(ciiXml));
+  const xmp = buildXmpMetadata(document, Boolean(ciiXml), renderedAt);
   const metadataStream = pdf.context.stream(xmp, {
     Type: 'Metadata',
     Subtype: 'XML',
   });
   pdf.catalog.set(PDFName.of('Metadata'), pdf.context.register(metadataStream));
 
-  return pdf.save();
+  addSrgbOutputIntent(pdf);
+  addFileIdentifier(pdf, document, renderedAt);
+
+  try {
+    return await pdf.save();
+  } finally {
+    activeFonts = null;
+  }
 }

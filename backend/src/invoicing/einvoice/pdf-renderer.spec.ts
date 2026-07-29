@@ -6,6 +6,7 @@ import {
   PDFDocument,
   PDFHexString,
   PDFName,
+  PDFPage,
   PDFRawStream,
   decodePDFRawStream,
 } from 'pdf-lib';
@@ -16,9 +17,6 @@ import type { EInvoiceDocument } from './document-model';
 
 const RENDERED_AT = new Date('2026-07-27T10:00:00.000Z');
 
-/** pdf-lib writes standard-font text as WinAnsi hex strings, so decode it back. */
-const WIN_ANSI = new TextDecoder('windows-1252');
-
 async function render(document: EInvoiceDocument, withXml = true): Promise<Uint8Array> {
   return renderInvoicePdf({
     document,
@@ -26,6 +24,13 @@ async function render(document: EInvoiceDocument, withXml = true): Promise<Uint8
     renderedAt: RENDERED_AT,
   });
 }
+
+/**
+ * Text extraction for embedded subset fonts: the content stream carries glyph ids, so the
+ * font's ToUnicode CMap has to be applied to get characters back. Each font resource has
+ * its own subset, hence the per-resource maps and the `Tf` tracking.
+ */
+type UnicodeMap = Map<number, string>;
 
 function decodeStream(object: PDFRawStream): string | null {
   try {
@@ -35,15 +40,72 @@ function decodeStream(object: PDFRawStream): string | null {
   }
 }
 
+function parseToUnicode(stream: PDFRawStream): UnicodeMap {
+  const map: UnicodeMap = new Map();
+  const text = decodeStream(stream) ?? '';
+  for (const block of text.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
+    for (const entry of block[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
+      const codePoints = entry[2].match(/.{4}/g) ?? [];
+      map.set(
+        parseInt(entry[1], 16),
+        String.fromCharCode(...codePoints.map((hex) => parseInt(hex, 16))),
+      );
+    }
+  }
+  return map;
+}
+
+/** Resource name (e.g. "F1") to the CMap of the font bound to it, per page. */
+function fontMapsForPage(page: PDFPage): Map<string, UnicodeMap> {
+  const maps = new Map<string, UnicodeMap>();
+  const resources = page.node.Resources();
+  const fonts = resources?.lookupMaybe(PDFName.of('Font'), PDFDict);
+  if (!fonts) return maps;
+
+  for (const [key] of fonts.entries()) {
+    const font = fonts.lookupMaybe(key, PDFDict);
+    const toUnicode = font?.lookup(PDFName.of('ToUnicode'));
+    if (toUnicode instanceof PDFRawStream) {
+      maps.set(key.asString().replace(/^\//, ''), parseToUnicode(toUnicode));
+    }
+  }
+  return maps;
+}
+
+function pageContent(page: PDFPage): string {
+  const contents = page.node.Contents();
+  if (contents instanceof PDFRawStream) return decodeStream(contents) ?? '';
+  if (contents instanceof PDFArray) {
+    let combined = '';
+    for (let index = 0; index < contents.size(); index += 1) {
+      const part = contents.lookup(index);
+      if (part instanceof PDFRawStream) combined += decodeStream(part) ?? '';
+    }
+    return combined;
+  }
+  return '';
+}
+
 /** The text a human actually sees on the page. */
 function visibleText(pdf: PDFDocument): string {
   const parts: string[] = [];
-  for (const [, object] of pdf.context.enumerateIndirectObjects()) {
-    if (!(object instanceof PDFRawStream)) continue;
-    const decoded = decodeStream(object);
-    if (!decoded) continue;
-    for (const match of decoded.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
-      parts.push(WIN_ANSI.decode(Buffer.from(match[1], 'hex')));
+  for (const page of pdf.getPages()) {
+    const maps = fontMapsForPage(page);
+    let active: UnicodeMap | undefined;
+    const content = pageContent(page);
+
+    for (const token of content.matchAll(/\/([^\s/]+)\s+[\d.]+\s+Tf|<([0-9A-Fa-f]+)>\s*Tj/g)) {
+      if (token[1] !== undefined) {
+        active = maps.get(token[1]);
+        continue;
+      }
+      const hex = token[2];
+      const codes = hex.match(/.{4}/g) ?? [];
+      parts.push(
+        codes
+          .map((code) => active?.get(parseInt(code, 16)) ?? '')
+          .join(''),
+      );
     }
   }
   return parts.join('\n');
@@ -258,7 +320,7 @@ describe('invoice PDF rendering', () => {
     assert.ok(text.includes('71.400,00 €'));
   });
 
-  it('replaces characters the standard fonts cannot encode instead of failing', async () => {
+  it('renders Turkish characters properly now that the font is embedded', async () => {
     const text = visibleText(
       await PDFDocument.load(
         await render(
@@ -277,7 +339,95 @@ describe('invoice PDF rendering', () => {
       ),
     );
 
-    assert.ok(text.includes('Askin Nakliyat Ltd. Sti.'));
-    assert.ok(text.includes('Istanbul'));
+    // Liberation Sans covers Latin Extended, so these are no longer degraded to "?".
+    assert.ok(text.includes('Aşkın Nakliyat Ltd. Şti.'));
+    assert.ok(text.includes('İstanbul'));
+    assert.ok(text.includes('Bağdat Cad. 1'));
+  });
+
+  it('substitutes glyphs the font does not have instead of failing', async () => {
+    const text = visibleText(
+      await PDFDocument.load(
+        await render(
+          sampleDocument({
+            customer: {
+              name: '株式会社テスト',
+              street: 'Teststr. 1',
+              postalCode: '10115',
+              city: 'Berlin',
+              countryCode: 'DE',
+              vatId: null,
+              email: null,
+            },
+          }),
+        ),
+      ),
+    );
+
+    assert.ok(text.includes('???????'));
+    assert.ok(text.includes('Teststr. 1'));
+  });
+
+  it('embeds the font programs PDF/A-3b requires', async () => {
+    const pdf = await PDFDocument.load(await render(sampleDocument()));
+    let embeddedFontFiles = 0;
+
+    for (const [, object] of pdf.context.enumerateIndirectObjects()) {
+      if (!(object instanceof PDFDict)) continue;
+      if (object.get(PDFName.of('Type'))?.toString() !== '/FontDescriptor') continue;
+      // A subset TrueType program lives in FontFile2.
+      if (object.get(PDFName.of('FontFile2'))) embeddedFontFiles += 1;
+    }
+
+    // One descriptor for the regular face, one for the bold face.
+    assert.equal(embeddedFontFiles, 2);
+  });
+
+  it('declares an sRGB output intent so device colours are unambiguous', async () => {
+    const pdf = await PDFDocument.load(await render(sampleDocument()));
+    const intents = pdf.catalog.lookup(PDFName.of('OutputIntents'), PDFArray);
+
+    assert.equal(intents.size(), 1);
+    const intent = intents.lookup(0, PDFDict);
+    assert.equal(intent.get(PDFName.of('S'))?.toString(), '/GTS_PDFA1');
+
+    const profile = intent.lookup(PDFName.of('DestOutputProfile'));
+    assert.ok(profile instanceof PDFRawStream, 'the ICC profile must be embedded');
+    assert.equal(profile.dict.get(PDFName.of('N'))?.toString(), '3');
+  });
+
+  it('writes the trailer file identifier ISO 19005-3 requires', async () => {
+    const bytes = await render(sampleDocument());
+    const pdf = await PDFDocument.load(bytes);
+    const id = pdf.context.trailerInfo.ID;
+
+    assert.ok(id instanceof PDFArray);
+    assert.equal(id.size(), 2);
+    // Both halves are equal for a first-generation file, and stable across renders.
+    assert.equal(id.lookup(0)?.toString(), id.lookup(1)?.toString());
+
+    const again = await PDFDocument.load(await render(sampleDocument()));
+    assert.equal(
+      (again.context.trailerInfo.ID as PDFArray).lookup(0)?.toString(),
+      id.lookup(0)?.toString(),
+    );
+  });
+
+  it('declares the Factur-X XMP extension schema PDF/A demands for custom namespaces', async () => {
+    const xmp = xmpMetadata(await PDFDocument.load(await render(sampleDocument())));
+
+    assert.ok(xmp.includes('pdfaExtension:schemas'));
+    assert.ok(xmp.includes('<pdfaSchema:prefix>fx</pdfaSchema:prefix>'));
+    assert.ok(
+      xmp.includes(
+        '<pdfaSchema:namespaceURI>urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#</pdfaSchema:namespaceURI>',
+      ),
+    );
+    for (const property of ['DocumentFileName', 'DocumentType', 'Version', 'ConformanceLevel']) {
+      assert.ok(
+        xmp.includes(`<pdfaProperty:name>${property}</pdfaProperty:name>`),
+        `${property} must be declared in the extension schema`,
+      );
+    }
   });
 });
