@@ -18,7 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDraftDto, ManualInvoiceLineDto } from './dto/create-invoice-draft.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
 import { UpsertBillingProfileDto } from './dto/upsert-billing-profile.dto';
-import { formatInvoiceNumber } from './invoice-number';
+import { allocateInvoiceNumber, formatInvoiceNumber } from './invoice-number';
 import {
   calculateInvoiceTotals,
   calculateLine,
@@ -30,6 +30,10 @@ import {
 const DEFAULT_PAYMENT_TERM_DAYS = 14;
 const DEFAULT_TAX_RATE_BASIS_POINTS = 1_900;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Mandatory statement on every invoice issued under the German small business rule. */
+const SMALL_BUSINESS_NOTE =
+  'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet (Kleinunternehmerregelung).';
 
 /** Statuses that still block an assignment from ever reaching the invoicing pipeline. */
 const OPEN_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
@@ -67,6 +71,13 @@ function taxRateForCategory(
   if (category === InvoiceTaxCategory.standard) return defaultTaxRateBasisPoints;
   if (category === InvoiceTaxCategory.reduced) return 700;
   return 0;
+}
+
+/** Appends a mandatory legal note without duplicating it on repeated writes. */
+function appendNote(notes: string | null, note: string): string {
+  const current = notes?.trim();
+  if (!current) return note;
+  return current.includes(note) ? current : `${current}\n${note}`;
 }
 
 function assertTaxCombination(category: InvoiceTaxCategory, rate: number): void {
@@ -795,6 +806,207 @@ export class InvoicingService {
       entityType: 'invoice',
       entityId: invoice.id,
       summary: 'Outgoing invoice draft updated',
+    });
+    return invoice;
+  }
+
+  /**
+   * Turns a draft into a legally binding invoice. Everything happens inside one
+   * transaction: a rollback must also roll back the consumed invoice number, and the
+   * customer/supplier data is snapshotted because GoBD forbids a finalized invoice from
+   * changing when the underlying master data is edited later.
+   */
+  async finalizeInvoice(id: string, tenantId: string, actorUserId: string) {
+    const invoice = await this.prisma.$transaction(async (tx) => {
+      // Serializes concurrent finalize attempts on the same invoice; the status check
+      // below is only meaningful while this row lock is held.
+      const locked = await tx.$queryRaw<Array<{ id: string; status: OutgoingInvoiceStatus }>>(
+        Prisma.sql`
+          SELECT "id", "status"
+          FROM "Invoice"
+          WHERE "id" = ${id} AND "tenantId" = ${tenantId}
+          FOR UPDATE
+        `,
+      );
+      if (locked.length === 0) throw new NotFoundException('Invoice not found');
+      if (locked[0].status !== OutgoingInvoiceStatus.draft) {
+        throw new ConflictException('Invoice has already been finalized');
+      }
+
+      const existing = await tx.invoice.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException('Invoice not found');
+
+      const [lines, profile, company] = await Promise.all([
+        tx.invoiceLine.findMany({
+          where: { invoiceId: id },
+          orderBy: { position: 'asc' },
+        }),
+        tx.tenantBillingProfile.findUnique({ where: { tenantId } }),
+        tx.company.findUnique({ where: { id: existing.companyId } }),
+      ]);
+
+      if (lines.length === 0) {
+        throw new BadRequestException('An invoice needs at least one line before it can be finalized');
+      }
+      if (!profile) {
+        throw new BadRequestException('A billing profile is required before finalizing');
+      }
+      if (!company) throw new NotFoundException('Company not found');
+
+      // §19 UStG: a small business never charges VAT, no matter what the draft lines say.
+      const recalculated = lines.map((line) => {
+        const forceExempt = profile.smallBusinessRule && line.taxRateBasisPoints !== 0;
+        const taxCategory = forceExempt ? InvoiceTaxCategory.exempt : line.taxCategory;
+        const taxRateBasisPoints = forceExempt ? 0 : line.taxRateBasisPoints;
+        const input = {
+          quantityMilliunits: parseQuantityToMilliunits(line.quantity.toString()),
+          unitPriceCents: line.unitPriceCents,
+          taxRateBasisPoints,
+          taxCategory: taxCategory as InvoiceTaxCategoryValue,
+        };
+        return { line, taxCategory, input, calculated: calculateLine(input) };
+      });
+
+      // The client never gets to dictate the amounts that end up on a finalized invoice.
+      const totals = calculateInvoiceTotals(recalculated.map((entry) => entry.input));
+
+      for (const entry of recalculated) {
+        const unchanged =
+          entry.line.taxRateBasisPoints === entry.input.taxRateBasisPoints &&
+          entry.line.taxCategory === entry.taxCategory &&
+          entry.line.netCents === entry.calculated.netCents &&
+          entry.line.taxCents === entry.calculated.taxCents &&
+          entry.line.grossCents === entry.calculated.grossCents;
+        if (unchanged) continue;
+        await tx.invoiceLine.update({
+          where: { id: entry.line.id },
+          data: {
+            taxRateBasisPoints: entry.input.taxRateBasisPoints,
+            taxCategory: entry.taxCategory,
+            netCents: entry.calculated.netCents,
+            taxCents: entry.calculated.taxCents,
+            grossCents: entry.calculated.grossCents,
+          },
+        });
+      }
+
+      const allocated = await allocateInvoiceNumber(
+        tx,
+        tenantId,
+        existing.invoiceDate,
+        profile.invoiceNumberFormat,
+      );
+
+      const dueDate = new Date(existing.invoiceDate);
+      dueDate.setUTCDate(dueDate.getUTCDate() + existing.paymentTermDays);
+
+      const supplierSnapshot: Prisma.InputJsonObject = {
+        legalName: profile.legalName,
+        street: profile.street,
+        postalCode: profile.postalCode,
+        city: profile.city,
+        countryCode: profile.countryCode,
+        taxNumber: profile.taxNumber,
+        vatId: profile.vatId,
+        iban: profile.iban,
+        bic: profile.bic,
+        bankName: profile.bankName,
+        invoiceNumberFormat: profile.invoiceNumberFormat,
+        defaultPaymentTermDays: profile.defaultPaymentTermDays,
+        defaultTaxRateBasisPoints: profile.defaultTaxRateBasisPoints,
+        smallBusinessRule: profile.smallBusinessRule,
+        invoiceFooterText: profile.invoiceFooterText,
+      };
+
+      const updated = await tx.invoice.update({
+        where: { id },
+        data: {
+          status: OutgoingInvoiceStatus.finalized,
+          number: allocated.number,
+          dueDate,
+          netCents: totals.netCents,
+          taxCents: totals.taxCents,
+          grossCents: totals.grossCents,
+          taxBreakdown: totals.taxBreakdown,
+          customerName: company.billingName?.trim() || company.name,
+          customerStreet: company.billingStreet,
+          customerPostalCode: company.billingPostalCode,
+          customerCity: company.billingCity,
+          customerCountryCode: company.billingCountryCode,
+          customerVatId: company.vatId,
+          customerEmail: company.invoiceEmail,
+          supplierSnapshot,
+          notes: profile.smallBusinessRule
+            ? appendNote(existing.notes, SMALL_BUSINESS_NOTE)
+            : existing.notes,
+          finalizedAt: new Date(),
+          finalizedById: actorUserId,
+        },
+        include: { company: true, lines: { orderBy: { position: 'asc' } } },
+      });
+
+      // Claiming the assignments here is what makes createDraft reject a second invoice
+      // for work that has already been billed.
+      for (const entry of recalculated) {
+        if (entry.line.source !== InvoiceLineSource.assignment || !entry.line.assignmentId) {
+          continue;
+        }
+        try {
+          await tx.invoiceAssignmentClaim.create({
+            data: { assignmentId: entry.line.assignmentId, invoiceLineId: entry.line.id },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            throw new ConflictException(
+              'An assignment on this invoice has already been finalized on another invoice',
+            );
+          }
+          throw error;
+        }
+      }
+
+      await tx.invoiceAuditEvent.create({
+        data: {
+          invoiceId: id,
+          actorUserId,
+          action: 'finalized',
+          snapshot: {
+            before: {
+              status: existing.status,
+              number: existing.number,
+              netCents: existing.netCents,
+              taxCents: existing.taxCents,
+              grossCents: existing.grossCents,
+              dueDate: existing.dueDate?.toISOString() ?? null,
+            },
+            after: {
+              status: updated.status,
+              number: updated.number,
+              sequenceValue: allocated.sequenceValue,
+              sequenceYear: allocated.year,
+              netCents: updated.netCents,
+              taxCents: updated.taxCents,
+              grossCents: updated.grossCents,
+              dueDate: dueDate.toISOString(),
+              customerName: updated.customerName,
+            },
+          },
+        },
+      });
+
+      return updated;
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'invoice.finalized',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      summary: `Outgoing invoice ${invoice.number} finalized`,
+      metadata: { companyId: invoice.companyId, grossCents: invoice.grossCents },
     });
     return invoice;
   }

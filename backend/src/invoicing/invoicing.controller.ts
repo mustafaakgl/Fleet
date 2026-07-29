@@ -87,4 +87,10 @@ export class InvoicingController {
   ) {
     return this.invoicing.updateDraft(id, dto, request.user.id);
   }
+
+  @Post('invoices/:id/finalize')
+  @RequiresWrite()
+  finalizeInvoice(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.invoicing.finalizeInvoice(id, request.user.tenantId, request.user.id);
+  }
 }
