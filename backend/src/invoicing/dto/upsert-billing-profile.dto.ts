@@ -19,6 +19,15 @@ export class UpsertBillingProfileDto {
   @IsString() @Matches(/^[A-Z]{2}$/) countryCode: string = 'DE';
   @IsOptional() @IsString() @MaxLength(50) taxNumber?: string;
   @IsOptional() @IsString() @MaxLength(20) vatId?: string;
+  /** BT-30 (Handelsregisternummer). EN 16931 BR-CO-26 needs it when there is no VAT id. */
+  @IsOptional() @IsString() @MaxLength(50) registrationNumber?: string;
+  /** BT-42. XRechnung BR-DE-6 requires it, BR-DE-27 wants at least three digits. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  @Matches(/^[+()/\d][\d\s()/.-]*$/, { message: 'phone must be a plain telephone number' })
+  @Matches(/(\d[\s()/.-]*){3,}/, { message: 'phone must contain at least three digits' })
+  phone?: string;
   @IsString() @MaxLength(34) iban!: string;
   @IsOptional() @IsString() @MaxLength(11) bic?: string;
   @IsOptional() @IsString() @MaxLength(100) bankName?: string;

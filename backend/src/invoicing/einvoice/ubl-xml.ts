@@ -8,6 +8,7 @@
  * the right authority, so XRechnung makes it mandatory and this writer refuses without it.
  */
 import {
+  assertSellerIsIdentifiable,
   EInvoiceValidationError,
   exemptionReason,
   mergeTaxGroups,
@@ -22,9 +23,13 @@ import {
 import { formatXmlAmount, formatXmlDate, formatXmlPercent, formatXmlQuantity } from './format';
 import { element, optionalTextElement, textElement, xmlDocument } from './xml';
 
-/** Identifies the document as XRechnung 3.0, which is EN 16931 plus the German CIUS. */
+/**
+ * Identifies the document as XRechnung 3.0, which is EN 16931 plus the German CIUS.
+ * KoSIT moved the identifier from `xoev-de:kosit:standard:` to `xeinkauf.de:kosit:` with
+ * version 3.0; using the old form means no validation scenario matches at all.
+ */
 export const XRECHNUNG_CUSTOMIZATION_ID =
-  'urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_3.0';
+  'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0';
 
 export const XRECHNUNG_PROFILE_ID = 'urn:fdc:peppol.eu:2017:poacc:billing:01:1.0';
 
@@ -84,9 +89,13 @@ function supplierParty(supplier: EInvoiceSupplier): string {
         : null,
       element('cac:PartyLegalEntity', {}, [
         textElement('cbc:RegistrationName', supplier.name),
+        // BT-30: lets the buyer identify the seller when there is no VAT id (BR-CO-26).
+        optionalTextElement('cbc:CompanyID', supplier.registrationNumber),
       ]),
+      // BG-6 seller contact. XRechnung BR-DE-6 makes the telephone mandatory.
       element('cac:Contact', {}, [
         textElement('cbc:Name', supplier.name),
+        optionalTextElement('cbc:Telephone', supplier.phone),
         optionalTextElement('cbc:ElectronicMail', supplier.email),
       ]),
     ]),
@@ -188,6 +197,13 @@ export function buildUblXml(document: EInvoiceDocument): string {
       'XRechnung requires a Leitweg-ID (BT-10) on the customer before the invoice can be issued',
     );
   }
+  // Refuse rather than ship a document a public authority's validator will reject.
+  if (!document.supplier.phone?.trim()) {
+    throw new EInvoiceValidationError(
+      'XRechnung (BR-DE-6) requires a seller telephone number (BT-42) in the billing profile before the invoice can be issued',
+    );
+  }
+  assertSellerIsIdentifiable(document.supplier);
 
   const root = element('Invoice', NAMESPACES, [
     textElement('cbc:CustomizationID', XRECHNUNG_CUSTOMIZATION_ID),
@@ -206,9 +222,9 @@ export function buildUblXml(document: EInvoiceDocument): string {
     supplierParty(document.supplier),
     customerParty(document.customer),
     element('cac:PaymentMeans', {}, [
-      // UNCL4461 code 58 = SEPA credit transfer.
+      // UNCL4461 code 58 = SEPA credit transfer. No cbc:PaymentDueDate here — EN 16931
+      // carries the due date only in BT-9 (cbc:DueDate above), see UBL-CR-412.
       textElement('cbc:PaymentMeansCode', '58'),
-      textElement('cbc:PaymentDueDate', formatXmlDate(document.dueDate)),
       element('cac:PayeeFinancialAccount', {}, [
         textElement('cbc:ID', document.supplier.iban),
         optionalTextElement('cbc:Name', document.supplier.bankName),

@@ -138,6 +138,8 @@ export class InvoicingService {
       countryCode: dto.countryCode,
       taxNumber: dto.taxNumber?.trim() || null,
       vatId: dto.vatId?.trim() || null,
+      registrationNumber: dto.registrationNumber?.trim() || null,
+      phone: dto.phone?.trim() || null,
       iban: dto.iban.replace(/\s+/g, '').toUpperCase(),
       bic: dto.bic?.replace(/\s+/g, '').toUpperCase() || null,
       bankName: dto.bankName?.trim() || null,
@@ -870,11 +872,24 @@ export class InvoicingService {
         throw new BadRequestException('A billing profile is required before finalizing');
       }
       if (!company) throw new NotFoundException('Company not found');
-      // Fail before a number is spent: an XRechnung without a Leitweg-ID cannot be routed
-      // to the authority, so the invoice must not become final in that state.
-      if (requiresUbl(company.eInvoicePreference) && !company.leitwegId?.trim()) {
+      // Fail before a number is spent. These are the conformance rules the official
+      // validators enforce; shipping a document that fails them would be worse than
+      // refusing, because finalized documents are never re-rendered.
+      if (requiresUbl(company.eInvoicePreference)) {
+        if (!company.leitwegId?.trim()) {
+          throw new BadRequestException(
+            'A Leitweg-ID is required on the customer before an XRechnung invoice can be finalized',
+          );
+        }
+        if (!profile.phone?.trim()) {
+          throw new BadRequestException(
+            'XRechnung (BR-DE-6) requires a seller telephone number (BT-42) in the billing profile before the invoice can be issued',
+          );
+        }
+      }
+      if (!profile.vatId?.trim() && !profile.registrationNumber?.trim()) {
         throw new BadRequestException(
-          'A Leitweg-ID is required on the customer before an XRechnung invoice can be finalized',
+          'EN 16931 (BR-CO-26) requires a seller VAT ID or a legal registration number (Handelsregisternummer) in the billing profile; a tax number alone is not enough',
         );
       }
 
@@ -933,6 +948,8 @@ export class InvoicingService {
         countryCode: profile.countryCode,
         taxNumber: profile.taxNumber,
         vatId: profile.vatId,
+        registrationNumber: profile.registrationNumber,
+        phone: profile.phone,
         iban: profile.iban,
         bic: profile.bic,
         bankName: profile.bankName,
@@ -985,6 +1002,8 @@ export class InvoicingService {
           countryCode: profile.countryCode,
           taxNumber: profile.taxNumber,
           vatId: profile.vatId,
+          registrationNumber: profile.registrationNumber,
+          phone: profile.phone,
           iban: profile.iban,
           bic: profile.bic,
           bankName: profile.bankName,

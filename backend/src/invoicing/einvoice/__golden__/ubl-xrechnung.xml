@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
-  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_3.0</cbc:CustomizationID>
+  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</cbc:CustomizationID>
   <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
   <cbc:ID>RE-2026-00001</cbc:ID>
   <cbc:IssueDate>2026-07-27</cbc:IssueDate>
@@ -40,9 +40,11 @@
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
         <cbc:RegistrationName>Fleet Transporte GmbH</cbc:RegistrationName>
+        <cbc:CompanyID>HRB 12345 B</cbc:CompanyID>
       </cac:PartyLegalEntity>
       <cac:Contact>
         <cbc:Name>Fleet Transporte GmbH</cbc:Name>
+        <cbc:Telephone>+49 30 1234567</cbc:Telephone>
         <cbc:ElectronicMail>rechnung@fleet.example</cbc:ElectronicMail>
       </cac:Contact>
     </cac:Party>
@@ -74,7 +76,6 @@
   </cac:AccountingCustomerParty>
   <cac:PaymentMeans>
     <cbc:PaymentMeansCode>58</cbc:PaymentMeansCode>
-    <cbc:PaymentDueDate>2026-08-10</cbc:PaymentDueDate>
     <cac:PayeeFinancialAccount>
       <cbc:ID>DE02120300000000202051</cbc:ID>
       <cbc:Name>Deutsche Kreditbank</cbc:Name>

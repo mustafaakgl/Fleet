@@ -9,6 +9,7 @@
  * urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100.
  */
 import {
+  assertSellerIsIdentifiable,
   exemptionReason,
   mergeTaxGroups,
   unitCode,
@@ -61,6 +62,28 @@ function postalAddress(party: { street: string | null; postalCode: string | null
 function sellerParty(supplier: EInvoiceSupplier): string {
   return element('ram:SellerTradeParty', {}, [
     textElement('ram:Name', supplier.name),
+    // BT-30: identifies the seller when there is no VAT id (BR-CO-26).
+    supplier.registrationNumber
+      ? element('ram:SpecifiedLegalOrganization', {}, [
+          textElement('ram:ID', supplier.registrationNumber),
+        ])
+      : null,
+    // BG-6 seller contact (BT-41/42/43).
+    supplier.phone || supplier.email
+      ? element('ram:DefinedTradeContact', {}, [
+          textElement('ram:PersonName', supplier.name),
+          supplier.phone
+            ? element('ram:TelephoneUniversalCommunication', {}, [
+                textElement('ram:CompleteNumber', supplier.phone),
+              ])
+            : null,
+          supplier.email
+            ? element('ram:EmailURIUniversalCommunication', {}, [
+                textElement('ram:URIID', supplier.email),
+              ])
+            : null,
+        ])
+      : null,
     postalAddress(supplier),
     supplier.email
       ? element('ram:URIUniversalCommunication', {}, [
@@ -203,6 +226,8 @@ function documentNotes(document: EInvoiceDocument): string[] {
 }
 
 export function buildCiiXml(document: EInvoiceDocument): string {
+  assertSellerIsIdentifiable(document.supplier);
+
   const root = element('rsm:CrossIndustryInvoice', NAMESPACES, [
     element('rsm:ExchangedDocumentContext', {}, [
       element('ram:GuidelineSpecifiedDocumentContextParameter', {}, [

@@ -97,6 +97,8 @@ type ProfileRow = {
   countryCode: string;
   taxNumber: string | null;
   vatId: string | null;
+  registrationNumber: string | null;
+  phone: string | null;
   iban: string;
   bic: string | null;
   bankName: string | null;
@@ -335,6 +337,8 @@ function billingProfile(overrides: Partial<ProfileRow> = {}): ProfileRow {
     countryCode: 'DE',
     taxNumber: '30/123/45678',
     vatId: 'DE123456789',
+    registrationNumber: 'HRB 12345 B',
+    phone: '+49 30 1234567',
     iban: 'DE02120300000000202051',
     bic: 'BYLADEM1001',
     bankName: 'Deutsche Kreditbank',
@@ -552,6 +556,8 @@ describe('InvoicingService finalize', () => {
       countryCode: 'DE',
       taxNumber: '30/123/45678',
       vatId: 'DE123456789',
+      registrationNumber: 'HRB 12345 B',
+      phone: '+49 30 1234567',
       iban: 'DE02120300000000202051',
       bic: 'BYLADEM1001',
       bankName: 'Deutsche Kreditbank',
@@ -823,7 +829,8 @@ describe('InvoicingService finalize document generation', () => {
     assert.equal(finalized.leitwegId, '991-33333TEST-33');
 
     const xml = storedAt(store, finalized.xrechnungStoredPath).toString('utf8');
-    assert.ok(xml.includes('urn:xoev-de:kosit:standard:xrechnung_3.0'));
+    assert.ok(xml.includes('urn:xeinkauf.de:kosit:xrechnung_3.0'));
+    assert.ok(xml.includes('<cbc:Telephone>+49 30 1234567</cbc:Telephone>'));
     assert.ok(xml.includes('<cbc:BuyerReference>991-33333TEST-33</cbc:BuyerReference>'));
   });
 
@@ -933,6 +940,62 @@ describe('InvoicingService finalize document generation', () => {
         error instanceof NotFoundException &&
         error.message === 'The requested invoice document does not exist',
     );
+  });
+
+  it('refuses to finalize an XRechnung customer when the billing profile has no telephone', async () => {
+    const store = createStore({
+      companies: [
+        company({ eInvoicePreference: EInvoicePreference.xrechnung, leitwegId: '991-33333TEST-33' }),
+      ],
+      profiles: [billingProfile({ phone: null })],
+    });
+    const service = createService(store);
+
+    await assert.rejects(
+      TenantContext.run('tenant-a', () => service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a')),
+      (error: unknown) =>
+        error instanceof BadRequestException &&
+        error.message ===
+          'XRechnung (BR-DE-6) requires a seller telephone number (BT-42) in the billing profile before the invoice can be issued',
+    );
+    assert.deepEqual(store.sequences, []);
+    assert.deepEqual(store.documents, []);
+  });
+
+  it('refuses to finalize when the seller has neither a VAT ID nor a registration number', async () => {
+    // EN 16931 BR-CO-26: a Steuernummer alone does not identify the seller.
+    const store = createStore({
+      profiles: [billingProfile({ vatId: null, registrationNumber: null })],
+    });
+    const service = createService(store);
+
+    await assert.rejects(
+      TenantContext.run('tenant-a', () => service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a')),
+      (error: unknown) =>
+        error instanceof BadRequestException &&
+        error.message.includes('BR-CO-26'),
+    );
+    assert.deepEqual(store.documents, []);
+  });
+
+  it('accepts a small business without a VAT ID when the registration number is on file', async () => {
+    const store = createStore({
+      profiles: [
+        billingProfile({ vatId: null, registrationNumber: 'HRB 98765 B', smallBusinessRule: true }),
+      ],
+    });
+    const service = createService(store);
+
+    const finalized = await TenantContext.run('tenant-a', () =>
+      service.finalizeInvoice('invoice-a', 'tenant-a', 'user-a'),
+    );
+
+    const xml = store.documents
+      .find((document) => document.storedPath === finalized.zugferdXmlStoredPath)
+      ?.contents.toString('utf8');
+    assert.ok(xml?.includes('<ram:SpecifiedLegalOrganization>'));
+    assert.ok(xml?.includes('<ram:ID>HRB 98765 B</ram:ID>'));
+    assert.equal(finalized.taxCents, 0);
   });
 
   it('has no documents to serve while the invoice is still a draft', async () => {

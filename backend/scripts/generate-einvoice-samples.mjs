@@ -39,6 +39,8 @@ const SUPPLIER = {
   countryCode: 'DE',
   vatId: 'DE123456789',
   taxNumber: '30/123/45678',
+  // BT-30, the identifier a § 19 seller without a VAT id has to fall back on (BR-CO-26).
+  registrationNumber: 'HRB 12345 B',
   email: 'rechnung@fleet-transporte.example',
   phone: '+49 30 1234567',
   iban: 'DE02120300000000202051',

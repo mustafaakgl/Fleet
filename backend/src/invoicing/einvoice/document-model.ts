@@ -21,7 +21,11 @@ export type EInvoiceAddress = {
 export type EInvoiceSupplier = EInvoiceAddress & {
   vatId: string | null;
   taxNumber: string | null;
+  /** BT-30 seller legal registration identifier (Handelsregisternummer). */
+  registrationNumber: string | null;
   email: string | null;
+  /** BT-42 seller contact telephone. */
+  phone: string | null;
   iban: string;
   bic: string | null;
   bankName: string | null;
@@ -108,6 +112,19 @@ export function unitCode(unit: EInvoiceUnit): string {
 
 export function unitLabelDe(unit: EInvoiceUnit): string {
   return UNIT_LABELS_DE[unit];
+}
+
+/**
+ * EN 16931 BR-CO-26: a buyer must be able to identify the seller automatically, so at
+ * least one of BT-29 (seller identifier), BT-30 (legal registration id) or BT-31 (VAT id)
+ * has to be present. A Steuernummer is BT-32 and does not count — which is why a § 19
+ * small business without a VAT id needs its Handelsregisternummer on file.
+ */
+export function assertSellerIsIdentifiable(supplier: EInvoiceSupplier): void {
+  if (supplier.vatId?.trim() || supplier.registrationNumber?.trim()) return;
+  throw new EInvoiceValidationError(
+    'EN 16931 (BR-CO-26) requires a seller VAT ID or a legal registration number (Handelsregisternummer) in the billing profile; a tax number alone is not enough',
+  );
 }
 
 /** UNCL5305 VAT category code (BT-118). Reduced rate stays "S"; the rate tells them apart. */

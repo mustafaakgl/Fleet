@@ -622,6 +622,11 @@ model TenantBillingProfile {
   countryCode             String   @default("DE")
   taxNumber               String?
   vatId                   String?
+  /** BT-30 seller legal registration id (Handelsregisternummer). EN 16931 BR-CO-26 needs
+      this whenever the seller has no VAT id, which is the normal § 19 UStG case. */
+  registrationNumber      String?
+  /** BT-42 seller contact telephone. XRechnung BR-DE-6 makes it mandatory. */
+  phone                   String?
   iban                    String
   bic                     String?
   bankName                String?

@@ -57,6 +57,8 @@ export type SupplierSnapshot = {
   countryCode: string;
   taxNumber: string | null;
   vatId: string | null;
+  registrationNumber: string | null;
+  phone: string | null;
   iban: string;
   bic: string | null;
   bankName: string | null;
@@ -126,7 +128,9 @@ export function buildEInvoiceDocument(params: {
       countryCode: supplier.countryCode,
       vatId: supplier.vatId,
       taxNumber: supplier.taxNumber,
+      registrationNumber: supplier.registrationNumber,
       email: supplier.invoiceEmailCc,
+      phone: supplier.phone,
       iban: supplier.iban,
       bic: supplier.bic,
       bankName: supplier.bankName,
