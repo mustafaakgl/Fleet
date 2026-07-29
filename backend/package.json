@@ -14,6 +14,7 @@
     "prestart:dev": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "seed:invoicing-mock": "node scripts/seed-invoicing-mock.mjs",
     "seed:p0-qa": "node scripts/seed-p0-qa.mjs",
     "telematics:sim": "node scripts/telematics-sim.mjs",
     "verify:gateway": "node scripts/verify-gateway.mjs",
