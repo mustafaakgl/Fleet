@@ -193,24 +193,41 @@ function parseKositReport(xml) {
 
 /* -------------------------------------------------------------------- validation */
 
-function validatePdf(mustangJar, file, expectValid) {
-  const action = expectValid ? 'validateExpectValid' : 'validate';
+function validatePdf(mustangJar, file) {
   const result = run('java', [
     '-jar',
     mustangJar,
     '--action',
-    action,
+    'validate',
     '--source',
     file,
     '--disable-file-logging',
   ]);
   const xml = isolateXml(result.stdout ?? '');
   writeFileSync(join(REPORTS_DIR, `${fileStem(file)}-mustang.xml`), xml || (result.stderr ?? ''));
+  return parseMustangReport(xml);
+}
 
-  const parsed = parseMustangReport(xml);
-  // validateExpectValid signals the verdict through the exit code; validate uses 255.
-  const valid = expectValid ? result.status === 0 : parsed.valid;
-  return { ...parsed, valid };
+/**
+ * Mustang's own gate action. It walks a directory of PDFs and exits non-zero if any of
+ * them is invalid, so CI is judged by the tool rather than by our report parsing.
+ * Note it takes `-d <dir>`; passing `--source` makes it throw a NullPointerException.
+ */
+function mustangExpectValid(mustangJar, directory) {
+  const result = run('java', [
+    '-jar',
+    mustangJar,
+    '--action',
+    'validateExpectValid',
+    '-d',
+    directory,
+    '--disable-file-logging',
+  ]);
+  writeFileSync(
+    join(REPORTS_DIR, 'mustang-expect-valid.txt'),
+    `exit=${result.status}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`,
+  );
+  return result.status === 0;
 }
 
 function validateUbl(kositJar, configDir, files) {
@@ -274,7 +291,7 @@ async function main() {
 
   console.log(`\n=== Mustang ${MUSTANG_VERSION}: PDF/A-3 + EN 16931 CII ===`);
   for (const pdf of pdfs) {
-    const result = validatePdf(tools.mustang, pdf, expectValid);
+    const result = validatePdf(tools.mustang, pdf);
     console.log(`\n  ${fileStem(pdf)}: ${result.valid ? 'VALID' : 'INVALID'}`);
     for (const finding of result.findings) {
       console.log(`    [${finding.level}] ${finding.code}: ${finding.message.slice(0, 180)}`);
@@ -295,6 +312,12 @@ async function main() {
       else warningCount += 1;
     }
     if (!result.valid && result.findings.length === 0) errorCount += 1;
+  }
+
+  if (expectValid) {
+    const gatePassed = mustangExpectValid(tools.mustang, SAMPLES_DIR);
+    console.log(`\n=== Mustang validateExpectValid gate: ${gatePassed ? 'PASS' : 'FAIL'} ===`);
+    if (!gatePassed) errorCount += 1;
   }
 
   console.log(`\n[validate] errors=${errorCount} warnings=${warningCount}`);
