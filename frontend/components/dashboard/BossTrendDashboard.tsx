@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
+import { InvoicingSummaryCards } from '@/components/dashboard/InvoicingSummaryCards';
 import { RepairPriorityTrendsChart } from '@/components/dashboard/RepairPriorityTrendsChart';
 import { dashboardApi, finesApi, fleetFuelEntriesApi, tachographApi } from '@/lib/api';
 import type { DashboardSummary } from '@/lib/types';
@@ -223,6 +224,8 @@ export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolea
           </div>
         </section>
       ) : null}
+
+      <InvoicingSummaryCards />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>

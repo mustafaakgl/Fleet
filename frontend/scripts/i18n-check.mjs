@@ -43,6 +43,19 @@ function setDiff(a, b) {
   return missing;
 }
 
+function flattenEntries(value, prefix = '', out = []) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [k, v] of Object.entries(value)) {
+      const next = prefix ? `${prefix}.${k}` : k;
+      flattenEntries(v, next, out);
+    }
+    return out;
+  }
+
+  if (prefix) out.push([prefix, value]);
+  return out;
+}
+
 function walkFiles(dirPath, out = []) {
   if (!fs.existsSync(dirPath)) return out;
 
@@ -153,6 +166,20 @@ function main() {
     }
     if (deExtraVsTr.length > 0) {
       errors.push(`[extra-keys:${fileName}:tr] ${deExtraVsTr.join(', ')}`);
+    }
+  }
+
+  for (const lang of langs) {
+    const commonPath = path.join(localesRoot, lang, 'common.json');
+    if (!fs.existsSync(commonPath)) continue;
+
+    const emptyInvoicingKeys = flattenEntries(readJson(commonPath))
+      .filter(([key]) => key.startsWith('invoicing.'))
+      .filter(([, value]) => typeof value !== 'string' || value.trim() === '')
+      .map(([key]) => key);
+
+    if (emptyInvoicingKeys.length > 0) {
+      errors.push(`[empty-invoicing-values:${lang}] ${emptyInvoicingKeys.join(', ')}`);
     }
   }
 

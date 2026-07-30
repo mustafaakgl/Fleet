@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { InvoicingSummaryCards } from '@/components/dashboard/InvoicingSummaryCards';
 import { Skeleton } from '@/components/ui/skeleton';
 import { finesApi, fleetFuelAnalyticsApi, tachographApi } from '@/lib/api';
 import type { Fine } from '@/lib/types';
@@ -98,6 +99,8 @@ export function AccountingDashboard() {
       <header>
         <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.v3.accounting.title')}</h1>
       </header>
+
+      <InvoicingSummaryCards />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>

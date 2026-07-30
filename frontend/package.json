@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "node ../scripts/dev-next.mjs start",
     "lint": "eslint",
-    "verify": "node scripts/i18n-check.mjs && tsc --noEmit && NEXT_DIST_DIR=.next-verify next build"
+    "verify": "node scripts/i18n-check.mjs && tsc --noEmit && NEXT_DIST_DIR=.next-verify next build",
+    "verify:invoicing-i18n": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -72,6 +73,7 @@ function isOverdueInvoice(invoice: OutgoingInvoiceListItem, now: number): boolea
 
 export default function InvoicingPage() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const [uninvoiced, setUninvoiced] = useState<UninvoicedCompany[]>([]);
   const [invoices, setInvoices] = useState<OutgoingInvoiceListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,6 +106,13 @@ export default function InvoicingPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (requestedTab && TABS.includes(requestedTab as ReceivablesTab)) {
+      setActiveTab(requestedTab as ReceivablesTab);
+    }
+  }, [searchParams]);
 
   const kpis = useMemo(() => {
     const now = Date.now();
