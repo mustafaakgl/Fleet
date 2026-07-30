@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -44,4 +45,15 @@ export class UpsertBillingProfileDto {
   @Type(() => Number) @IsInt() @Min(0) dunningLevel1FeeCents: number = 0;
   @Type(() => Number) @IsInt() @Min(0) dunningLevel2FeeCents: number = 500;
   @Type(() => Number) @IsInt() @Min(0) dunningLevel3FeeCents: number = 1_000;
+
+  // DATEV bookkeeping export settings. Optional: they keep their defaults until the
+  // tax advisor supplies the client's chart of accounts.
+  @IsOptional() @IsString() @MaxLength(20) datevConsultantNumber?: string;
+  @IsOptional() @IsString() @MaxLength(20) datevClientNumber?: string;
+  @IsOptional() @IsIn(['SKR03', 'SKR04']) datevChart?: 'SKR03' | 'SKR04';
+  @IsOptional() @IsString() @Matches(/^\d{3,8}$/) revenueAccount19?: string;
+  @IsOptional() @IsString() @Matches(/^\d{3,8}$/) revenueAccount7?: string;
+  @IsOptional() @IsString() @Matches(/^\d{3,8}$/) revenueAccount0?: string;
+  @IsOptional() @IsString() @Matches(/^\d{3,8}$/) revenueAccountReverseCharge?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) debtorNumberStart?: number;
 }

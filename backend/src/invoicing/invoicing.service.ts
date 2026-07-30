@@ -38,6 +38,7 @@ import { CreateInvoicePaymentDto } from './dto/create-invoice-payment.dto';
 import { CreateInvoiceDraftDto, ManualInvoiceLineDto } from './dto/create-invoice-draft.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
+import { UpdateInvoiceLineDto } from './dto/update-invoice-line.dto';
 import { UpsertBillingProfileDto } from './dto/upsert-billing-profile.dto';
 import { allocateInvoiceNumber, formatInvoiceNumber } from './invoice-number';
 import {
@@ -185,6 +186,16 @@ function assertTaxCombination(category: InvoiceTaxCategory, rate: number): void 
   });
 }
 
+/** Money helpers signal invalid input with RangeError; the API must answer 400, not 500. */
+function asBadRequest<T>(compute: () => T): T {
+  try {
+    return compute();
+  } catch (error) {
+    if (error instanceof RangeError) throw new BadRequestException(error.message);
+    throw error;
+  }
+}
+
 @Injectable()
 export class InvoicingService {
   constructor(
@@ -241,6 +252,22 @@ export class InvoicingService {
       dunningLevel1FeeCents: dto.dunningLevel1FeeCents,
       dunningLevel2FeeCents: dto.dunningLevel2FeeCents,
       dunningLevel3FeeCents: dto.dunningLevel3FeeCents,
+      ...(dto.datevConsultantNumber === undefined
+        ? {}
+        : { datevConsultantNumber: dto.datevConsultantNumber.trim() || null }),
+      ...(dto.datevClientNumber === undefined
+        ? {}
+        : { datevClientNumber: dto.datevClientNumber.trim() || null }),
+      ...(dto.datevChart === undefined ? {} : { datevChart: dto.datevChart }),
+      ...(dto.revenueAccount19 === undefined ? {} : { revenueAccount19: dto.revenueAccount19 }),
+      ...(dto.revenueAccount7 === undefined ? {} : { revenueAccount7: dto.revenueAccount7 }),
+      ...(dto.revenueAccount0 === undefined ? {} : { revenueAccount0: dto.revenueAccount0 }),
+      ...(dto.revenueAccountReverseCharge === undefined
+        ? {}
+        : { revenueAccountReverseCharge: dto.revenueAccountReverseCharge }),
+      ...(dto.debtorNumberStart === undefined
+        ? {}
+        : { debtorNumberStart: dto.debtorNumberStart }),
     };
 
     const profile = await this.prisma.tenantBillingProfile.upsert({
@@ -1125,6 +1152,211 @@ export class InvoicingService {
       entityType: 'invoice',
       entityId: invoice.id,
       summary: 'Outgoing invoice draft updated',
+    });
+    return invoice;
+  }
+
+  async addDraftLine(invoiceId: string, dto: ManualInvoiceLineDto, actorUserId: string) {
+    const existing = await this.loadDraftForLineChange(invoiceId);
+    const line = asBadRequest(() => this.buildManualLine(dto, existing.lines.length + 1));
+
+    return this.applyDraftLineChange(
+      invoiceId,
+      actorUserId,
+      'draft.line_added',
+      'Outgoing invoice draft line added',
+      async (tx) => {
+        await tx.invoiceLine.create({
+          data: { ...line, invoice: { connect: { id: invoiceId } } },
+        });
+      },
+    );
+  }
+
+  async updateDraftLine(
+    invoiceId: string,
+    lineId: string,
+    dto: UpdateInvoiceLineDto,
+    actorUserId: string,
+  ) {
+    const existing = await this.loadDraftForLineChange(invoiceId);
+    const current = existing.lines.find((line) => line.id === lineId);
+    if (!current) throw new NotFoundException('Invoice line not found');
+
+    const quantityMilliunits = asBadRequest(() =>
+      parseQuantityToMilliunits(dto.quantity ?? current.quantity.toString()),
+    );
+    const taxCategory = dto.taxCategory ?? current.taxCategory;
+    const taxRateBasisPoints = dto.taxRateBasisPoints ?? current.taxRateBasisPoints;
+    const unitPriceCents = dto.unitPriceCents ?? current.unitPriceCents;
+    const calculated = asBadRequest(() => {
+      assertTaxCombination(taxCategory, taxRateBasisPoints);
+      return calculateLine({
+        quantityMilliunits,
+        unitPriceCents,
+        taxRateBasisPoints,
+        taxCategory: taxCategory as InvoiceTaxCategoryValue,
+      });
+    });
+
+    const description = dto.description?.trim() ?? current.description;
+    if (!description) throw new BadRequestException('description must not be empty');
+
+    return this.applyDraftLineChange(
+      invoiceId,
+      actorUserId,
+      'draft.line_updated',
+      'Outgoing invoice draft line updated',
+      async (tx) => {
+        await tx.invoiceLine.update({
+          where: { id: lineId },
+          data: {
+            description,
+            quantity: new Prisma.Decimal(formatMilliunits(quantityMilliunits)),
+            unit: dto.unit ?? current.unit,
+            unitPriceCents,
+            taxRateBasisPoints,
+            taxCategory,
+            netCents: calculated.netCents,
+            taxCents: calculated.taxCents,
+            grossCents: calculated.grossCents,
+            serviceDate:
+              dto.serviceDate === undefined
+                ? current.serviceDate
+                : normalizeDay(dto.serviceDate, 'serviceDate'),
+          },
+        });
+      },
+    );
+  }
+
+  async deleteDraftLine(invoiceId: string, lineId: string, actorUserId: string) {
+    const existing = await this.loadDraftForLineChange(invoiceId);
+    if (!existing.lines.some((line) => line.id === lineId)) {
+      throw new NotFoundException('Invoice line not found');
+    }
+    if (existing.lines.length === 1) {
+      throw new BadRequestException('An invoice must keep at least one line');
+    }
+
+    return this.applyDraftLineChange(
+      invoiceId,
+      actorUserId,
+      'draft.line_removed',
+      'Outgoing invoice draft line removed',
+      async (tx) => {
+        await tx.invoiceLine.delete({ where: { id: lineId } });
+      },
+    );
+  }
+
+  private async loadDraftForLineChange(invoiceId: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: {
+        id: true,
+        status: true,
+        lines: {
+          orderBy: { position: 'asc' },
+          select: {
+            id: true,
+            description: true,
+            quantity: true,
+            unit: true,
+            unitPriceCents: true,
+            taxRateBasisPoints: true,
+            taxCategory: true,
+            serviceDate: true,
+          },
+        },
+      },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status !== OutgoingInvoiceStatus.draft) {
+      throw new ConflictException('Only draft invoices can be changed');
+    }
+    return invoice;
+  }
+
+  /**
+   * Line writes must never leave the stored totals behind: the mutation, the position
+   * renumbering and the recalculated totals belong to one transaction.
+   */
+  private async applyDraftLineChange(
+    invoiceId: string,
+    actorUserId: string,
+    auditAction: string,
+    auditSummary: string,
+    mutate: (tx: Prisma.TransactionClient) => Promise<void>,
+  ) {
+    const invoice = await this.prisma.$transaction(async (tx) => {
+      await mutate(tx);
+
+      const lines = await tx.invoiceLine.findMany({
+        where: { invoiceId },
+        orderBy: { position: 'asc' },
+        select: {
+          id: true,
+          quantity: true,
+          unitPriceCents: true,
+          taxRateBasisPoints: true,
+          taxCategory: true,
+        },
+      });
+      if (lines.length === 0) {
+        throw new BadRequestException('An invoice must keep at least one line');
+      }
+
+      for (const [index, line] of lines.entries()) {
+        await tx.invoiceLine.update({
+          where: { id: line.id },
+          data: { position: index + 1 },
+        });
+      }
+
+      const totals = calculateInvoiceTotals(
+        lines.map((line) => ({
+          quantityMilliunits: parseQuantityToMilliunits(line.quantity.toString()),
+          unitPriceCents: line.unitPriceCents,
+          taxRateBasisPoints: line.taxRateBasisPoints,
+          taxCategory: line.taxCategory as InvoiceTaxCategoryValue,
+        })),
+      );
+
+      const updated = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          netCents: totals.netCents,
+          taxCents: totals.taxCents,
+          grossCents: totals.grossCents,
+          taxBreakdown: totals.taxBreakdown,
+        },
+        include: { company: true, lines: { orderBy: { position: 'asc' } } },
+      });
+
+      await tx.invoiceAuditEvent.create({
+        data: {
+          invoiceId,
+          actorUserId,
+          action: auditAction,
+          snapshot: {
+            lineCount: lines.length,
+            netCents: totals.netCents,
+            taxCents: totals.taxCents,
+            grossCents: totals.grossCents,
+          },
+        },
+      });
+
+      return updated;
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'invoice.draft_line_changed',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      summary: auditSummary,
     });
     return invoice;
   }

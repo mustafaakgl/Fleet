@@ -2299,6 +2299,7 @@ export type CreateInvoiceDraftPayload = {
   servicePeriodStart: string;
   servicePeriodEnd: string;
   assignmentIds: string[];
+  manualLines?: InvoiceLinePayload[];
   invoiceDate?: string;
   paymentTermDays?: number;
   notes?: string;
@@ -2310,4 +2311,189 @@ export type CreatedInvoiceDraft = {
   number: string | null;
   netCents: number;
   grossCents: number;
+};
+
+export type InvoiceUnit = 'day' | 'hour' | 'tour' | 'km' | 'flat';
+
+export type InvoiceTaxCategory = 'standard' | 'reduced' | 'exempt' | 'reverse_charge';
+
+export type InvoicePaymentMethod = 'bank_transfer' | 'cash' | 'other';
+
+export type InvoiceLine = {
+  id: string;
+  position: number;
+  description: string;
+  quantity: string;
+  unit: InvoiceUnit;
+  unitPriceCents: number;
+  taxRateBasisPoints: number;
+  taxCategory: InvoiceTaxCategory;
+  netCents: number;
+  taxCents: number;
+  grossCents: number;
+  source: 'assignment' | 'manual';
+  serviceDate: string | null;
+};
+
+export type InvoicePayment = {
+  id: string;
+  amountCents: number;
+  paidAt: string;
+  method: InvoicePaymentMethod;
+  reference: string | null;
+  note: string | null;
+  createdAt: string;
+};
+
+export type InvoiceDeliveryAttempt = {
+  id: string;
+  channel: string;
+  recipient: string;
+  succeeded: boolean;
+  errorMessage: string | null;
+  attemptedAt: string;
+};
+
+export type InvoiceDunningNotice = {
+  id: string;
+  level: number;
+  feeCents: number;
+  sentAt: string | null;
+  dueDate: string | null;
+  createdAt: string;
+};
+
+export type InvoiceTaxBreakdownEntry = {
+  taxCategory: InvoiceTaxCategory;
+  taxRateBasisPoints: number;
+  netCents: number;
+  taxCents: number;
+  grossCents: number;
+};
+
+export type InvoiceDetail = {
+  id: string;
+  kind: OutgoingInvoiceKind;
+  status: OutgoingInvoiceStatus;
+  number: string | null;
+  invoiceDate: string;
+  servicePeriodStart: string;
+  servicePeriodEnd: string;
+  dueDate: string | null;
+  paymentTermDays: number;
+  netCents: number;
+  taxCents: number;
+  grossCents: number;
+  paidCents: number;
+  notes: string | null;
+  taxBreakdown: InvoiceTaxBreakdownEntry[] | null;
+  finalizedAt: string | null;
+  sentAt: string | null;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  company: { id: string; name: string; invoiceEmail?: string | null; email?: string | null };
+  lines: InvoiceLine[];
+  payments: InvoicePayment[];
+  deliveryAttempts: InvoiceDeliveryAttempt[];
+  dunningNotices: InvoiceDunningNotice[];
+};
+
+export type InvoiceLinePayload = {
+  description: string;
+  quantity: string;
+  unit: InvoiceUnit;
+  unitPriceCents: number;
+  taxRateBasisPoints: number;
+  taxCategory: InvoiceTaxCategory;
+  serviceDate?: string;
+};
+
+export type UpdateInvoiceDraftPayload = {
+  servicePeriodStart?: string;
+  servicePeriodEnd?: string;
+  invoiceDate?: string;
+  paymentTermDays?: number;
+  notes?: string;
+};
+
+export type CreateInvoicePaymentPayload = {
+  amountCents: number;
+  paidAt: string;
+  method: InvoicePaymentMethod;
+  reference?: string;
+  note?: string;
+};
+
+export type BillingProfile = {
+  id: string;
+  legalName: string;
+  street: string;
+  postalCode: string;
+  city: string;
+  countryCode: string;
+  taxNumber: string | null;
+  vatId: string | null;
+  registrationNumber: string | null;
+  phone: string | null;
+  iban: string;
+  bic: string | null;
+  bankName: string | null;
+  invoiceNumberFormat: string;
+  defaultPaymentTermDays: number;
+  defaultTaxRateBasisPoints: number;
+  smallBusinessRule: boolean;
+  invoiceFooterText: string | null;
+  invoiceEmailCc: string | null;
+  dunningEnabled: boolean;
+  dunningLevel1Days: number;
+  dunningLevel2Days: number;
+  dunningLevel3Days: number;
+  dunningLevel1FeeCents: number;
+  dunningLevel2FeeCents: number;
+  dunningLevel3FeeCents: number;
+  datevConsultantNumber: string | null;
+  datevClientNumber: string | null;
+  datevChart: string;
+  revenueAccount19: string;
+  revenueAccount7: string;
+  revenueAccount0: string;
+  revenueAccountReverseCharge: string;
+  debtorNumberStart: number;
+};
+
+export type UpsertBillingProfilePayload = {
+  legalName: string;
+  street: string;
+  postalCode: string;
+  city: string;
+  countryCode: string;
+  taxNumber?: string;
+  vatId?: string;
+  registrationNumber?: string;
+  phone?: string;
+  iban: string;
+  bic?: string;
+  bankName?: string;
+  invoiceNumberFormat: string;
+  defaultPaymentTermDays: number;
+  defaultTaxRateBasisPoints: number;
+  smallBusinessRule: boolean;
+  invoiceFooterText?: string;
+  invoiceEmailCc?: string;
+  dunningEnabled: boolean;
+  dunningLevel1Days: number;
+  dunningLevel2Days: number;
+  dunningLevel3Days: number;
+  dunningLevel1FeeCents: number;
+  dunningLevel2FeeCents: number;
+  dunningLevel3FeeCents: number;
+  datevConsultantNumber?: string;
+  datevClientNumber?: string;
+  datevChart?: 'SKR03' | 'SKR04';
+  revenueAccount19?: string;
+  revenueAccount7?: string;
+  revenueAccount0?: string;
+  revenueAccountReverseCharge?: string;
+  debtorNumberStart?: number;
 };

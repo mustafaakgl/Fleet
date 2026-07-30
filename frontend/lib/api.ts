@@ -74,11 +74,17 @@ import type {
   TelemetryHistoryResponse,
   FleetTripTimelineResponse,
   BulkCompleteAssignmentsResult,
+  BillingProfile,
   CreateInvoiceDraftPayload,
+  CreateInvoicePaymentPayload,
   CreatedInvoiceDraft,
+  InvoiceDetail,
+  InvoiceLinePayload,
   OpenOverdueResponse,
   OutgoingInvoiceListItem,
   UninvoicedCompany,
+  UpdateInvoiceDraftPayload,
+  UpsertBillingProfilePayload,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -958,6 +964,54 @@ export const invoicingApi = {
 
   createDraft: (payload: CreateInvoiceDraftPayload) =>
     api.post<CreatedInvoiceDraft>('/invoicing/invoices', payload).then((r) => r.data),
+
+  getInvoice: (id: string) =>
+    api.get<InvoiceDetail>(`/invoicing/invoices/${id}`).then((r) => r.data),
+
+  updateDraft: (id: string, payload: UpdateInvoiceDraftPayload) =>
+    api.patch<InvoiceDetail>(`/invoicing/invoices/${id}`, payload).then((r) => r.data),
+
+  addLine: (id: string, payload: InvoiceLinePayload) =>
+    api.post<InvoiceDetail>(`/invoicing/invoices/${id}/lines`, payload).then((r) => r.data),
+
+  updateLine: (id: string, lineId: string, payload: Partial<InvoiceLinePayload>) =>
+    api
+      .patch<InvoiceDetail>(`/invoicing/invoices/${id}/lines/${lineId}`, payload)
+      .then((r) => r.data),
+
+  deleteLine: (id: string, lineId: string) =>
+    api.delete<InvoiceDetail>(`/invoicing/invoices/${id}/lines/${lineId}`).then((r) => r.data),
+
+  finalize: (id: string) =>
+    api.post<InvoiceDetail>(`/invoicing/invoices/${id}/finalize`, {}).then((r) => r.data),
+
+  send: (id: string, payload?: { includeXml?: boolean; language?: 'de' | 'en' | 'tr' }) =>
+    api.post(`/invoicing/invoices/${id}/send`, payload ?? {}).then((r) => r.data),
+
+  addPayment: (id: string, payload: CreateInvoicePaymentPayload) =>
+    api.post(`/invoicing/invoices/${id}/payments`, payload).then((r) => r.data),
+
+  deletePayment: (paymentId: string) =>
+    api.delete(`/invoicing/payments/${paymentId}`).then((r) => r.data),
+
+  downloadPdf: (id: string) =>
+    api
+      .get(`/invoicing/invoices/${id}/pdf`, { responseType: 'blob' })
+      .then((r) => r.data as Blob),
+
+  downloadXml: (id: string, format?: 'zugferd' | 'xrechnung') =>
+    api
+      .get(`/invoicing/invoices/${id}/xml`, {
+        responseType: 'blob',
+        params: format ? { format } : undefined,
+      })
+      .then((r) => r.data as Blob),
+
+  getBillingProfile: () =>
+    api.get<BillingProfile | null>('/invoicing/billing-profile').then((r) => r.data),
+
+  upsertBillingProfile: (payload: UpsertBillingProfilePayload) =>
+    api.put<BillingProfile>('/invoicing/billing-profile', payload).then((r) => r.data),
 };
 
 // ─── Morning check-ins ───────────────────────────────────────────────────────

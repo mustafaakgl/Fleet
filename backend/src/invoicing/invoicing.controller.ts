@@ -7,9 +7,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { FINANCIAL_ROLES } from '../common/utils/permissions';
 import { CreateInvoicePaymentDto } from './dto/create-invoice-payment.dto';
-import { CreateInvoiceDraftDto } from './dto/create-invoice-draft.dto';
+import { CreateInvoiceDraftDto, ManualInvoiceLineDto } from './dto/create-invoice-draft.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
+import { UpdateInvoiceLineDto } from './dto/update-invoice-line.dto';
 import { UpsertBillingProfileDto } from './dto/upsert-billing-profile.dto';
 import { InvoicingService } from './invoicing.service';
 
@@ -89,6 +90,37 @@ export class InvoicingController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.invoicing.updateDraft(id, dto, request.user.id);
+  }
+
+  @Post('invoices/:id/lines')
+  @RequiresWrite()
+  addDraftLine(
+    @Param('id') id: string,
+    @Body() dto: ManualInvoiceLineDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoicing.addDraftLine(id, dto, request.user.id);
+  }
+
+  @Patch('invoices/:id/lines/:lineId')
+  @RequiresWrite()
+  updateDraftLine(
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Body() dto: UpdateInvoiceLineDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoicing.updateDraftLine(id, lineId, dto, request.user.id);
+  }
+
+  @Delete('invoices/:id/lines/:lineId')
+  @RequiresWrite()
+  deleteDraftLine(
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoicing.deleteDraftLine(id, lineId, request.user.id);
   }
 
   @Post('invoices/:id/finalize')

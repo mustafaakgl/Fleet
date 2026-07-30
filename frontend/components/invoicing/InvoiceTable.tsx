@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { InvoiceStatusBadge } from '@/components/invoicing/InvoiceStatusBadge';
@@ -98,7 +99,12 @@ export function InvoiceTable({
                   )}
                 >
                   <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
-                    {invoice.number ?? t('invoicing.table.draftNumber')}
+                    <Link
+                      href={`/invoicing/invoices/${invoice.id}`}
+                      className="text-blue-700 hover:underline"
+                    >
+                      {invoice.number ?? t('invoicing.table.draftNumber')}
+                    </Link>
                   </TableCell>
                   <TableCell className={FLEET_TABLE_CELL}>{invoice.company.name}</TableCell>
                   <TableCell className={FLEET_TABLE_CELL}>

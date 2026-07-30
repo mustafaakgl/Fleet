@@ -1,14 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   AlertTriangle,
   CheckCircle2,
   FileText,
+  Plus,
   Receipt,
   RefreshCw,
   Search,
   Send,
+  Settings,
   WifiOff,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -199,6 +202,18 @@ export default function InvoicingPage() {
           </div>
         </div>
         <div className={FLEET_PAGE_HEADER_ACTIONS}>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/settings/billing-profile">
+              <Settings className="mr-2 h-4 w-4" aria-hidden />
+              {t('invoicing.billingProfile.title')}
+            </Link>
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/invoicing/invoices/new">
+              <Plus className="mr-2 h-4 w-4" aria-hidden />
+              {t('invoicing.new.title')}
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className="mr-2 h-4 w-4" aria-hidden />
             {t('common.refresh')}
