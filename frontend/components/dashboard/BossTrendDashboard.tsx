@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
 import { InvoicingSummaryCards } from '@/components/dashboard/InvoicingSummaryCards';
@@ -210,6 +211,8 @@ export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolea
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.v3.bossTitle')}</h1>
         </header>
       )}
+
+      <DailyEinsatzplanTable rows={summary?.todayOperations} loading={loading && !summary} />
 
       {legacyKpis.length > 0 ? (
         <section className="space-y-3">

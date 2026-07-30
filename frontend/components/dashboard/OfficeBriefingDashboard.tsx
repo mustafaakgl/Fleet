@@ -16,6 +16,7 @@ import {
   tachographApi,
   transportRequestsApi,
 } from '@/lib/api';
+import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 import { RecentMessagesWidget } from '@/components/dashboard/RecentMessagesWidget';
 import type { DashboardSummary, Defect, MissingDepartureCheck, TransportRequest } from '@/lib/types';
 
@@ -207,6 +208,8 @@ export function OfficeBriefingDashboard() {
       <header className="space-y-1">
         <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.v3.office.title')}</h1>
       </header>
+
+      <DailyEinsatzplanTable rows={summary?.todayOperations} loading={loading && !summary} officeMode />
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

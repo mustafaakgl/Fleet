@@ -282,10 +282,10 @@ export default function LoginPage() {
           <Image
             src="/brand/operion-logo-navy.svg"
             alt="Operion"
-            width={180}
-            height={36}
+            width={210}
+            height={42}
             priority
-            style={{ height: 36, width: 'auto' }}
+            style={{ height: 42, width: 'auto' }}
           />
         </Link>
 

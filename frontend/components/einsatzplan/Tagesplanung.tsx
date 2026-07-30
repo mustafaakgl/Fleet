@@ -101,11 +101,16 @@ function currency(value: number) {
 
 export function Tagesplanung({
   initialSubTab,
+  subTab,
+  onSubTabChange,
   planningDate: planningDateProp,
   officeMode = false,
   operationsOnly = false,
 }: {
   initialSubTab?: PlanSubTab;
+  /** When provided, the sub tab is driven by the parent (Einsatzplan top bar). */
+  subTab?: PlanSubTab;
+  onSubTabChange?: (tab: PlanSubTab) => void;
   planningDate?: string;
   officeMode?: boolean;
   operationsOnly?: boolean;
@@ -128,7 +133,15 @@ export function Tagesplanung({
   const defaultSubTab: PlanSubTab = operationsOnly
     ? (initialSubTab && initialSubTab !== 'daily-overview' ? initialSubTab : 'morning-checkins')
     : (initialSubTab ?? 'daily-overview');
-  const [activeSubTab, setActiveSubTab] = useState<PlanSubTab>(defaultSubTab);
+  const [internalSubTab, setInternalSubTab] = useState<PlanSubTab>(defaultSubTab);
+  const activeSubTab = subTab ?? internalSubTab;
+  const setActiveSubTab = useCallback(
+    (tab: PlanSubTab) => {
+      setInternalSubTab(tab);
+      onSubTabChange?.(tab);
+    },
+    [onSubTabChange],
+  );
   const [companyEmailAttentionCount, setCompanyEmailAttentionCount] = useState(0);
   const [selectedTransportRequestId, setSelectedTransportRequestId] = useState<string | null>(null);
   const [driverSearch, setDriverSearch] = useState('');
@@ -206,7 +219,7 @@ export function Tagesplanung({
       setSelectedTransportRequestId(transportId);
       setActiveSubTab('planning');
     }
-  }, [searchParams]);
+  }, [searchParams, setActiveSubTab]);
 
   const selectedTransportRequest = useMemo(
     () => transportRequests.find((request) => request.id === selectedTransportRequestId) ?? null,

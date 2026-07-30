@@ -1,15 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useTranslation } from 'react-i18next';
 import {
+  CalendarDays,
   Gauge,
+  Mail,
   Wallet,
   ClipboardCheck,
   Sun,
+  Sunrise,
+  Truck,
   Plus,
 } from 'lucide-react';
 import { getUser } from '@/lib/auth';
@@ -36,15 +40,31 @@ const UrlaubsplanerPanel = dynamic(
   { loading: () => <div className="text-sm text-slate-500">...</div> },
 );
 
-type TopTab = 'dashboard' | 'urlaub' | 'tagesplanung' | 'revenue';
 type UrlaubSubtab = 'jahreskalender' | 'abteilungskalender' | 'antragsverwaltung';
 type PlanningSubtab = 'daily-overview' | 'planning' | 'morning-checkins' | 'vehicle-handovers' | 'company-notifications';
+type TopTab = PlanningSubtab | 'vacation-planner' | 'revenue-summary' | 'overview';
 
-const topTabs: Array<{ id: TopTab; labelKey: string; icon: typeof Gauge }> = [
-  { id: 'dashboard', labelKey: 'einsatzplan.dashboard', icon: Gauge },
-  { id: 'urlaub', labelKey: 'einsatzplan.vacationPlanner', icon: Sun },
-  { id: 'tagesplanung', labelKey: 'einsatzplan.dailyPlanning', icon: ClipboardCheck },
-  { id: 'revenue', labelKey: 'einsatzplan.revenueSummary', icon: Wallet },
+const PLANNING_TABS: readonly string[] = [
+  'daily-overview',
+  'planning',
+  'morning-checkins',
+  'vehicle-handovers',
+  'company-notifications',
+];
+
+function isPlanningTab(tab: TopTab): tab is PlanningSubtab {
+  return PLANNING_TABS.includes(tab);
+}
+
+const topTabs: Array<{ id: TopTab; labelKey: string; ns: 'common' | 'einsatzplan'; icon: typeof Gauge }> = [
+  { id: 'daily-overview', labelKey: 'nav.assignments.dailyOverview', ns: 'common', icon: CalendarDays },
+  { id: 'planning', labelKey: 'nav.assignments.planning', ns: 'common', icon: ClipboardCheck },
+  { id: 'morning-checkins', labelKey: 'nav.assignments.morningCheckins', ns: 'common', icon: Sunrise },
+  { id: 'vehicle-handovers', labelKey: 'nav.assignments.vehicleHandovers', ns: 'common', icon: Truck },
+  { id: 'company-notifications', labelKey: 'nav.assignments.companyNotifications', ns: 'common', icon: Mail },
+  { id: 'vacation-planner', labelKey: 'nav.assignments.vacationPlanner', ns: 'common', icon: Sun },
+  { id: 'revenue-summary', labelKey: 'nav.assignments.revenueSummary', ns: 'common', icon: Wallet },
+  { id: 'overview', labelKey: 'einsatzplan.dashboard', ns: 'einsatzplan', icon: Gauge },
 ];
 
 export function EinsatzplanPage() {
@@ -57,6 +77,7 @@ export function EinsatzplanPage() {
 
 function EinsatzplanFullView() {
   const { t } = useTranslation('einsatzplan');
+  const { t: tCommon } = useTranslation('common');
   const router = useRouter();
   const pathname = usePathname();
   const { assignments, drivers } = useFleetData();
@@ -103,11 +124,12 @@ function EinsatzplanFullView() {
   const absenceFromQuery = searchParams.get('absence');
 
   const initialTopTab = useMemo<TopTab>(() => {
-    if (panelFromQuery === 'revenue') return 'revenue';
-    if (panelFromQuery === 'urlaubsplaner') return 'urlaub';
-    if (panelFromQuery === 'tagesplanung' || panelFromQuery === 'company_notifications') return 'tagesplanung';
-    return 'dashboard';
-  }, [panelFromQuery]);
+    if (panelFromQuery === 'revenue') return 'revenue-summary';
+    if (panelFromQuery === 'urlaubsplaner') return 'vacation-planner';
+    if (panelFromQuery === 'company_notifications') return 'company-notifications';
+    if (viewFromQuery && PLANNING_TABS.includes(viewFromQuery)) return viewFromQuery as PlanningSubtab;
+    return 'daily-overview';
+  }, [panelFromQuery, viewFromQuery]);
 
   const initialUrlaubSubtab = useMemo<UrlaubSubtab | undefined>(() => {
     if (viewFromQuery === 'jahreskalender') return 'jahreskalender';
@@ -116,17 +138,11 @@ function EinsatzplanFullView() {
     return undefined;
   }, [viewFromQuery]);
 
-  const initialPlanningSubtab = useMemo<PlanningSubtab | undefined>(() => {
-    if (panelFromQuery === 'company_notifications') return 'company-notifications';
-    if (viewFromQuery === 'company-notifications') return 'company-notifications';
-    if (viewFromQuery === 'morning-checkins') return 'morning-checkins';
-    if (viewFromQuery === 'vehicle-handovers') return 'vehicle-handovers';
-    if (viewFromQuery === 'planning') return 'planning';
-    if (viewFromQuery === 'daily-overview' || panelFromQuery === 'tagesplanung') return 'daily-overview';
-    return undefined;
-  }, [panelFromQuery, viewFromQuery]);
-
   const [activeTab, setActiveTab] = useState<TopTab>(initialTopTab);
+
+  const handlePlanningSubTabChange = useCallback((tab: PlanningSubtab) => {
+    setActiveTab(tab);
+  }, []);
 
   useEffect(() => {
     if (panelFromQuery !== 'users') return;
@@ -152,14 +168,14 @@ function EinsatzplanFullView() {
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {t(tab.labelKey)}
+                {tab.ns === 'common' ? tCommon(tab.labelKey) : t(tab.labelKey)}
               </button>
             );
           })}
         </div>
 
         <div className="p-4 sm:p-5">
-          {activeTab === 'dashboard' && (
+          {activeTab === 'overview' && (
             <div className="space-y-4 sm:space-y-5">
               <div className={cn('flex flex-col gap-3 rounded-lg border border-slate-200 p-5 text-white shadow-sm lg:flex-row lg:items-center lg:justify-between', BRAND_HERO)}>
                 <div>
@@ -204,13 +220,15 @@ function EinsatzplanFullView() {
             </div>
           )}
 
-          {activeTab === 'urlaub' && (
+          {activeTab === 'vacation-planner' && (
             <UrlaubsplanerPanel initialSubtab={initialUrlaubSubtab} initialAbsenceFocus={absenceFromQuery === 'UT' || absenceFromQuery === 'KT' ? absenceFromQuery : undefined} />
           )}
 
-          {activeTab === 'tagesplanung' && <Tagesplanung initialSubTab={initialPlanningSubtab} />}
+          {isPlanningTab(activeTab) && (
+            <Tagesplanung subTab={activeTab} onSubTabChange={handlePlanningSubTabChange} />
+          )}
 
-          {activeTab === 'revenue' && <RevenueSummary />}
+          {activeTab === 'revenue-summary' && <RevenueSummary />}
         </div>
       </div>
     </div>

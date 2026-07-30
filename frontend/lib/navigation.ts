@@ -191,21 +191,6 @@ const REMINDERS_SECTION: NavSection = {
   ],
 };
 
-const EINSATZPLAN_SECTION: NavSection = {
-  id: 'einsatzplan',
-  labelKey: 'nav.assignments',
-  icon: CalendarDays,
-  items: [
-    { href: '/assignments/daily-overview', labelKey: 'nav.assignments.dailyOverview' },
-    { href: '/assignments/planning', labelKey: 'nav.assignments.planning' },
-    { href: '/assignments/morning-checkins', labelKey: 'nav.assignments.morningCheckins' },
-    { href: '/assignments/vehicle-handovers', labelKey: 'nav.assignments.vehicleHandovers' },
-    { href: '/assignments/company-notifications', labelKey: 'nav.assignments.companyNotifications' },
-    { href: '/assignments/vacation-planner', labelKey: 'nav.assignments.vacationPlanner' },
-    { href: '/assignments/revenue-summary', labelKey: 'nav.assignments.revenueSummary' },
-  ],
-};
-
 function item(key: keyof typeof ALL_ITEMS): NavItem {
   return ALL_ITEMS[key];
 }
@@ -258,7 +243,7 @@ const OFFICE_NAV: NavGroup[] = [
     [
       item('dashboard'),
       item('officeQueue'),
-      EINSATZPLAN_SECTION,
+      item('assignments'),
       REMINDERS_HUB_ITEM,
       item('messenger'),
       item('notifications'),
@@ -300,7 +285,7 @@ const DEFAULT_NAV: NavGroup[] = [
     'nav.group.heute',
     [
       item('dashboard'),
-      EINSATZPLAN_SECTION,
+      item('assignments'),
       REMINDERS_HUB_ITEM,
       item('messenger'),
       item('notifications'),
