@@ -74,7 +74,11 @@ import type {
   TelemetryHistoryResponse,
   FleetTripTimelineResponse,
   BulkCompleteAssignmentsResult,
+  CreateInvoiceDraftPayload,
+  CreatedInvoiceDraft,
   OpenOverdueResponse,
+  OutgoingInvoiceListItem,
+  UninvoicedCompany,
 } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -933,11 +937,27 @@ export const assignmentsApi = {
 
 // ─── Outgoing invoicing ──────────────────────────────────────────────────────
 
+export interface InvoiceListParams {
+  status?: string;
+  companyId?: string;
+  from?: string;
+  to?: string;
+}
+
 export const invoicingApi = {
   listOpenOverdue: (asOf?: string) =>
     api
       .get<OpenOverdueResponse>('/invoicing/open-overdue', { params: asOf ? { asOf } : undefined })
       .then((r) => r.data),
+
+  listUninvoiced: (params?: { from?: string; to?: string }) =>
+    api.get<UninvoicedCompany[]>('/invoicing/uninvoiced', { params }).then((r) => r.data),
+
+  listInvoices: (params?: InvoiceListParams) =>
+    api.get<OutgoingInvoiceListItem[]>('/invoicing/invoices', { params }).then((r) => r.data),
+
+  createDraft: (payload: CreateInvoiceDraftPayload) =>
+    api.post<CreatedInvoiceDraft>('/invoicing/invoices', payload).then((r) => r.data),
 };
 
 // ─── Morning check-ins ───────────────────────────────────────────────────────

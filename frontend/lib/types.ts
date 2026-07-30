@@ -2244,3 +2244,70 @@ export type OpenOverdueResponse = {
   };
   companies: OpenOverdueCompany[];
 };
+
+export type UninvoicedAssignment = {
+  id: string;
+  workDate: string;
+  cargoName: string;
+  routeName: string | null;
+  pickupAddress: string;
+  deliveryAddress: string;
+  suggestedNetCents: number | null;
+};
+
+export type UninvoicedCompany = {
+  companyId: string;
+  companyName: string;
+  invoiceEmail: string | null;
+  assignmentCount: number;
+  suggestedNetCents: number;
+  assignmentsWithoutPrice: number;
+  assignments: UninvoicedAssignment[];
+};
+
+export type OutgoingInvoiceStatus =
+  | 'draft'
+  | 'finalized'
+  | 'sent'
+  | 'partially_paid'
+  | 'paid'
+  | 'overdue'
+  | 'cancelled';
+
+export type OutgoingInvoiceKind = 'invoice' | 'credit_note' | 'cancellation';
+
+export type OutgoingInvoiceListItem = {
+  id: string;
+  kind: OutgoingInvoiceKind;
+  status: OutgoingInvoiceStatus;
+  number: string | null;
+  invoiceDate: string;
+  servicePeriodStart: string;
+  servicePeriodEnd: string;
+  dueDate: string | null;
+  netCents: number;
+  taxCents: number;
+  grossCents: number;
+  paidCents: number;
+  createdAt: string;
+  company: { id: string; name: string };
+  _count: { lines: number };
+};
+
+export type CreateInvoiceDraftPayload = {
+  companyId: string;
+  servicePeriodStart: string;
+  servicePeriodEnd: string;
+  assignmentIds: string[];
+  invoiceDate?: string;
+  paymentTermDays?: number;
+  notes?: string;
+};
+
+export type CreatedInvoiceDraft = {
+  id: string;
+  status: OutgoingInvoiceStatus;
+  number: string | null;
+  netCents: number;
+  grossCents: number;
+};
