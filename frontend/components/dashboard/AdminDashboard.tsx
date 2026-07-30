@@ -159,6 +159,10 @@ export function AdminDashboard() {
         </h1>
       </header>
 
+      <BossTrendDashboard hideHeader />
+
+      <ComplianceFleetStrip />
+
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-slate-900">
           {t('dashboard.v3.admin.urgent.title')}
@@ -173,8 +177,6 @@ export function AdminDashboard() {
           </div>
         )}
       </section>
-
-      <ComplianceFleetStrip />
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-slate-900">
@@ -244,8 +246,6 @@ export function AdminDashboard() {
           </div>
         )}
       </section>
-
-      <BossTrendDashboard hideHeader />
     </div>
   );
 }

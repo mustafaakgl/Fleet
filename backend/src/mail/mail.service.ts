@@ -2,11 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
+export type MailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+};
+
 export type SendMailParams = {
   to: string;
+  cc?: string | null;
   subject: string;
   text: string;
   html?: string;
+  attachments?: MailAttachment[];
 };
 
 export type SendMailResult = {
@@ -65,8 +73,12 @@ export class MailService {
 
   async sendMail(params: SendMailParams): Promise<SendMailResult> {
     if (!this.isEnabled()) {
+      const cc = params.cc ? ` cc=${params.cc}` : '';
+      const attachments = params.attachments?.length
+        ? ` attachments=${params.attachments.map((file) => file.filename).join(',')}`
+        : '';
       this.logger.log(
-        `[mail:log] to=${params.to} subject="${params.subject}"\n${params.text}`,
+        `[mail:log] to=${params.to}${cc}${attachments} subject="${params.subject}"\n${params.text}`,
       );
       return { sent: false, mode: 'log' };
     }
@@ -74,9 +86,11 @@ export class MailService {
     const info = await this.getTransporter().sendMail({
       from: this.getFromAddress(),
       to: params.to,
+      cc: params.cc ?? undefined,
       subject: params.subject,
       text: params.text,
       html: params.html,
+      attachments: params.attachments,
     });
 
     return {

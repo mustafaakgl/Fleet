@@ -259,7 +259,6 @@ export function MessengerChatPanel({
 }: MessengerChatPanelProps) {
   const { t, i18n } = useTranslation();
   const currentUserId = getUser()?.id;
-  const messageEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const loadingOlderRef = useRef(false);
@@ -298,16 +297,11 @@ export function MessengerChatPanel({
   }, [loadingOlder, messages.length]);
 
   useEffect(() => {
-    if (loading || loadingOlder) return;
-    messageEndRef.current?.scrollIntoView({ behavior: 'auto' });
-  }, [selectedConversationId, loading]);
-
-  useEffect(() => {
     if (loadingOlder || !scrollContainerRef.current) return;
     const node = scrollContainerRef.current;
     const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 160;
     if (nearBottom) {
-      messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      node.scrollTop = node.scrollHeight;
     }
   }, [loadingOlder, messages]);
 
@@ -492,7 +486,6 @@ export function MessengerChatPanel({
                 </div>
               </div>
             ))}
-            <div ref={messageEndRef} />
           </div>
         )}
       </div>

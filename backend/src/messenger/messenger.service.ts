@@ -324,6 +324,7 @@ export class MessengerService {
     }
 
     const where: Prisma.ConversationWhereInput = {};
+    const filters: Prisma.ConversationWhereInput[] = [];
 
     if (query.driverId) {
       where.driverId = query.driverId;
@@ -331,14 +332,31 @@ export class MessengerService {
 
     if (currentUser.role === 'driver') {
       const linkedDriverId = await this.resolveLinkedDriverId(currentUser.id);
-      where.participants = {
-        some: {
-          userId: currentUser.id,
+      filters.push({
+        participants: {
+          some: {
+            userId: currentUser.id,
+          },
         },
-      };
+      });
       if (linkedDriverId) {
         where.driverId = linkedDriverId;
       }
+    } else {
+      filters.push({
+        participants: {
+          some: {
+            userId: currentUser.id,
+          },
+        },
+      });
+      filters.push({
+        participants: {
+          none: {
+            role: 'customer',
+          },
+        },
+      });
     }
 
     if (query.search?.trim()) {
@@ -363,6 +381,13 @@ export class MessengerService {
             },
           ],
         },
+      ];
+    }
+
+    if (filters.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        ...filters,
       ];
     }
 

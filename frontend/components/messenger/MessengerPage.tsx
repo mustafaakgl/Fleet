@@ -18,6 +18,7 @@ import { FLEET_LIST_CARD, FLEET_PAGE, FLEET_PAGE_HEADER, FLEET_PAGE_HEADER_ACTIO
 import {
   getConversationCategory,
   getConversationSearchText,
+  shouldShowConversationInMessenger,
   type MessengerConversationPersonaFilter,
 } from '@/lib/messenger-utils';
 import { cn } from '@/lib/utils';
@@ -301,6 +302,9 @@ export function MessengerPage() {
   const filteredConversations = useMemo(() => {
     const query = search.trim().toLowerCase();
     return conversations.filter((conversation) => {
+      if (!shouldShowConversationInMessenger(conversation, currentUserId)) {
+        return false;
+      }
       const personaMatch =
         personaFilter === 'all' || getConversationCategory(conversation, currentUserId) === personaFilter;
       if (!personaMatch) {

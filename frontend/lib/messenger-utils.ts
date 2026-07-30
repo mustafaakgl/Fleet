@@ -65,7 +65,7 @@ export function driverDisplayName(conversation: ConversationListItem | Conversat
   return `${conversation.driver.firstName} ${conversation.driver.lastName}`.trim();
 }
 
-export type MessengerConversationPersonaFilter = 'all' | 'drivers' | 'customers';
+export type MessengerConversationPersonaFilter = 'all' | 'drivers';
 
 export interface MessengerCounterpartInfo {
   name: string;
@@ -86,7 +86,14 @@ export function getConversationCategory(
   const hasCustomer = otherParticipants(conversation, currentUserId).some(
     (participant) => participant.role === 'customer',
   );
-  return hasCustomer ? 'customers' : 'drivers';
+  return hasCustomer ? 'drivers' : 'drivers';
+}
+
+export function shouldShowConversationInMessenger(
+  conversation: ConversationListItem | ConversationDetail,
+  currentUserId: string | null | undefined,
+): boolean {
+  return !otherParticipants(conversation, currentUserId).some((participant) => participant.role === 'customer');
 }
 
 export function getCounterpartInfo(

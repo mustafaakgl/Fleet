@@ -1,4 +1,5 @@
 import { getFrontendUrl } from '../config/env.validation';
+import { formatGermanCurrency, formatGermanDate } from '../invoicing/einvoice/format';
 
 const BRAND = 'Fleet';
 const FOOTER = `Mit freundlichen Grüßen\n${BRAND} Team`;
@@ -44,6 +45,12 @@ function button(href: string, label: string): string {
 }
 
 export type MailTemplateResult = { subject: string; text: string; html: string };
+type SupportedMailLanguage = 'de' | 'en' | 'tr';
+
+function resolveMailLanguage(language?: string | null): SupportedMailLanguage {
+  if (language === 'en' || language === 'tr') return language;
+  return 'de';
+}
 
 export function invitationMail(params: {
   fullName: string;
@@ -151,6 +158,177 @@ export function companyEmailMail(params: {
   const html = htmlLayout(`
     ${companyLine}
     <div style="white-space:pre-wrap">${params.body.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+  `);
+
+  return { subject, text, html };
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Cover letter for a finalized invoice. The legally binding content lives in the attached
+ * PDF/XML, so this mail only restates the identifying data a bookkeeper needs to file it:
+ * number, service period, amount, due date and the bank account to pay into. Everything is
+ * taken from the invoice snapshot, never from live master data — the letter and the
+ * attachment must agree even after the customer or the billing profile is edited.
+ */
+export function invoiceDeliveryMail(params: {
+  invoiceNumber: string;
+  sellerName: string;
+  customerName: string;
+  invoiceDate: Date;
+  dueDate: Date | null;
+  servicePeriodStart: Date;
+  servicePeriodEnd: Date;
+  grossCents: number;
+  currency: string;
+  iban: string;
+  bic: string | null;
+  bankName: string | null;
+  includesXml: boolean;
+  footerText: string | null;
+  language?: string | null;
+}): MailTemplateResult {
+  const language = resolveMailLanguage(params.language);
+  const copy = {
+    de: {
+      subject: `Rechnung ${params.invoiceNumber} von ${params.sellerName}`,
+      attachmentNote: params.includesXml
+        ? 'Die Rechnung liegt dieser E-Mail als PDF und als elektronische Rechnung im XML-Format bei.'
+        : 'Die Rechnung liegt dieser E-Mail als PDF bei.',
+      facts: {
+        invoiceNumber: 'Rechnungsnummer',
+        invoiceDate: 'Rechnungsdatum',
+        servicePeriod: 'Leistungszeitraum',
+        invoiceAmount: 'Rechnungsbetrag',
+        payableUntil: 'Zahlbar bis',
+        bank: 'Bank',
+      },
+      salutation: 'Sehr geehrte Damen und Herren,',
+      intro: `anbei erhalten Sie unsere Rechnung ${params.invoiceNumber} vom {{invoiceDate}}.`,
+      transfer: 'Bitte überweisen Sie den Betrag{{dueDate}} unter Angabe der Rechnungsnummer als Verwendungszweck.',
+      transferDueDate: ' bis zum {{dueDate}}',
+      closing: 'Mit freundlichen Grüßen',
+      htmlIntro:
+        'anbei erhalten Sie unsere Rechnung <strong>{{invoiceNumber}}</strong> vom {{invoiceDate}} für <strong>{{customerName}}</strong>.',
+      htmlTransfer:
+        'Bitte überweisen Sie den Betrag{{dueDate}} unter Angabe der Rechnungsnummer als Verwendungszweck.',
+      htmlTransferDueDate: ' bis zum <strong>{{dueDate}}</strong>',
+    },
+    en: {
+      subject: `Invoice ${params.invoiceNumber} from ${params.sellerName}`,
+      attachmentNote: params.includesXml
+        ? 'The invoice is attached to this email as a PDF and as an electronic XML invoice.'
+        : 'The invoice is attached to this email as a PDF.',
+      facts: {
+        invoiceNumber: 'Invoice number',
+        invoiceDate: 'Invoice date',
+        servicePeriod: 'Service period',
+        invoiceAmount: 'Invoice amount',
+        payableUntil: 'Payable by',
+        bank: 'Bank',
+      },
+      salutation: 'Dear Sir or Madam,',
+      intro: 'Please find attached our invoice {{invoiceNumber}} dated {{invoiceDate}}.',
+      transfer: 'Please transfer the amount{{dueDate}} and use the invoice number as payment reference.',
+      transferDueDate: ' by {{dueDate}}',
+      closing: 'Kind regards',
+      htmlIntro:
+        'Please find attached our invoice <strong>{{invoiceNumber}}</strong> dated {{invoiceDate}} for <strong>{{customerName}}</strong>.',
+      htmlTransfer: 'Please transfer the amount{{dueDate}} and use the invoice number as payment reference.',
+      htmlTransferDueDate: ' by <strong>{{dueDate}}</strong>',
+    },
+    tr: {
+      subject: `${params.sellerName} tarafindan gonderilen ${params.invoiceNumber} no.lu fatura`,
+      attachmentNote: params.includesXml
+        ? 'Fatura bu e-postaya PDF ve XML formatinda e-fatura olarak eklenmistir.'
+        : 'Fatura bu e-postaya PDF olarak eklenmistir.',
+      facts: {
+        invoiceNumber: 'Fatura numarasi',
+        invoiceDate: 'Fatura tarihi',
+        servicePeriod: 'Hizmet donemi',
+        invoiceAmount: 'Fatura tutari',
+        payableUntil: 'Son odeme tarihi',
+        bank: 'Banka',
+      },
+      salutation: 'Sayin Yetkili,',
+      intro: '{{invoiceDate}} tarihli {{invoiceNumber}} no.lu faturamiz ekte bilginize sunulmustur.',
+      transfer: 'Lutfen odemeyi{{dueDate}} fatura numarasini aciklama olarak belirterek yapiniz.',
+      transferDueDate: ' {{dueDate}} tarihine kadar',
+      closing: 'Saygilarimizla',
+      htmlIntro:
+        '<strong>{{customerName}}</strong> icin duzenlenen <strong>{{invoiceNumber}}</strong> no.lu, {{invoiceDate}} tarihli faturamiz ektedir.',
+      htmlTransfer: 'Lutfen odemeyi{{dueDate}} fatura numarasini aciklama olarak belirterek yapiniz.',
+      htmlTransferDueDate: ' <strong>{{dueDate}}</strong> tarihine kadar',
+    },
+  }[language];
+
+  const amount = formatGermanCurrency(params.grossCents, params.currency);
+  const invoiceDate = formatGermanDate(params.invoiceDate);
+  const servicePeriod = `${formatGermanDate(params.servicePeriodStart)} – ${formatGermanDate(params.servicePeriodEnd)}`;
+  const dueDate = params.dueDate ? formatGermanDate(params.dueDate) : null;
+  const subject = copy.subject;
+  const attachmentNote = copy.attachmentNote;
+
+  const facts: Array<[string, string]> = [
+    [copy.facts.invoiceNumber, params.invoiceNumber],
+    [copy.facts.invoiceDate, invoiceDate],
+    [copy.facts.servicePeriod, servicePeriod],
+    [copy.facts.invoiceAmount, amount],
+  ];
+  if (dueDate) facts.push([copy.facts.payableUntil, dueDate]);
+  facts.push(['IBAN', params.iban]);
+  if (params.bic) facts.push(['BIC', params.bic]);
+  if (params.bankName) facts.push([copy.facts.bank, params.bankName]);
+
+  const transferDueDate = dueDate
+    ? copy.transferDueDate.replace('{{dueDate}}', dueDate)
+    : '';
+  const htmlTransferDueDate = dueDate
+    ? copy.htmlTransferDueDate.replace('{{dueDate}}', dueDate)
+    : '';
+
+  const text = [
+    copy.salutation,
+    '',
+    copy.intro
+      .replace('{{invoiceNumber}}', params.invoiceNumber)
+      .replace('{{invoiceDate}}', invoiceDate),
+    '',
+    ...facts.map(([label, value]) => `${label}: ${value}`),
+    '',
+    copy.transfer.replace('{{dueDate}}', transferDueDate),
+    attachmentNote,
+    ...(params.footerText ? ['', params.footerText] : []),
+    '',
+    copy.closing,
+    params.sellerName,
+  ].join('\n');
+
+  const rows = facts
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:4px 16px 4px 0;color:#4B5563;font-size:14px">${escapeHtml(label)}</td><td style="padding:4px 0;font-size:14px"><strong>${escapeHtml(value)}</strong></td></tr>`,
+    )
+    .join('');
+
+  const html = htmlLayout(`
+    <p>${copy.salutation}</p>
+    <p>${copy.htmlIntro
+      .replace('{{invoiceNumber}}', escapeHtml(params.invoiceNumber))
+      .replace('{{invoiceDate}}', invoiceDate)
+      .replace('{{customerName}}', escapeHtml(params.customerName))}</p>
+    <table style="border-collapse:collapse;margin:16px 0">${rows}</table>
+    <p style="font-size:14px">${copy.htmlTransfer.replace('{{dueDate}}', htmlTransferDueDate)}</p>
+    <p style="font-size:14px;color:#4B5563">${attachmentNote}</p>
+    ${params.footerText ? `<p style="font-size:13px;color:#4B5563;white-space:pre-wrap">${escapeHtml(params.footerText)}</p>` : ''}
+    <p style="font-size:14px">${copy.closing}<br />${escapeHtml(params.sellerName)}</p>
   `);
 
   return { subject, text, html };

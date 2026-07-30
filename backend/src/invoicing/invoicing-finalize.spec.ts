@@ -12,6 +12,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
 import { TenantContext } from '../tenant/tenant-context';
@@ -323,6 +324,8 @@ function createService(store: Store): InvoicingService {
     createFakePrisma(store) as unknown as PrismaService,
     { logAction: async () => undefined } as unknown as AuditService,
     createFakeDocumentStorage(store) as unknown as InvoiceDocumentStorageService,
+    // Finalizing never sends mail; delivery is covered in invoicing-send.spec.ts.
+    {} as unknown as MailService,
   );
 }
 

@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { FINANCIAL_ROLES } from '../common/utils/permissions';
 import { CreateInvoiceDraftDto } from './dto/create-invoice-draft.dto';
+import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
 import { UpsertBillingProfileDto } from './dto/upsert-billing-profile.dto';
 import { InvoicingService } from './invoicing.service';
@@ -93,6 +94,16 @@ export class InvoicingController {
   @RequiresWrite()
   finalizeInvoice(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.invoicing.finalizeInvoice(id, request.user.tenantId, request.user.id);
+  }
+
+  @Post('invoices/:id/send')
+  @RequiresWrite()
+  sendInvoice(
+    @Param('id') id: string,
+    @Body() dto: SendInvoiceDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoicing.sendInvoice(id, request.user.tenantId, request.user.id, dto);
   }
 
   @Get('invoices/:id/pdf')

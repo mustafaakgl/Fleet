@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   AssignmentStatus,
@@ -16,6 +17,8 @@ import {
 import type { Readable } from 'node:stream';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
+import { invoiceDeliveryMail } from '../mail/mail-templates';
+import { MailService, type MailAttachment, type SendMailResult } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
 import {
@@ -29,6 +32,7 @@ import {
   type SupplierSnapshot,
 } from './einvoice';
 import { CreateInvoiceDraftDto, ManualInvoiceLineDto } from './dto/create-invoice-draft.dto';
+import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
 import { UpsertBillingProfileDto } from './dto/upsert-billing-profile.dto';
 import { allocateInvoiceNumber, formatInvoiceNumber } from './invoice-number';
@@ -93,6 +97,18 @@ function appendNote(notes: string | null, note: string): string {
   return current.includes(note) ? current : `${current}\n${note}`;
 }
 
+/** Reads one string field out of a stored JSON snapshot without trusting its shape. */
+function readSnapshotString(snapshot: Prisma.JsonValue | null, key: string): string | null {
+  if (snapshot === null || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  const value = snapshot[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+/** Audit metadata must not carry the customer's full address, only where the mail went. */
+function emailDomain(email: string): string {
+  return email.split('@')[1] ?? 'unknown';
+}
+
 function assertTaxCombination(category: InvoiceTaxCategory, rate: number): void {
   calculateLine({
     quantityMilliunits: 1_000,
@@ -108,6 +124,7 @@ export class InvoicingService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly invoiceDocuments: InvoiceDocumentStorageService,
+    private readonly mailService: MailService,
   ) {}
 
   async getBillingProfile() {
@@ -1185,6 +1202,262 @@ export class InvoicingService {
       xrechnungStoredPath: xrechnung?.storedPath ?? null,
       xrechnungSha256: xrechnung?.sha256 ?? null,
     };
+  }
+
+  /**
+   * E-mails a finalized invoice to the customer, PDF (and where it is the legally original
+   * document, the XML) attached. Every attempt — successful or not — is written to
+   * InvoiceDeliveryAttempt, and a failure never changes the invoice itself, so a bounced
+   * mail leaves a retryable record instead of a half-sent invoice.
+   */
+  async sendInvoice(
+    id: string,
+    tenantId: string,
+    actorUserId: string,
+    dto: SendInvoiceDto = {},
+  ) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        company: { select: { name: true, invoiceEmail: true, eInvoicePreference: true } },
+      },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.status === OutgoingInvoiceStatus.draft) {
+      throw new ConflictException('The invoice must be finalized before it can be sent');
+    }
+
+    // The snapshot address wins: it is the address the invoice was issued to, and it must
+    // not silently move when the company master data is edited afterwards.
+    const recipientEmail =
+      invoice.customerEmail?.trim() || invoice.company.invoiceEmail?.trim() || null;
+    if (!recipientEmail) {
+      throw new BadRequestException(
+        'The customer has no invoice e-mail address; add one to the company or the invoice before sending',
+      );
+    }
+
+    const profile = await this.prisma.tenantBillingProfile.findUnique({ where: { tenantId } });
+    const ccEmail = profile?.invoiceEmailCc?.trim() || null;
+
+    const sellerName = readSnapshotString(invoice.supplierSnapshot, 'legalName') ?? profile?.legalName;
+    const iban = readSnapshotString(invoice.supplierSnapshot, 'iban') ?? profile?.iban;
+    if (!sellerName || !iban) {
+      throw new BadRequestException('A billing profile is required before an invoice can be sent');
+    }
+
+    // ZUGFeRD carries the CII inside the PDF, so only XRechnung needs a separate XML file.
+    const includeXml = dto.includeXml ?? requiresUbl(invoice.company.eInvoicePreference);
+    const xmlStoredPath = includeXml
+      ? invoice.xrechnungStoredPath ?? invoice.zugferdXmlStoredPath
+      : null;
+
+    const template = invoiceDeliveryMail({
+      invoiceNumber: invoice.number ?? id,
+      sellerName,
+      customerName: invoice.customerName ?? invoice.company.name,
+      invoiceDate: invoice.invoiceDate,
+      dueDate: invoice.dueDate,
+      servicePeriodStart: invoice.servicePeriodStart,
+      servicePeriodEnd: invoice.servicePeriodEnd,
+      grossCents: invoice.grossCents,
+      currency: invoice.currency,
+      iban,
+      bic: readSnapshotString(invoice.supplierSnapshot, 'bic') ?? profile?.bic ?? null,
+      bankName: readSnapshotString(invoice.supplierSnapshot, 'bankName') ?? profile?.bankName ?? null,
+      includesXml: xmlStoredPath !== null,
+      footerText:
+        readSnapshotString(invoice.supplierSnapshot, 'invoiceFooterText') ??
+        profile?.invoiceFooterText ??
+        null,
+      language: dto.language ?? 'de',
+    });
+
+    const mailMode = this.mailService.isEnabled() ? 'smtp' : 'log';
+    const attachmentBaseName = invoice.number ?? id;
+    let result: SendMailResult;
+    try {
+      const attachments: MailAttachment[] = [
+        {
+          filename: `${attachmentBaseName}.pdf`,
+          content: await this.readStoredDocument(invoice.pdfStoredPath),
+          contentType: 'application/pdf',
+        },
+      ];
+      if (xmlStoredPath) {
+        attachments.push({
+          filename: `${attachmentBaseName}.xml`,
+          content: await this.readStoredDocument(xmlStoredPath),
+          contentType: 'application/xml',
+        });
+      }
+      result = await this.mailService.sendMail({
+        to: recipientEmail,
+        cc: ccEmail,
+        subject: template.subject,
+        text: template.text,
+        html: template.html,
+        attachments,
+      });
+    } catch (error) {
+      const errorMessage = (error instanceof Error ? error.message : 'Unknown mail error').slice(
+        0,
+        1_000,
+      );
+      await this.recordDeliveryAttempt({
+        invoiceId: id,
+        actorUserId,
+        recipientEmail,
+        ccEmail,
+        mailMode,
+        status: 'failed',
+        errorMessage,
+      });
+      await safeAuditLog(this.auditService, {
+        actorUserId,
+        action: 'invoice.send_failed',
+        entityType: 'invoice',
+        entityId: id,
+        summary: `Sending outgoing invoice ${invoice.number ?? id} failed`,
+        metadata: { mail_mode: mailMode, recipient_domain: emailDomain(recipientEmail) },
+      });
+      throw new ServiceUnavailableException(
+        `The invoice could not be e-mailed and remains unsent; the failed attempt was recorded and can be retried (${errorMessage})`,
+      );
+    }
+
+    const attemptedAt = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.invoiceDeliveryAttempt.create({
+        data: {
+          invoiceId: id,
+          recipientEmail,
+          ccEmail,
+          status: 'sent',
+          mailMode: result.mode,
+          providerMessageId: result.messageId ?? null,
+          attemptedAt,
+        },
+      });
+
+      // A successful dispatch marks the invoice sent unless the invoice is already paid.
+      const status =
+        invoice.status === OutgoingInvoiceStatus.paid
+          ? OutgoingInvoiceStatus.paid
+          : OutgoingInvoiceStatus.sent;
+      const row = await tx.invoice.update({
+        where: { id },
+        data: {
+          status,
+          // The first successful delivery is the legally relevant one; later copies are
+          // documented by their delivery attempts.
+          sentAt: invoice.sentAt ?? attemptedAt,
+        },
+        include: { company: true, lines: { orderBy: { position: 'asc' } } },
+      });
+
+      await tx.invoiceAuditEvent.create({
+        data: {
+          invoiceId: id,
+          actorUserId,
+          action: 'sent',
+          snapshot: {
+            recipientEmail,
+            ccEmail,
+            mailMode: result.mode,
+            mailSent: result.sent,
+            providerMessageId: result.messageId ?? null,
+            attachments: [
+              `${attachmentBaseName}.pdf`,
+              ...(xmlStoredPath ? [`${attachmentBaseName}.xml`] : []),
+            ],
+            statusBefore: invoice.status,
+            statusAfter: row.status,
+            sentAt: row.sentAt?.toISOString() ?? null,
+          },
+        },
+      });
+
+      return row;
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'invoice.sent',
+      entityType: 'invoice',
+      entityId: id,
+      summary: `Outgoing invoice ${invoice.number ?? id} sent`,
+      metadata: {
+        mail_mode: result.mode,
+        mail_sent: result.sent,
+        recipient_domain: emailDomain(recipientEmail),
+      },
+    });
+
+    return {
+      invoice: updated,
+      recipientEmail,
+      ccEmail,
+      mailSent: result.sent,
+      mailMode: result.mode,
+      attachedXml: xmlStoredPath !== null,
+    };
+  }
+
+  /** A failed delivery is a record of its own, so it is written even though nothing was sent. */
+  private async recordDeliveryAttempt(params: {
+    invoiceId: string;
+    actorUserId: string;
+    recipientEmail: string;
+    ccEmail: string | null;
+    mailMode: string;
+    status: 'sent' | 'failed';
+    errorMessage: string | null;
+  }): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoiceDeliveryAttempt.create({
+        data: {
+          invoiceId: params.invoiceId,
+          recipientEmail: params.recipientEmail,
+          ccEmail: params.ccEmail,
+          status: params.status,
+          mailMode: params.mailMode,
+          errorMessage: params.errorMessage,
+        },
+      });
+      await tx.invoiceAuditEvent.create({
+        data: {
+          invoiceId: params.invoiceId,
+          actorUserId: params.actorUserId,
+          action: 'send.failed',
+          snapshot: {
+            recipientEmail: params.recipientEmail,
+            ccEmail: params.ccEmail,
+            mailMode: params.mailMode,
+            errorMessage: params.errorMessage,
+          },
+        },
+      });
+    });
+  }
+
+  private async readStoredDocument(storedPath: string | null): Promise<Buffer> {
+    if (!storedPath) {
+      throw new Error('the stored invoice document is missing on the invoice');
+    }
+    const opened = await this.invoiceDocuments.open(storedPath);
+    if (!opened) {
+      throw new Error(`the stored invoice document ${storedPath} could not be read`);
+    }
+    return this.streamToBuffer(opened.stream);
+  }
+
+  private async streamToBuffer(stream: Readable): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   /**

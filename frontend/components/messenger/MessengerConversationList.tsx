@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, MessageSquare, Plus, Search, Truck } from 'lucide-react';
+import { MessageSquare, Plus, Search, Truck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -35,7 +35,7 @@ interface MessengerConversationListProps {
   previewText: (conversation: ConversationListItem) => string;
 }
 
-const FILTERS: MessengerConversationPersonaFilter[] = ['all', 'drivers', 'customers'];
+const FILTERS: MessengerConversationPersonaFilter[] = ['all', 'drivers'];
 
 export function MessengerConversationList({
   conversations,
@@ -139,7 +139,6 @@ export function MessengerConversationList({
               const initials = personInitials(avatarName);
               const color = avatarColor(avatarName);
               const unread = conversation.unreadCount > 0;
-              const isCustomer = counterpart.role === 'customer';
 
               return (
                 <li key={conversation.id}>
@@ -164,18 +163,11 @@ export function MessengerConversationList({
                           {initials}
                         </span>
                         <span
-                          className={cn(
-                            'absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-white',
-                            isCustomer ? 'bg-amber-500' : 'bg-[#1a4d7a]',
-                          )}
+                          className="absolute -bottom-0.5 -right-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-[#1a4d7a]"
                           aria-hidden
                           title={t(roleLabelKey(counterpart.role))}
                         >
-                          {isCustomer ? (
-                            <Building2 className="h-2.5 w-2.5 text-white" />
-                          ) : (
-                            <Truck className="h-2.5 w-2.5 text-white" />
-                          )}
+                          <Truck className="h-2.5 w-2.5 text-white" />
                         </span>
                       </span>
                       <div className="min-w-0 flex-1">

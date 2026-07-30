@@ -32,5 +32,5 @@ Herhangi biri kırmızıysa: düzelt, baştan başla. Bataryayı asla atlama, "m
 - Commit mesajları: `faz0: <ne yapıldı>` formatında, milestone başına küçük ve incelenebilir commitler.
 
 ## KAPSAM SINIRI
-Şu klasörlere DOKUNMA (bu loop'un kapsamı dışı): `billing/`, `customer-portal/`, `qa-agents/` (e2e testleri hariç),
-`invoicing` ile ilgili her şey. Şüphedeysen sor.
+Şu klasörlere DOKUNMA (bu loop'un kapsamı dışı): , `customer-portal/`, `qa-agents/` (e2e testleri hariç), ile ilgili her şey. Şüphedeysen sor.
+
