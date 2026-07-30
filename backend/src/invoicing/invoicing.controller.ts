@@ -123,6 +123,26 @@ export class InvoicingController {
     return this.invoicing.deletePayment(id, request.user.tenantId, request.user.id);
   }
 
+  @Get('datev/export')
+  @RequiresWrite()
+  exportDatev(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoicing.exportDatev(from, to, request.user.tenantId, request.user.id);
+  }
+
+  @Get('datev/exports/:id/download')
+  async downloadDatevExport(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Res() response: Response,
+  ) {
+    const file = await this.invoicing.downloadDatevExport(id, request.user.tenantId);
+    this.sendStoredDocument(response, file);
+  }
+
   @Get('invoices/:id/pdf')
   async downloadPdf(@Param('id') id: string, @Res() response: Response) {
     const file = await this.invoicing.downloadInvoiceDocument(id, 'pdf');

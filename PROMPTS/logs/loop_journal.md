@@ -78,6 +78,7 @@
 [2026-07-20] [QA-P0-ROUND2] [vehicle-duplicate-conflict] [Duplicate vehicle P2002 genel 500'e cevriliyordu; 409 Conflict eslemesi+unit regresyon eklendi, touched query as-any castleri kaldirildi]
 [2026-07-20] [QA-P0-ROUND2] [company-finance-contract] [P0 testi camelCase bekliyordu; mevcut API snake_case default_daily_revenue kontratina hizalandi]
 [2026-07-20] [QA-P0-ROUND2] [permission-matrix-drift] [Users/drivers/vehicles/companies/assignments controller metadata ile canonical read/write matrisi ve tum mutation RequiresWrite decoratorlari unit testte kilitlendi]
+[2026-07-30] [faz0] [datev-export] [DATEV EXTF Buchungsstapel + Debitorenstamm export akisi tamamlandi; CSV payload refaktoru ile backend tsc/test + codec8|verify + tenant isolation yesil]
 [2026-07-20] [QA-P0-ROUND2] [request-approver-spoofing] [Request approve body currentUserId ile approvedBy kimligi taklit edilebiliyordu; approver JWT actor kimligine baglandi]
 [2026-07-20] [QA-P0-ROUND2] [critical-workflow-api-suite] [Assignment/request/leave/transport icin RBAC+tenant+transition+idempotency+calendar yan etkilerini kapsayan gercek P0 API paketi eklendi]
 [2026-07-20] [QA-P0-ROUND2] [transport-cross-tenant-relations] [Tenant A tokeni Tenant B driver/vehicle/company ile transport request yaratip PII okuyabiliyordu; scoped relation checks create transactionina eklendi]

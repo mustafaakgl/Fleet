@@ -14,6 +14,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DatevExportStorageService } from '../storage/datev-export-storage.service';
 import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { applyTenantScope } from '../tenant/tenant-prisma.extension';
@@ -324,6 +325,7 @@ function createService(store: Store): InvoicingService {
     createFakePrisma(store) as unknown as PrismaService,
     { logAction: async () => undefined } as unknown as AuditService,
     createFakeDocumentStorage(store) as unknown as InvoiceDocumentStorageService,
+    {} as unknown as DatevExportStorageService,
     // Finalizing never sends mail; delivery is covered in invoicing-send.spec.ts.
     {} as unknown as MailService,
   );

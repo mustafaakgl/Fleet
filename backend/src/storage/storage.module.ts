@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { DefectPhotoCryptoService } from './defect-photo-crypto.service';
 import { DefectPhotoStorageService } from './defect-photo-storage.service';
+import { DatevExportStorageService } from './datev-export-storage.service';
 import { FineDocumentStorageService } from './fine-document-storage.service';
 import { InvoiceDocumentStorageService } from './invoice-document-storage.service';
 import { LicensePhotoCryptoService } from './license-photo-crypto.service';
@@ -18,6 +19,7 @@ import { StorageService } from './storage.service';
     LicensePhotoStorageService,
     DefectPhotoCryptoService,
     DefectPhotoStorageService,
+    DatevExportStorageService,
     FineDocumentStorageService,
     InvoiceDocumentStorageService,
     {
@@ -33,6 +35,7 @@ import { StorageService } from './storage.service';
     LicensePhotoStorageService,
     DefectPhotoCryptoService,
     DefectPhotoStorageService,
+    DatevExportStorageService,
     FineDocumentStorageService,
     InvoiceDocumentStorageService,
   ],

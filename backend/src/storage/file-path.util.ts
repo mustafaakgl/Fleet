@@ -11,10 +11,12 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   '.png': 'image/png',
   '.webp': 'image/webp',
   '.xml': 'application/xml',
+  '.csv': 'text/csv',
+  '.zip': 'application/zip',
 };
 
 const STORED_FILE_URL_PATTERN =
-  /^\/uploads\/(documents|vehicles|license-photos|defect-photos|fine-documents|message-attachments|invoice-documents)\/([^/]+)$/;
+  /^\/uploads\/(documents|vehicles|license-photos|defect-photos|fine-documents|message-attachments|invoice-documents|datev-exports)\/([^/]+)$/;
 
 export function mimeTypeFromFileName(fileName: string): string {
   const dotIdx = fileName.lastIndexOf('.');

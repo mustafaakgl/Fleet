@@ -7,8 +7,10 @@ import {
 } from '@nestjs/common';
 import {
   AssignmentStatus,
+  DatevExportStatus,
   EInvoicePreference,
   InvoiceLineSource,
+  InvoiceKind,
   InvoiceTaxCategory,
   InvoiceUnit,
   OutgoingInvoiceStatus,
@@ -20,6 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { invoiceDeliveryMail } from '../mail/mail-templates';
 import { MailService, type MailAttachment, type SendMailResult } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DatevExportStorageService } from '../storage/datev-export-storage.service';
 import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
 import {
   buildEInvoiceDocument,
@@ -44,6 +47,12 @@ import {
   parseQuantityToMilliunits,
   type InvoiceTaxCategoryValue,
 } from './money';
+import {
+  renderDebtorMasterCsv,
+  renderExtfBuchungsstapelCsv,
+  type DatevInvoiceExportInput,
+  type DatevTaxCategory,
+} from './datev/extf';
 
 const DEFAULT_PAYMENT_TERM_DAYS = 14;
 const DEFAULT_TAX_RATE_BASIS_POINTS = 1_900;
@@ -118,6 +127,55 @@ function emailDomain(email: string): string {
   return email.split('@')[1] ?? 'unknown';
 }
 
+type DatevExportTaxBucket = {
+  taxCategory: DatevTaxCategory;
+  taxRateBasisPoints: number;
+  grossCents: number;
+};
+
+function isDatevTaxCategory(value: string): value is DatevTaxCategory {
+  return (
+    value === 'standard' ||
+    value === 'reduced' ||
+    value === 'exempt' ||
+    value === 'reverse_charge'
+  );
+}
+
+function readDatevTaxBuckets(value: Prisma.JsonValue | null): DatevExportTaxBucket[] {
+  if (!Array.isArray(value)) return [];
+
+  const buckets: DatevExportTaxBucket[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+
+    const category = entry.taxCategory;
+    const rate = entry.taxRateBasisPoints;
+    const gross = entry.grossCents;
+
+    if (
+      typeof category !== 'string' ||
+      !isDatevTaxCategory(category) ||
+      typeof rate !== 'number' ||
+      typeof gross !== 'number'
+    ) {
+      continue;
+    }
+
+    buckets.push({
+      taxCategory: category,
+      taxRateBasisPoints: rate,
+      grossCents: gross,
+    });
+  }
+
+  return buckets;
+}
+
+function isExportableInvoiceStatus(status: OutgoingInvoiceStatus): boolean {
+  return status !== OutgoingInvoiceStatus.draft;
+}
+
 function assertTaxCombination(category: InvoiceTaxCategory, rate: number): void {
   calculateLine({
     quantityMilliunits: 1_000,
@@ -133,6 +191,7 @@ export class InvoicingService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly invoiceDocuments: InvoiceDocumentStorageService,
+    private readonly datevExportStorage: DatevExportStorageService,
     private readonly mailService: MailService,
   ) {}
 
@@ -1629,6 +1688,289 @@ export class InvoicingService {
       mailMode: result.mode,
       attachedXml: xmlStoredPath !== null,
     };
+  }
+
+  async exportDatev(from: string, to: string, tenantId: string, actorUserId: string) {
+    const periodStart = normalizeDay(from, 'from');
+    const periodEnd = normalizeDay(to, 'to');
+    if (periodEnd < periodStart) {
+      throw new BadRequestException('to must be on or after from');
+    }
+
+    const periodEndExclusive = new Date(periodEnd);
+    periodEndExclusive.setUTCDate(periodEndExclusive.getUTCDate() + 1);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const profile = await tx.tenantBillingProfile.findUnique({ where: { tenantId } });
+      if (!profile) {
+        throw new BadRequestException('A billing profile is required before DATEV export');
+      }
+
+      const invoices = await tx.invoice.findMany({
+        where: {
+          tenantId,
+          invoiceDate: { gte: periodStart, lt: periodEndExclusive },
+          status: { not: OutgoingInvoiceStatus.draft },
+          number: { not: null },
+        },
+        select: {
+          id: true,
+          number: true,
+          kind: true,
+          status: true,
+          invoiceDate: true,
+          taxBreakdown: true,
+          grossCents: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              datevDebtorNumber: true,
+            },
+          },
+        },
+        orderBy: [{ invoiceDate: 'asc' }, { number: 'asc' }],
+      });
+
+      const exportable = invoices.filter((invoice) => isExportableInvoiceStatus(invoice.status));
+      const companyIds = [...new Set(exportable.map((invoice) => invoice.company.id))];
+      const debtorNumbers = await this.ensureDatevDebtorNumbers(
+        tx,
+        tenantId,
+        companyIds,
+        profile.debtorNumberStart,
+      );
+
+      const invoiceIds = exportable.map((invoice) => invoice.id);
+      const previousExports = await tx.datevExport.findMany({
+        where: { tenantId },
+        select: { id: true, invoiceIds: true },
+      });
+
+      const previouslyExportedInvoiceIds = new Set<string>();
+      for (const exported of previousExports) {
+        if (!Array.isArray(exported.invoiceIds)) continue;
+        for (const entry of exported.invoiceIds) {
+          if (typeof entry === 'string') previouslyExportedInvoiceIds.add(entry);
+        }
+      }
+
+      const repeatedInvoiceNumbers = exportable
+        .filter((invoice) => previouslyExportedInvoiceIds.has(invoice.id))
+        .map((invoice) => invoice.number)
+        .filter((number): number is string => typeof number === 'string');
+
+      const datevInvoices: DatevInvoiceExportInput[] = exportable.map((invoice) => {
+        const taxBuckets = readDatevTaxBuckets(invoice.taxBreakdown);
+        const normalizedBuckets = taxBuckets.length
+          ? taxBuckets
+          : [
+              {
+                taxCategory: 'exempt' as const,
+                taxRateBasisPoints: 0,
+                grossCents: invoice.grossCents,
+              },
+            ];
+
+        return {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number ?? invoice.id,
+          invoiceDate: invoice.invoiceDate,
+          companyName: invoice.company.name,
+          debtorNumber: debtorNumbers.get(invoice.company.id) ?? profile.debtorNumberStart,
+          kind:
+            invoice.kind === InvoiceKind.invoice
+              ? 'invoice'
+              : invoice.kind === InvoiceKind.credit_note
+                ? 'credit_note'
+                : 'cancellation',
+          taxBuckets: normalizedBuckets,
+        };
+      });
+
+      const buchungsstapelCsv = renderExtfBuchungsstapelCsv({
+        profile: {
+          consultantNumber: profile.datevConsultantNumber,
+          clientNumber: profile.datevClientNumber,
+          chart: profile.datevChart === 'SKR04' ? 'SKR04' : 'SKR03',
+          revenueAccount19: profile.revenueAccount19,
+          revenueAccount7: profile.revenueAccount7,
+          revenueAccount0: profile.revenueAccount0,
+          revenueAccountReverseCharge: profile.revenueAccountReverseCharge,
+        },
+        createdAt: new Date(),
+        invoices: datevInvoices,
+      });
+
+      const debtorCsv = renderDebtorMasterCsv(
+        [...debtorNumbers.entries()]
+          .map(([companyId, debtorNumber]) => {
+            const companyName = exportable.find((invoice) => invoice.company.id === companyId)?.company.name;
+            return {
+              debtorNumber,
+              companyName: companyName ?? companyId,
+            };
+          })
+          .sort((left, right) => left.debtorNumber - right.debtorNumber),
+      );
+
+      const payload = this.buildDatevExportPayload(buchungsstapelCsv, debtorCsv);
+      const fileName = this.datevExportStorage.buildFileName(periodStart, periodEnd);
+      const stored = await this.datevExportStorage.save(fileName, payload);
+
+      const exportRow = await tx.datevExport.create({
+        data: {
+          tenantId,
+          periodStart,
+          periodEnd,
+          createdById: actorUserId,
+          fileStoredPath: stored.storedPath,
+          fileSha256: stored.sha256,
+          invoiceIds,
+        },
+      });
+
+      if (exportable.length > 0) {
+        await tx.invoiceAuditEvent.createMany({
+          data: exportable.map((invoice) => ({
+            tenantId,
+            invoiceId: invoice.id,
+            actorUserId,
+            action: 'datev.exported',
+            snapshot: {
+              exportId: exportRow.id,
+              periodStart: periodStart.toISOString().slice(0, 10),
+              periodEnd: periodEnd.toISOString().slice(0, 10),
+            },
+          })),
+        });
+      }
+
+      return {
+        exportId: exportRow.id,
+        fileStoredPath: exportRow.fileStoredPath,
+        invoiceCount: exportable.length,
+        repeatedInvoiceNumbers,
+      };
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'datev.export_generated',
+      entityType: 'datev_export',
+      entityId: result.exportId,
+      summary: 'DATEV EXTF export generated',
+      metadata: {
+        invoice_count: result.invoiceCount,
+        repeated_invoice_count: result.repeatedInvoiceNumbers.length,
+      },
+    });
+
+    return {
+      exportId: result.exportId,
+      invoiceCount: result.invoiceCount,
+      warning:
+        result.repeatedInvoiceNumbers.length > 0
+          ? {
+              code: 'DATEV_ALREADY_EXPORTED_INVOICES',
+              message: 'Some invoices were already part of a previous DATEV export',
+              invoiceNumbers: result.repeatedInvoiceNumbers,
+            }
+          : null,
+      downloadUrl: `/invoicing/datev/exports/${result.exportId}/download`,
+      fileStoredPath: result.fileStoredPath,
+    };
+  }
+
+  async downloadDatevExport(
+    id: string,
+    tenantId: string,
+  ): Promise<{ stream: Readable; fileName: string; mimeType: string }> {
+    const exportRow = await this.prisma.datevExport.findFirst({
+      where: { id, tenantId },
+      select: {
+        id: true,
+        periodStart: true,
+        periodEnd: true,
+        fileStoredPath: true,
+      },
+    });
+    if (!exportRow) throw new NotFoundException('DATEV export not found');
+
+    const opened = await this.datevExportStorage.open(exportRow.fileStoredPath);
+    if (!opened) {
+      throw new NotFoundException('The stored DATEV export could not be read');
+    }
+
+    await this.prisma.datevExport.update({
+      where: { id },
+      data: { status: DatevExportStatus.downloaded },
+    });
+
+    const fileName = this.datevExportStorage.buildFileName(exportRow.periodStart, exportRow.periodEnd);
+    return {
+      stream: opened.stream,
+      fileName,
+      mimeType: opened.contentType ?? this.datevExportStorage.mimeTypeFor(exportRow.fileStoredPath),
+    };
+  }
+
+  private async ensureDatevDebtorNumbers(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    companyIds: string[],
+    debtorNumberStart: number,
+  ): Promise<Map<string, number>> {
+    if (companyIds.length === 0) return new Map();
+
+    const companies = await tx.company.findMany({
+      where: {
+        tenantId,
+        id: { in: companyIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        datevDebtorNumber: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    if (companies.length !== companyIds.length) {
+      throw new NotFoundException('One or more companies were not found for DATEV export');
+    }
+
+    const maxExistingRow = await tx.company.findFirst({
+      where: {
+        tenantId,
+        datevDebtorNumber: { not: null },
+      },
+      select: { datevDebtorNumber: true },
+      orderBy: { datevDebtorNumber: 'desc' },
+    });
+    let nextDebtorNumber = Math.max(debtorNumberStart - 1, maxExistingRow?.datevDebtorNumber ?? 0);
+
+    const result = new Map<string, number>();
+    for (const company of companies) {
+      if (company.datevDebtorNumber !== null) {
+        result.set(company.id, company.datevDebtorNumber);
+        continue;
+      }
+
+      nextDebtorNumber += 1;
+      await tx.company.update({
+        where: { id: company.id },
+        data: { datevDebtorNumber: nextDebtorNumber },
+      });
+      result.set(company.id, nextDebtorNumber);
+    }
+
+    return result;
+  }
+
+  private buildDatevExportPayload(buchungsstapelCsv: string, debtorCsv: string): Buffer {
+    const separator = '#DEBITORENSTAMM';
+    return Buffer.from(`${buchungsstapelCsv}\n${separator}\n${debtorCsv}`, 'utf8');
   }
 
   /** A failed delivery is a record of its own, so it is written even though nothing was sent. */

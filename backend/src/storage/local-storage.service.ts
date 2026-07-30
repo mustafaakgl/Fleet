@@ -18,6 +18,8 @@ export const MESSENGER_ATTACHMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'message
 export const MESSENGER_ATTACHMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), MESSENGER_ATTACHMENT_UPLOAD_RELATIVE_DIR);
 export const INVOICE_DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'invoice-documents');
 export const INVOICE_DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), INVOICE_DOCUMENT_UPLOAD_RELATIVE_DIR);
+export const DATEV_EXPORT_UPLOAD_RELATIVE_DIR = join('uploads', 'datev-exports');
+export const DATEV_EXPORT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), DATEV_EXPORT_UPLOAD_RELATIVE_DIR);
 
 const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
   documents: DOCUMENT_UPLOAD_ABSOLUTE_DIR,
@@ -27,6 +29,7 @@ const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
   'fine-documents': FINE_DOCUMENT_UPLOAD_ABSOLUTE_DIR,
   'message-attachments': MESSENGER_ATTACHMENT_UPLOAD_ABSOLUTE_DIR,
   'invoice-documents': INVOICE_DOCUMENT_UPLOAD_ABSOLUTE_DIR,
+  'datev-exports': DATEV_EXPORT_UPLOAD_ABSOLUTE_DIR,
 };
 
 export function uploadAbsoluteDirForBucket(bucket: StorageBucket): string {

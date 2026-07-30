@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { InvoiceTaxCategory, OutgoingInvoiceStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { DatevExportStorageService } from '../storage/datev-export-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
@@ -14,6 +15,8 @@ function createService(prisma: object): InvoicingService {
     { logAction: async () => undefined } as unknown as AuditService,
     // These cases never reach document generation; finalize is covered separately.
     {} as unknown as InvoiceDocumentStorageService,
+    // Nor DATEV export; dedicated specs cover that path.
+    {} as unknown as DatevExportStorageService,
     // Nor mail delivery; sending is covered in invoicing-send.spec.ts.
     {} as unknown as MailService,
   );

@@ -5,6 +5,7 @@ import { InvoicePaymentMethod, OutgoingInvoiceStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DatevExportStorageService } from '../storage/datev-export-storage.service';
 import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { applyTenantScope } from '../tenant/tenant-prisma.extension';
@@ -192,6 +193,7 @@ function createService(store: Store): InvoicingService {
     createFakePrisma(store) as unknown as PrismaService,
     { logAction: async () => undefined } as unknown as AuditService,
     {} as unknown as InvoiceDocumentStorageService,
+    {} as unknown as DatevExportStorageService,
     {} as unknown as MailService,
   );
 }
