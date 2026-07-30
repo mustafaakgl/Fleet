@@ -31,6 +31,7 @@ import {
   type FinalizedLineSnapshot,
   type SupplierSnapshot,
 } from './einvoice';
+import { CreateInvoicePaymentDto } from './dto/create-invoice-payment.dto';
 import { CreateInvoiceDraftDto, ManualInvoiceLineDto } from './dto/create-invoice-draft.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
@@ -65,6 +66,14 @@ function normalizeDay(value: string | Date, label: string): Date {
     throw new BadRequestException(`${label} is invalid`);
   }
   date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
+function normalizeTimestamp(value: string | Date, label: string): Date {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException(`${label} is invalid`);
+  }
   return date;
 }
 
@@ -774,6 +783,224 @@ export class InvoicingService {
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     return invoice;
+  }
+
+  async recordPayment(
+    invoiceId: string,
+    tenantId: string,
+    actorUserId: string,
+    dto: CreateInvoicePaymentDto,
+  ) {
+    if (dto.amountCents <= 0) {
+      throw new BadRequestException('amountCents must be greater than 0');
+    }
+
+    const paidAt = normalizeTimestamp(dto.paidAt, 'paidAt');
+    const result = await this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, tenantId },
+        select: {
+          id: true,
+          status: true,
+          number: true,
+          grossCents: true,
+          paidCents: true,
+          sentAt: true,
+          finalizedAt: true,
+        },
+      });
+      if (!invoice) throw new NotFoundException('Invoice not found');
+      if (invoice.status === OutgoingInvoiceStatus.draft) {
+        throw new ConflictException('Draft invoices cannot be paid');
+      }
+      if (invoice.status === OutgoingInvoiceStatus.cancelled) {
+        throw new ConflictException('Cancelled invoices cannot be paid');
+      }
+
+      const nextPaidCents = invoice.paidCents + dto.amountCents;
+      if (nextPaidCents > invoice.grossCents) {
+        const openAmount = Math.max(invoice.grossCents - invoice.paidCents, 0);
+        throw new BadRequestException(
+          `Payment exceeds the open amount (${openAmount} cents remaining)`,
+        );
+      }
+
+      const payment = await tx.invoicePayment.create({
+        data: {
+          invoiceId,
+          amountCents: dto.amountCents,
+          paidAt,
+          method: dto.method,
+          reference: dto.reference?.trim() || null,
+          note: dto.note?.trim() || null,
+          recordedById: actorUserId,
+        },
+      });
+
+      const status = this.recalculatePaymentStatus(
+        invoice.status,
+        invoice.finalizedAt,
+        invoice.sentAt,
+        nextPaidCents,
+        invoice.grossCents,
+      );
+
+      const updatedInvoice = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          paidCents: nextPaidCents,
+          status,
+          paidAt: status === OutgoingInvoiceStatus.paid ? paidAt : null,
+        },
+        include: {
+          company: true,
+          lines: { orderBy: { position: 'asc' } },
+          payments: { orderBy: { paidAt: 'desc' } },
+        },
+      });
+
+      await tx.invoiceAuditEvent.create({
+        data: {
+          invoiceId,
+          actorUserId,
+          action: 'payment.recorded',
+          snapshot: {
+            paymentId: payment.id,
+            amountCents: payment.amountCents,
+            paidAt: payment.paidAt.toISOString(),
+            method: payment.method,
+            reference: payment.reference,
+            note: payment.note,
+            statusBefore: invoice.status,
+            statusAfter: updatedInvoice.status,
+            paidCentsBefore: invoice.paidCents,
+            paidCentsAfter: updatedInvoice.paidCents,
+          },
+        },
+      });
+
+      return { invoice: updatedInvoice, payment };
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'invoice.payment_recorded',
+      entityType: 'invoice',
+      entityId: invoiceId,
+      summary: `Payment recorded for outgoing invoice ${result.invoice.number ?? invoiceId}`,
+      metadata: {
+        amount_cents: dto.amountCents,
+        method: dto.method,
+        paid_cents_after: result.invoice.paidCents,
+        status_after: result.invoice.status,
+      },
+    });
+
+    return result;
+  }
+
+  async deletePayment(paymentId: string, tenantId: string, actorUserId: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.invoicePayment.findFirst({
+        where: { id: paymentId, tenantId },
+        include: {
+          invoice: {
+            select: {
+              id: true,
+              status: true,
+              number: true,
+              grossCents: true,
+              paidCents: true,
+              sentAt: true,
+              finalizedAt: true,
+            },
+          },
+        },
+      });
+      if (!payment) throw new NotFoundException('Payment not found');
+
+      const nextPaidCents = Math.max(payment.invoice.paidCents - payment.amountCents, 0);
+      const status = this.recalculatePaymentStatus(
+        payment.invoice.status,
+        payment.invoice.finalizedAt,
+        payment.invoice.sentAt,
+        nextPaidCents,
+        payment.invoice.grossCents,
+      );
+
+      await tx.invoicePayment.delete({ where: { id: paymentId } });
+
+      const updatedInvoice = await tx.invoice.update({
+        where: { id: payment.invoice.id },
+        data: {
+          paidCents: nextPaidCents,
+          status,
+          paidAt: status === OutgoingInvoiceStatus.paid ? payment.paidAt : null,
+        },
+        include: {
+          company: true,
+          lines: { orderBy: { position: 'asc' } },
+          payments: { orderBy: { paidAt: 'desc' } },
+        },
+      });
+
+      await tx.invoiceAuditEvent.create({
+        data: {
+          invoiceId: payment.invoice.id,
+          actorUserId,
+          action: 'payment.deleted',
+          snapshot: {
+            paymentId,
+            amountCents: payment.amountCents,
+            paidAt: payment.paidAt.toISOString(),
+            method: payment.method,
+            reference: payment.reference,
+            note: payment.note,
+            statusBefore: payment.invoice.status,
+            statusAfter: updatedInvoice.status,
+            paidCentsBefore: payment.invoice.paidCents,
+            paidCentsAfter: updatedInvoice.paidCents,
+          },
+        },
+      });
+
+      return { invoice: updatedInvoice, deletedPaymentId: paymentId };
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'invoice.payment_deleted',
+      entityType: 'invoice',
+      entityId: result.invoice.id,
+      summary: `Payment deleted from outgoing invoice ${result.invoice.number ?? result.invoice.id}`,
+      metadata: {
+        payment_id: paymentId,
+        paid_cents_after: result.invoice.paidCents,
+        status_after: result.invoice.status,
+      },
+    });
+
+    return result;
+  }
+
+  private recalculatePaymentStatus(
+    currentStatus: OutgoingInvoiceStatus,
+    finalizedAt: Date | null,
+    sentAt: Date | null,
+    paidCents: number,
+    grossCents: number,
+  ): OutgoingInvoiceStatus {
+    if (paidCents >= grossCents && grossCents > 0) return OutgoingInvoiceStatus.paid;
+    if (paidCents > 0) return OutgoingInvoiceStatus.partially_paid;
+    if (
+      currentStatus !== OutgoingInvoiceStatus.paid &&
+      currentStatus !== OutgoingInvoiceStatus.partially_paid
+    ) {
+      return currentStatus;
+    }
+    if (sentAt) return OutgoingInvoiceStatus.sent;
+    if (finalizedAt) return OutgoingInvoiceStatus.finalized;
+    return currentStatus;
   }
 
   async updateDraft(id: string, dto: UpdateInvoiceDraftDto, actorUserId: string) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { Readable } from 'node:stream';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
@@ -6,6 +6,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { FINANCIAL_ROLES } from '../common/utils/permissions';
+import { CreateInvoicePaymentDto } from './dto/create-invoice-payment.dto';
 import { CreateInvoiceDraftDto } from './dto/create-invoice-draft.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
 import { UpdateInvoiceDraftDto } from './dto/update-invoice-draft.dto';
@@ -104,6 +105,22 @@ export class InvoicingController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.invoicing.sendInvoice(id, request.user.tenantId, request.user.id, dto);
+  }
+
+  @Post('invoices/:id/payments')
+  @RequiresWrite()
+  addPayment(
+    @Param('id') id: string,
+    @Body() dto: CreateInvoicePaymentDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.invoicing.recordPayment(id, request.user.tenantId, request.user.id, dto);
+  }
+
+  @Delete('payments/:id')
+  @RequiresWrite()
+  deletePayment(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.invoicing.deletePayment(id, request.user.tenantId, request.user.id);
   }
 
   @Get('invoices/:id/pdf')
