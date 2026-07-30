@@ -81,11 +81,21 @@ describe('fleet-fuel-analytics.util', () => {
           eventCount: 1,
         },
       ],
+      [
+        {
+          driverId: 'd1',
+          enteredAt: new Date('2026-06-03T08:00:00.000Z'),
+          liters: 40,
+          totalCost: 80,
+        },
+      ],
     );
 
     assert.equal(trend.length, 1);
     assert.equal(trend[0]?.realLiters, 40);
     assert.equal(trend[0]?.estimatedLiters, 12);
+    assert.equal(trend[0]?.costPer100Km, 16);
+    assert.equal(trend[0]?.averagePricePerLiter, 2);
   });
 
   it('builds driver breakdown from trips and fuel entries', () => {
@@ -111,6 +121,7 @@ describe('fleet-fuel-analytics.util', () => {
           driverId: 'd1',
           enteredAt: new Date('2026-06-04T08:00:00.000Z'),
           liters: 45,
+          totalCost: 90,
         },
       ],
     );
@@ -118,6 +129,8 @@ describe('fleet-fuel-analytics.util', () => {
     assert.equal(breakdown.length, 2);
     assert.equal(breakdown[0]?.driverId, 'd1');
     assert.equal(breakdown[0]?.realLiters, 45);
+    assert.equal(breakdown[0]?.realCost, 90);
+    assert.equal(breakdown[0]?.costPer100Km, 90);
     assert.equal(breakdown[0]?.estimatedLiters, 10);
   });
 });

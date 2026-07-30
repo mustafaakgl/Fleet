@@ -8,16 +8,23 @@ export type WeeklyFuelTrendPoint = {
   estimatedLiters: number;
   realLitersPer100Km: number | null;
   estimatedLitersPer100Km: number | null;
+  realCost: number;
+  entryLiters: number;
+  entryCost: number;
+  costPer100Km: number | null;
+  averagePricePerLiter: number | null;
 };
 
 export type DriverFuelBreakdown = {
   driverId: string;
   tripDistanceKm: number;
   realLiters: number;
+  realCost: number;
   estimatedLiters: number;
   eventCount: number;
   realLitersPer100Km: number | null;
   estimatedLitersPer100Km: number | null;
+  costPer100Km: number | null;
 };
 
 type TripEstimateRow = {
@@ -32,11 +39,13 @@ type FuelEntryRow = {
   driverId: string;
   enteredAt: Date;
   liters: number;
+  totalCost: number;
 };
 
 export function buildWeeklyFuelTrend(
   intervals: FuelConsumptionInterval[],
   trips: TripEstimateRow[],
+  entries: FuelEntryRow[],
 ): WeeklyFuelTrendPoint[] {
   const buckets = new Map<string, WeeklyFuelTrendPoint>();
 
@@ -52,6 +61,14 @@ export function buildWeeklyFuelTrend(
     const bucket = getOrCreateBucket(buckets, weekStart);
     bucket.realLiters += interval.litersTotal;
     bucket.realDistanceKm += interval.distanceKm;
+    bucket.realCost += interval.costTotal;
+  }
+
+  for (const entry of entries) {
+    const weekStart = toWeekStartIso(entry.enteredAt);
+    const bucket = getOrCreateBucket(buckets, weekStart);
+    bucket.entryLiters += entry.liters;
+    bucket.entryCost += entry.totalCost;
   }
 
   return [...buckets.values()]
@@ -61,6 +78,9 @@ export function buildWeeklyFuelTrend(
       realDistanceKm: round(bucket.realDistanceKm, 3),
       realLiters: round(bucket.realLiters, 3),
       estimatedLiters: round(bucket.estimatedLiters, 3),
+      realCost: round(bucket.realCost, 2),
+      entryLiters: round(bucket.entryLiters, 3),
+      entryCost: round(bucket.entryCost, 2),
       realLitersPer100Km:
         bucket.realDistanceKm > 0 && bucket.realLiters > 0
           ? round((bucket.realLiters / bucket.realDistanceKm) * 100, 2)
@@ -68,6 +88,14 @@ export function buildWeeklyFuelTrend(
       estimatedLitersPer100Km:
         bucket.tripDistanceKm > 0 && bucket.estimatedLiters > 0
           ? round((bucket.estimatedLiters / bucket.tripDistanceKm) * 100, 2)
+          : null,
+      costPer100Km:
+        bucket.realDistanceKm > 0 && bucket.realCost > 0
+          ? round((bucket.realCost / bucket.realDistanceKm) * 100, 2)
+          : null,
+      averagePricePerLiter:
+        bucket.entryLiters > 0 && bucket.entryCost > 0
+          ? round(bucket.entryCost / bucket.entryLiters, 3)
           : null,
     }))
     .sort((left, right) => left.weekStart.localeCompare(right.weekStart));
@@ -89,6 +117,7 @@ export function buildDriverFuelBreakdown(
   for (const entry of entries) {
     const row = getOrCreateDriverRow(byDriver, entry.driverId);
     row.realLiters += entry.liters;
+    row.realCost += entry.totalCost;
   }
 
   return [...byDriver.values()]
@@ -96,6 +125,7 @@ export function buildDriverFuelBreakdown(
       ...row,
       tripDistanceKm: round(row.tripDistanceKm, 3),
       realLiters: round(row.realLiters, 3),
+      realCost: round(row.realCost, 2),
       estimatedLiters: round(row.estimatedLiters, 3),
       realLitersPer100Km:
         row.tripDistanceKm > 0 && row.realLiters > 0
@@ -104,6 +134,10 @@ export function buildDriverFuelBreakdown(
       estimatedLitersPer100Km:
         row.tripDistanceKm > 0 && row.estimatedLiters > 0
           ? round((row.estimatedLiters / row.tripDistanceKm) * 100, 2)
+          : null,
+      costPer100Km:
+        row.tripDistanceKm > 0 && row.realCost > 0
+          ? round((row.realCost / row.tripDistanceKm) * 100, 2)
           : null,
     }))
     .sort((left, right) => right.tripDistanceKm - left.tripDistanceKm);
@@ -126,6 +160,11 @@ function getOrCreateBucket(
     estimatedLiters: 0,
     realLitersPer100Km: null,
     estimatedLitersPer100Km: null,
+    realCost: 0,
+    entryLiters: 0,
+    entryCost: 0,
+    costPer100Km: null,
+    averagePricePerLiter: null,
   };
   buckets.set(weekStart, created);
   return created;
@@ -144,10 +183,12 @@ function getOrCreateDriverRow(
     driverId,
     tripDistanceKm: 0,
     realLiters: 0,
+    realCost: 0,
     estimatedLiters: 0,
     eventCount: 0,
     realLitersPer100Km: null,
     estimatedLitersPer100Km: null,
+    costPer100Km: null,
   };
   rows.set(driverId, created);
   return created;

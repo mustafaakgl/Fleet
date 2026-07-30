@@ -148,41 +148,91 @@ export default function FleetFuelAnalyticsPage() {
     [locale],
   );
 
+  const priceFormat = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: 'EUR',
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+      }),
+    [locale],
+  );
+
   const overviewCards = useMemo(() => {
     if (!data) return [];
+    const totals = data.totals;
     return [
       {
         key: 'realLiters',
         label: t('fleetFuelReport.summary.realLiters', 'Gerçek litre (fiş)'),
-        value: `${numberFormat.format(data.totals.totalLiters)} L`,
+        value: `${numberFormat.format(totals.totalLiters)} L`,
+        hint: `${integerFormat.format(totals.realDistanceKm)} km`,
       },
       {
         key: 'estimatedLiters',
         label: t('fleetFuelReport.summary.estimatedLiters', 'Tahmini litre (GPS)'),
-        value: `${numberFormat.format(data.totals.totalEstimatedLiters)} L`,
-      },
-      {
-        key: 'deltaLiters',
-        label: t('fleetFuelReport.detail.deltaLiters', 'Tahmin − fiş farkı'),
-        value: `${formatDelta(data.totals.estimatedVsRealDeltaLiters)} L`,
-      },
-      {
-        key: 'co2',
-        label: t('fleetFuelReport.summary.co2', 'CO₂ tahmini'),
-        value: `${numberFormat.format(data.totals.co2Kg)} kg`,
+        value: `${numberFormat.format(totals.totalEstimatedLiters)} L`,
+        hint: `${integerFormat.format(totals.tripDistanceKm)} km`,
       },
       {
         key: 'cost',
         label: t('fleetFuelReport.summary.fuelCost', 'Yakıt maliyeti'),
-        value: currency.format(data.totals.totalCost),
+        value: currency.format(totals.totalCost),
+        hint:
+          totals.avgLitersPer100Km != null
+            ? `${totals.avgLitersPer100Km.toFixed(1)} L/100 km`
+            : '—',
       },
       {
-        key: 'alerts',
-        label: t('fleetFuelReport.summary.suspiciousEvents', 'Şüpheli olay'),
-        value: integerFormat.format(data.totals.suspiciousEventCount),
+        key: 'costPerKm',
+        label: t('fleetFuelReport.summary.costPer100Km', 'Km maliyeti'),
+        value: totals.costPer100Km != null ? `${currency.format(totals.costPer100Km)} / 100 km` : '—',
+        hint:
+          totals.costPerKm != null
+            ? t('fleetFuelReport.summary.costPerKmHint', '{{value}} / km', {
+                value: priceFormat.format(totals.costPerKm),
+              })
+            : '—',
+      },
+      {
+        key: 'pricePerLiter',
+        label: t('fleetFuelReport.summary.avgPricePerLiter', 'Ortalama litre fiyatı'),
+        value: totals.averagePricePerLiter != null ? `${priceFormat.format(totals.averagePricePerLiter)} / L` : '—',
+        hint:
+          totals.minPricePerLiter != null && totals.maxPricePerLiter != null
+            ? `${priceFormat.format(totals.minPricePerLiter)} – ${priceFormat.format(totals.maxPricePerLiter)}`
+            : '—',
+      },
+      {
+        key: 'expensiveRefuels',
+        label: t('fleetFuelReport.summary.expensiveRefuels', 'Pahalı tanklama'),
+        value: integerFormat.format(totals.aboveAveragePriceEntryCount),
+        hint: t('fleetFuelReport.summary.expensiveRefuelsHint', '{{value}} fazla maliyet', {
+          value: currency.format(totals.aboveAverageExcessCost),
+        }),
+      },
+      {
+        key: 'overTarget',
+        label: t('fleetFuelReport.summary.overTargetVehicles', 'Hedef üstü araç'),
+        value: `${integerFormat.format(totals.overTargetVehicleCount)} / ${integerFormat.format(totals.ratedVehicleCount)}`,
+        hint:
+          totals.averageTargetDeviationPercent != null
+            ? t('fleetFuelReport.summary.avgTargetDeviation', 'Ort. sapma {{value}} %', {
+                value: formatDelta(totals.averageTargetDeviationPercent),
+              })
+            : '—',
+      },
+      {
+        key: 'co2',
+        label: t('fleetFuelReport.summary.co2', 'CO₂ tahmini'),
+        value: `${numberFormat.format(totals.co2Kg)} kg`,
+        hint: t('fleetFuelReport.summary.co2Hint', '{{value}} kg/L', {
+          value: numberFormat.format(data.assumptions.co2KgPerLiter),
+        }),
       },
     ];
-  }, [currency, data, integerFormat, numberFormat, t]);
+  }, [currency, data, integerFormat, numberFormat, priceFormat, t]);
 
   const trendChartData = useMemo(() => {
     if (!data) return [];
@@ -195,18 +245,28 @@ export default function FleetFuelAnalyticsPage() {
     }));
   }, [data]);
 
-  const vehicleChartData = useMemo(() => {
+  const targetChartData = useMemo(() => {
     if (!data) return [];
-    return [...data.vehicles].slice(0, 8).map((vehicle) => ({
-      plateNumber: vehicle.plateNumber,
-      deltaPercent: vehicle.deltaPercent,
-      suspiciousEventCount: vehicle.suspiciousEventCount,
-    }));
+    return [...data.vehicles]
+      .filter((vehicle) => vehicle.avgLitersPer100Km != null)
+      .sort((left, right) => (right.targetDeviationPercent ?? 0) - (left.targetDeviationPercent ?? 0))
+      .slice(0, 8)
+      .map((vehicle) => ({
+        plateNumber: vehicle.plateNumber,
+        targetAvg: vehicle.targetLitersPer100Km,
+        realAvg: vehicle.avgLitersPer100Km,
+        deviationPercent: vehicle.targetDeviationPercent,
+      }));
   }, [data]);
 
   const topDrivers = useMemo(() => {
     if (!data) return [];
     return [...data.driverBreakdown].slice(0, 6);
+  }, [data]);
+
+  const priceOutliers = useMemo(() => {
+    if (!data) return [];
+    return data.priceOutliers.slice(0, 8);
   }, [data]);
 
   const suspiciousEvents = useMemo(() => {
@@ -264,11 +324,12 @@ export default function FleetFuelAnalyticsPage() {
       {!error && !loading && data ? (
         <>
           <Card className={FLEET_LIST_CARD}>
-            <CardContent className="grid grid-cols-2 gap-px bg-slate-100 p-0 lg:grid-cols-3 xl:grid-cols-6">
+            <CardContent className="grid grid-cols-2 gap-px bg-slate-100 p-0 lg:grid-cols-4">
               {overviewCards.map((card) => (
                 <div key={card.key} className="bg-white px-4 py-3">
                   <p className="text-xs text-slate-500">{card.label}</p>
                   <p className="mt-1 text-2xl font-semibold text-slate-900">{card.value}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">{card.hint}</p>
                 </div>
               ))}
             </CardContent>
@@ -320,30 +381,40 @@ export default function FleetFuelAnalyticsPage() {
 
             <Card className={FLEET_LIST_CARD}>
               <CardHeader>
-                <CardTitle>{t('fleetFuelReport.vehicleTable', 'Araç karşılaştırması')}</CardTitle>
+                <CardTitle>{t('fleetFuelReport.targetChart.title', 'Hedef tüketim sapması')}</CardTitle>
               </CardHeader>
               <CardContent className="h-80">
-                {vehicleChartData.length === 0 ? (
+                {targetChartData.length === 0 ? (
                   <p className="text-sm text-muted-foreground">{t('fleetFuelReport.noData', 'Seçilen dönemde veri yok.')}</p>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={vehicleChartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <BarChart data={targetChartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                       <XAxis dataKey="plateNumber" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} />
                       <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={36} />
                       <Tooltip
                         formatter={(value: number, name: string) => [
-                          name === 'deltaPercent'
-                            ? `${value?.toFixed?.(1) ?? '—'} %`
-                            : `${value?.toFixed?.(0) ?? '—'}`,
-                          name === 'deltaPercent'
-                            ? t('fleetFuelReport.detail.deltaLiters', 'Tahmin − fiş farkı')
-                            : t('fleetFuelReport.summary.suspiciousEvents', 'Şüpheli olay'),
+                          value != null ? `${value.toFixed(1)} L/100 km` : '—',
+                          name === 'targetAvg'
+                            ? t('fleetFuelReport.targetChart.target', 'Hedef L/100')
+                            : t('fleetFuelReport.realAvg', 'Gerçek L/100'),
                         ]}
+                        labelFormatter={(label, payload) => {
+                          const row = payload?.[0]?.payload as { deviationPercent?: number | null } | undefined;
+                          if (row?.deviationPercent == null) return String(label);
+                          return `${String(label)} · ${formatDelta(row.deviationPercent)} %`;
+                        }}
+                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
                       />
-                      <Legend />
-                      <Bar dataKey="deltaPercent" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={32} name="deltaPercent" />
-                      <Bar dataKey="suspiciousEventCount" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={32} name="suspiciousEventCount" />
+                      <Legend
+                        formatter={(value) =>
+                          value === 'targetAvg'
+                            ? t('fleetFuelReport.targetChart.target', 'Hedef L/100')
+                            : t('fleetFuelReport.realAvg', 'Gerçek L/100')
+                        }
+                      />
+                      <Bar dataKey="targetAvg" fill="#94a3b8" radius={[4, 4, 0, 0]} maxBarSize={24} name="targetAvg" />
+                      <Bar dataKey="realAvg" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={24} name="realAvg" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -368,8 +439,8 @@ export default function FleetFuelAnalyticsPage() {
                         <TableHead className={FLEET_TABLE_HEAD}>{t('fuelHistory.col.driver', 'Sürücü')}</TableHead>
                         <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.tripKm', 'Sefer km')}</TableHead>
                         <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.realAvg', 'Gerçek L/100')}</TableHead>
-                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.estimatedAvg', 'Tahmini L/100')}</TableHead>
-                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.detail.deltaLiters', 'Tahmin − fiş farkı')}</TableHead>
+                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.costPer100Km', '€/100 km')}</TableHead>
+                        <TableHead className={FLEET_TABLE_HEAD}>{t('fleetFuelReport.fuelSpend', 'Yakıt harcaması')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody className={FLEET_TABLE_BODY}>
@@ -378,8 +449,8 @@ export default function FleetFuelAnalyticsPage() {
                           <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{driver.driverName}</TableCell>
                           <TableCell className={FLEET_TABLE_CELL}>{integerFormat.format(driver.tripDistanceKm)}</TableCell>
                           <TableCell className={FLEET_TABLE_CELL}>{driver.realLitersPer100Km != null ? driver.realLitersPer100Km.toFixed(1) : '—'}</TableCell>
-                          <TableCell className={FLEET_TABLE_CELL}>{driver.estimatedLitersPer100Km != null ? driver.estimatedLitersPer100Km.toFixed(1) : '—'}</TableCell>
-                          <TableCell className={FLEET_TABLE_CELL}>{formatDelta(driver.deltaLiters)} L</TableCell>
+                          <TableCell className={FLEET_TABLE_CELL}>{driver.costPer100Km != null ? currency.format(driver.costPer100Km) : '—'}</TableCell>
+                          <TableCell className={FLEET_TABLE_CELL}>{currency.format(driver.realCost)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -421,6 +492,57 @@ export default function FleetFuelAnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card className={`${FLEET_LIST_CARD} mt-4`}>
+            <CardHeader>
+              <CardTitle>{t('fleetFuelReport.priceOutliers.title', 'Ortalama üstü tanklamalar')}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {t('fleetFuelReport.priceOutliers.subtitle', 'Dönem ortalamasını %{{percent}} aşan fişler', {
+                  percent: data.assumptions.priceTolerancePercent,
+                })}
+              </p>
+            </CardHeader>
+            <CardContent className="overflow-x-auto p-0">
+              {priceOutliers.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  {t('fleetFuelReport.priceOutliers.empty', 'Bu dönemde ortalama üstü tanklama yok.')}
+                </p>
+              ) : (
+                <Table className={FLEET_TABLE}>
+                  <TableHeader>
+                    <TableRow className={FLEET_TABLE_HEADER_ROW}>
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>{t('fuelHistory.col.vehicle', 'Araç')}</TableHead>
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>{t('fuelHistory.col.date', 'Tarih')}</TableHead>
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>{t('fuelHistory.col.driver', 'Sürücü')}</TableHead>
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>{t('fuelHistory.col.volume', 'Hacim')}</TableHead>
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>{t('fleetFuelReport.pricePerLiter', 'Litre fiyatı')}</TableHead>
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>{t('fleetFuelReport.priceOutliers.deviation', 'Ortalamadan fark')}</TableHead>
+                      <TableHead className={`${FLEET_TABLE_HEAD} whitespace-nowrap`}>{t('fleetFuelReport.priceOutliers.excessCost', 'Fazla maliyet')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className={FLEET_TABLE_BODY}>
+                    {priceOutliers.map((row) => (
+                      <TableRow
+                        key={row.entryId}
+                        className={`${FLEET_TABLE_ROW} ${FLEET_TABLE_ROW_CLICKABLE}`}
+                        onClick={() => {
+                          window.location.href = `/fleet-analytics/fuel/entries/${row.entryId}`;
+                        }}
+                      >
+                        <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{row.plateNumber}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL_MUTED}>{new Date(row.enteredAt).toLocaleDateString(locale)}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{row.driverName || '—'}</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{numberFormat.format(row.liters)} L</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{priceFormat.format(row.pricePerLiter)}</TableCell>
+                        <TableCell className={`${FLEET_TABLE_CELL} text-amber-700`}>{formatDelta(row.deviationPercent)} %</TableCell>
+                        <TableCell className={FLEET_TABLE_CELL}>{currency.format(row.excessCost)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className={`${FLEET_LIST_CARD} mt-4`}>
             <CardHeader className="flex flex-row items-center justify-between gap-3">

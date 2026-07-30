@@ -596,11 +596,14 @@ export interface FleetFuelAnalyticsCockpitResponse {
   assumptions: {
     co2KgPerLiter: number;
     suspiciousDeltaPercent: number;
+    priceTolerancePercent: number;
+    targetTolerancePercent: number;
   };
   totals: {
     totalLiters: number;
     totalEstimatedLiters: number;
     tripDistanceKm: number;
+    realDistanceKm: number;
     totalCost: number;
     avgLitersPer100Km: number | null;
     avgEstimatedLitersPer100Km: number | null;
@@ -609,6 +612,15 @@ export interface FleetFuelAnalyticsCockpitResponse {
     co2Kg: number;
     estimatedCo2Kg: number;
     averagePricePerLiter: number | null;
+    minPricePerLiter: number | null;
+    maxPricePerLiter: number | null;
+    costPerKm: number | null;
+    costPer100Km: number | null;
+    aboveAveragePriceEntryCount: number;
+    aboveAverageExcessCost: number;
+    overTargetVehicleCount: number;
+    ratedVehicleCount: number;
+    averageTargetDeviationPercent: number | null;
     suspiciousEventCount: number;
   };
   vehicles: Array<{
@@ -625,6 +637,11 @@ export interface FleetFuelAnalyticsCockpitResponse {
     deltaLiters: number | null;
     deltaPercent: number | null;
     suspiciousEventCount: number;
+    realDistanceKm: number;
+    costPerKm: number | null;
+    costPer100Km: number | null;
+    targetLitersPer100Km: number;
+    targetDeviationPercent: number | null;
   }>;
   weeklyTrend: Array<{
     weekStart: string;
@@ -634,18 +651,37 @@ export interface FleetFuelAnalyticsCockpitResponse {
     estimatedLiters: number;
     realLitersPer100Km: number | null;
     estimatedLitersPer100Km: number | null;
+    realCost: number;
+    entryLiters: number;
+    entryCost: number;
+    costPer100Km: number | null;
+    averagePricePerLiter: number | null;
   }>;
   driverBreakdown: Array<{
     driverId: string;
     driverName: string;
     tripDistanceKm: number;
     realLiters: number;
+    realCost: number;
     estimatedLiters: number;
     eventCount: number;
     realLitersPer100Km: number | null;
     estimatedLitersPer100Km: number | null;
+    costPer100Km: number | null;
     deltaLiters: number | null;
     deltaPercent: number | null;
+  }>;
+  priceOutliers: Array<{
+    entryId: string;
+    vehicleId: string;
+    plateNumber: string;
+    driverName: string;
+    enteredAt: string;
+    liters: number;
+    totalCost: number;
+    pricePerLiter: number;
+    deviationPercent: number;
+    excessCost: number;
   }>;
   suspiciousEvents: Array<{
     id: string;

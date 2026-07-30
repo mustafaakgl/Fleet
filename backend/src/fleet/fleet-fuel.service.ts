@@ -40,6 +40,11 @@ const TRACKABLE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
   AssignmentStatus.in_progress,
 ];
 
+/** A refuel is flagged as expensive once it exceeds the period average by this margin. */
+const FUEL_PRICE_TOLERANCE_PERCENT = 5;
+/** A vehicle counts as over target once it burns this much more than its norm consumption. */
+const FUEL_TARGET_TOLERANCE_PERCENT = 10;
+
 export type FleetFuelEntrySummary = {
   id: string;
   vehicleId: string;
@@ -114,12 +119,30 @@ export type FleetFuelAnalyticsVehicleRow = FleetFuelOverviewVehicleSummary & {
   deltaLiters: number | null;
   deltaPercent: number | null;
   suspiciousEventCount: number;
+  realDistanceKm: number;
+  costPerKm: number | null;
+  costPer100Km: number | null;
+  targetLitersPer100Km: number;
+  targetDeviationPercent: number | null;
 };
 
 export type FleetFuelAnalyticsDriverRow = DriverFuelBreakdown & {
   driverName: string;
   deltaLiters: number | null;
   deltaPercent: number | null;
+};
+
+export type FleetFuelPriceOutlier = {
+  entryId: string;
+  vehicleId: string;
+  plateNumber: string;
+  driverName: string;
+  enteredAt: string;
+  liters: number;
+  totalCost: number;
+  pricePerLiter: number;
+  deviationPercent: number;
+  excessCost: number;
 };
 
 export type FleetFuelAnalyticsSuspiciousEvent = {
@@ -141,11 +164,14 @@ export type FleetFuelAnalyticsCockpitResponse = {
   assumptions: {
     co2KgPerLiter: number;
     suspiciousDeltaPercent: number;
+    priceTolerancePercent: number;
+    targetTolerancePercent: number;
   };
   totals: {
     totalLiters: number;
     totalEstimatedLiters: number;
     tripDistanceKm: number;
+    realDistanceKm: number;
     totalCost: number;
     avgLitersPer100Km: number | null;
     avgEstimatedLitersPer100Km: number | null;
@@ -154,11 +180,21 @@ export type FleetFuelAnalyticsCockpitResponse = {
     co2Kg: number;
     estimatedCo2Kg: number;
     averagePricePerLiter: number | null;
+    minPricePerLiter: number | null;
+    maxPricePerLiter: number | null;
+    costPerKm: number | null;
+    costPer100Km: number | null;
+    aboveAveragePriceEntryCount: number;
+    aboveAverageExcessCost: number;
+    overTargetVehicleCount: number;
+    ratedVehicleCount: number;
+    averageTargetDeviationPercent: number | null;
     suspiciousEventCount: number;
   };
   vehicles: FleetFuelAnalyticsVehicleRow[];
   weeklyTrend: WeeklyFuelTrendPoint[];
   driverBreakdown: FleetFuelAnalyticsDriverRow[];
+  priceOutliers: FleetFuelPriceOutlier[];
   suspiciousEvents: FleetFuelAnalyticsSuspiciousEvent[];
   entries: FleetFuelEntrySummary[];
 };
@@ -482,6 +518,20 @@ export class FleetFuelService {
         const suspiciousEventCount =
           suspiciousEventsRaw.filter((event) => event.relatedEntityId === row.vehicleId).length +
           (deltaPercent !== null && Math.abs(deltaPercent) >= 15 ? 1 : 0);
+        const realDistanceKm = row.analytics.totalDistanceKm;
+        const costDistanceKm = realDistanceKm > 0 ? realDistanceKm : row.analytics.tripDistanceKm;
+        const costPerKm =
+          costDistanceKm > 0 && row.analytics.totalCost > 0
+            ? round(row.analytics.totalCost / costDistanceKm, 3)
+            : null;
+        const targetLitersPer100Km = row.analytics.avgConsumptionLPer100Km;
+        const targetDeviationPercent =
+          targetLitersPer100Km > 0 && row.analytics.avgLitersPer100Km != null
+            ? round(
+                ((row.analytics.avgLitersPer100Km - targetLitersPer100Km) / targetLitersPer100Km) * 100,
+                2,
+              )
+            : null;
 
         return {
           vehicleId: row.vehicleId,
@@ -497,6 +547,11 @@ export class FleetFuelService {
           deltaLiters,
           deltaPercent,
           suspiciousEventCount,
+          realDistanceKm,
+          costPerKm,
+          costPer100Km: costPerKm != null ? round(costPerKm * 100, 2) : null,
+          targetLitersPer100Km,
+          targetDeviationPercent,
         } satisfies FleetFuelAnalyticsVehicleRow;
       })
       .sort((left, right) => {
@@ -527,6 +582,7 @@ export class FleetFuelService {
 
         const tripDistanceKm = round(existing.tripDistanceKm + driver.tripDistanceKm, 3);
         const realLiters = round(existing.realLiters + driver.realLiters, 3);
+        const realCost = round(existing.realCost + driver.realCost, 2);
         const estimatedLiters = round(existing.estimatedLiters + driver.estimatedLiters, 3);
         const eventCount = existing.eventCount + driver.eventCount;
 
@@ -535,6 +591,7 @@ export class FleetFuelService {
           driverName,
           tripDistanceKm,
           realLiters,
+          realCost,
           estimatedLiters,
           eventCount,
           realLitersPer100Km:
@@ -543,6 +600,8 @@ export class FleetFuelService {
             tripDistanceKm > 0 && estimatedLiters > 0
               ? round((estimatedLiters / tripDistanceKm) * 100, 2)
               : null,
+          costPer100Km:
+            tripDistanceKm > 0 && realCost > 0 ? round((realCost / tripDistanceKm) * 100, 2) : null,
           deltaLiters: round(estimatedLiters - realLiters, 3),
           deltaPercent: realLiters > 0 ? round(((estimatedLiters - realLiters) / realLiters) * 100, 2) : null,
         });
@@ -560,11 +619,19 @@ export class FleetFuelService {
           estimatedLiters: 0,
           realLitersPer100Km: null,
           estimatedLitersPer100Km: null,
+          realCost: 0,
+          entryLiters: 0,
+          entryCost: 0,
+          costPer100Km: null,
+          averagePricePerLiter: null,
         };
         bucket.tripDistanceKm += point.tripDistanceKm;
         bucket.realDistanceKm += point.realDistanceKm;
         bucket.realLiters += point.realLiters;
         bucket.estimatedLiters += point.estimatedLiters;
+        bucket.realCost += point.realCost;
+        bucket.entryLiters += point.entryLiters;
+        bucket.entryCost += point.entryCost;
         weeklyTrendMap.set(point.weekStart, bucket);
       }
     }
@@ -576,6 +643,9 @@ export class FleetFuelService {
         realDistanceKm: round(point.realDistanceKm, 3),
         realLiters: round(point.realLiters, 3),
         estimatedLiters: round(point.estimatedLiters, 3),
+        realCost: round(point.realCost, 2),
+        entryLiters: round(point.entryLiters, 3),
+        entryCost: round(point.entryCost, 2),
         realLitersPer100Km:
           point.realDistanceKm > 0 && point.realLiters > 0
             ? round((point.realLiters / point.realDistanceKm) * 100, 2)
@@ -583,6 +653,14 @@ export class FleetFuelService {
         estimatedLitersPer100Km:
           point.tripDistanceKm > 0 && point.estimatedLiters > 0
             ? round((point.estimatedLiters / point.tripDistanceKm) * 100, 2)
+            : null,
+        costPer100Km:
+          point.realDistanceKm > 0 && point.realCost > 0
+            ? round((point.realCost / point.realDistanceKm) * 100, 2)
+            : null,
+        averagePricePerLiter:
+          point.entryLiters > 0 && point.entryCost > 0
+            ? round(point.entryCost / point.entryLiters, 3)
             : null,
       }))
       .sort((left, right) => left.weekStart.localeCompare(right.weekStart));
@@ -603,8 +681,54 @@ export class FleetFuelService {
       3,
     );
     const tripDistanceKm = round(rows.reduce((sum, row) => sum + row.analytics.tripDistanceKm, 0), 3);
+    const realDistanceKm = round(rows.reduce((sum, row) => sum + row.analytics.totalDistanceKm, 0), 3);
     const totalCost = round(rows.reduce((sum, row) => sum + row.analytics.totalCost, 0), 2);
     const estimatedVsRealDeltaLiters = round(totalEstimatedLiters - totalLiters, 3);
+    const costDistanceKm = realDistanceKm > 0 ? realDistanceKm : tripDistanceKm;
+    const costPerKm = costDistanceKm > 0 && totalCost > 0 ? round(totalCost / costDistanceKm, 3) : null;
+    const averagePricePerLiter = totalLiters > 0 ? round(totalCost / totalLiters, 3) : null;
+
+    const entryPrices = entries
+      .map((entry) => {
+        const liters = Number(entry.liters);
+        const cost = Number(entry.totalCost);
+        if (liters <= 0 || cost <= 0) {
+          return null;
+        }
+        return { entry, liters, cost, pricePerLiter: cost / liters };
+      })
+      .filter((row): row is NonNullable<typeof row> => row != null);
+
+    const priceOutliers: FleetFuelPriceOutlier[] =
+      averagePricePerLiter != null
+        ? entryPrices
+            .filter(
+              (row) =>
+                row.pricePerLiter >=
+                averagePricePerLiter * (1 + FUEL_PRICE_TOLERANCE_PERCENT / 100),
+            )
+            .map((row) => ({
+              entryId: row.entry.id,
+              vehicleId: row.entry.vehicleId,
+              plateNumber: row.entry.vehicle.plateNumber,
+              driverName: `${row.entry.driver.firstName} ${row.entry.driver.lastName}`.trim(),
+              enteredAt: row.entry.enteredAt.toISOString(),
+              liters: round(row.liters, 2),
+              totalCost: round(row.cost, 2),
+              pricePerLiter: round(row.pricePerLiter, 3),
+              deviationPercent: round(
+                ((row.pricePerLiter - averagePricePerLiter) / averagePricePerLiter) * 100,
+                2,
+              ),
+              excessCost: round((row.pricePerLiter - averagePricePerLiter) * row.liters, 2),
+            }))
+            .sort((left, right) => right.excessCost - left.excessCost)
+        : [];
+
+    const ratedVehicles = vehicles.filter((vehicle) => vehicle.targetDeviationPercent != null);
+    const overTargetVehicleCount = ratedVehicles.filter(
+      (vehicle) => (vehicle.targetDeviationPercent ?? 0) >= FUEL_TARGET_TOLERANCE_PERCENT,
+    ).length;
 
     return {
       generatedAt: new Date().toISOString(),
@@ -615,11 +739,14 @@ export class FleetFuelService {
       assumptions: {
         co2KgPerLiter: 2.64,
         suspiciousDeltaPercent: 15,
+        priceTolerancePercent: FUEL_PRICE_TOLERANCE_PERCENT,
+        targetTolerancePercent: FUEL_TARGET_TOLERANCE_PERCENT,
       },
       totals: {
         totalLiters,
         totalEstimatedLiters,
         tripDistanceKm,
+        realDistanceKm,
         totalCost,
         avgLitersPer100Km:
           tripDistanceKm > 0 && totalLiters > 0 ? round((totalLiters / tripDistanceKm) * 100, 2) : null,
@@ -632,7 +759,32 @@ export class FleetFuelService {
           totalLiters > 0 ? round((estimatedVsRealDeltaLiters / totalLiters) * 100, 2) : null,
         co2Kg: round(totalLiters * 2.64, 2),
         estimatedCo2Kg: round(totalEstimatedLiters * 2.64, 2),
-        averagePricePerLiter: totalLiters > 0 ? round(totalCost / totalLiters, 2) : null,
+        averagePricePerLiter,
+        minPricePerLiter:
+          entryPrices.length > 0
+            ? round(Math.min(...entryPrices.map((row) => row.pricePerLiter)), 3)
+            : null,
+        maxPricePerLiter:
+          entryPrices.length > 0
+            ? round(Math.max(...entryPrices.map((row) => row.pricePerLiter)), 3)
+            : null,
+        costPerKm,
+        costPer100Km: costPerKm != null ? round(costPerKm * 100, 2) : null,
+        aboveAveragePriceEntryCount: priceOutliers.length,
+        aboveAverageExcessCost: round(
+          priceOutliers.reduce((sum, row) => sum + row.excessCost, 0),
+          2,
+        ),
+        overTargetVehicleCount,
+        ratedVehicleCount: ratedVehicles.length,
+        averageTargetDeviationPercent:
+          ratedVehicles.length > 0
+            ? round(
+                ratedVehicles.reduce((sum, vehicle) => sum + (vehicle.targetDeviationPercent ?? 0), 0) /
+                  ratedVehicles.length,
+                2,
+              )
+            : null,
         suspiciousEventCount:
           suspiciousEventsRaw.length + vehicles.filter((vehicle) => Math.abs(vehicle.deltaPercent ?? 0) >= 15).length,
       },
@@ -641,6 +793,7 @@ export class FleetFuelService {
       driverBreakdown: [...driverBreakdownMap.values()].sort(
         (left, right) => right.tripDistanceKm - left.tripDistanceKm,
       ),
+      priceOutliers,
       suspiciousEvents: [
         ...suspiciousEventsRaw.map((event) => {
           const vehicle = rows.find((row) => row.vehicleId === event.relatedEntityId);
@@ -808,17 +961,17 @@ export class FleetFuelService {
       avgConsumptionLPer100Km,
     );
 
+    const entryRows = entries.map((entry) => ({
+      driverId: entry.driverId,
+      enteredAt: entry.enteredAt,
+      liters: Number(entry.liters),
+      totalCost: Number(entry.totalCost),
+    }));
+
     const intervals = computeFuelConsumptionIntervals(consumptionEntries, tripSlices);
     const avgLitersPer100Km = computeWeightedAverageLitersPer100Km(intervals);
-    const weeklyTrend = buildWeeklyFuelTrend(intervals, tripEstimates);
-    const driverBreakdown = buildDriverFuelBreakdown(
-      tripEstimates,
-      entries.map((entry) => ({
-        driverId: entry.driverId,
-        enteredAt: entry.enteredAt,
-        liters: Number(entry.liters),
-      })),
-    );
+    const weeklyTrend = buildWeeklyFuelTrend(intervals, tripEstimates, entryRows);
+    const driverBreakdown = buildDriverFuelBreakdown(tripEstimates, entryRows);
 
     const totalLiters = round(
       consumptionEntries.reduce((sum, entry) => sum + entry.liters, 0),
