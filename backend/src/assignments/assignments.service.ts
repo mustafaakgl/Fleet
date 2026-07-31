@@ -18,6 +18,7 @@ import { AssignmentTransitionTarget } from './dto/transition-assignment.dto';
 import { dedupeDriverDayAssignments } from './assignment-dedupe';
 import { LicenseComplianceService } from '../license-compliance/license-compliance.service';
 import { DepartureCheckService } from '../departure-check/departure-check.service';
+import { RoutingService } from '../routing/routing.service';
 
 type DayRange = { start: Date; end: Date };
 
@@ -104,6 +105,7 @@ export class AssignmentsService {
     private readonly driverNotify: DriverNotifyService,
     private readonly licenseCompliance: LicenseComplianceService,
     private readonly departureCheck: DepartureCheckService,
+    private readonly routing: RoutingService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -611,6 +613,10 @@ export class AssignmentsService {
       created.workDate,
     );
 
+    // Transaction disinda ve beklemeden: geocoding + kamyon erisim kontrolu ag
+    // cagrisi, gorev kaydetme yanitini geciktirmemeli.
+    this.routing.linkAssignmentLocationsSafely(created.id);
+
     await this.safeAuditLog({
       actorUserId: currentUserId,
       action: 'assignment.created',
@@ -657,6 +663,9 @@ export class AssignmentsService {
         companyId: true,
         startTime: true,
         endTime: true,
+        // Adres degisikligini tespit edip Location bagini tazelemek icin
+        pickupAddress: true,
+        deliveryAddress: true,
       },
     });
     if (!existing) throw new NotFoundException('Assignment not found');
@@ -755,6 +764,20 @@ export class AssignmentsService {
         workDate: updated.workDate.toISOString(),
       },
     });
+
+    // Adres degistiyse eski Location bagi gecersiz — kopar ve yeniden cozumle.
+    // Location kayitlari gorevler arasinda paylasildigi icin silinmez.
+    const pickupChanged =
+      dto.pickup_address !== undefined && dto.pickup_address !== existing.pickupAddress;
+    const deliveryChanged =
+      dto.delivery_address !== undefined && dto.delivery_address !== existing.deliveryAddress;
+    if (pickupChanged || deliveryChanged) {
+      await this.routing.unlinkAssignmentLocations(updated.id, {
+        pickup: pickupChanged,
+        delivery: deliveryChanged,
+      });
+      this.routing.linkAssignmentLocationsSafely(updated.id);
+    }
 
     return toClientAssignment(updated);
   }

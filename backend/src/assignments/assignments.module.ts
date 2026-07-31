@@ -8,6 +8,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { LicenseComplianceModule } from '../license-compliance/license-compliance.module';
 import { DepartureCheckModule } from '../departure-check/departure-check.module';
+import { RoutingModule } from '../routing/routing.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DepartureCheckModule } from '../departure-check/departure-check.module'
     CustomerPortalModule,
     LicenseComplianceModule,
     DepartureCheckModule,
+    RoutingModule,
   ],
   controllers: [AssignmentsController],
   providers: [AssignmentsService],

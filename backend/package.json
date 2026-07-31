@@ -20,6 +20,7 @@
     "seed:telematics-fleet": "node scripts/seed-telematics-fleet.mjs",
     "seed:demo-all": "node scripts/seed-demo-fill.mjs && node scripts/seed-demo-month.mjs && node scripts/seed-telematics-fleet.mjs && node scripts/seed-invoicing-mock.mjs",
     "seed:p0-qa": "node scripts/seed-p0-qa.mjs",
+    "backfill:assignment-locations": "ts-node --transpile-only scripts/backfill-assignment-locations.ts",
     "telematics:sim": "node scripts/telematics-sim.mjs",
     "verify:gateway": "node scripts/verify-gateway.mjs",
     "verify:smtp": "ts-node scripts/verify-smtp.ts",

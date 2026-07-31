@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GeocodeSource, type Location, TruckAccessStatus } from '@prisma/client';
+import { GeocodeSource, type Location, Prisma, TruckAccessStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { addressHash } from './core/address-normalize.util';
 import {
@@ -56,6 +56,34 @@ export class RoutingService {
     private readonly cache: RoutingCacheService,
   ) {}
 
+  /**
+   * Location olusturur; ayni normalizedHash baskasi tarafindan araya girip
+   * yazildiysa o kaydi doner.
+   *
+   * Gerekli: bir gorevin alis ve teslim adresi paralel cozumleniyor ve ikisi ayni
+   * olabiliyor; ayrica ayni anda birden fazla gorev islenebiliyor. "Once bak,
+   * yoksa yaz" deseni bu durumda @@unique([tenantId, normalizedHash]) kisitini
+   * ihlal ediyor. Toplu backfill'de 1021 gorevin 1'inde gozlendi.
+   */
+  private async createLocationIdempotent(
+    // Unchecked varyant: tenant uzantisi `tenantId` skalerini data'ya enjekte
+    // ediyor; iliski bicimli (checked) girdiyle karistirilamaz.
+    data: Prisma.LocationUncheckedCreateInput,
+    normalizedHash: string,
+  ): Promise<Location | null> {
+    try {
+      return await this.prisma.location.create({ data });
+    } catch (error) {
+      // instanceof yerine kod kontrolu: ts-node/tsx altinda birden fazla
+      // @prisma/client ornegi yuklenebiliyor ve instanceof yaniltici oluyor.
+      const code = (error as { code?: unknown } | null)?.code;
+      if (code !== 'P2002') {
+        throw error;
+      }
+      return this.prisma.location.findFirst({ where: { normalizedHash } });
+    }
+  }
+
   /** Onbellek anahtari icin koordinat sadelestirmesi (~11 m cozunurluk). */
   private coordKey(point: GeoPoint): string {
     return `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`;
@@ -81,29 +109,43 @@ export class RoutingService {
    * Gorev kaydetme akisi geocoder arizasi yuzunden durmamali.
    */
   async resolveLocation(params: ResolveLocationParams): Promise<Location | null> {
+    return (await this.resolveLocationDetailed(params)).location;
+  }
+
+  /**
+   * resolveLocation ile ayni, ama geocoder'a gercekten gidilip gidilmedigini de
+   * bildirir. Toplu islemde hiz sinirlamasi buna gore uygulanir: mevcut bir
+   * Location paylasildiginde bekleme gereksizdir. Olcum: 1029 gorevde yalnizca
+   * 31 benzersiz adres var, yani cagrilarin %97'si onbellekten karsilaniyor.
+   */
+  async resolveLocationDetailed(
+    params: ResolveLocationParams,
+  ): Promise<{ location: Location | null; geocoded: boolean }> {
     const rawAddress = params.rawAddress?.trim() ?? '';
     if (!rawAddress) {
-      return null;
+      return { location: null, geocoded: false };
     }
 
     const normalizedHash = addressHash(rawAddress);
     const existing = await this.prisma.location.findFirst({ where: { normalizedHash } });
     if (existing) {
-      return existing;
+      return { location: existing, geocoded: false };
     }
 
     const geocoded = await this.geocoding.geocode(rawAddress);
 
     if (!geocoded.ok) {
       this.logger.warn(`Geocoding failed for "${rawAddress}": ${geocoded.message}`);
-      return this.prisma.location.create({
-        data: {
+      const location = await this.createLocationIdempotent(
+        {
           rawAddress,
           normalizedHash,
           label: params.label ?? null,
           companyId: params.companyId ?? null,
         },
-      });
+        normalizedHash,
+      );
+      return { location, geocoded: true };
     }
 
     const hit = geocoded.value;
@@ -126,14 +168,20 @@ export class RoutingService {
         truckSnapDistanceM = check.value.snapDistanceM;
         truckAccessNote = check.value.note;
       } else {
+        // out_of_coverage dahil tum basarisizliklar check_failed olur — asla
+        // unreachable degil. Kapsam disi bir adresi "kamyona kapali" isaretlemek
+        // operasyona yanlis alarm verir; bilmiyoruz, bilmedigimizi kaydediyoruz.
         truckAccess = TruckAccessStatus.check_failed;
         truckAccessCheckedAt = new Date();
-        truckAccessNote = check.message;
+        truckAccessNote =
+          check.error === 'out_of_coverage'
+            ? 'Adres mevcut harita kapsaminin disinda — erisim dogrulanamadi'
+            : check.message;
       }
     }
 
-    return this.prisma.location.create({
-      data: {
+    const location = await this.createLocationIdempotent(
+      {
         rawAddress,
         normalizedHash,
         label: params.label ?? null,
@@ -154,7 +202,10 @@ export class RoutingService {
         truckSnapDistanceM,
         truckAccessNote,
       },
-    });
+      normalizedHash,
+    );
+
+    return { location, geocoded: true };
   }
 
   /**
@@ -178,7 +229,10 @@ export class RoutingService {
         data: {
           truckAccess: TruckAccessStatus.check_failed,
           truckAccessCheckedAt: new Date(),
-          truckAccessNote: check.message,
+          truckAccessNote:
+            check.error === 'out_of_coverage'
+              ? 'Adres mevcut harita kapsaminin disinda — erisim dogrulanamadi'
+              : check.message,
         },
       });
     }
@@ -192,6 +246,103 @@ export class RoutingService {
         truckAccessCheckedAt: new Date(),
         truckSnapDistanceM: check.value.snapDistanceM,
         truckAccessNote: check.value.note,
+      },
+    });
+  }
+
+  /**
+   * Gorevin adres metinlerini Location kayitlarina baglar.
+   *
+   * Transaction ICINDE cagrilmamali: geocoding ve kamyon erisim kontrolu ag
+   * cagrisi, birlikte saniyeler surebilir ve acik transaction kilitleri tutar.
+   * Commit sonrasi calistirilir.
+   */
+  async linkAssignmentLocations(
+    assignmentId: string,
+    options: { skipTruckAccessCheck?: boolean } = {},
+  ): Promise<{ geocodeCalls: number }> {
+    const assignment = await this.prisma.assignment.findFirst({
+      where: { id: assignmentId },
+      select: {
+        id: true,
+        companyId: true,
+        pickupAddress: true,
+        deliveryAddress: true,
+        pickupLocationId: true,
+        deliveryLocationId: true,
+      },
+    });
+
+    if (!assignment) {
+      return { geocodeCalls: 0 };
+    }
+
+    const empty = { location: null, geocoded: false };
+    const [pickup, delivery] = await Promise.all([
+      assignment.pickupLocationId
+        ? empty
+        : this.resolveLocationDetailed({
+            rawAddress: assignment.pickupAddress,
+            companyId: assignment.companyId,
+            skipTruckAccessCheck: options.skipTruckAccessCheck,
+          }),
+      assignment.deliveryLocationId
+        ? empty
+        : this.resolveLocationDetailed({
+            rawAddress: assignment.deliveryAddress,
+            companyId: assignment.companyId,
+            skipTruckAccessCheck: options.skipTruckAccessCheck,
+          }),
+    ]);
+
+    const geocodeCalls = (pickup.geocoded ? 1 : 0) + (delivery.geocoded ? 1 : 0);
+
+    if (!pickup.location && !delivery.location) {
+      return { geocodeCalls };
+    }
+
+    await this.prisma.assignment.update({
+      where: { id: assignment.id },
+      data: {
+        ...(pickup.location ? { pickupLocationId: pickup.location.id } : {}),
+        ...(delivery.location ? { deliveryLocationId: delivery.location.id } : {}),
+      },
+    });
+
+    return { geocodeCalls };
+  }
+
+  /**
+   * Bekletmeden baglama. Gorev kaydetme yanitini geciktirmemeli — geocoder
+   * yavas ya da kapali olsa bile gorev olusmus sayilir, baglama sonra
+   * backfill ile tamamlanir. driver-notify'daki notifyUserSafely deseni.
+   */
+  linkAssignmentLocationsSafely(assignmentId: string): void {
+    void this.linkAssignmentLocations(assignmentId).catch((error: unknown) => {
+      this.logger.warn(
+        `Failed to link locations for assignment ${assignmentId}: ${
+          error instanceof Error ? error.message : 'unknown'
+        }`,
+      );
+    });
+  }
+
+  /**
+   * Adres degistiginde eski baglantiyi dusurur ki yeniden cozumlensin.
+   * Location kayitlari paylasildigi icin silinmez, sadece bagi kopariliyor.
+   */
+  async unlinkAssignmentLocations(
+    assignmentId: string,
+    fields: { pickup: boolean; delivery: boolean },
+  ): Promise<void> {
+    if (!fields.pickup && !fields.delivery) {
+      return;
+    }
+    await this.prisma.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        ...(fields.pickup ? { pickupLocationId: null } : {}),
+        ...(fields.delivery ? { deliveryLocationId: null } : {}),
       },
     });
   }

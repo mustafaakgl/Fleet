@@ -8,6 +8,7 @@ import { DepartureCheckService } from '../departure-check/departure-check.servic
 import { LicenseComplianceService } from '../license-compliance/license-compliance.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RoutingService } from '../routing/routing.service';
 import { AssignmentsService, mapAssignmentTransactionError } from './assignments.service';
 
 function createService(prisma: object): AssignmentsService {
@@ -18,6 +19,10 @@ function createService(prisma: object): AssignmentsService {
     {} as unknown as DriverNotifyService,
     {} as unknown as LicenseComplianceService,
     {} as unknown as DepartureCheckService,
+    {
+      linkAssignmentLocationsSafely: () => undefined,
+      unlinkAssignmentLocations: async () => undefined,
+    } as unknown as RoutingService,
   );
 }
 

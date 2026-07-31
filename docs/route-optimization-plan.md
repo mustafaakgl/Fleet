@@ -154,8 +154,37 @@ Genel amaçlı optimizerlerin yapamadığı, bizde **verisi zaten duran** üç �
 1. ✅ **Valhalla servisi** `docker-compose.yml`'e eklendi (`valhalla_data` volume, env ile bölge seçimi)
 2. ✅ **`Location` modeli** + migration + `tenant-scoped-models.ts` + `tenant-isolation-check.ts` (CLAUDE.md kural 2). `Assignment`'a nullable `pickupLocationId`/`deliveryLocationId` de bu adımda eklendi.
 3. ✅ **`RoutingModule`**: `ValhallaClient` (route / matrix / locate / height), `GeocodingService` (Photon), `RoutingCacheService` (Redis, yoksa süreç içi Map), `RoutingService` (adres→Location çözümleme, önbellekli rota ve matris). Hiçbir metot istisna fırlatmıyor — Valhalla veya geocoder erişilemezse görev kaydetme akışı durmuyor, alanlar boş kalıp sonradan yeniden denenebiliyor.
-4. ⬜ Görev oluşturma/güncelleme akışının `Location` üretmesi + mevcut ~970 görev için backfill script'i
+4. ✅ **`Assignment` entegrasyonu.** Görev oluşturma/güncelleme commit sonrası `Location` üretiyor (`linkAssignmentLocationsSafely`, `driver-notify`'daki fire-and-forget deseni — geocoding transaction içine girmemeli, kilit tutar). Adres değişince eski bağ koparılıp yeniden çözümleniyor. `scripts/backfill-assignment-locations.ts` (`npm run backfill:assignment-locations`): idempotent, tenant başına, `--limit/--tenant/--delay/--skip-access-check/--dry-run`.
 5. ⬜ Planlanan vs gerçekleşen sapma raporu + de/en/tr i18n
+
+### Backfill ölçümleri ve adım 4'te çıkan üç hata
+
+**Dedupe beklenenden çok daha değerli:** 1029 görevde yalnızca **31 benzersiz adres**. Tasarım
+2058 geocode çağrısını 31'e indiriyor (%98,5 azalma). Backfill'in hız sınırlaması buna göre
+düzeltildi — bekleme her göreve değil, yalnızca gerçekten geocoder'a gidildiğinde uygulanıyor.
+
+**(a) Kapsam dışı adresler yanlışlıkla "kamyona kapalı" işaretleniyordu.** Demo veride Hamburg/
+Berlin adresleri var, tile kapsamı NRW. Valhalla ikisini `error_code` ile ayırıyor — **171**
+"No suitable edges near location" (kapsam dışı) vs **442** "No path could be found" (gerçekten
+erişilemez). İlk kod mesaj metnine bakıp ikisini karıştırıyordu. Artık `error_code` kullanılıyor
+ve kapsam dışı adresler `unreachable` değil `check_failed` olarak işaretleniyor. Kapsam dışı
+noktada `/locate` 200 ama boş kenar listesi döndürüyor — o da `out_of_coverage` sayılıyor.
+
+**(b) Check-then-insert yarışı.** Bir görevin alış ve teslim adresi paralel çözümleniyor; ikisi
+aynıysa her ikisi de "yoksa oluştur" diyerek `@@unique([tenantId, normalizedHash])` kısıtını
+ihlal ediyordu (1021 görevin 1'inde gözlendi). Unique ihlali (P2002) yakalanıp mevcut kayıt
+okunuyor. Not: `instanceof PrismaClientKnownRequestError` yerine `code` kontrolü kullanıldı —
+ts-node/tsx altında birden fazla `@prisma/client` örneği yüklenebiliyor ve `instanceof`
+yanıltıyor.
+
+**(c) Tesis adıyla başlayan adresler geocode edilemiyordu.** "DHL Hub Hamburg-Billbrook,
+Halskestraße 48" gibi biçimler Photon'da boş dönüyor; virgül öncesi atılınca çözülüyor.
+Ama ham fallback tehlikeli: "DB Schenker Terminal **Dresden**, Hamburger Straße 19" ön eksiz
+sorguda **Bremen**'deki bir Hamburger Straße'yi döndürüyor. Sessizce yanlış şehre geocode etmek
+hiç etmemekten kötü — sapma raporu yüzlerce km hayali fark üretir. Bu yüzden fallback sonucu
+yalnızca dönen şehir orijinal metinde geçiyorsa kabul ediliyor
+(`core/geocode-consistency.util.ts`, 7 birim testi) ve kabul edilse bile güven 0,7'ye çekiliyor.
+Sonuç: başarısız geocode 4 → 1; kalan tek kayıt bilerek reddedilen Dresden vakası.
 
 **Adım 5'ten önce yapılması gereken:** kamyon costing kalibrasyonu (bulgu 2.2). Sapma raporu
 "planlanan km"yi Valhalla'dan alacağı için kalibre edilmemiş rota yanlış bir taban üretir.

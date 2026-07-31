@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { isGeocodeFallbackConsistent } from './core/geocode-consistency.util';
 import type { RoutingResult } from './core/routing.types';
 
 /** Photon (Komoot) GeoJSON yaniti — kullandigimiz alanlar. */
@@ -76,12 +77,63 @@ export class GeocodingService {
     return Math.min(1, Number(score.toFixed(3)));
   }
 
+  /**
+   * Adresi koordinata cevirir; dogrudan sorgu bos donerse basindaki tesis/firma
+   * adini atarak bir kez daha dener.
+   *
+   * Gercek veride yaygin bicim: "DHL Hub Hamburg-Billbrook, Halskestraße 48".
+   * Photon bu bicimi cozemiyor; virgul sonrasi tek basina cozuluyor. Olculdu:
+   * demo verideki 4 basarisiz adresin 3'u bu yolla kurtariliyor.
+   *
+   * Fallback ham haliyle tehlikeli olurdu — on ek atilinca sehir baglami da
+   * kayboluyor: "DB Schenker Terminal Dresden, Hamburger Straße 19" on eksiz
+   * sorguda BREMEN'deki bir Hamburger Straße'yi donduruyor. Sessizce yanlis
+   * sehre geocode etmek hic etmemekten kotu; sapma raporu yuzlerce km'lik
+   * hayali fark uretir. Bu yuzden sonuc isGeocodeFallbackConsistent'ten
+   * gecmek zorunda ve gecse bile guveni 0.7'ye cekiliyor.
+   */
   async geocode(rawAddress: string): Promise<RoutingResult<GeocodeHit>> {
     const query = rawAddress.trim();
     if (!query) {
       return { ok: false, error: 'invalid_input', message: 'address is empty' };
     }
 
+    const direct = await this.geocodeQuery(query);
+    if (direct.ok) {
+      return direct;
+    }
+
+    const commaIndex = query.indexOf(',');
+    if (direct.error !== 'no_route' || commaIndex < 0) {
+      return direct;
+    }
+
+    const stripped = query.slice(commaIndex + 1).trim();
+    if (!stripped) {
+      return direct;
+    }
+
+    const fallback = await this.geocodeQuery(stripped);
+    if (!fallback.ok) {
+      return direct;
+    }
+
+    if (!isGeocodeFallbackConsistent(fallback.value.city, query)) {
+      this.logger.warn(
+        `Geocode fallback rejected for "${query}": returned city ` +
+          `"${fallback.value.city ?? '?'}" does not appear in the original address`,
+      );
+      return direct;
+    }
+
+    return {
+      ok: true,
+      // On ek atilarak bulundugu icin guveni dusur — tam eslesme kadar kesin degil
+      value: { ...fallback.value, confidence: Math.min(fallback.value.confidence, 0.7) },
+    };
+  }
+
+  private async geocodeQuery(query: string): Promise<RoutingResult<GeocodeHit>> {
     const params = new URLSearchParams({
       q: query,
       limit: '1',

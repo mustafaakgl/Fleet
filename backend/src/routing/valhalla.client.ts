@@ -98,13 +98,24 @@ export class ValhallaClient {
       }
 
       if (!response.ok) {
-        // Valhalla yol bulunamadiginda 400 doner. Bu bir arizadan cok bir
-        // yanittir: girdi kamyonla ulasilamiyor demektir, tekrar denemek anlamsiz.
-        const message =
-          (payload as { error?: string } | null)?.error ?? `Valhalla responded ${response.status}`;
+        const body = payload as { error?: string; error_code?: number } | null;
+        const message = body?.error ?? `Valhalla responded ${response.status}`;
+
         if (response.status === 400) {
-          const code = /no path|not found|unreachable/i.test(message) ? 'no_route' : 'invalid_input';
-          return { ok: false, error: code, message };
+          // error_code ayrimi kritik ve olculdu:
+          //   171 "No suitable edges near location" -> nokta tile kapsaminin
+          //       DISINDA. Kamyon erisimi hakkinda hicbir sey soylemez.
+          //   442 "No path could be found"          -> nokta kapsam icinde ama
+          //       kamyon agindan kopuk, yani gercekten erisilemez.
+          // Mesaj metnine gore siniflandirmak ikisini karistirir ve NRW disindaki
+          // gecerli adresleri "kamyona kapali" diye yanlis isaretler.
+          if (body?.error_code === 171) {
+            return { ok: false, error: 'out_of_coverage', message };
+          }
+          if (body?.error_code === 442) {
+            return { ok: false, error: 'no_route', message };
+          }
+          return { ok: false, error: 'invalid_input', message };
         }
         return { ok: false, error: 'unavailable', message };
       }
@@ -235,13 +246,13 @@ export class ValhallaClient {
       edges.length > 0 && typeof edges[0]?.distance === 'number' ? edges[0].distance : null;
 
     if (edges.length === 0) {
+      // Olculdu: kapsam disi bir nokta (ornegin NRW tile'lariyla Hamburg) /locate'ten
+      // 200 ama bos kenar listesi doner. Bunu "kamyona kapali" saymak, gecerli bir
+      // adresi yanlislikla sorunlu isaretler. Erisim hakkinda karar veremiyoruz.
       return {
-        ok: true,
-        value: {
-          reachable: false,
-          snapDistanceM,
-          note: 'Koordinat kamyon yol agina snap edilemedi',
-        },
+        ok: false,
+        error: 'out_of_coverage',
+        message: 'Koordinat yol agi kapsaminin disinda (tile bolgesi yetersiz olabilir)',
       };
     }
 
