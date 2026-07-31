@@ -47,6 +47,7 @@ import { LicenseComplianceModule } from './license-compliance/license-compliance
 import { DepartureCheckModule } from './departure-check/departure-check.module';
 import { FineManagementModule } from './fine-management/fine-management.module';
 import { FleetModule } from './fleet/fleet.module';
+import { RoutingModule } from './routing/routing.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { StorageModule } from './storage/storage.module';
@@ -115,6 +116,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     DepartureCheckModule,
     FineManagementModule,
     FleetModule,
+    RoutingModule,
     TachographModule,
     TelematicsModule,
     DevicesModule,

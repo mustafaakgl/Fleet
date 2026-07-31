@@ -79,8 +79,19 @@ Bielefeld merkez koordinatı (52.0302, 8.5325) 4,4 m mesafede kamyona kapalı bi
 100-200 m kaydırılınca çalışıyor. 20 duraklı optimizasyon bu tek nokta yüzünden komple patlıyor;
 hangi durağın suçlu olduğu yanıttan anlaşılmıyor.
 
-→ **Faz 1 gereksinimi:** geocoding sırasında her adres `/locate` ile truck costing altında
-snap-doğrulaması geçmeli. Geçemezse *o adres için* kullanıcıya uyarı verilir.
+→ **Faz 1 gereksinimi:** her adres kaydedilirken kamyon erişilebilirliği doğrulanmalı. Geçemezse
+*o adres için* kullanıcıya uyarı verilir.
+
+**Ucuz kontrol işe yaramıyor — ölçüldü.** İlk tasarımda `/locate` verbose çıktısındaki erişim
+bayrağına bakılacaktı. Ölçüm bunu çürüttü: hem Bielefeld'in kamyona kapalı koordinatı hem de
+sağlam bir liman koordinatı `access.truck: true` döndürüyor. Sorun kenarın erişim bayrağı değil,
+kenarın kamyon ağından **kopuk** olması. Tek güvenilir kontrol referans bir noktadan gerçek rota
+denemesi (`ROUTING_ACCESS_PROBE_LAT/LON`, varsayılan Duisburg Hafen). Maliyeti kabul edilebilir:
+`Location` başına bir kez çalışır, sonuç kayda yazılır, adresler defalarca yeniden kullanılır.
+
+`/locate`'in verdiği tek değerli bilgi **snap mesafesi** — koordinatın en yakın kamyon yoluna
+uzaklığı. Büyük değer geocode kalitesinin düşük olduğunu gösterir. Bunun için `verbose: true`
+gerekiyor; verbose olmadan kenar nesnesi `distance` taşımıyor.
 
 **✅ Rakım verisi yakıt modeli için ayırt edici.**
 - Köln → Siegen (Sauerland): 101 km, 2.048 m tırmanış → **20,2 m/km**
@@ -141,10 +152,13 @@ Genel amaçlı optimizerlerin yapamadığı, bizde **verisi zaten duran** üç �
 
 ### Faz 1 — Geo temeli
 1. ✅ **Valhalla servisi** `docker-compose.yml`'e eklendi (`valhalla_data` volume, env ile bölge seçimi)
-2. ⬜ `Location` modeli + migration + `tenant-scoped-models.ts` + `tenant-isolation-check.ts` (CLAUDE.md kural 2)
-3. ⬜ `RoutingModule`: Valhalla client + Redis cache + **truck snap doğrulaması**
-4. ⬜ `Assignment` → `pickupLocationId` / `deliveryLocationId` (nullable, String alanlar korunur) + backfill script
+2. ✅ **`Location` modeli** + migration + `tenant-scoped-models.ts` + `tenant-isolation-check.ts` (CLAUDE.md kural 2). `Assignment`'a nullable `pickupLocationId`/`deliveryLocationId` de bu adımda eklendi.
+3. ✅ **`RoutingModule`**: `ValhallaClient` (route / matrix / locate / height), `GeocodingService` (Photon), `RoutingCacheService` (Redis, yoksa süreç içi Map), `RoutingService` (adres→Location çözümleme, önbellekli rota ve matris). Hiçbir metot istisna fırlatmıyor — Valhalla veya geocoder erişilemezse görev kaydetme akışı durmuyor, alanlar boş kalıp sonradan yeniden denenebiliyor.
+4. ⬜ Görev oluşturma/güncelleme akışının `Location` üretmesi + mevcut ~970 görev için backfill script'i
 5. ⬜ Planlanan vs gerçekleşen sapma raporu + de/en/tr i18n
+
+**Adım 5'ten önce yapılması gereken:** kamyon costing kalibrasyonu (bulgu 2.2). Sapma raporu
+"planlanan km"yi Valhalla'dan alacağı için kalibre edilmemiş rota yanlış bir taban üretir.
 
 **Faz 1'in müşteriye görünen çıktısı:** "geçen ay 47 görevde fazladan 1.240 km, ~380 L, ~€760".
 Henüz optimizasyon yok — ama satışta Faz 2'yi finanse eden cümle bu.
