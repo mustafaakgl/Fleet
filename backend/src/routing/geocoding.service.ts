@@ -36,8 +36,57 @@ export interface GeocodeHit {
   confidence: number;
 }
 
-/** Almanya sinirlayici kutusu — komsu ulkelerdeki benzer sokak adlarini eler. */
+/**
+ * Almanya sinirlayici kutusu. Kaba bir dikdortgen oldugu icin Isvicre'nin kuzeyini
+ * ve Avusturya'nin batisini da kapsiyor — olculdu: sehirsiz "Bahnhofstr" sorgusu
+ * bbox gonderilse bile Zürich (47.377) donduruyor, cunku Zürich kutunun icinde.
+ * Bu yuzden bbox tek basina yeterli degil; sokak aramasi sehir baglami ister.
+ * Ulke koduna gore sert filtre KOYULMADI: Alman filolar AT/NL/BE'ye de sefer
+ * yapiyor, sinir otesi adresler gecerli.
+ */
 const GERMANY_BBOX = '5.87,47.27,15.04,55.06';
+
+export type SuggestionKind = 'city' | 'street' | 'address' | 'poi';
+
+export interface AddressSuggestion {
+  /** Listede React anahtari ve secim kimligi olarak kullanilir */
+  id: string;
+  /** Kullaniciya gosterilen tek satirlik metin */
+  label: string;
+  street: string | null;
+  houseNumber: string | null;
+  postalCode: string | null;
+  city: string | null;
+  countryCode: string;
+  latitude: number;
+  longitude: number;
+  kind: SuggestionKind;
+}
+
+function classifyKind(osmKey?: string, osmValue?: string): SuggestionKind {
+  if (osmKey === 'place' && ['city', 'town', 'village', 'suburb'].includes(osmValue ?? '')) {
+    return 'city';
+  }
+  if (osmKey === 'highway') {
+    return 'street';
+  }
+  if (osmKey === 'building' || osmKey === 'address') {
+    return 'address';
+  }
+  return 'poi';
+}
+
+function buildLabel(parts: {
+  name?: string | null;
+  street?: string | null;
+  houseNumber?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+}): string {
+  const line1 = [parts.street ?? parts.name, parts.houseNumber].filter(Boolean).join(' ');
+  const line2 = [parts.postalCode, parts.city].filter(Boolean).join(' ');
+  return [line1, line2].filter((segment) => segment.length > 0).join(', ');
+}
 
 /**
  * Adres -> koordinat cevirisi.
@@ -131,6 +180,138 @@ export class GeocodingService {
       // On ek atilarak bulundugu icin guveni dusur — tam eslesme kadar kesin degil
       value: { ...fallback.value, confidence: Math.min(fallback.value.confidence, 0.7) },
     };
+  }
+
+  /**
+   * Yazarken gosterilecek adres onerileri.
+   *
+   * Tasarim kararlari olcume dayali:
+   * - Sokak ararken sehir SORGU METNINE katilir. `lat/lon` konum bias'i yetersiz
+   *   kaliyor: Duisburg'a bias'lanmis "Hauptstr" sorgusu Odenhausen donduruyor.
+   *   "Bahnhofstraße Köln" ise dogru sonucu veriyor.
+   * - Posta kodu sorguya katilmaz: "Hauptstraße 47059" Kranenburg/Rheurdt
+   *   donduruyor, posta kodu bulanik metin gibi islem goruyor.
+   * - Photon ayni caddeyi birden cok kez donduruyor; tekrarlar ayiklanir.
+   * - osm_tag KATI filtre degil, yumusak tercih; istenen turle eslesmeyen
+   *   sonuclar ayrica elenir.
+   */
+  async suggest(params: {
+    query: string;
+    kind: 'city' | 'street';
+    /** Sokak ararken zorunlu sayilir — sehirsiz sokak sorgusu guvenilir degil */
+    city?: string | null;
+    limit?: number;
+  }): Promise<RoutingResult<AddressSuggestion[]>> {
+    const trimmed = params.query.trim();
+    if (trimmed.length < 2) {
+      return { ok: true, value: [] };
+    }
+
+    const city = params.city?.trim() ?? '';
+
+    // Sehirsiz sokak aramasi bilincli olarak reddediliyor. Olculdu: "Bahnhofstr"
+    // sehirsiz sorguda Zürich donduruyor, "Bahnhofstr Köln" ise dogru iki adayi.
+    // Bos liste dondurmek, kullaniciya yanlis sehirdeki bir caddeyi sectirmekten
+    // iyidir — arayuz once sehir secilmesini istemeli.
+    if (params.kind === 'street' && !city) {
+      return { ok: false, error: 'invalid_input', message: 'city_required_for_street_search' };
+    }
+
+    const queryText = params.kind === 'street' ? `${trimmed} ${city}` : trimmed;
+
+    const search = new URLSearchParams({
+      q: queryText,
+      limit: String(Math.min(params.limit ?? 8, 20)),
+      lang: 'de',
+      bbox: GERMANY_BBOX,
+    });
+    // Sehir ararken yerlesim, sokak ararken yol nesnelerine daralt
+    search.set('osm_tag', params.kind === 'city' ? 'place' : 'highway');
+
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api?${search.toString()}`, {
+        headers: { Accept: 'application/json', 'User-Agent': 'Fleet/1.0 (address-suggest)' },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return { ok: false, error: 'unavailable', message: `Photon responded ${response.status}` };
+      }
+
+      const payload = (await response.json()) as PhotonResponse;
+      const seen = new Set<string>();
+      const suggestions: AddressSuggestion[] = [];
+
+      for (const feature of payload.features ?? []) {
+        const coordinates = feature.geometry?.coordinates;
+        if (!Array.isArray(coordinates) || coordinates.length !== 2) {
+          continue;
+        }
+        const [longitude, latitude] = coordinates;
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          continue;
+        }
+
+        const p = feature.properties ?? {};
+
+        // osm_tag Photon'da KATI filtre degil, yumusak tercih: `place` istenince
+        // de POI donebiliyor ("Duisb" -> Trier'deki "Duisburger Hof"). Istenen
+        // turle eslesmeyenler burada elenir.
+        const kind = classifyKind(p.osm_key, p.osm_value);
+        const kindMatches =
+          params.kind === 'city' ? kind === 'city' : kind === 'street' || kind === 'address';
+        if (!kindMatches) {
+          continue;
+        }
+
+        // Sehir sonucunda Photon sehri `name` alaninda donduruyor. Bunu street'e
+        // de yazmak listede "Duisburg, Duisburg" gibi bozuk etiket uretiyor.
+        const street = kind === 'city' ? null : (p.street ?? p.name ?? null);
+        const city = p.city ?? p.district ?? p.name ?? null;
+        const postalCode = p.postcode ?? null;
+
+        // Tekilleme anahtari: ayni cadde + posta kodu + sehir tek satir olmali.
+        // Koordinat dahil edilmez; Photon ayni caddenin farkli parcalarini ayri
+        // kayit olarak donduruyor ve kullanici icin hepsi ayni adres.
+        const dedupeKey = [street, postalCode, city].map((v) => (v ?? '').toLowerCase()).join('|');
+        if (seen.has(dedupeKey)) {
+          continue;
+        }
+        seen.add(dedupeKey);
+
+        suggestions.push({
+          id: dedupeKey,
+          label: buildLabel({
+            // Sehirde `name` zaten sehrin kendisi; ikinci satirda gorunuyor.
+            // Buraya da konursa etiket "Duisburg, Duisburg" olur.
+            name: kind === 'city' ? null : p.name,
+            street,
+            houseNumber: p.housenumber ?? null,
+            postalCode,
+            city,
+          }),
+          street,
+          houseNumber: p.housenumber ?? null,
+          postalCode,
+          city,
+          countryCode: (p.countrycode ?? 'DE').toUpperCase(),
+          latitude,
+          longitude,
+          kind,
+        });
+      }
+
+      return { ok: true, value: suggestions };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown transport failure';
+      this.logger.warn(`Photon suggest failed: ${message}`);
+      return { ok: false, error: 'unavailable', message };
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   }
 
   private async geocodeQuery(query: string): Promise<RoutingResult<GeocodeHit>> {

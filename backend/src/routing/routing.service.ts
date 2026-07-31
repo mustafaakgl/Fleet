@@ -11,7 +11,7 @@ import {
   type RoutingResult,
   type TruckProfile,
 } from './core/routing.types';
-import { GeocodingService } from './geocoding.service';
+import { type AddressSuggestion, GeocodingService } from './geocoding.service';
 import { RoutingCacheService } from './routing-cache.service';
 import { ValhallaClient } from './valhalla.client';
 
@@ -345,6 +345,143 @@ export class RoutingService {
         ...(fields.delivery ? { deliveryLocationId: null } : {}),
       },
     });
+  }
+
+  /**
+   * Yazarken gosterilecek adres onerileri, Redis onbellekli.
+   *
+   * Onbellek burada zorunlu: bu uc tus basina cagriliyor. Gelistirmede public
+   * Photon kullaniliyor ve ayni on ekler surekli tekrar ediyor ("Duis", "Duisb",
+   * "Duisbu"...), isabet orani cok yuksek oluyor.
+   */
+  async suggestAddresses(params: {
+    query: string;
+    kind: 'city' | 'street';
+    city?: string | null;
+    limit?: number;
+  }): Promise<RoutingResult<AddressSuggestion[]>> {
+    const key = `suggest:${params.kind}:${(params.city ?? '').toLowerCase()}:${params.query
+      .trim()
+      .toLowerCase()}:${params.limit ?? 8}`;
+
+    const cached = await this.cache.get<AddressSuggestion[]>(key);
+    if (cached) {
+      return { ok: true, value: cached };
+    }
+
+    const result = await this.geocoding.suggest(params);
+    if (result.ok) {
+      await this.cache.set(key, result.value);
+    }
+    return result;
+  }
+
+  /**
+   * Kullanicinin oneri listesinden sectigi adresi Location'a cevirir.
+   *
+   * resolveLocation'dan farki: geocoder'a HIC gidilmez. Koordinat kullanicinin
+   * sectigi adaydan gelir, tahmin yoktur — Dresden/Bremen sinifindaki hatalar
+   * bu yolda olusamaz. Kamyon erisim kontrolu yine calisir ve sonuc hemen
+   * dondurulur ki arayuz uyariyi aninda gosterebilsin.
+   */
+  async resolvePickedLocation(params: {
+    latitude: number;
+    longitude: number;
+    street?: string | null;
+    houseNumber?: string | null;
+    postalCode?: string | null;
+    city?: string | null;
+    countryCode?: string | null;
+    label?: string | null;
+    companyId?: string | null;
+  }): Promise<Location | null> {
+    const rawAddress = [
+      [params.street, params.houseNumber].filter(Boolean).join(' '),
+      [params.postalCode, params.city].filter(Boolean).join(' '),
+    ]
+      .filter((segment) => segment.length > 0)
+      .join(', ');
+
+    if (!rawAddress) {
+      return null;
+    }
+
+    const normalizedHash = addressHash(rawAddress);
+    const existing = await this.prisma.location.findFirst({ where: { normalizedHash } });
+    if (existing) {
+      return existing;
+    }
+
+    const check = await this.valhalla.checkTruckAccess(
+      { latitude: params.latitude, longitude: params.longitude },
+      accessProbePoint(),
+    );
+
+    const accessFields = check.ok
+      ? {
+          truckAccess: check.value.reachable
+            ? TruckAccessStatus.reachable
+            : TruckAccessStatus.unreachable,
+          truckAccessCheckedAt: new Date(),
+          truckSnapDistanceM: check.value.snapDistanceM,
+          truckAccessNote: check.value.note,
+        }
+      : {
+          truckAccess: TruckAccessStatus.check_failed,
+          truckAccessCheckedAt: new Date(),
+          truckAccessNote:
+            check.error === 'out_of_coverage'
+              ? 'Adres mevcut harita kapsaminin disinda — erisim dogrulanamadi'
+              : check.message,
+        };
+
+    return this.createLocationIdempotent(
+      {
+        rawAddress,
+        normalizedHash,
+        label: params.label ?? null,
+        companyId: params.companyId ?? null,
+        street: params.street ?? null,
+        houseNumber: params.houseNumber ?? null,
+        postalCode: params.postalCode ?? null,
+        city: params.city ?? null,
+        countryCode: (params.countryCode ?? 'DE').toUpperCase(),
+        latitude: params.latitude,
+        longitude: params.longitude,
+        // Kullanici listeden sectigi icin kaynak manual, guven tam
+        geocodeSource: GeocodeSource.manual,
+        geocodeConfidence: 1,
+        geocodedAt: new Date(),
+        ...accessFields,
+      },
+      normalizedHash,
+    );
+  }
+
+  /**
+   * Iki Location arasinda kamyon rotasi onizlemesi — form doldurulurken
+   * km/sure gostermek ve haritayi cizmek icin.
+   */
+  async routePreviewBetweenLocations(
+    fromLocationId: string,
+    toLocationId: string,
+  ): Promise<RoutingResult<RouteSummary>> {
+    const [from, to] = await Promise.all([
+      this.prisma.location.findFirst({ where: { id: fromLocationId } }),
+      this.prisma.location.findFirst({ where: { id: toLocationId } }),
+    ]);
+
+    if (!from || !to) {
+      return { ok: false, error: 'invalid_input', message: 'location_not_found' };
+    }
+    if (from.latitude === null || from.longitude === null || to.latitude === null || to.longitude === null) {
+      return { ok: false, error: 'invalid_input', message: 'location_without_coordinates' };
+    }
+
+    return this.routeBetween(
+      { latitude: Number(from.latitude), longitude: Number(from.longitude) },
+      { latitude: Number(to.latitude), longitude: Number(to.longitude) },
+    );
   }
 
   /** Onbellekli nokta-nokta kamyon rotasi. */
