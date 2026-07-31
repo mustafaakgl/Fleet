@@ -460,6 +460,13 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.datevExport.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.datevExport.count()),
       }),
+      verifyTenantScopedModel({
+        label: 'Location', tenantA, tenantB,
+        unscopedCountA: () => base.location.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.location.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.location.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.location.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

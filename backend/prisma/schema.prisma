@@ -446,6 +446,24 @@ enum LocationSource {
   telematics
 }
 
+/// Bir Location'in koordinatlarinin nereden geldigi.
+enum GeocodeSource {
+  photon
+  nominatim
+  manual
+  imported
+}
+
+/// Koordinatin 40t kamyonla ulasilabilir bir yola snap edilip edilemedigi.
+/// Tek bir ulasilamaz durak tum tur optimizasyonunu cokerttigi icin adres
+/// kaydedilirken dogrulanir, optimizasyon aninda degil.
+enum TruckAccessStatus {
+  unknown
+  reachable
+  unreachable
+  check_failed
+}
+
 /// Phone / device / API origin for fleet analytics (Faz 2-ready; distinct from live-tracking LocationSource).
 enum FleetTelemetrySource {
   phone
@@ -609,6 +627,7 @@ model Tenant {
   invoiceAuditEvents    InvoiceAuditEvent[]
   dunningNotices        DunningNotice[]
   datevExports          DatevExport[]
+  locations             Location[]
 }
 
 model TenantBillingProfile {
@@ -1093,6 +1112,7 @@ model Company {
   portalSettings    CompanyPortalSettings?
   rateCards         RateCard[]
   invoices          Invoice[]
+  locations         Location[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, datevDebtorNumber])
@@ -1128,6 +1148,52 @@ model CompanyPortalSettings {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
+/// Geocode edilmis, yeniden kullanilabilir adres. Ayni adres tenant icinde bir kez
+/// geocode edilir (normalizedHash), sonraki gorevler ayni kaydi paylasir.
+model Location {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Kullanicinin girdigi ham metin — geriye donuk izlenebilirlik icin saklanir
+  rawAddress     String
+  /// Kucuk harf + noktalama/bosluk sadelestirilmis hali; tenant ici tekillik anahtari
+  normalizedHash String
+  /// Operasyonda gorunen ad, ornegin "Werk Duisburg" veya "Rampe 3"
+  label       String?
+  street      String?
+  houseNumber String?
+  postalCode  String?
+  city        String?
+  countryCode String  @default("DE")
+
+  latitude          Decimal?       @db.Decimal(10, 7)
+  longitude         Decimal?       @db.Decimal(10, 7)
+  geocodeSource     GeocodeSource?
+  geocodeConfidence Decimal?       @db.Decimal(4, 3)
+  geocodedAt        DateTime?
+
+  truckAccess          TruckAccessStatus @default(unknown)
+  truckAccessCheckedAt DateTime?
+  /// Koordinatin snap edildigi kamyon yoluna mesafe (m); buyuk deger supheli geocode
+  truckSnapDistanceM Decimal? @db.Decimal(8, 2)
+  truckAccessNote    String?
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pickupAssignments   Assignment[] @relation("AssignmentPickupLocation")
+  deliveryAssignments Assignment[] @relation("AssignmentDeliveryLocation")
+
+  @@unique([tenantId, normalizedHash])
+  @@index([tenantId])
+  @@index([tenantId, companyId])
+  @@index([tenantId, truckAccess])
+}
+
 model Assignment {
   id              String           @id @default(cuid())
   tenantId        String           @default("default-tenant")
@@ -1139,6 +1205,10 @@ model Assignment {
   cargoOwner      String
   pickupAddress   String
   deliveryAddress String
+  /// Geocode edilmis karsiliklari. String alanlar geriye donuk uyumluluk icin
+  /// korunur — backfill tamamlanana kadar bu alanlar bos olabilir.
+  pickupLocationId   String?
+  deliveryLocationId String?
   workDate        DateTime
   startTime       String?
   endTime         String?
@@ -1153,6 +1223,8 @@ model Assignment {
   driver           Driver            @relation(fields: [driverId], references: [id], onDelete: Restrict)
   vehicle          Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  pickupLocation   Location?         @relation("AssignmentPickupLocation", fields: [pickupLocationId], references: [id], onDelete: SetNull)
+  deliveryLocation Location?         @relation("AssignmentDeliveryLocation", fields: [deliveryLocationId], references: [id], onDelete: SetNull)
   createdBy        User              @relation("AssignmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   calendarEvents   CalendarEvent[]
   transportRequest TransportRequest? @relation("TransportRequestAssignment")
