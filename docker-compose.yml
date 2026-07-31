@@ -48,6 +48,7 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+      VALHALLA_URL: ${VALHALLA_URL:-http://valhalla:8002}
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,6 +96,35 @@ services:
       - "3001:3001"
     restart: unless-stopped
 
+  # Rota/mesafe motoru. Kamyon profili (yükseklik/ağırlık/ADR), mesafe matrisi ve
+  # rakım profili sağlar. İlk açılışta tile build eder (NRW ~65 dk, tüm Almanya ~5 sa);
+  # tile'lar valhalla_data volume'unda kalıcıdır, sonraki açılışlar saniyeler sürer.
+  # Bölge değiştirmek için VALHALLA_REGION_URL + VALHALLA_FORCE_REBUILD=True.
+  valhalla:
+    image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
+    container_name: fleet_valhalla
+    ports:
+      - "${VALHALLA_PORT:-8002}:8002"
+    volumes:
+      - valhalla_data:/custom_files
+    environment:
+      tile_urls: ${VALHALLA_REGION_URL:-https://download.geofabrik.de/europe/germany/nordrhein-westfalen-latest.osm.pbf}
+      server_threads: ${VALHALLA_THREADS:-4}
+      serve_tiles: "True"
+      build_elevation: "True"      # rakım profili -> yakıt tüketimi modelinin girdisi
+      build_admins: "True"         # ülke/eyalet sınırları -> erişim kuralları
+      build_time_zones: "True"     # zaman penceresi hesapları
+      build_tar: "True"
+      force_rebuild: ${VALHALLA_FORCE_REBUILD:-False}
+      use_default_speeds_config: "True"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 6h           # ilk tile build'i healthcheck'i tetiklememeli
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     container_name: fleet_redis
@@ -113,3 +143,4 @@ volumes:
   postgres_data:
   backend_uploads:
   redis_data:
+  valhalla_data:
