@@ -77,6 +77,16 @@ export class TelemetryIngestService {
       const driverId = await this.resolveDriverId(tx, job.tenantId, job.vehicleId);
       const speedMps = Number((record.speedKph / 3.6).toFixed(3));
 
+      if (!driverId) {
+        // Sessiz dusme yasak: konum kaydi atlaniyorsa bu gorunur olmali.
+        // Onceden hicbir iz birakmadan atlaniyordu ve arac haritadan
+        // kayboluyordu; tanisi gunler suruyordu.
+        this.logger.warn(
+          `Telemetry stored without location: no driver resolved for vehicle ${job.vehicleId} `
+            + `(tenant ${job.tenantId}). Assign the vehicle or set currentDriverId.`,
+        );
+      }
+
       if (driverId) {
         const locationData = {
           tenantId: job.tenantId,
@@ -261,6 +271,21 @@ export class TelemetryIngestService {
     }
   }
 
+  /**
+   * Telemetriyi bir surucuye baglar.
+   *
+   * Once o gunun gorevine bakilir. Gorev YOKSA aracin uzerinde sabitlenmis
+   * suruculye dusulur — aksi halde arac tamamen izlenemez hale geliyordu:
+   * DriverLocationHistory.driverId zorunlu bir alan, yani surucu cozulemezse
+   * ne gecmis ne de canli konum yaziliyor ve arac haritadan kayboluyor.
+   *
+   * Gercek vakada gozlendi: sim aracinin gorevleri 2026-07-31'de bitince
+   * konum yazimi ayni gun durdu; cihaz veri gondermeye devam ediyordu, sistem
+   * kayitlari "islendi" isaretliyordu, hicbir hata da uretmiyordu.
+   *
+   * Hafta sonu surusu, plansiz sefer veya sevkiyatin gorev girmeyi atladigi
+   * bir gun uretimde ayni sonucu verir.
+   */
   private async resolveDriverId(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -277,9 +302,18 @@ export class TelemetryIngestService {
       orderBy: { updatedAt: 'desc' },
       select: { driverId: true },
     });
-    return assignment?.driverId ?? null;
+    if (assignment?.driverId) {
+      return assignment.driverId;
+    }
+
+    const vehicle = await tx.vehicle.findFirst({
+      where: { id: vehicleId, tenantId },
+      select: { currentDriverId: true },
+    });
+    return vehicle?.currentDriverId ?? null;
   }
 
+  /** resolveDriverId ile ayni mantik; transaction disi cagirimlar icin. */
   private async resolveDriverIdUnscoped(
     tenantId: string,
     vehicleId: string,
@@ -295,7 +329,15 @@ export class TelemetryIngestService {
       orderBy: { updatedAt: 'desc' },
       select: { driverId: true },
     });
-    return assignment?.driverId ?? null;
+    if (assignment?.driverId) {
+      return assignment.driverId;
+    }
+
+    const vehicle = await this.prisma.unscoped.vehicle.findFirst({
+      where: { id: vehicleId, tenantId },
+      select: { currentDriverId: true },
+    });
+    return vehicle?.currentDriverId ?? null;
   }
 
   private todayRange(): { start: Date; end: Date } {
