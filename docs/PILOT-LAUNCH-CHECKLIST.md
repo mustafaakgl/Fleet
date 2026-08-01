@@ -3,7 +3,7 @@
 **Öncelik sırası:** güvenlik → hukuki uygunluk → veri bütünlüğü → operasyon → pazarlama.
 
 **Durum işaretleri:**
-`✅` bu oturumda doğrulandı · `⚠️` bilinen açık · `❓` doğrulanmadı, kontrol edilmeli
+`[x] ✅` bu oturumda doğrulandı, kapandı · `[ ] ❌ 🔴` doğrulandı ve **başarısız** — açık bulgu · `[ ] ⚠️` bilinen sınır/risk · `[ ] ❓` henüz kontrol edilmedi
 
 > Fleet bir pazarlama sitesi değil: çok kiracılı, çalışan konum verisi işleyen, donanım
 > içeren, regüle edilmiş takograf verisi tutan bir B2B sistem. Bu liste o farklara göre
@@ -36,7 +36,7 @@ Bunlardan biri bile kapanmadıysa pilot başlamaz.
 
 ## 1. Altyapı ve teknik lansman
 
-- [ ] 🔴 **Production ortam değişkenleri EKSİK** — kod 153 değişken okuyor, `.env.production.example` 42'sini tanımlıyor. Çoğunun makul varsayılanı var, ama şunlar mutlaka eklenmeli: `LICENSE_PHOTO_ENCRYPTION_KEY`, `DEFECT_PHOTO_ENCRYPTION_KEY`, `TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY`, `DEVICE_INGEST_TOKEN`, `TACHO_INGEST_TOKEN`, `REDIS_URL`, ve tüm `*_RETENTION_DAYS` (DSGVO için varsayılana bırakılmamalı)
+- [ ] ❌ 🔴 **Production ortam değişkenleri EKSİK** — kod 153 değişken okuyor, `.env.production.example` 42'sini tanımlıyor. Çoğunun makul varsayılanı var, ama şunlar mutlaka eklenmeli: `LICENSE_PHOTO_ENCRYPTION_KEY`, `DEFECT_PHOTO_ENCRYPTION_KEY`, `TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY`, `DEVICE_INGEST_TOKEN`, `TACHO_INGEST_TOKEN`, `REDIS_URL`, ve tüm `*_RETENTION_DAYS` (DSGVO için varsayılana bırakılmamalı)
 - [x] ✅ **`NODE_ENV=production` build hatasız** — backend (`nest build`) ve frontend (`next build`, tüm sayfalar) 2026-08-01'de doğrulandı
 - [ ] ❓ Tüm migration'lar production veritabanına uygulanmış
       *(Dikkat: repoda migration checksum drift'i var — `add_ddd_file_processing_status`,
@@ -45,9 +45,9 @@ Bunlardan biri bile kapanmadıysa pilot başlamaz.
       Production'a çıkmadan bu temizlenmeli.)*
 - [ ] ❓ Otomatik veritabanı yedeği açık (`docs/ops/BACKUP-CRON.md` mevcut)
 - [ ] ❓ Restore testi en az bir kez yapılmış (`docs/ops/DISASTER-RECOVERY.md`)
-- [ ] ✅ **CI tetikleyicisi doğru** — `main, master, develop, faz-a, feature/**`
+- [x] ✅ **CI tetikleyicisi doğru** — `main, master, develop, faz-a, feature/**`
 - [ ] ❓ CI'nin gerçekten yeşil geçtiği doğrulanmış *(bu oturumda `gh` yetkisi yoktu)*
-- [ ] ✅ **Doğrulama bataryası yeşil** — tsc + 404/404 test + tenant isolation +
+- [x] ✅ **Doğrulama bataryası yeşil** — tsc + 404/404 test + tenant isolation +
       codec8-sim | verify-tacho-telematics
 - [ ] ❓ Sentry/hata izleme production'da aktif ve test edilmiş
 - [ ] ❓ Metrikler ve `/health` ucu izleniyor (`docs/ops/OBSERVABILITY-PROD.md`)
@@ -70,13 +70,13 @@ Bunlardan biri bile kapanmadıysa pilot başlamaz.
 - [x] ✅ **Seed production'da engelleniyor** — `assertSeedAllowed()` `NODE_ENV=production`'da hata fırlatıyor; şifre verilmezse rastgele üretiliyor
 - [x] ✅ **Hız sınırı aktif** — global 100 istek/dk (`ThrottlerModule.forRoot`), hassas uçlarda daha sıkı: giriş 20/dk, gizlilik uçları 5-10/dk, müşteri portalı 20-30/dk, arama 60/dk
 - [x] ✅ **Cihaz/takograf ingest guard'ları kapalı düşüyor** — token yoksa `ServiceUnavailableException`, sessizce açılmıyor
-- [ ] 🔴 **Fotoğraf şifreleme AÇIK düşüyor** — `LICENSE_PHOTO_ENCRYPTION_KEY` veya `DEFECT_PHOTO_ENCRYPTION_KEY` yoksa fotoğraflar **şifresiz** saklanıyor; tek uyarı bir log satırı. Ehliyet fotoğrafı kimlik belgesidir.
+- [ ] ❌ 🔴 **Fotoğraf şifreleme AÇIK düşüyor** — `LICENSE_PHOTO_ENCRYPTION_KEY` veya `DEFECT_PHOTO_ENCRYPTION_KEY` yoksa fotoğraflar **şifresiz** saklanıyor; tek uyarı bir log satırı. Ehliyet fotoğrafı kimlik belgesidir.
       *Not: bu bir tasarım hatası değil, atlanmış bir madde — `env.validation.ts` takograf şifreleme anahtarı için aynı kontrolü zaten yapıyor. Düzeltmesi o dosyaya iki kontrol eklemek.*
 - [x] ✅ **Oto-giriş / Swagger / açık kayıt güvenli varsayılanlı** — yalnızca açıkça `'true'` yazılırsa açılıyor; `COOKIE_SECURE` yalnızca açıkça `'false'` ile kapanıyor
 - [x] ✅ **Yüklenen dosyalar herkese açık değil** — statik servis yok (`express.static`/`ServeStatic` kullanılmıyor); indirme guard'lı controller üzerinden, rol kontrolü ve kullanıcı bazlı çözümleme ile, ayrıca her indirme kaydediliyor
 - [x] ✅ **Dosya tipi ve boyut sınırları aktif** — `MAX_FILE_SIZE_BYTES`, `fileFilter`, `ParseFilePipeBuilder`
 - [x] ✅ **Loglarda açık kişisel veri yok** — log satırları tarandı; e-posta, şifre, token, IBAN, konum içeren log bulunamadı
-- [ ] ✅ **Rol bazlı yetkilendirme çalışıyor** — sürücü token'ı ile ofis ucuna yazma denemesi
+- [x] ✅ **Rol bazlı yetkilendirme çalışıyor** — sürücü token'ı ile ofis ucuna yazma denemesi
       reddedildi (401)
 - [x] ✅ **CORS açılışta zorlanıyor** — production'da `CORS_ORIGIN` tanımsızsa uygulama başlamıyor
 - [x] ✅ **Denetim kaydı kapsamlı** — 164 farklı işlem: giriş başarılı/başarısız, hız limiti, MFA kurulum/doğrulama, şifre değişikliği, görev oluşturma/güncelleme/iptal, faturalama
@@ -108,7 +108,7 @@ Bunlardan biri bile kapanmadıysa pilot başlamaz.
       Plausible, Matomo, piksel bulunamadı), yani zorunlu olmayan çerez set edilmiyor.
       *Bölüm 9'daki analitik eklenirse bu madde yeniden açılır.*
 
-- [ ] 🔴 **Datenschutzerklärung işlenen verilerin tamamını saymıyor**
+- [ ] ❌ 🔴 **Datenschutzerklärung işlenen verilerin tamamını saymıyor**
       Metindeki "Welche Daten wir verarbeiten" bölümü 5 kategori sayıyor: sürücü ana
       verisi/ehliyet, araç verisi, yüklenen belgeler, GPS konumu, görev/talep/check-in/kaza.
       Sistemin gerçekten işlediği ama **metinde geçmeyen** kategoriler:
@@ -161,24 +161,24 @@ Bunlardan biri bile kapanmadıysa pilot başlamaz.
 Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`
 
 **Office / Disponent**
-- [ ] ✅ Günlük özet, sabah check-in'leri, çıkış kontrolleri, arızalar açılıyor
-- [ ] ✅ Kalan sürüş süresi hesaplanıyor
-- [ ] ✅ Canlı takip haritası araçları gösteriyor
-- [ ] ✅ Yeni görev formu (adres otomatik tamamlama + harita) çalışıyor
-- [ ] ✅ Bekleyen işler kuyruğu aciliyete göre sıralı
+- [x] ✅ Günlük özet, sabah check-in'leri, çıkış kontrolleri, arızalar açılıyor
+- [x] ✅ Kalan sürüş süresi hesaplanıyor
+- [x] ✅ Canlı takip haritası araçları gösteriyor
+- [x] ✅ Yeni görev formu (adres otomatik tamamlama + harita) çalışıyor
+- [x] ✅ Bekleyen işler kuyruğu aciliyete göre sıralı
 - [ ] ❓ **Görev oluşturma uçtan uca** — kaydet, sürücüye düşsün, mobilde görünsün
 - [ ] ❓ Tur oluştur → optimize et → sürücüye aç akışı gerçek veriyle
 
 **Muhasebe**
-- [ ] ⚠️ **Faturalama menüden erişilemiyor** — `NAV_ITEMS` ile `navigation.ts` çelişiyor (B1)
-- [ ] ⚠️ **Yakıt kartı mutabakatı sayfası hiçbir menüde yok** (B2)
+- [ ] ❌ 🔴 **Faturalama menüden erişilemiyor** — `NAV_ITEMS` ile `navigation.ts` çelişiyor (B1)
+- [ ] ❌ 🔴 **Yakıt kartı mutabakatı sayfası hiçbir menüde yok** (B2)
 - [ ] ❓ Görev → fatura → kesinleştir → e-fatura gönder akışı uçtan uca
 - [ ] ❓ DATEV dışa aktarımı muhasebeci tarafından açılıp doğrulanmış
 - [ ] ❓ Bordro için çalışma saati çıktısı doğru
 
 **Sürücü**
-- [ ] ✅ Web portalına giriş çalışıyor
-- [ ] ⚠️ **Web portalında tur ekranı yok** (mobilde var) (B3)
+- [x] ✅ Web portalına giriş çalışıyor
+- [ ] ❌ 🔴 **Web portalında tur ekranı yok** (mobilde var) (B3)
 - [ ] ❓ Mobil uygulama gerçek telefonda: check-in, çıkış kontrolü, görev, navigasyon
 - [ ] ❓ Çevrimdışı kuyruk — kapsama olmayan yerde veri kaybolmuyor
 - [ ] ⚠️ Açık vardiya onay ekranı sürücüyü kilitleyebiliyor (B5)
@@ -197,11 +197,11 @@ Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`
 
 - [ ] ⚠️ **Kalan sınır:** ne görevi ne `currentDriverId`'si olan araç hâlâ konum yazamaz
       (`DriverLocationHistory.driverId` zorunlu alan; şema değişikliği gerekir)
-- [ ] 🔴 **Karantina akışının otomatik testi YOK** — simülatörde yalnızca `normal` ve
+- [ ] ❌ 🔴 **Karantina akışının otomatik testi YOK** — simülatörde yalnızca `normal` ve
       `load` senaryosu var, CRC hatası üreten senaryo yok. Veritabanındaki son karantina
       kaydı 2026-07-13 ("crc mismatch"), yani bir zamanlar elle denenmiş. Temmuz denetim
       raporundaki T7 maddesi hâlâ açık.
-- [ ] 🔴 **Gerçek yük testi hiç yapılmadı** — `scripts/load/k6-smoke.js` CI'da yalnızca
+- [ ] ❌ 🔴 **Gerçek yük testi hiç yapılmadı** — `scripts/load/k6-smoke.js` CI'da yalnızca
       `test -f` ile varlığı kontrol ediliyor, hiç çalıştırılmıyor. `load` senaryosu da
       yalnızca 5 kayıt gönderiyor, gerçek yük değil. **Donanımlı pilotta 100+ cihaz
       bağlanacaksa bu bilinmeyen bir risk.**
