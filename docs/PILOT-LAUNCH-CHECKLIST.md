@@ -84,19 +84,56 @@ Bunlardan biri bile kapanmadıysa pilot başlamaz.
 
 ## 4. Hukuki uygunluk — Almanya
 
-- [ ] ❓ Impressum güncel
-- [ ] ❓ Datenschutzerklärung güncel ve **konum takibini, takograf verisini, sürücü
-      davranış skorlamasını** açıkça kapsıyor
-- [ ] ❓ AGB erişilebilir
-- [ ] ❓ AVV (Auftragsverarbeitungsvertrag) şablonu hazır — `frontend/public/legal/` altında var
-- [ ] ❓ Çerez ayarları sayfası çalışıyor
-- [ ] ❓ **Takograf verisi saklama süreleri** yasal sınırlara uygun (DDD arşivi, aktivite kayıtları)
-- [ ] ❓ **E-fatura yasal uygunluğu** — ZUGFeRD/XRechnung teknik olarak üretiliyor
-      (`einvoice/cii-xml.ts`, `ubl-xml.ts`, XRechnung 3.0 golden dosyası ✅), ama
-      **vergi açısından doğruluğu Steuerberater onayı ister**
-- [ ] ❓ GoBD: fatura ve muhasebe verisi değiştirilemezlik/saklama gereklerine uygun
-- [ ] ❓ Sürücü verisinin silinmesi (GDPR Art. 17) uçtan uca çalışıyor
-- [ ] ❓ Abartılı veya garanti veren pazarlama iddiaları kaldırılmış
+> Bu bölümde **metinlerin varlığı, kapsamı ve teknik uygulaması** doğrulandı.
+> **Hukuki doğruluk** avukat/Steuerberater işidir ve bu denetimin kapsamı dışındadır.
+
+- [x] ✅ **Impressum, Datenschutz, AGB, KVKK sayfaları açılıyor** (hepsi HTTP 200)
+- [x] ✅ **AVV paketi hazır ve kapsamlı** — `frontend/public/legal/` altında:
+      AVV şablonu, TOM'lar eki, satış için TOM özeti, veri saklama belgesi,
+      alt işleyici listesi
+- [x] ✅ **Alt işleyici listesi gerçekçi** — DeepL (mesaj çevirisi, AB, müşteri verisiyle
+      eğitim yok), Expo, hosting, e-posta sağlayıcısı; amaç ve bölge belirtilmiş
+- [x] ✅ **Konum onayı metinde vaat edildiği gibi kodda uygulanmış** —
+      `Driver.locationTrackingConsentAt`, `POST me/location-consent`, denetim kaydına
+      `location_consent_granted`, ve GDPR dışa aktarımında konum geçmişi yalnızca onay
+      varsa ekleniyor (yoksa açıklama dosyası)
+- [x] ✅ **GDPR Art. 17 silme uçları var** — `POST privacy/delete/driver/:id`, `delete/user/:id`
+- [x] ✅ **GoBD ciddiye alınmış** — fatura kesinleştirme tek transaction'da, eşzamanlı
+      denemeler satır kilidiyle sıraya sokuluyor, hata halinde fatura numarası geri
+      alınıyor, müşteri/tedarikçi verisi anlık görüntüleniyor (ana veri sonradan
+      değişse bile kesinleşmiş fatura değişmiyor). Gerekçesi kodda yazılı.
+- [x] ✅ **Abartılı/garanti veren pazarlama iddiası bulunamadı** — ana sayfa, funktionen
+      ve preise tarandı ("garantiert", "100%", "rechtssicher", "fehlerfrei" vb.)
+- [x] ✅ **Çerez banner'ı gerekmeyebilir** — üçüncü taraf izleme kodu yok (gtag, GTM,
+      Plausible, Matomo, piksel bulunamadı), yani zorunlu olmayan çerez set edilmiyor.
+      *Bölüm 9'daki analitik eklenirse bu madde yeniden açılır.*
+
+- [ ] 🔴 **Datenschutzerklärung işlenen verilerin tamamını saymıyor**
+      Metindeki "Welche Daten wir verarbeiten" bölümü 5 kategori sayıyor: sürücü ana
+      verisi/ehliyet, araç verisi, yüklenen belgeler, GPS konumu, görev/talep/check-in/kaza.
+      Sistemin gerçekten işlediği ama **metinde geçmeyen** kategoriler:
+      - **Takograf verisi** (sürüş/dinlenme süreleri, DDD dosyaları, ihlaller)
+      - **Sürücü davranış olayları ve skorlama** (sert fren, hız aşımı, sürücü puanı) —
+        bu **profilleme**dir ve açıkça belirtilmesi gerekir
+      - **Telematik araç verisi** (yakıt, arıza kodları, motor verisi)
+      - **Ceza/Bußgeld verisi** — trafik suçu verisi, DSGVO Art. 10 alanına girer
+      - **Çalışma seansları** (çalışma süresi)
+      - **Mesaj içerikleri** (DeepL'e gönderiliyor — alt işleyici listesinde var ama
+        veri kategorisi olarak sayılmamış)
+
+- [ ] ⚠️ **Konum takibinin hukuki dayanağı "onay" olarak kurulmuş** — metin GPS'i
+      "yalnızca belgelenmiş sürücü onayıyla" işlediğini söylüyor ve sistem bunu
+      titizlikle uyguluyor. Ancak Almanya'da **iş ilişkisinde onayın geçerli dayanak
+      olup olmadığı tartışmalıdır** (güç dengesizliği; denetim otoriteleri genelde
+      §26 BDSG + Betriebsvereinbarung bekler). Tasarımın tamamı bu dayanağa oturduğu
+      için **avukat görüşü alınmalı** — teknik bir eksiklik değil, hukuki bir tercih.
+
+- [ ] ❓ **Takograf verisi saklama süreleri** yasal sınırlara uygun mu (DDD arşivi,
+      aktivite kayıtları) — kodda retention var, **yasal süreyle karşılaştırılmadı**
+- [ ] ❓ **E-fatura vergi doğruluğu** — XRechnung 3.0 formatı teknik olarak üretiliyor
+      (`einvoice/cii-xml.ts`, `ubl-xml.ts`, golden dosya ✅); vergi açısından doğruluğu
+      Steuerberater onayı ister
+- [ ] ❓ Impressum ve AGB içeriğinin güncelliği (hukuki inceleme)
 
 ## 5. Veri bütünlüğü ve göç
 
@@ -148,14 +185,28 @@ Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`
 
 ## 8. Telematik ve takograf
 
-- [ ] ✅ **Konum yazma hatası düzeltildi** — görev atanmamış araçta konum sessizce
+- [x] ✅ **Konum yazma hatası düzeltildi** — görev atanmamış araçta konum sessizce
       düşüyordu; `currentDriverId`'ye düşülüyor ve çözülemezse uyarı loglanıyor
+- [x] ✅ **Cihaz offline tespiti var** — sessizlik eşiği 30 dk (`TELEMATICS_DEVICE_SILENT_MS`),
+      watchdog 5 dk, durum modeli `online/offline/silent`, arka planda çalışan kontrol
+- [x] ✅ **DDD gerçek dosyayla test ediliyor** — `sample-driver-card.ddd` fixture'ı
+      `tachograph.service.spec.ts` içinde; sistemde yüklenmiş gerçek DDD dosyaları da var
+- [x] ✅ **561/2006 ihlal motoru test kapsamında** — 25 takograf spec dosyası;
+      kural motoru testleri (mola, günlük sürüş, günlük dinlenme, kart olayları) 33/33 geçiyor
+- [x] ✅ **Normal ve yük senaryosu yeşil** — `codec8-sim | verify-tacho-telematics`
+
 - [ ] ⚠️ **Kalan sınır:** ne görevi ne `currentDriverId`'si olan araç hâlâ konum yazamaz
-- [ ] ❓ Cihaz→araç eşleştirme yapılmış ve doğrulanmış
-- [ ] ❓ Cihaz kopunca uyarı geliyor (offline tespiti)
-- [ ] ❓ DDD dosyası yükleme ve arşivleme gerçek dosyayla test edilmiş
-- [ ] ❓ İhlal tespiti gerçek veriyle doğrulanmış (561/2006 motoru)
-- [ ] ❓ Karantina akışı (CRC hatası → inceleme) uçtan uca çalışıyor
+      (`DriverLocationHistory.driverId` zorunlu alan; şema değişikliği gerekir)
+- [ ] 🔴 **Karantina akışının otomatik testi YOK** — simülatörde yalnızca `normal` ve
+      `load` senaryosu var, CRC hatası üreten senaryo yok. Veritabanındaki son karantina
+      kaydı 2026-07-13 ("crc mismatch"), yani bir zamanlar elle denenmiş. Temmuz denetim
+      raporundaki T7 maddesi hâlâ açık.
+- [ ] 🔴 **Gerçek yük testi hiç yapılmadı** — `scripts/load/k6-smoke.js` CI'da yalnızca
+      `test -f` ile varlığı kontrol ediliyor, hiç çalıştırılmıyor. `load` senaryosu da
+      yalnızca 5 kayıt gönderiyor, gerçek yük değil. **Donanımlı pilotta 100+ cihaz
+      bağlanacaksa bu bilinmeyen bir risk.**
+- [ ] ❓ **Cihaz→araç eşleştirme yapılmış ve doğrulanmış** — akış hiç yazılmadı (T5)
+- [ ] ❓ Gerçek araçta, gerçek cihazla bir tam gün saha provası
 
 ## 9. Analitik ve dönüşüm (pazarlama sitesi tarafı)
 
@@ -206,3 +257,7 @@ Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`
 | — | Araç tüketim verisi eksik | Sapma raporu euro hesaplayamaz |
 | **G1** | **Fotoğraf şifreleme anahtarsız çalışıyor** | Ehliyet/arıza fotoğrafları şifresiz saklanır (DSGVO) |
 | **G2** | **Production env şablonu eksik** | Şifreleme anahtarları ve token'lar belgelenmemiş |
+| **G3** | **Datenschutz eksik veri kategorileri** | Takograf, davranış skorlaması (profilleme), telematik, ceza verisi metinde yok |
+| **G4** | **Konum için hukuki dayanak "onay"** | Alman iş hukukunda tartışmalı — avukat görüşü gerekir |
+| **G5** | **Karantina akışı test edilmiyor** | Bozuk paket geldiğinde ne olduğu bilinmiyor |
+| **G6** | **Gerçek yük testi yok** | 100+ cihazlı pilotta davranış bilinmiyor |
