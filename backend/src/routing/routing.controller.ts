@@ -5,6 +5,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { AddressSuggestQueryDto } from './dto/address-suggest.query';
 import { ResolvePickedLocationDto } from './dto/resolve-picked-location.dto';
+import { RouteDeviationService } from './route-deviation.service';
 import { RoutingService } from './routing.service';
 
 /**
@@ -19,7 +20,44 @@ import { RoutingService } from './routing.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)
 export class RoutingController {
-  constructor(private readonly routing: RoutingService) {}
+  constructor(
+    private readonly routing: RoutingService,
+    private readonly deviation: RouteDeviationService,
+  ) {}
+
+  /**
+   * Planlanan vs gerceklesen mesafe raporu.
+   *
+   * Gorev basina bir Valhalla cagrisi gerekebildigi icin donem sinirli
+   * taraniyor; genis donemler icin arka plan isine tasinmali.
+   */
+  @Get('deviation-report')
+  async deviationReport(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const now = new Date();
+    const defaultFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const defaultTo = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const fromDate = from ? new Date(from) : defaultFrom;
+    const toDate = to ? new Date(to) : defaultTo;
+
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      throw new BadRequestException({ code: 'invalid_date_range' });
+    }
+    if (fromDate >= toDate) {
+      throw new BadRequestException({ code: 'from_must_precede_to' });
+    }
+
+    const parsedLimit = limit ? Number(limit) : undefined;
+    return this.deviation.buildReport({
+      from: fromDate,
+      to: toDate,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    });
+  }
 
   @Get('address-suggestions')
   async suggest(@Query() query: AddressSuggestQueryDto) {

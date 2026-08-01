@@ -63,15 +63,25 @@ varyant fark yaratmaz):
 | ADR (hazmat) | 4/29 rotada fark, max 6,0 km |
 | uzunluk 25 m | fark yok — OSM'de `maxlength` etiketi pratikte yok |
 
-**⚠️ Kamyon costing'i kalibrasyon istiyor.**
-Duisburg Hafen → Köln:
-- `auto`: A40 → A59 → A524 → A3 → A4 = 85,7 km
-- `truck`: A40 → A57 → **B51** = 76,2 km (aynı süre)
+**✅ Kamyon costing'i varsayılan haliyle makul — ilk teşhis yanlıştı.**
 
-Valhalla 40 t aracı Bundesstraße'ye sokuyor. Gerçekte yanlış tercih: B51 tek şeritli, şehir içi,
-dur-kalk yakıt yakıyor — ve **Maut 2018'den beri Bundesstraße'lerde de geçerli**, yani toll
-tasarrufu da yok. `use_highways` / `use_tolls` ağırlıkları kalibre edilmeli. Kutudan çıktığı gibi
-kullanılamaz.
+İlk incelemede Duisburg→Köln rotasında yol referansları arasında "B 51" görülmüş ve
+Valhalla'nın 40 tonluk aracı Bundesstraße'ye soktuğu sonucuna varılmıştı. **Bu yanlıştı**;
+referans listesine bakılmış, mesafeye bakılmamıştı. Manevra bazında ölçüm:
+
+| Yol | Mesafe | Pay |
+|---|---|---|
+| A 57 | 63,5 km | 83% |
+| A 40 | 4,4 km | 6% |
+| B 51 | 0,9 km | 1% |
+
+B 51 ana güzergâh değil, Köln'e girişteki son 900 m. Altı Alman yük koridorunda ortalama
+**%86,9 Autobahn**, %7,4 Bundesstraße payı ölçüldü.
+
+Ayar denemeleri fayda getirmedi: `use_highways=1` ve `low_class_penalty` (120/300)
+kombinasyonları ya rotayı hiç değiştirmedi ya da kötüleştirdi — `hw=1 + lcp=300`
+Bonn→Recklinghausen'e 20,3 km ekleyip otoyol payını yalnızca %89'dan %94'e çıkardı.
+Kötü takas. **Kalibrasyon kapsam dışı bırakıldı.**
 
 **🔴 Tek bir kamyona-kapalı durak tüm optimizasyonu çökertiyor.**
 Bielefeld merkez koordinatı (52.0302, 8.5325) 4,4 m mesafede kamyona kapalı bir yola snap oluyor.
@@ -186,8 +196,8 @@ yalnızca dönen şehir orijinal metinde geçiyorsa kabul ediliyor
 (`core/geocode-consistency.util.ts`, 7 birim testi) ve kabul edilse bile güven 0,7'ye çekiliyor.
 Sonuç: başarısız geocode 4 → 1; kalan tek kayıt bilerek reddedilen Dresden vakası.
 
-**Adım 5'ten önce yapılması gereken:** kamyon costing kalibrasyonu (bulgu 2.2). Sapma raporu
-"planlanan km"yi Valhalla'dan alacağı için kalibre edilmemiş rota yanlış bir taban üretir.
+**Not:** Bu adımdan önce kamyon costing kalibrasyonu planlanmıştı; ölçüm gereksiz olduğunu
+gösterdi (bkz. 2.2), kapsamdan çıkarıldı.
 
 **Faz 1'in müşteriye görünen çıktısı:** "geçen ay 47 görevde fazladan 1.240 km, ~380 L, ~€760".
 Henüz optimizasyon yok — ama satışta Faz 2'yi finanse eden cümle bu.
