@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "الجولة",
+    "empty": "لا توجد جولة مخططة لليوم.",
+    "navigate": "بدء الملاحة",
+    "noCoordinates": "لا توجد إحداثيات لهذه المحطة.",
+    "window": "النافذة الزمنية {{from}}–{{to}}",
+    "legDistance": "{{km}} كم إلى هنا",
+    "summary": "{{stops}} محطات · {{km}} كم · حوالي {{minutes}} دقيقة",
+    "kind": {
+      "depot_start": "البداية",
+      "pickup": "التحميل",
+      "delivery": "التسليم",
+      "depot_end": "العودة"
+    },
+    "status": {
+      "draft": "مسودة",
+      "optimizing": "جارٍ الحساب",
+      "optimized": "مخطط",
+      "released": "معتمد",
+      "in_progress": "في الطريق",
+      "completed": "مكتمل",
+      "cancelled": "ملغى"
+    },
+    "truckWarning": {
+      "unreachable": "غير قابل للوصول بالشاحنة – يرجى الاتصال بالإرسال.",
+      "unverified": "لم يتم التحقق من وصول الشاحنة."
+    }
   }
 }

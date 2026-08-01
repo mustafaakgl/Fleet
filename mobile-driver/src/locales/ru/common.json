@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Маршрут",
+    "empty": "На сегодня маршрут не запланирован.",
+    "navigate": "Запустить навигацию",
+    "noCoordinates": "У этой остановки нет координат.",
+    "window": "Временное окно {{from}}–{{to}}",
+    "legDistance": "{{km}} км до этой точки",
+    "summary": "{{stops}} остановок · {{km}} км · около {{minutes}} мин",
+    "kind": {
+      "depot_start": "Старт",
+      "pickup": "Погрузка",
+      "delivery": "Доставка",
+      "depot_end": "Возврат"
+    },
+    "status": {
+      "draft": "Черновик",
+      "optimizing": "Расчёт",
+      "optimized": "Запланирован",
+      "released": "Утверждён",
+      "in_progress": "В пути",
+      "completed": "Завершён",
+      "cancelled": "Отменён"
+    },
+    "truckWarning": {
+      "unreachable": "Недоступно для грузовика – свяжитесь с диспетчером.",
+      "unverified": "Доступ для грузовика не проверен."
+    }
   }
 }

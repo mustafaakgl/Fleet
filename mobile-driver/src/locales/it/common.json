@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Giro",
+    "empty": "Nessun giro programmato per oggi.",
+    "navigate": "Avvia navigazione",
+    "noCoordinates": "Questa fermata non ha coordinate.",
+    "window": "Finestra oraria {{from}}–{{to}}",
+    "legDistance": "{{km}} km fino a qui",
+    "summary": "{{stops}} fermate · {{km}} km · circa {{minutes}} min",
+    "kind": {
+      "depot_start": "Partenza",
+      "pickup": "Ritiro",
+      "delivery": "Consegna",
+      "depot_end": "Rientro"
+    },
+    "status": {
+      "draft": "Bozza",
+      "optimizing": "Calcolo in corso",
+      "optimized": "Pianificato",
+      "released": "Approvato",
+      "in_progress": "In viaggio",
+      "completed": "Completato",
+      "cancelled": "Annullato"
+    },
+    "truckWarning": {
+      "unreachable": "Non raggiungibile con camion – contattare la logistica.",
+      "unverified": "Accesso camion non verificato."
+    }
   }
 }

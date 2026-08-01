@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Trasa",
+    "empty": "Na dziś nie zaplanowano trasy.",
+    "navigate": "Uruchom nawigację",
+    "noCoordinates": "Ten przystanek nie ma współrzędnych.",
+    "window": "Okno czasowe {{from}}–{{to}}",
+    "legDistance": "{{km}} km do tego miejsca",
+    "summary": "{{stops}} przystanków · {{km}} km · ok. {{minutes}} min",
+    "kind": {
+      "depot_start": "Start",
+      "pickup": "Odbiór",
+      "delivery": "Dostawa",
+      "depot_end": "Powrót"
+    },
+    "status": {
+      "draft": "Szkic",
+      "optimizing": "Obliczanie",
+      "optimized": "Zaplanowana",
+      "released": "Zatwierdzona",
+      "in_progress": "W drodze",
+      "completed": "Zakończona",
+      "cancelled": "Anulowana"
+    },
+    "truckWarning": {
+      "unreachable": "Niedostępne dla ciężarówki – skontaktuj się z dyspozytorem.",
+      "unverified": "Dostęp dla ciężarówki niezweryfikowany."
+    }
   }
 }

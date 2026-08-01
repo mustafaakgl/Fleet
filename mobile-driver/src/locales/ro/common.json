@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Tur",
+    "empty": "Nu este planificat niciun tur pentru azi.",
+    "navigate": "Pornește navigația",
+    "noCoordinates": "Această oprire nu are coordonate.",
+    "window": "Interval orar {{from}}–{{to}}",
+    "legDistance": "{{km}} km până aici",
+    "summary": "{{stops}} opriri · {{km}} km · aprox. {{minutes}} min",
+    "kind": {
+      "depot_start": "Start",
+      "pickup": "Preluare",
+      "delivery": "Livrare",
+      "depot_end": "Retur"
+    },
+    "status": {
+      "draft": "Ciornă",
+      "optimizing": "Se calculează",
+      "optimized": "Planificat",
+      "released": "Aprobat",
+      "in_progress": "În cursă",
+      "completed": "Finalizat",
+      "cancelled": "Anulat"
+    },
+    "truckWarning": {
+      "unreachable": "Inaccesibil pentru camion – contactați dispecerul.",
+      "unverified": "Accesul camionului nu a fost verificat."
+    }
   }
 }

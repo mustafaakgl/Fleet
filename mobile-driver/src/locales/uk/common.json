@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Маршрут",
+    "empty": "На сьогодні маршрут не заплановано.",
+    "navigate": "Запустити навігацію",
+    "noCoordinates": "Ця зупинка не має координат.",
+    "window": "Часове вікно {{from}}–{{to}}",
+    "legDistance": "{{km}} км до цієї точки",
+    "summary": "{{stops}} зупинок · {{km}} км · близько {{minutes}} хв",
+    "kind": {
+      "depot_start": "Старт",
+      "pickup": "Завантаження",
+      "delivery": "Доставка",
+      "depot_end": "Повернення"
+    },
+    "status": {
+      "draft": "Чернетка",
+      "optimizing": "Обчислення",
+      "optimized": "Заплановано",
+      "released": "Затверджено",
+      "in_progress": "У дорозі",
+      "completed": "Завершено",
+      "cancelled": "Скасовано"
+    },
+    "truckWarning": {
+      "unreachable": "Недоступно для вантажівки – зверніться до диспетчера.",
+      "unverified": "Доступ для вантажівки не перевірено."
+    }
   }
 }

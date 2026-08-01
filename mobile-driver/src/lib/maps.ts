@@ -16,3 +16,21 @@ export async function openMapsAddress(address: string) {
     await Linking.openURL(url);
   }
 }
+
+/**
+ * Hazir bir navigasyon URL'ini acar.
+ *
+ * canOpenURL Android'de `google.navigation:` gibi ozel semalarda uygulama
+ * kurulu degilse false doner; o durumda web yol tarifine dusuyoruz ki buton
+ * sessizce hicbir sey yapmasin.
+ */
+export async function openExternalUrl(url: string, webFallback?: string) {
+  const canOpen = await Linking.canOpenURL(url).catch(() => false);
+  if (canOpen) {
+    await Linking.openURL(url);
+    return;
+  }
+  if (webFallback) {
+    await Linking.openURL(webFallback);
+  }
+}

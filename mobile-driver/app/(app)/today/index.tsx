@@ -127,6 +127,14 @@ export default function HomeTodayScreen() {
 
       <DayStatusBanner />
 
+      {/* Turu olan surucu icin giris. Tur yoksa ekran zaten "bugun tur yok"
+          diyor; butonu kosullu gizlemek ek bir istek gerektirirdi. */}
+      <ActionButton
+        label={t('tour.title')}
+        onPress={() => router.push('/(app)/today/tour')}
+        variant="primary"
+      />
+
       {licenseStatus?.can_submit ? (
         <View style={styles.licenseTaskCard}>
           <Text style={styles.licenseTaskTitle}>{t('licenseCheck.taskTitle')}</Text>

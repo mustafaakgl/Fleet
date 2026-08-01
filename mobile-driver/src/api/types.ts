@@ -530,3 +530,36 @@ export type DriverDefect = {
   created_at: string;
   updated_at: string;
 };
+
+/** Turdaki tek durak. Koordinat navigasyon icin; adres yalnizca gosterim. */
+export type DriverTourStop = {
+  id: string;
+  sequence: number;
+  kind: 'depot_start' | 'pickup' | 'delivery' | 'depot_end';
+  assignmentId: string | null;
+  address: string;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** Kamyon erisimi supheliyse surucu uyarilir; navigasyon yine de acilir */
+  truckAccess: 'unknown' | 'reachable' | 'unreachable' | 'check_failed';
+  windowStart: string | null;
+  windowEnd: string | null;
+  serviceMinutes: number;
+  plannedArrivalAt: string | null;
+  legDistanceKm: number | null;
+};
+
+export type DriverTour = {
+  id: string;
+  name: string | null;
+  workDate: string;
+  status: string;
+  plannedDistanceKm: number | null;
+  plannedDurationMin: number | null;
+  stops: DriverTourStop[];
+};
+
+export type DriverTourResponse = { tour: DriverTour | null };

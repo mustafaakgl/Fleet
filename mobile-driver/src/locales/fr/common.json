@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Tournée",
+    "empty": "Aucune tournée prévue aujourd’hui.",
+    "navigate": "Démarrer la navigation",
+    "noCoordinates": "Cet arrêt n’a pas de coordonnées.",
+    "window": "Créneau {{from}}–{{to}}",
+    "legDistance": "{{km}} km jusqu’ici",
+    "summary": "{{stops}} arrêts · {{km}} km · environ {{minutes}} min",
+    "kind": {
+      "depot_start": "Départ",
+      "pickup": "Enlèvement",
+      "delivery": "Livraison",
+      "depot_end": "Retour"
+    },
+    "status": {
+      "draft": "Brouillon",
+      "optimizing": "Calcul en cours",
+      "optimized": "Planifiée",
+      "released": "Validée",
+      "in_progress": "En route",
+      "completed": "Terminée",
+      "cancelled": "Annulée"
+    },
+    "truckWarning": {
+      "unreachable": "Inaccessible en camion – contactez la régulation.",
+      "unverified": "Accès camion non vérifié."
+    }
   }
 }

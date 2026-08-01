@@ -17,6 +17,7 @@ export default function TodayStackLayout() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="assignment/[id]" />
+      <Stack.Screen name="tour" />
       <Stack.Screen name="morning-checkin" />
       <Stack.Screen name="handover-upload" />
       <Stack.Screen name="equipment-issuance" />

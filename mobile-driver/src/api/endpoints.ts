@@ -1,3 +1,4 @@
+import type { DriverTourResponse } from '@/api/types';
 import { apiClient } from './client';
 import type { DriverSession } from '@/domain/models';
 import type {
@@ -103,6 +104,13 @@ export const driverApi = {
   },
   async assignmentById(id: string) {
     const { data } = await apiClient.get<DriverAssignment>(`/driver/assignments/${id}`);
+    return data;
+  },
+
+  async todayTour(date?: string) {
+    const { data } = await apiClient.get<DriverTourResponse>('/driver/tours/today', {
+      params: { date },
+    });
     return data;
   },
   async listMorningCheckins(date?: string) {

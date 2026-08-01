@@ -705,5 +705,33 @@
     "statusDueSoon": "Due soon",
     "statusOverdue": "Overdue",
     "statusUnknown": "Unknown"
+  },
+  "tour": {
+    "title": "Tour",
+    "empty": "No tour planned for today.",
+    "navigate": "Start navigation",
+    "noCoordinates": "This stop has no coordinates.",
+    "window": "Time window {{from}}–{{to}}",
+    "legDistance": "{{km}} km to here",
+    "summary": "{{stops}} stops · {{km}} km · approx. {{minutes}} min",
+    "kind": {
+      "depot_start": "Start",
+      "pickup": "Pickup",
+      "delivery": "Delivery",
+      "depot_end": "Return"
+    },
+    "status": {
+      "draft": "Draft",
+      "optimizing": "Calculating",
+      "optimized": "Planned",
+      "released": "Released",
+      "in_progress": "On the road",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "truckWarning": {
+      "unreachable": "Not reachable by truck – please contact dispatch.",
+      "unverified": "Truck access not verified."
+    }
   }
 }

@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Маршрут",
+    "empty": "За днес няма планиран маршрут.",
+    "navigate": "Стартирай навигация",
+    "noCoordinates": "Тази спирка няма координати.",
+    "window": "Времеви прозорец {{from}}–{{to}}",
+    "legDistance": "{{km}} км дотук",
+    "summary": "{{stops}} спирки · {{km}} км · около {{minutes}} мин",
+    "kind": {
+      "depot_start": "Начало",
+      "pickup": "Товарене",
+      "delivery": "Доставка",
+      "depot_end": "Връщане"
+    },
+    "status": {
+      "draft": "Чернова",
+      "optimizing": "Изчислява се",
+      "optimized": "Планиран",
+      "released": "Одобрен",
+      "in_progress": "В движение",
+      "completed": "Завършен",
+      "cancelled": "Отменен"
+    },
+    "truckWarning": {
+      "unreachable": "Недостъпно за камион – свържете се с диспечера.",
+      "unverified": "Достъпът за камион не е проверен."
+    }
   }
 }

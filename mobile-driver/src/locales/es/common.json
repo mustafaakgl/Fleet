@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Ruta",
+    "empty": "No hay ninguna ruta planificada para hoy.",
+    "navigate": "Iniciar navegación",
+    "noCoordinates": "Esta parada no tiene coordenadas.",
+    "window": "Franja horaria {{from}}–{{to}}",
+    "legDistance": "{{km}} km hasta aquí",
+    "summary": "{{stops}} paradas · {{km}} km · aprox. {{minutes}} min",
+    "kind": {
+      "depot_start": "Inicio",
+      "pickup": "Recogida",
+      "delivery": "Entrega",
+      "depot_end": "Regreso"
+    },
+    "status": {
+      "draft": "Borrador",
+      "optimizing": "Calculando",
+      "optimized": "Planificada",
+      "released": "Aprobada",
+      "in_progress": "En ruta",
+      "completed": "Completada",
+      "cancelled": "Cancelada"
+    },
+    "truckWarning": {
+      "unreachable": "No accesible para camión – contacte con tráfico.",
+      "unverified": "Acceso de camión no verificado."
+    }
   }
 }

@@ -568,5 +568,33 @@
     "es": "Español",
     "nl": "Nederlands",
     "ru": "Русский"
+  },
+  "tour": {
+    "title": "Rit",
+    "empty": "Er is vandaag geen rit gepland.",
+    "navigate": "Navigatie starten",
+    "noCoordinates": "Deze stop heeft geen coördinaten.",
+    "window": "Tijdvenster {{from}}–{{to}}",
+    "legDistance": "{{km}} km tot hier",
+    "summary": "{{stops}} stops · {{km}} km · ca. {{minutes}} min",
+    "kind": {
+      "depot_start": "Start",
+      "pickup": "Ophalen",
+      "delivery": "Levering",
+      "depot_end": "Terug"
+    },
+    "status": {
+      "draft": "Concept",
+      "optimizing": "Berekenen",
+      "optimized": "Gepland",
+      "released": "Vrijgegeven",
+      "in_progress": "Onderweg",
+      "completed": "Afgerond",
+      "cancelled": "Geannuleerd"
+    },
+    "truckWarning": {
+      "unreachable": "Niet bereikbaar voor vrachtwagen – neem contact op met planning.",
+      "unverified": "Vrachtwagentoegang niet geverifieerd."
+    }
   }
 }

@@ -735,5 +735,33 @@
     "statusDueSoon": "Bald fällig",
     "statusOverdue": "Überfällig",
     "statusUnknown": "Unbekannt"
+  },
+  "tour": {
+    "title": "Tour",
+    "empty": "Für heute ist keine Tour geplant.",
+    "navigate": "Navigation starten",
+    "noCoordinates": "Für diesen Stopp fehlen Koordinaten.",
+    "window": "Zeitfenster {{from}}–{{to}}",
+    "legDistance": "{{km}} km bis hierher",
+    "summary": "{{stops}} Stopps · {{km}} km · ca. {{minutes}} Min.",
+    "kind": {
+      "depot_start": "Start",
+      "pickup": "Abholung",
+      "delivery": "Lieferung",
+      "depot_end": "Rückkehr"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "optimizing": "Wird berechnet",
+      "optimized": "Geplant",
+      "released": "Freigegeben",
+      "in_progress": "Unterwegs",
+      "completed": "Abgeschlossen",
+      "cancelled": "Storniert"
+    },
+    "truckWarning": {
+      "unreachable": "Für Lkw nicht erreichbar – bitte Disposition kontaktieren.",
+      "unverified": "Lkw-Erreichbarkeit nicht geprüft."
+    }
   }
 }

@@ -705,5 +705,33 @@
     "statusDueSoon": "Yakında",
     "statusOverdue": "Gecikmiş",
     "statusUnknown": "Bilinmiyor"
+  },
+  "tour": {
+    "title": "Tur",
+    "empty": "Bugün için planlanmış tur yok.",
+    "navigate": "Navigasyonu başlat",
+    "noCoordinates": "Bu durağın koordinatı yok.",
+    "window": "Zaman aralığı {{from}}–{{to}}",
+    "legDistance": "Buraya {{km}} km",
+    "summary": "{{stops}} durak · {{km}} km · yaklaşık {{minutes}} dk",
+    "kind": {
+      "depot_start": "Başlangıç",
+      "pickup": "Alış",
+      "delivery": "Teslim",
+      "depot_end": "Dönüş"
+    },
+    "status": {
+      "draft": "Taslak",
+      "optimizing": "Hesaplanıyor",
+      "optimized": "Planlandı",
+      "released": "Onaylandı",
+      "in_progress": "Yolda",
+      "completed": "Tamamlandı",
+      "cancelled": "İptal"
+    },
+    "truckWarning": {
+      "unreachable": "Kamyonla erişilemiyor – lütfen sevkiyatla görüşün.",
+      "unverified": "Kamyon erişimi doğrulanmadı."
+    }
   }
 }
