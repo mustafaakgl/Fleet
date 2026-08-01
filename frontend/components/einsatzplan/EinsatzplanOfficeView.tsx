@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Sun, Truck } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Route, Sun, Truck } from 'lucide-react';
 import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { usePlanningDate } from '@/hooks/usePlanningDate';
 import {
@@ -17,6 +17,7 @@ import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
 import { groupAssignmentsByCompany } from './companyBoard';
 import { BRAND_LINK, BRAND_TAB_ACTIVE } from '@/lib/brand-colors';
 import { cn } from '@/lib/utils';
+import { TourPlanningPanel } from '@/components/einsatzplan/TourPlanningPanel';
 import { Tagesplanung } from './Tagesplanung';
 
 export function EinsatzplanOfficeView() {
@@ -70,6 +71,7 @@ export function EinsatzplanOfficeView() {
     { id: 'heute', labelKey: 'office.tab.today', icon: Sun },
     { id: 'morgen', labelKey: 'office.tab.tomorrow', icon: CalendarDays },
     { id: 'betrieb', labelKey: 'office.tab.operations', icon: ClipboardCheck },
+    { id: 'touren', labelKey: 'office.tab.tours', icon: Route },
   ];
 
   return (
@@ -174,6 +176,8 @@ export function EinsatzplanOfficeView() {
               />
             </div>
           ) : null}
+
+          {activeTab === 'touren' ? <TourPlanningPanel date={planningDate} /> : null}
 
           {activeTab === 'betrieb' ? (
             <Tagesplanung

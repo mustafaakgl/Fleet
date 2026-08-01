@@ -126,5 +126,6 @@
   "planning.tstatus.approved": "Genehmigt",
   "planning.tstatus.rejected": "Abgelehnt",
   "planning.tstatus.needs_review": "Rückfrage",
-  "planning.tstatus.pending": "Offen"
+  "planning.tstatus.pending": "Offen",
+  "office.tab.tours": "Touren"
 }

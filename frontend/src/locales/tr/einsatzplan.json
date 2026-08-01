@@ -126,5 +126,6 @@
   "planning.tstatus.approved": "Onaylandı",
   "planning.tstatus.rejected": "Reddedildi",
   "planning.tstatus.needs_review": "İnceleme gerekli",
-  "planning.tstatus.pending": "Beklemede"
+  "planning.tstatus.pending": "Beklemede",
+  "office.tab.tours": "Turlar"
 }

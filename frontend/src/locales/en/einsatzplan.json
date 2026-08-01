@@ -126,5 +126,6 @@
   "planning.tstatus.approved": "Approved",
   "planning.tstatus.rejected": "Rejected",
   "planning.tstatus.needs_review": "Needs Review",
-  "planning.tstatus.pending": "Pending"
+  "planning.tstatus.pending": "Pending",
+  "office.tab.tours": "Tours"
 }

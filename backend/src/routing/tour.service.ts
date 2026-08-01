@@ -22,8 +22,24 @@ export interface CreateTourFromAssignmentsParams {
   createdById: string;
 }
 
+/**
+ * Optimizasyonun neden uygulanmadigi.
+ *
+ * Kod donuluyor, metin degil: sebep kullaniciya kendi dilinde gosterilmeli ve
+ * sunucunun dili arayuzun dili degil. Serbest metin donmek Almanca bir ekranda
+ * Turkce uyari cikarmisti.
+ */
+export type OptimizeSkipReason =
+  | 'pickup_before_delivery_violated'
+  | 'stop_not_reachable'
+  | 'invalid_order'
+  | 'invalid_input'
+  | 'engine_unavailable';
+
 export interface OptimizeResult {
   optimized: boolean;
+  reasonCode?: OptimizeSkipReason;
+  /** Tanilama icin ham mesaj; arayuz reasonCode kullanmali */
   reason?: string;
   before?: { distanceKm: number | null; durationMinutes: number | null };
   after?: { distanceKm: number; durationMinutes: number };
@@ -195,7 +211,7 @@ export class TourService {
         where: { id: tour.id },
         data: { optimizationError: issues.map((i) => i.message).join('; ') },
       });
-      return { optimized: false, reason: issues[0].message };
+      return { optimized: false, reasonCode: 'invalid_input', reason: issues[0].message };
     }
 
     // Depo duraklari uclara sabitlenir; Valhalla /optimized_route ilk ve son
@@ -228,36 +244,37 @@ export class TourService {
     const result = await this.valhalla.optimizedRoute(points, DEFAULT_TRUCK_PROFILE);
 
     if (!result.ok) {
-      const reason =
-        result.error === 'no_route'
-          ? 'Duraklardan biri kamyonla ulasilamiyor — tur siralanamadi'
-          : result.message;
+      const reasonCode: OptimizeSkipReason =
+        result.error === 'no_route' ? 'stop_not_reachable' : 'engine_unavailable';
       await this.prisma.tour.update({
         where: { id: tour.id },
-        data: { status: TourStatus.draft, optimizationError: reason },
+        data: { status: TourStatus.draft, optimizationError: reasonCode },
       });
-      return { optimized: false, reason };
+      return { optimized: false, reasonCode, reason: result.message };
     }
 
     const reordered = applyOptimizedOrder(ordered, result.value.order);
     if (!reordered) {
       await this.prisma.tour.update({
         where: { id: tour.id },
-        data: { status: TourStatus.draft, optimizationError: 'Gecersiz siralama ciktisi' },
+        data: { status: TourStatus.draft, optimizationError: 'invalid_order' },
       });
-      return { optimized: false, reason: 'Gecersiz siralama ciktisi' };
+      return { optimized: false, reasonCode: 'invalid_order', reason: 'invalid optimizer order' };
     }
 
     if (violatesPickupBeforeDelivery(reordered)) {
       // Valhalla bu kisiti bilmez; ihlal eden ciktiyi uygulamaktansa mevcut
       // sirayi korumak dogru. Gercek cozum OR-Tools'un pickup-delivery kisiti.
-      const reason = 'Onerilen sira alis-teslim kuralini ihlal ediyor, uygulanmadi';
-      this.logger.warn(`Tour ${tour.id}: ${reason}`);
+      this.logger.warn(`Tour ${tour.id}: optimizer order violates pickup-before-delivery`);
       await this.prisma.tour.update({
         where: { id: tour.id },
-        data: { status: TourStatus.draft, optimizationError: reason },
+        data: { status: TourStatus.draft, optimizationError: 'pickup_before_delivery_violated' },
       });
-      return { optimized: false, reason };
+      return {
+        optimized: false,
+        reasonCode: 'pickup_before_delivery_violated',
+        reason: 'optimizer order violates pickup-before-delivery',
+      };
     }
 
     const before = { distanceKm: baselineDistanceKm, durationMinutes: baselineDurationMin };

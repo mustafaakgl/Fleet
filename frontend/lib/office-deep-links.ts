@@ -1,4 +1,4 @@
-export type OfficeEinsatzTab = 'heute' | 'morgen' | 'betrieb';
+export type OfficeEinsatzTab = 'heute' | 'morgen' | 'betrieb' | 'touren';
 
 /** Legacy admin query params (non-office Einsatzplan). */
 export type EinsatzplanPanel = 'tagesplanung' | 'urlaubsplaner' | 'company_notifications';
@@ -27,7 +27,7 @@ export function officeAssignmentsHref(options?: {
 /** Resolves office tab from legacy panel/view query params. */
 export function resolveOfficeTabFromQuery(search: URLSearchParams): OfficeEinsatzTab {
   const tab = search.get('tab');
-  if (tab === 'heute' || tab === 'morgen' || tab === 'betrieb') return tab;
+  if (tab === 'heute' || tab === 'morgen' || tab === 'betrieb' || tab === 'touren') return tab;
 
   const view = search.get('view');
   const panel = search.get('panel');

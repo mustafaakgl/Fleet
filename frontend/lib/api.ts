@@ -2613,4 +2613,94 @@ export const routingApi = {
       .then((r) => r.data),
 };
 
+// ─── Turlar ──────────────────────────────────────────────────────────────────
+
+export type TourStatus =
+  | 'draft' | 'optimizing' | 'optimized' | 'released' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface TourStop {
+  id: string;
+  sequence: number;
+  plannedSequence: number | null;
+  kind: 'depot_start' | 'pickup' | 'delivery' | 'depot_end';
+  assignmentId: string | null;
+  address: string;
+  city: string | null;
+  postalCode: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  truckAccess: TruckAccessStatus;
+  legDistanceKm: number | null;
+}
+
+export interface TourDetail {
+  id: string;
+  name: string | null;
+  workDate: string;
+  status: TourStatus;
+  plannedDistanceKm: number | null;
+  plannedDurationMin: number | null;
+  baselineDistanceKm: number | null;
+  baselineDurationMin: number | null;
+  optimizedAt: string | null;
+  optimizationError: string | null;
+  stops: TourStop[];
+}
+
+export interface TourListItem {
+  id: string;
+  name: string | null;
+  workDate: string;
+  status: TourStatus;
+  stopCount: number;
+  plannedDistanceKm: number | null;
+  plannedDurationMin: number | null;
+  baselineDistanceKm: number | null;
+  optimizedAt: string | null;
+  optimizationError: string | null;
+  vehiclePlate: string | null;
+  driverName: string | null;
+}
+
+export type OptimizeSkipReason =
+  | 'pickup_before_delivery_violated'
+  | 'stop_not_reachable'
+  | 'invalid_order'
+  | 'invalid_input'
+  | 'engine_unavailable';
+
+export interface OptimizeTourResult {
+  optimized: boolean;
+  /** Arayuz bunu cevirir; `reason` yalnizca tanilama icin */
+  reasonCode?: OptimizeSkipReason;
+  reason?: string;
+  savedKm: number | null;
+  before?: { distanceKm: number | null; durationMinutes: number | null };
+  after?: { distanceKm: number; durationMinutes: number };
+  tour: TourDetail;
+}
+
+export const toursApi = {
+  list: (date: string) =>
+    api.get<{ tours: TourListItem[] }>('/routing/tours', { params: { date } }).then((r) => r.data),
+
+  detail: (id: string) => api.get<TourDetail>(`/routing/tours/${id}`).then((r) => r.data),
+
+  create: (payload: {
+    assignment_ids: string[];
+    work_date: string;
+    name?: string;
+    vehicle_id?: string;
+    driver_id?: string;
+    depot_location_id?: string;
+  }) => api.post<TourDetail>('/routing/tours', payload).then((r) => r.data),
+
+  /** `optimized: false` hata degil — sira korunmus demektir, `reason` sebebi tasir. */
+  optimize: (id: string) =>
+    api.post<OptimizeTourResult>(`/routing/tours/${id}/optimize`).then((r) => r.data),
+
+  release: (id: string) =>
+    api.post<TourDetail>(`/routing/tours/${id}/release`).then((r) => r.data),
+};
+
 export default api;
