@@ -329,6 +329,72 @@ export class ValhallaClient {
     };
   }
 
+  /**
+   * Durak sirasini optimize eder (gezgin satici). Ilk ve son nokta sabit kalir,
+   * aradakiler yeniden siralanir.
+   *
+   * SINIRLARI — olculdu, bilinerek kabul ediliyor: yalnizca sirayi cozer.
+   * Kapasite, zaman penceresi, coklu arac ve surus suresi kisiti YOK; ayrica
+   * ayni goreve ait alisin teslimden once gelmesini de garanti etmez. Bu
+   * yuzden cikti cagiran tarafta dogrulanir. Gercek kisitlar gerektiginde
+   * OR-Tools devreye girecek; bu uc kisitsiz siralama icin ara cozumdur.
+   */
+  async optimizedRoute(
+    points: GeoPoint[],
+    profile: TruckProfile = DEFAULT_TRUCK_PROFILE,
+  ): Promise<RoutingResult<{ order: number[]; summary: RouteSummary }>> {
+    if (points.length < 2) {
+      return { ok: false, error: 'invalid_input', message: 'optimization requires two points' };
+    }
+
+    const result = await this.post<
+      ValhallaRouteResponse & {
+        trip?: { locations?: Array<{ original_index?: number }> };
+      }
+    >('/optimized_route', {
+      locations: points.map((p) => ({ lat: p.latitude, lon: p.longitude })),
+      costing: 'truck',
+      costing_options: { truck: this.toCostingOptions(profile) },
+      units: 'kilometers',
+    });
+
+    if (!result.ok) {
+      return result;
+    }
+
+    const summary = result.value.trip?.summary;
+    const locations = result.value.trip?.locations;
+
+    if (!summary || typeof summary.length !== 'number' || typeof summary.time !== 'number') {
+      return { ok: false, error: 'no_route', message: 'Valhalla returned no trip summary' };
+    }
+    if (!Array.isArray(locations)) {
+      return { ok: false, error: 'no_route', message: 'Valhalla returned no visit order' };
+    }
+
+    const order = locations.map((location) =>
+      typeof location.original_index === 'number' ? location.original_index : -1,
+    );
+    if (order.some((index) => index < 0)) {
+      return { ok: false, error: 'no_route', message: 'Valhalla returned an incomplete visit order' };
+    }
+
+    return {
+      ok: true,
+      value: {
+        order,
+        summary: {
+          distanceKm: summary.length,
+          durationMinutes: summary.time / 60,
+          hasToll: Boolean(summary.has_toll),
+          hasFerry: Boolean(summary.has_ferry),
+          hasHighway: Boolean(summary.has_highway),
+          shape: result.value.trip?.legs?.[0]?.shape ?? null,
+        },
+      },
+    };
+  }
+
   /** Servisin ayakta olup olmadigi — saglik ucu ve tanilama icin. */
   async status(): Promise<RoutingResult<{ version: string }>> {
     const controller = new AbortController();
