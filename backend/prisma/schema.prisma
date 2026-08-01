@@ -446,6 +446,28 @@ enum LocationSource {
   telematics
 }
 
+/// Bir turun yasam dongusu. `optimizing` kisa suren bir gecis durumu:
+/// mesafe matrisi 40 durak icin ~7 sn surdugu icin optimizasyon arka plan
+/// isinde calisir ve bu sirada tur kilitli sayilir.
+enum TourStatus {
+  draft
+  optimizing
+  optimized
+  released
+  in_progress
+  completed
+  cancelled
+}
+
+/// Bir duragin ne icin durdugu. depot_start/depot_end turun baslangic ve
+/// bitis noktasi; arac genelde depoya doner ve bu bacak da maliyete girer.
+enum TourStopKind {
+  depot_start
+  pickup
+  delivery
+  depot_end
+}
+
 /// Bir Location'in koordinatlarinin nereden geldigi.
 enum GeocodeSource {
   photon
@@ -628,6 +650,8 @@ model Tenant {
   dunningNotices        DunningNotice[]
   datevExports          DatevExport[]
   locations             Location[]
+  tours                 Tour[]
+  tourStops             TourStop[]
 }
 
 model TenantBillingProfile {
@@ -724,6 +748,7 @@ model User {
   fleetTripClassifications FleetTrip[] @relation("FleetTripClassifiedBy")
   fleetTripPurposeLogs     FleetTripPurposeLog[] @relation("FleetTripPurposeChangedBy")
   createdAssignments Assignment[]   @relation("AssignmentCreatedBy")
+  createdTours       Tour[]         @relation("TourCreatedBy")
   approvedRequests   Request[]      @relation("ApprovedRequests")
   uploadedDocuments  Document[]     @relation("DocumentUploadedBy")
   notifications      Notification[]
@@ -874,6 +899,7 @@ model Driver {
   tachoInfringements    TachoInfringement[]
   tachoDownloadSchedules TachoDownloadSchedule[]
   equipmentIssuances    EquipmentIssuance[]
+  tours                 Tour[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -991,6 +1017,7 @@ model Vehicle {
   tachoActivities   TachoActivity[]
   tachoInfringements TachoInfringement[]
   tachoDownloadSchedules TachoDownloadSchedule[]
+  tours             Tour[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -1187,11 +1214,123 @@ model Location {
 
   pickupAssignments   Assignment[] @relation("AssignmentPickupLocation")
   deliveryAssignments Assignment[] @relation("AssignmentDeliveryLocation")
+  tourDepots          Tour[]       @relation("TourDepot")
+  tourStops           TourStop[]   @relation("TourStopLocation")
 
   @@unique([tenantId, normalizedHash])
   @@index([tenantId])
   @@index([tenantId, companyId])
   @@index([tenantId, truckAccess])
+}
+
+/// Bir aracin bir gunluk sirali durak dizisi.
+///
+/// Tek alis + tek teslimden olusan uzun yol gorevi bunun ozel durumudur
+/// (iki durak); ayri bir yapiya gerek yok. Assignment kaydi korunur — Tour
+/// onun uzerine gecen bir planlama katmani, yerine gecen bir sey degil.
+model Tour {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  name      String?
+  workDate  DateTime
+  status    TourStatus @default(draft)
+  vehicleId String?
+  vehicle   Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId  String?
+  driver    Driver?    @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
+  /// Turun baslangic/bitis noktasi. Bos ise ilk/son durak esas alinir.
+  depotLocationId String?
+  depotLocation   Location? @relation("TourDepot", fields: [depotLocationId], references: [id], onDelete: SetNull)
+
+  /// Optimizasyon ciktisi. Gerceklesen degerlerle karsilastirmak icin
+  /// saklanir — sapma raporunun tur duzeyindeki karsiligi.
+  plannedDistanceKm  Decimal? @db.Decimal(12, 3)
+  plannedDurationMin Int?
+  plannedFuelLiters  Decimal? @db.Decimal(10, 3)
+  /// Maut tahmini. Valhalla tutar hesaplamadigi icin kendi katmanimiz doldurur;
+  /// hesaplanamadiginda null kalir ve rapor bunu "bilinmiyor" olarak gosterir.
+  plannedTollCents Int?
+
+  /// Optimizasyon oncesi durum — kullaniciya "once/sonra" gostermek icin.
+  /// Optimizasyon kabul edilmezse geri donulecek referans da budur.
+  baselineDistanceKm  Decimal? @db.Decimal(12, 3)
+  baselineDurationMin Int?
+
+  optimizedAt       DateTime?
+  /// Arka plan isinin kimligi; ayni tur icin ikinci is baslatilmasini engeller
+  optimizationJobId String?
+  /// Optimizasyon basarisiz olduysa kullaniciya gosterilecek sebep.
+  /// Ornegin kamyona kapali bir durak tum turu cokertir.
+  optimizationError String?
+
+  createdById String
+  createdBy   User   @relation("TourCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stops TourStop[]
+
+  @@index([tenantId])
+  @@index([tenantId, workDate])
+  @@index([tenantId, vehicleId, workDate])
+  @@index([tenantId, driverId, workDate])
+  @@index([tenantId, status])
+}
+
+/// Turdaki tek bir durak.
+model TourStop {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  tourId String
+  tour   Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+
+  /// Yurutulecek sira. Optimizasyon bunu yeniden yazar.
+  sequence Int
+  /// Kullanicinin girdigi ilk sira — optimizasyonun ne degistirdigini
+  /// gostermek ve gerekirse geri donmek icin korunur.
+  plannedSequence Int?
+
+  kind       TourStopKind
+  locationId String
+  location   Location     @relation("TourStopLocation", fields: [locationId], references: [id], onDelete: Restrict)
+
+  /// Durak bir gorevden turetildiyse baglantisi. Bos olabilir: depo duraklari
+  /// ve serbest eklenen duraklar bir goreve ait degildir.
+  assignmentId String?
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  /// Musterinin kabul ettigi zaman araligi, "HH:MM". Repo genelinde saatler
+  /// string tutuluyor (bkz. Assignment.startTime); ayni desen izlendi.
+  windowStart String?
+  windowEnd   String?
+  /// Durakta gecen sure (bosaltma, evrak). Cok durakli dagitimda planin
+  /// buyuk bolumunu bu olusturur.
+  serviceMinutes Int @default(0)
+
+  weightKg Decimal? @db.Decimal(10, 2)
+  volumeM3 Decimal? @db.Decimal(10, 3)
+
+  /// Optimizasyon ciktisi
+  plannedArrivalAt   DateTime?
+  plannedDepartureAt DateTime?
+  /// Bir onceki duraktan bu duraga olan bacak
+  legDistanceKm Decimal? @db.Decimal(12, 3)
+  legDurationMin Int?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tourId, sequence])
+  @@index([tenantId])
+  @@index([tourId])
+  @@index([tenantId, locationId])
+  @@index([assignmentId])
 }
 
 model Assignment {
@@ -1237,6 +1376,7 @@ model Assignment {
   fleetTrips       FleetTrip[]
   invoiceLines     InvoiceLine[]
   invoiceClaim     InvoiceAssignmentClaim?
+  tourStops        TourStop[]
 
   @@index([tenantId])
   @@index([driverId, workDate])

@@ -65,6 +65,8 @@ export const TENANT_SCOPED_MODELS = new Set([
   'DunningNotice',
   'DatevExport',
   'Location',
+  'Tour',
+  'TourStop',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

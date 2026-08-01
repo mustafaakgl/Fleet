@@ -467,6 +467,20 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.location.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.location.count()),
       }),
+      verifyTenantScopedModel({
+        label: 'Tour', tenantA, tenantB,
+        unscopedCountA: () => base.tour.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.tour.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.tour.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.tour.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'TourStop', tenantA, tenantB,
+        unscopedCountA: () => base.tourStop.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.tourStop.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.tourStop.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.tourStop.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');
