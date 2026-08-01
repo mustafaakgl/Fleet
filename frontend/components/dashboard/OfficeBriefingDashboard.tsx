@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -16,8 +17,8 @@ import {
   tachographApi,
   transportRequestsApi,
 } from '@/lib/api';
-import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 import { RecentMessagesWidget } from '@/components/dashboard/RecentMessagesWidget';
+import { einsatzplanHref } from '@/lib/office-deep-links';
 import type { DashboardSummary, Defect, MissingDepartureCheck, TransportRequest } from '@/lib/types';
 
 function iso(offsetDays = 0): string {
@@ -209,7 +210,11 @@ export function OfficeBriefingDashboard() {
         <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{t('dashboard.v3.office.title')}</h1>
       </header>
 
-      <DailyEinsatzplanTable rows={summary?.todayOperations} loading={loading && !summary} officeMode />
+      <Button variant="outline" size="sm" asChild>
+        <Link href={einsatzplanHref({ office: true, tab: 'heute', view: 'daily-overview' })}>
+          {t('dashboard.openEinsatzplan')}
+        </Link>
+      </Button>
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px]">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

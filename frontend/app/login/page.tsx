@@ -22,6 +22,7 @@ import {
   clearManualLoginRequired,
   markManualLoginRequired,
 } from '@/lib/auth';
+import { isSupportedLanguage } from '@/src/language';
 import './login-page.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-login-inter' });
@@ -47,7 +48,7 @@ const AUTO_LOGIN_PASSWORD = process.env.NEXT_PUBLIC_AUTO_LOGIN_PASSWORD?.trim() 
 
 export default function LoginPage() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [autoLoggingIn, setAutoLoggingIn] = useState(false);
@@ -63,6 +64,10 @@ export default function LoginPage() {
     async function bootstrap() {
       const searchParams =
         typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const requestedLanguage = searchParams?.get('lang');
+      if (isSupportedLanguage(requestedLanguage)) {
+        await i18n.changeLanguage(requestedLanguage);
+      }
       const wantsManualLogin = searchParams?.get('manual') === '1';
 
       if (wantsManualLogin) {
@@ -146,7 +151,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [i18n, router]);
 
   const {
     register,

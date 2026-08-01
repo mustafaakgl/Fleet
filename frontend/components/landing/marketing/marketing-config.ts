@@ -1,5 +1,5 @@
 /** Opens the login form without dev auto-login. */
-export const LOGIN_HREF = '/login?manual=1';
+export const LOGIN_HREF = '/login?manual=1&lang=de';
 export const TRIAL_CTA_HREF = '/login';
 export const TRIAL_CTA_ANCHOR = '#test';
 export const TRIAL_CTA_LINK = '/#test';

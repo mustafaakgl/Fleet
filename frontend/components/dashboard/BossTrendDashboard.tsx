@@ -14,9 +14,9 @@ import {
   YAxis,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DailyEinsatzplanTable } from '@/components/dashboard/DailyEinsatzplanTable';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import { FleetCostCharts } from '@/components/dashboard/FleetCostCharts';
 import { InvoicingSummaryCards } from '@/components/dashboard/InvoicingSummaryCards';
@@ -212,7 +212,11 @@ export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolea
         </header>
       )}
 
-      <DailyEinsatzplanTable rows={summary?.todayOperations} loading={loading && !summary} />
+      <Button variant="outline" size="sm" asChild>
+        <Link href="/assignments?panel=tagesplanung&view=daily-overview">
+          {t('dashboard.openEinsatzplan')}
+        </Link>
+      </Button>
 
       {legacyKpis.length > 0 ? (
         <section className="space-y-3">
