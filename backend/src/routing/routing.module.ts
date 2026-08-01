@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { GeocodingService } from './geocoding.service';
 import { RoutingCacheService } from './routing-cache.service';
 import { RoutingController } from './routing.controller';
+import { TourController } from './tour.controller';
 import { TourDriverController } from './tour-driver.controller';
 import { RouteDeviationService } from './route-deviation.service';
 import { RoutingService } from './routing.service';
@@ -18,7 +19,7 @@ import { ValhallaClient } from './valhalla.client';
  */
 @Module({
   imports: [PrismaModule],
-  controllers: [RoutingController, TourDriverController],
+  controllers: [RoutingController, TourController, TourDriverController],
   providers: [ValhallaClient, GeocodingService, RoutingCacheService, RoutingService, TourService, RouteDeviationService],
   exports: [RoutingService, TourService, RouteDeviationService, ValhallaClient],
 })
