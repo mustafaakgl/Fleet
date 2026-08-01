@@ -335,6 +335,12 @@ export type AssignmentWritePayload = {
   cargo_owner?: string;
   pickup_address?: string;
   delivery_address?: string;
+  /**
+   * Adres oneri listesinden secildiyse dogrulanmis Location kimligi. Doluysa
+   * sunucu adresi yeniden aramaz. Elle yazmada bos kalir.
+   */
+  pickup_location_id?: string;
+  delivery_location_id?: string;
   work_date?: string;
   start_time?: string;
   end_time?: string;

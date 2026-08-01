@@ -299,6 +299,8 @@ async function main() {
         '--test',
         '../frontend/lib/tachograph-repeat.spec.ts',
         '../frontend/lib/tachograph-evidence.spec.ts',
+        '../frontend/lib/decode-polyline.spec.ts',
+        '../frontend/lib/address-format.spec.ts',
       ],
       { cwd: backendDir, inheritStdout: true, inheritStderr: true },
     );

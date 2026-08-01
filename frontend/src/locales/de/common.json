@@ -4070,5 +4070,16 @@
   "invoicing.billingProfile.phone.invalid": "Bitte eine Telefonnummer mit mindestens drei Ziffern angeben.",
   "invoicing.billingProfile.registrationNumber.label": "Handelsregisternummer",
   "invoicing.billingProfile.registrationNumber.help": "Erforderlich, wenn keine USt-IdNr. vorliegt (EN 16931, BR-CO-26). Die Steuernummer allein genügt nicht.",
-  "invoicing.billingProfile.sellerIdentityRequired": "Bitte USt-IdNr. oder Handelsregisternummer hinterlegen, sonst können keine E-Rechnungen erstellt werden."
+  "invoicing.billingProfile.sellerIdentityRequired": "Bitte USt-IdNr. oder Handelsregisternummer hinterlegen, sonst können keine E-Rechnungen erstellt werden.",
+  "address.suggestFooter": "Vorschläge von OpenStreetMap",
+  "address.pickCityFirst": "Bitte zuerst den Ort wählen",
+  "address.verifying": "Adresse wird geprüft …",
+  "address.truckAccess.reachable": "Für Lkw erreichbar",
+  "address.truckAccess.unreachable": "Für Lkw nicht erreichbar – diese Adresse blockiert die Tourenplanung",
+  "address.truckAccess.unverified": "Lkw-Erreichbarkeit nicht geprüft",
+  "address.routeLoading": "Route wird berechnet …",
+  "address.routeSummary": "{{km}} km · ca. {{minutes}} Min.",
+  "address.routeHasToll": "mautpflichtig",
+  "address.routeUnavailable": "Keine Lkw-Route zwischen diesen Adressen gefunden",
+  "address.routeHint": "Beide Adressen auswählen, um die Route zu sehen"
 }

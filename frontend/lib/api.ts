@@ -2539,4 +2539,78 @@ export const fleetTripsApi = {
   ) => api.patch<{ updated: number }>('/fleet/trips/purpose/bulk', payload).then((r) => r.data),
 };
 
+// ─── Routing / Adres ─────────────────────────────────────────────────────────
+
+export type TruckAccessStatus = 'unknown' | 'reachable' | 'unreachable' | 'check_failed';
+
+export interface AddressSuggestion {
+  id: string;
+  label: string;
+  street: string | null;
+  houseNumber: string | null;
+  postalCode: string | null;
+  city: string | null;
+  countryCode: string;
+  latitude: number;
+  longitude: number;
+  kind: 'city' | 'street' | 'address' | 'poi';
+}
+
+export interface PickedLocation {
+  id: string;
+  rawAddress: string;
+  street: string | null;
+  houseNumber: string | null;
+  postalCode: string | null;
+  city: string | null;
+  countryCode: string;
+  latitude: number | null;
+  longitude: number | null;
+  truckAccess: TruckAccessStatus;
+  truckSnapDistanceM: number | null;
+  truckAccessNote: string | null;
+}
+
+export interface RoutePreview {
+  available: boolean;
+  distanceKm?: number;
+  durationMinutes?: number;
+  hasToll?: boolean;
+  /** Valhalla encoded polyline (precision 6) */
+  shape?: string | null;
+  reason?: string;
+}
+
+export const routingApi = {
+  /**
+   * Adres onerileri. Sokak ararken `city` zorunlu — sehirsiz sokak sorgusu
+   * komsu ulkelerden sonuc donduruyor, sunucu bunu 400 ile reddediyor.
+   */
+  suggest: (params: { q: string; kind: 'city' | 'street'; city?: string; limit?: number }) =>
+    api
+      .get<{ suggestions: AddressSuggestion[]; degraded: boolean; reason?: string }>(
+        '/routing/address-suggestions',
+        { params },
+      )
+      .then((r) => r.data),
+
+  /** Secilen adayi Location'a cevirir; koordinat yeniden aranmaz. */
+  pick: (payload: {
+    latitude: number;
+    longitude: number;
+    street?: string;
+    houseNumber?: string;
+    postalCode?: string;
+    city?: string;
+    countryCode?: string;
+    label?: string;
+    companyId?: string;
+  }) => api.post<PickedLocation>('/routing/locations/pick', payload).then((r) => r.data),
+
+  routePreview: (fromLocationId: string, toLocationId: string) =>
+    api
+      .get<RoutePreview>(`/routing/route-preview/${fromLocationId}/${toLocationId}`)
+      .then((r) => r.data),
+};
+
 export default api;

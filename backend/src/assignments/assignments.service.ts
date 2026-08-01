@@ -575,6 +575,9 @@ export class AssignmentsService {
           cargoOwner: dto.cargo_owner,
           pickupAddress: dto.pickup_address,
           deliveryAddress: dto.delivery_address,
+          // Oneri listesinden secildiyse dogrulanmis Location dogrudan baglanir
+          pickupLocationId: dto.pickup_location_id ?? null,
+          deliveryLocationId: dto.delivery_location_id ?? null,
           workDate,
           startTime,
           endTime,

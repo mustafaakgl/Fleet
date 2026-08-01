@@ -14,7 +14,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LicenseComplianceWarningDialog } from '@/components/license-checks/LicenseComplianceWarningDialog';
-import { driversApi, vehiclesApi, companiesApi } from '@/lib/api';
+import { driversApi, vehiclesApi, companiesApi, type PickedLocation } from '@/lib/api';
+import { AddressPickerFields } from '@/components/shared/AddressPickerFields';
+import { AssignmentRoutePreviewMap } from '@/components/shared/AssignmentRoutePreviewMap';
 import {
   createAssignmentWithLicenseAck,
   parseLicenseComplianceError,
@@ -80,6 +82,10 @@ export default function NewAssignmentPage() {
 
   const [pickupAddress, setPickupAddress] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  // Oneri listesinden secilip dogrulanmis adresler. Elle yazilirsa null kalir
+  // ve sunucu adres metninden cozumlemeye duser.
+  const [pickupLocation, setPickupLocation] = useState<PickedLocation | null>(null);
+  const [deliveryLocation, setDeliveryLocation] = useState<PickedLocation | null>(null);
 
   const {
     register,
@@ -166,6 +172,8 @@ export default function NewAssignmentPage() {
           cargo_owner: data.cargo_owner,
           pickup_address: pickup,
           delivery_address: delivery,
+          pickup_location_id: pickupLocation?.id,
+          delivery_location_id: deliveryLocation?.id,
           work_date: data.work_date,
           start_time: data.start_time || undefined,
           end_time: data.end_time || undefined,
@@ -294,26 +302,30 @@ export default function NewAssignmentPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <StructuredAddressFields
+                <AddressPickerFields
                   label={`${t('assignmentForm.pickup')} *`}
                   value={pickupAddress}
                   disabled={refsLoading}
                   onChange={setPickupAddress}
                   onPartsChange={syncPickupAddress}
+                  onLocationChange={setPickupLocation}
                 />
                 {pickupError ? <p className="mt-1 text-xs text-red-600">{t(pickupError)}</p> : null}
               </div>
               <div>
-                <StructuredAddressFields
+                <AddressPickerFields
                   label={`${t('assignmentForm.delivery')} *`}
                   value={deliveryAddress}
                   disabled={refsLoading}
                   onChange={setDeliveryAddress}
                   onPartsChange={syncDeliveryAddress}
+                  onLocationChange={setDeliveryLocation}
                 />
                 {deliveryError ? <p className="mt-1 text-xs text-red-600">{t(deliveryError)}</p> : null}
               </div>
             </div>
+
+            <AssignmentRoutePreviewMap pickup={pickupLocation} delivery={deliveryLocation} />
 
             {routePreview ? (
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">

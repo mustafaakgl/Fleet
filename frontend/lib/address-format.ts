@@ -7,6 +7,17 @@ export interface StructuredAddress {
 
 export const DEFAULT_ADDRESS_COUNTRY = 'Deutschland';
 
+/**
+ * Adres ayristirmasinda ulke adini sehirden ayirmak icin kullanilir.
+ * Bilincli olarak dar tutuldu: burada olmayan bir metin sehir sayilir, yani
+ * gercek bir sehir adi yanlislikla elenmez.
+ */
+const COUNTRY_NAMES = new Set(['deutschland', 'germany', 'de', 'österreich', 'austria', 'at']);
+
+function isCountryName(value: string): boolean {
+  return COUNTRY_NAMES.has(value.trim().toLowerCase());
+}
+
 export function formatStructuredAddress(parts: Partial<StructuredAddress>): string {
   const street = parts.street?.trim() ?? '';
   const zipCode = parts.zipCode?.trim() ?? '';
@@ -32,6 +43,15 @@ export function parseFormattedAddress(formatted: string): StructuredAddress {
   const parts = trimmed.split(',').map((part) => part.trim()).filter(Boolean);
   if (parts.length === 1) {
     return { street: parts[0], zipCode: '', city: '', country: DEFAULT_ADDRESS_COUNTRY };
+  }
+
+  // "Duisb, Deutschland" gibi iki parcali girdide ikinci parca sehir DEGIL ulkedir.
+  // formatStructuredAddress ulkeyi her zaman ekledigi icin, yalnizca sokak
+  // doldurulmus bir adres bu bicimde geri geliyor ve ulke adi sehir alanina
+  // dusuyordu. Sadece bilinen ulke adlariyla sinirli tutuluyor ki gercek bir
+  // sehir adi yanlislikla elenmesin.
+  if (parts.length === 2 && isCountryName(parts[1])) {
+    return { street: parts[0], zipCode: '', city: '', country: parts[1] };
   }
 
   const country =

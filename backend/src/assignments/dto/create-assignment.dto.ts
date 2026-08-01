@@ -44,6 +44,19 @@ export class CreateAssignmentDto {
   @MinLength(1)
   delivery_address!: string;
 
+  /**
+   * Kullanici adresi oneri listesinden sectiyse dogrulanmis Location kimligi.
+   * Doluysa sunucu adresi yeniden aramaz — kesin koordinat zaten kayitli.
+   * Bos ise (elle yazma, ice aktarma) eski cozumleme yolu isler.
+   */
+  @IsOptional()
+  @IsString()
+  pickup_location_id?: string;
+
+  @IsOptional()
+  @IsString()
+  delivery_location_id?: string;
+
   @IsDateString()
   work_date!: string;
 

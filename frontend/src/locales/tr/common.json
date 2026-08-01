@@ -4070,5 +4070,16 @@
   "invoicing.billingProfile.phone.invalid": "Lütfen en az üç rakam içeren bir telefon numarası girin.",
   "invoicing.billingProfile.registrationNumber.label": "Ticaret sicil numarası",
   "invoicing.billingProfile.registrationNumber.help": "KDV numarası yoksa zorunludur (EN 16931, BR-CO-26). Yalnızca vergi numarası yeterli değildir.",
-  "invoicing.billingProfile.sellerIdentityRequired": "KDV numarası veya ticaret sicil numarası girin, aksi halde e-fatura oluşturulamaz."
+  "invoicing.billingProfile.sellerIdentityRequired": "KDV numarası veya ticaret sicil numarası girin, aksi halde e-fatura oluşturulamaz.",
+  "address.suggestFooter": "Öneriler OpenStreetMap'ten",
+  "address.pickCityFirst": "Önce şehir seçin",
+  "address.verifying": "Adres kontrol ediliyor …",
+  "address.truckAccess.reachable": "Kamyonla erişilebilir",
+  "address.truckAccess.unreachable": "Kamyonla erişilemiyor – bu adres tur planlamasını bozar",
+  "address.truckAccess.unverified": "Kamyon erişimi doğrulanmadı",
+  "address.routeLoading": "Rota hesaplanıyor …",
+  "address.routeSummary": "{{km}} km · yaklaşık {{minutes}} dk",
+  "address.routeHasToll": "geçiş ücretli",
+  "address.routeUnavailable": "Bu adresler arasında kamyon rotası bulunamadı",
+  "address.routeHint": "Rotayı görmek için iki adresi de seçin"
 }

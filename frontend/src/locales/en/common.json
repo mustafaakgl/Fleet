@@ -4070,5 +4070,16 @@
   "invoicing.billingProfile.phone.invalid": "Please enter a telephone number with at least three digits.",
   "invoicing.billingProfile.registrationNumber.label": "Commercial register number",
   "invoicing.billingProfile.registrationNumber.help": "Required when there is no VAT ID (EN 16931, BR-CO-26). A tax number alone is not sufficient.",
-  "invoicing.billingProfile.sellerIdentityRequired": "Add a VAT ID or a commercial register number, otherwise no e-invoices can be issued."
+  "invoicing.billingProfile.sellerIdentityRequired": "Add a VAT ID or a commercial register number, otherwise no e-invoices can be issued.",
+  "address.suggestFooter": "Suggestions from OpenStreetMap",
+  "address.pickCityFirst": "Please select a city first",
+  "address.verifying": "Checking address …",
+  "address.truckAccess.reachable": "Reachable by truck",
+  "address.truckAccess.unreachable": "Not reachable by truck – this address will break route planning",
+  "address.truckAccess.unverified": "Truck access not verified",
+  "address.routeLoading": "Calculating route …",
+  "address.routeSummary": "{{km}} km · approx. {{minutes}} min",
+  "address.routeHasToll": "toll road",
+  "address.routeUnavailable": "No truck route found between these addresses",
+  "address.routeHint": "Select both addresses to see the route"
 }
