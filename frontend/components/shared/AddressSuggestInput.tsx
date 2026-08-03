@@ -15,8 +15,10 @@ interface AddressSuggestInputProps {
   city?: string;
   placeholder?: string;
   disabled?: boolean;
-  /** Alan pasifken gosterilecek ipucu, ornegin "once sehir secin" */
+  /** Alan pasifken gosterilecek ipucu, ornegin "sehirle daraltin" */
   hint?: string;
+  /** Dar izgara hucreleri kendi giris stilini verir */
+  inputClassName?: string;
 }
 
 const DEBOUNCE_MS = 400;
@@ -42,6 +44,7 @@ export function AddressSuggestInput({
   placeholder,
   disabled = false,
   hint,
+  inputClassName,
 }: AddressSuggestInputProps) {
   const { t } = useTranslation();
   const listId = useId();
@@ -145,6 +148,7 @@ export function AddressSuggestInput({
           value={value}
           disabled={disabled}
           placeholder={placeholder}
+          className={inputClassName}
           autoComplete="off"
           role="combobox"
           aria-expanded={open}
