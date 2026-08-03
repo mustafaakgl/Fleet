@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Route, Sun, Truck } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Plus, Route, Sun, Truck } from 'lucide-react';
 import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { usePlanningDate } from '@/hooks/usePlanningDate';
 import {
@@ -15,7 +15,7 @@ import {
 } from '@/lib/office-deep-links';
 import { CompanyAssignmentBoard } from './CompanyAssignmentBoard';
 import { groupAssignmentsByCompany } from './companyBoard';
-import { BRAND_LINK, BRAND_TAB_ACTIVE } from '@/lib/brand-colors';
+import { BRAND_BTN_PRIMARY, BRAND_LINK, BRAND_TAB_ACTIVE } from '@/lib/brand-colors';
 import { cn } from '@/lib/utils';
 import { TourPlanningPanel } from '@/components/einsatzplan/TourPlanningPanel';
 import { Tagesplanung } from './Tagesplanung';
@@ -77,25 +77,40 @@ export function EinsatzplanOfficeView() {
   return (
     <div className="space-y-5 bg-surface">
       <div className="rounded-xl border border-slate-300 bg-white shadow-sm">
-        <div className="flex items-stretch gap-1 overflow-x-auto border-b border-slate-300 bg-slate-100 p-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'flex min-w-fit items-center gap-2 rounded-t-md border px-4 py-2 text-sm font-semibold transition-colors',
-                  isActive ? BRAND_TAB_ACTIVE : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {t(tab.labelKey)}
-              </button>
-            );
-          })}
+        <div className="flex items-stretch gap-2 border-b border-slate-300 bg-slate-100 p-2">
+          <div className="flex items-stretch gap-1 overflow-x-auto">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    'flex min-w-fit items-center gap-2 rounded-t-md border px-4 py-2 text-sm font-semibold transition-colors',
+                    isActive ? BRAND_TAB_ACTIVE : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {t(tab.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Outside the scrolling tab strip: the dispatcher had no route to the
+              assignment form from this view at all, so it must stay reachable. */}
+          <Link
+            href="/assignments/new"
+            className={cn(
+              'ml-auto inline-flex shrink-0 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-colors',
+              BRAND_BTN_PRIMARY,
+            )}
+          >
+            <Plus className="h-4 w-4" />
+            {tCommon('assignmentForm.title')}
+          </Link>
         </div>
 
         <div className="p-4 sm:p-5">
