@@ -56,6 +56,9 @@ type QuickAssignState = {
   endTime: string;
   pickupAddress: string;
   deliveryAddress: string;
+  /** Oneriden secildiyse dogrulanmis Location; elle yazilinca null olur */
+  pickupLocationId: string | null;
+  deliveryLocationId: string | null;
   expectedRevenue: number;
 };
 
@@ -382,6 +385,10 @@ export function Tagesplanung({
       endTime: row.assignment.endTime || '15:00',
       pickupAddress: row.assignment.pickupAddress ?? '',
       deliveryAddress: row.assignment.deliveryAddress ?? '',
+      // Duzenlemeye baslarken dogrulama yok: kullanici oneriden secerse dolar,
+      // elle yazarsa null kalir ve sunucu metinden cozumler.
+      pickupLocationId: null,
+      deliveryLocationId: null,
       expectedRevenue: row.assignment.expectedRevenue || 0,
     });
   }, [planningRows]);
@@ -452,6 +459,8 @@ export function Tagesplanung({
       endTime: quickAssign.endTime,
       pickupAddress: quickAssign.pickupAddress,
       deliveryAddress: quickAssign.deliveryAddress,
+      pickupLocationId: quickAssign.pickupLocationId,
+      deliveryLocationId: quickAssign.deliveryLocationId,
       routeName: buildAssignmentRouteName(quickAssign.pickupAddress, quickAssign.deliveryAddress),
       expectedRevenue:
         quickAssign.expectedRevenue > 0
@@ -1053,6 +1062,11 @@ export function Tagesplanung({
                               onChange={(pickupAddress) =>
                                 setQuickAssign((current) => (current ? { ...current, pickupAddress } : current))
                               }
+                              onLocationChange={(location) =>
+                                setQuickAssign((current) =>
+                                  current ? { ...current, pickupLocationId: location?.id ?? null } : current,
+                                )
+                              }
                             />
                           </div>
                           <div>
@@ -1063,6 +1077,11 @@ export function Tagesplanung({
                               value={quickAssign.deliveryAddress}
                               onChange={(deliveryAddress) =>
                                 setQuickAssign((current) => (current ? { ...current, deliveryAddress } : current))
+                              }
+                              onLocationChange={(location) =>
+                                setQuickAssign((current) =>
+                                  current ? { ...current, deliveryLocationId: location?.id ?? null } : current,
+                                )
                               }
                             />
                           </div>

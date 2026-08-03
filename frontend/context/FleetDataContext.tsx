@@ -98,6 +98,9 @@ export interface FleetAssignment {
   cargoOwner?: string;
   pickupAddress?: string;
   deliveryAddress?: string;
+  /** Oneri listesinden secilmis, koordinati dogrulanmis Location kimlikleri */
+  pickupLocationId?: string | null;
+  deliveryLocationId?: string | null;
   startTime: string;
   endTime: string;
   status: PlanningStatus;
@@ -1104,6 +1107,14 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     if (vehicle) patch.vehicle_plate = vehicle;
     if (from) patch.pickup_address = from;
     if (to) patch.delivery_address = to;
+    // Secilmisse dogrulanmis Location gonderilir; sunucu o zaman adresi yeniden
+    // aramaz ve kullanicinin sectigi koordinat korunur.
+    if (assignment.pickupLocationId !== undefined) {
+      patch.pickup_location_id = assignment.pickupLocationId ?? '';
+    }
+    if (assignment.deliveryLocationId !== undefined) {
+      patch.delivery_location_id = assignment.deliveryLocationId ?? '';
+    }
     if (from && to) patch.route_name = assignment.routeName?.trim() || `${from} → ${to}`;
     else if (route) patch.route_name = route;
     if (Number.isFinite(assignment.expectedRevenue)) {
@@ -1144,6 +1155,10 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
         pickup_address: assignment.pickupAddress?.trim() || 'TBD',
         delivery_address: assignment.deliveryAddress?.trim() || 'TBD',
         notes: assignment.notes?.trim() || 'Created from office planning',
+        ...(assignment.pickupLocationId ? { pickup_location_id: assignment.pickupLocationId } : {}),
+        ...(assignment.deliveryLocationId
+          ? { delivery_location_id: assignment.deliveryLocationId }
+          : {}),
       };
 
       if (await shouldWarnLicenseCompliance(parsed.driverId)) {

@@ -24,6 +24,19 @@ export class UpdateAssignmentDto {
   @MinLength(1)
   delivery_address?: string;
 
+  /**
+   * Adres oneri listesinden secildiyse dogrulanmis Location kimligi.
+   * Doluysa koordinat kesindir ve sunucu adresi yeniden aramaz; bos ise
+   * (elle yazma) eski metinden cozumleme yolu isler.
+   */
+  @IsOptional()
+  @IsString()
+  pickup_location_id?: string;
+
+  @IsOptional()
+  @IsString()
+  delivery_location_id?: string;
+
   @IsOptional()
   @IsDateString()
   work_date?: string;

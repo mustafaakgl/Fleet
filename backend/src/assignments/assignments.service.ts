@@ -188,6 +188,22 @@ export class AssignmentsService {
     throw new BadRequestException('vehicle_id or vehicle_plate is required');
   }
 
+  /**
+   * Location'in bu kiraciya ait oldugunu dogrular ve kimligini geri verir.
+   *
+   * PrismaService tenant uzantisi sorguyu zaten kiraciya daraltiyor; bulunamamasi
+   * "baska kiracinin kimligi gonderildi" anlamina da gelir ve ayni sekilde
+   * reddedilir.
+   */
+  private async assertOwnLocation(tx: Prisma.TransactionClient, locationId: string): Promise<string> {
+    const location = await tx.location.findFirst({
+      where: { id: locationId },
+      select: { id: true },
+    });
+    if (!location) throw new BadRequestException({ code: 'unknown_location' });
+    return location.id;
+  }
+
   private getDayRange(date: Date): DayRange {
     const start = new Date(date);
     start.setHours(0, 0, 0, 0);
@@ -751,6 +767,19 @@ export class AssignmentsService {
       if (dto.cargo_owner !== undefined) data.cargoOwner = dto.cargo_owner;
       if (dto.pickup_address !== undefined) data.pickupAddress = dto.pickup_address;
       if (dto.delivery_address !== undefined) data.deliveryAddress = dto.delivery_address;
+      // Oneri listesinden secilmis Location: koordinat zaten dogrulanmis, metinden
+      // yeniden cozumlemeye gerek yok. Kiraci disindaki bir kimlik baglanamasin
+      // diye varligi tenant kapsamli sorguyla dogrulanir.
+      if (dto.pickup_location_id !== undefined) {
+        data.pickupLocation = dto.pickup_location_id
+          ? { connect: { id: await this.assertOwnLocation(tx, dto.pickup_location_id) } }
+          : { disconnect: true };
+      }
+      if (dto.delivery_location_id !== undefined) {
+        data.deliveryLocation = dto.delivery_location_id
+          ? { connect: { id: await this.assertOwnLocation(tx, dto.delivery_location_id) } }
+          : { disconnect: true };
+      }
       if (dto.work_date !== undefined) data.workDate = newDate;
       if (dto.start_time !== undefined) data.startTime = this.normalizeTime(dto.start_time);
       if (dto.end_time !== undefined) data.endTime = this.normalizeTime(dto.end_time);
@@ -794,10 +823,16 @@ export class AssignmentsService {
 
     // Adres degistiyse eski Location bagi gecersiz — kopar ve yeniden cozumle.
     // Location kayitlari gorevler arasinda paylasildigi icin silinmez.
+    // Acikca Location verildiyse metinden yeniden cozumleme yapilmaz — kullanicinin
+    // sectigi koordinati sunucunun tahminiyle degistirmek dogrulamayi cope atar.
     const pickupChanged =
-      dto.pickup_address !== undefined && dto.pickup_address !== existing.pickupAddress;
+      dto.pickup_location_id === undefined &&
+      dto.pickup_address !== undefined &&
+      dto.pickup_address !== existing.pickupAddress;
     const deliveryChanged =
-      dto.delivery_address !== undefined && dto.delivery_address !== existing.deliveryAddress;
+      dto.delivery_location_id === undefined &&
+      dto.delivery_address !== undefined &&
+      dto.delivery_address !== existing.deliveryAddress;
     if (pickupChanged || deliveryChanged) {
       await this.routing.unlinkAssignmentLocations(updated.id, {
         pickup: pickupChanged,
