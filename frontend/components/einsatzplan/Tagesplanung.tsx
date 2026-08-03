@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { Check, ChevronLeft, ChevronRight, Copy, Loader2, Mail, Search, Truck, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, Loader2, Mail, Search, Truck, X } from 'lucide-react';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { createPlanningPlaceholder } from '@/lib/planning-assignment';
 import { vehicleAssignmentsHref } from '@/lib/office-deep-links';
@@ -128,6 +128,8 @@ export function Tagesplanung({
     approveTransportRequest,
     rejectTransportRequest,
     refetchHydrate,
+    assignmentPersistError,
+    clearAssignmentPersistError,
   } = useFleetData();
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const defaultSubTab: PlanSubTab = operationsOnly
@@ -152,26 +154,60 @@ export function Tagesplanung({
   const [internalDate, setInternalDate] = useState<string>(() => planningDateProp ?? getTodayDate());
   const [kpiFilter, setKpiFilter] = useState<KpiFilter>('all');
   const [copying, setCopying] = useState(false);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const saveIndicatorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const planningDate = planningDateProp ?? internalDate;
   const dateNavEnabled = !planningDateProp;
 
   const trackUpdate = useCallback(
     (assignmentId: string, patch: Parameters<typeof updateAssignment>[1]) => {
+      clearAssignmentPersistError();
       updateAssignment(assignmentId, patch);
+      // Yalnizca "kaydediliyor" yazilir. Sonucu asagidaki effect belirler:
+      // once burada 1400 ms'lik bir zamanlayici kosulsuz "kaydedildi" diyordu,
+      // sunucu atamayi reddetse bile.
       setSaveState('saving');
-      if (saveIndicatorTimer.current) clearTimeout(saveIndicatorTimer.current);
-      saveIndicatorTimer.current = setTimeout(() => setSaveState('saved'), 1400);
     },
-    [updateAssignment],
+    [clearAssignmentPersistError, updateAssignment],
   );
 
+  /**
+   * Kaydin gercek sonucunu gostergeye tasir.
+   *
+   * Kalicilastirma 600 ms geciktirilip arka planda yapiliyor; hata gelirse
+   * context iyimser degisikligi geri aliyor ve assignmentPersistError doluyor.
+   * Basari icin ayrica bir sinyal yok, bu yuzden hata gelmediyse kisa bir
+   * bekleyisin ardindan "kaydedildi" gosterilir.
+   */
+  /**
+   * Sunucunun dondurdugu cakisma KODUNU kullanicinin dilinde metne cevirir.
+   * Tanimadigimiz bir sebep gelirse sunucunun mesajina duseriz.
+   */
+  const assignmentConflictMessage = useMemo(() => {
+    if (!assignmentPersistError) return '';
+
+    const conflict = assignmentPersistError.conflict;
+    if (!conflict) return assignmentPersistError.message;
+
+    if (conflict.reason === 'driver_absent') {
+      const absence = conflict.absenceStatus === 'KT' ? t('planning.absence.sick') : t('planning.absence.vacation');
+      return t('planning.saveConflict.driverAbsent', { absence });
+    }
+    return t(`planning.saveConflict.${conflict.reason}`);
+  }, [assignmentPersistError, t]);
+
   useEffect(() => {
-    return () => {
-      if (saveIndicatorTimer.current) clearTimeout(saveIndicatorTimer.current);
-    };
-  }, []);
+    if (saveState !== 'saving' && saveState !== 'error') return;
+
+    if (assignmentPersistError) {
+      setSaveState('error');
+      return;
+    }
+
+    if (saveState !== 'saving') return;
+    const handle = setTimeout(() => setSaveState('saved'), 1400);
+    return () => clearTimeout(handle);
+  }, [assignmentPersistError, saveState]);
+
   const transportStatusLabel = (status: string) =>
     ['approved', 'rejected', 'needs_review', 'pending'].includes(status)
       ? t(`planning.tstatus.${status}`)
@@ -632,15 +668,25 @@ export function Tagesplanung({
               <span
                 className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-medium',
-                  saveState === 'saving' ? 'text-slate-500' : 'text-emerald-600',
+                  saveState === 'saving'
+                    ? 'text-slate-500'
+                    : saveState === 'error'
+                      ? 'text-red-600'
+                      : 'text-emerald-600',
                 )}
               >
                 {saveState === 'saving' ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : saveState === 'error' ? (
+                  <AlertTriangle className="h-3.5 w-3.5" />
                 ) : (
                   <Check className="h-3.5 w-3.5" />
                 )}
-                {saveState === 'saving' ? t('planning.autoSaving') : t('planning.autoSaved')}
+                {saveState === 'saving'
+                  ? t('planning.autoSaving')
+                  : saveState === 'error'
+                    ? assignmentConflictMessage
+                    : t('planning.autoSaved')}
               </span>
             ) : null}
             <button

@@ -127,5 +127,12 @@
   "planning.tstatus.rejected": "Rejected",
   "planning.tstatus.needs_review": "Needs Review",
   "planning.tstatus.pending": "Pending",
-  "office.tab.tours": "Tours"
+  "office.tab.tours": "Tours",
+  "planning.saveConflict.driverAbsent": "Not saved — driver has {{absence}} on this day.",
+  "planning.saveConflict.driver_inactive": "Not saved — driver is not active.",
+  "planning.saveConflict.driver_overlap": "Not saved — driver already has an assignment in this time range.",
+  "planning.saveConflict.vehicle_inactive": "Not saved — vehicle is unavailable.",
+  "planning.saveConflict.vehicle_overlap": "Not saved — vehicle is already booked in this time range.",
+  "planning.absence.vacation": "vacation",
+  "planning.absence.sick": "sick leave"
 }

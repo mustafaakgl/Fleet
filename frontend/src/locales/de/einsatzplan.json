@@ -127,5 +127,12 @@
   "planning.tstatus.rejected": "Abgelehnt",
   "planning.tstatus.needs_review": "Rückfrage",
   "planning.tstatus.pending": "Offen",
-  "office.tab.tours": "Touren"
+  "office.tab.tours": "Touren",
+  "planning.saveConflict.driverAbsent": "Nicht gespeichert — Fahrer hat an diesem Tag {{absence}}.",
+  "planning.saveConflict.driver_inactive": "Nicht gespeichert — Fahrer ist nicht aktiv.",
+  "planning.saveConflict.driver_overlap": "Nicht gespeichert — Fahrer hat bereits einen Einsatz in diesem Zeitraum.",
+  "planning.saveConflict.vehicle_inactive": "Nicht gespeichert — Fahrzeug ist nicht verfügbar.",
+  "planning.saveConflict.vehicle_overlap": "Nicht gespeichert — Fahrzeug ist in diesem Zeitraum bereits eingeplant.",
+  "planning.absence.vacation": "Urlaub",
+  "planning.absence.sick": "Krankmeldung"
 }

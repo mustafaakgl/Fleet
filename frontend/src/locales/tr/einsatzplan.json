@@ -127,5 +127,12 @@
   "planning.tstatus.rejected": "Reddedildi",
   "planning.tstatus.needs_review": "İnceleme gerekli",
   "planning.tstatus.pending": "Beklemede",
-  "office.tab.tours": "Turlar"
+  "office.tab.tours": "Turlar",
+  "planning.saveConflict.driverAbsent": "Kaydedilmedi — sürücü o gün {{absence}}.",
+  "planning.saveConflict.driver_inactive": "Kaydedilmedi — sürücü aktif değil.",
+  "planning.saveConflict.driver_overlap": "Kaydedilmedi — sürücünün bu saat aralığında zaten görevi var.",
+  "planning.saveConflict.vehicle_inactive": "Kaydedilmedi — araç uygun değil.",
+  "planning.saveConflict.vehicle_overlap": "Kaydedilmedi — araç bu saat aralığında zaten planlı.",
+  "planning.absence.vacation": "izinli",
+  "planning.absence.sick": "raporlu"
 }

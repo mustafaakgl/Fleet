@@ -11,10 +11,21 @@ import {
 import type { AssignmentWritePayload } from '@/lib/types';
 import {
   assignmentsApi,
+  getApiErrorMessage,
   leaveRequestsApi,
   morningCheckinsApi,
+  readAssignmentConflict,
   transportRequestsApi,
+  type AssignmentConflictDetail,
 } from '@/lib/api';
+
+/** Sunucu kaydi reddettiginde ekrana tasinan sonuc. */
+export interface AssignmentPersistError {
+  assignmentId: string;
+  /** Bilinen bir cakisma ise kod; degilse null ve `message` kullanilir. */
+  conflict: AssignmentConflictDetail | null;
+  message: string;
+}
 import { LicenseComplianceWarningDialog } from '@/components/license-checks/LicenseComplianceWarningDialog';
 import {
   createAssignmentWithLicenseAck,
@@ -212,6 +223,9 @@ interface FleetDataContextValue {
   isHydrating: boolean;
   hydrateError: string | null;
   refetchHydrate: () => void;
+  /** Sunucu son kaydi reddettiyse dolu gelir; ekran degisikligi geri alinmistir. */
+  assignmentPersistError: AssignmentPersistError | null;
+  clearAssignmentPersistError: () => void;
 }
 
 const FleetDataContext = createContext<FleetDataContextValue | undefined>(undefined);
@@ -659,6 +673,8 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
   const [hydrateKey, setHydrateKey] = useState(0);
   const refetchHydrate = useCallback(() => setHydrateKey((key) => key + 1), []);
   const persistAssignmentTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [assignmentPersistError, setAssignmentPersistError] =
+    useState<AssignmentPersistError | null>(null);
   const [companyEmailDrafts, setCompanyEmailDrafts] = useState<CompanyEmailDraft[]>([]);
   const [driverAssignmentHistory, setDriverAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
   const [vehicleAssignmentHistory, setVehicleAssignmentHistory] = useState<AssignmentHistoryEntry[]>([]);
@@ -1145,16 +1161,43 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     await assignmentsApi.update(assignment.id, patch);
   }
 
-  function scheduleAssignmentPersist(assignment: FleetAssignment) {
+  /**
+   * Kaydi erteler ve BASARISIZLIKTA iyimser degisikligi geri alir.
+   *
+   * Onceden hata yalnizca console'a yaziliyordu: sunucu atamayi reddetse bile
+   * (ornegin surucu o gun izinli) ekranda duruyor ve gosterge "kaydedildi"
+   * diyordu. Disponent isin yapildigini saniyor, sofore hicbir sey gitmiyordu.
+   */
+  function scheduleAssignmentPersist(assignment: FleetAssignment, previous?: FleetAssignment) {
     const existingTimer = persistAssignmentTimersRef.current.get(assignment.id);
     if (existingTimer) clearTimeout(existingTimer);
 
     persistAssignmentTimersRef.current.set(
       assignment.id,
       setTimeout(() => {
-        void persistAssignmentToApi(assignment).catch((error) => {
-          console.error('Failed to persist assignment', error);
-        });
+        void persistAssignmentToApi(assignment)
+          .then(() => {
+            setAssignmentPersistError((current) =>
+              current?.assignmentId === assignment.id ? null : current,
+            );
+          })
+          .catch((error: unknown) => {
+            console.error('Failed to persist assignment', error);
+            // Sunucu reddetti: ekran gercegi yansitmali, aksi halde olmayan bir
+            // atama planlamada durur.
+            if (previous) {
+              setAssignments((current) =>
+                current.map((item) => (item.id === assignment.id ? previous : item)),
+              );
+            } else {
+              setAssignments((current) => current.filter((item) => item.id !== assignment.id));
+            }
+            setAssignmentPersistError({
+              assignmentId: assignment.id,
+              conflict: readAssignmentConflict(error),
+              message: getApiErrorMessage(error, 'Speichern fehlgeschlagen.'),
+            });
+          });
       }, 600),
     );
   }
@@ -1252,7 +1295,7 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
 
       const merged = next.find((item) => item.id === assignmentId);
       if (merged) {
-        scheduleAssignmentPersist(merged);
+        scheduleAssignmentPersist(merged, working.find((item) => item.id === assignmentId));
       }
 
       return next;
@@ -1438,6 +1481,8 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
     isHydrating,
     hydrateError,
     refetchHydrate,
+    assignmentPersistError,
+    clearAssignmentPersistError: () => setAssignmentPersistError(null),
   };
 
   return (

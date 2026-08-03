@@ -22,6 +22,21 @@ import { RoutingService } from '../routing/routing.service';
 
 type DayRange = { start: Date; end: Date };
 
+/**
+ * Atamanin neden kurulamadigini anlatan kod.
+ *
+ * Metin degil kod dondurulur — ceviri arayuzde yapilir. `assignment_conflict`
+ * kodu altinda 400 olarak istemciye gider; arayuz bunu okuyup planlama
+ * ekranindaki iyimser degisikligi geri alir ve sebebi kullanicinin dilinde
+ * gosterir.
+ */
+export type AssignmentConflict =
+  | { reason: 'driver_inactive'; driverStatus: DriverStatus }
+  | { reason: 'driver_absent'; absenceStatus: CalendarStatus }
+  | { reason: 'driver_overlap' }
+  | { reason: 'vehicle_inactive'; vehicleStatus: VehicleStatus }
+  | { reason: 'vehicle_overlap' };
+
 export function mapAssignmentTransactionError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
     throw new ConflictException('Assignment conflicts with another concurrent request');
@@ -214,6 +229,13 @@ export class AssignmentsService {
     return aStart < bEnd && bStart < aEnd;
   }
 
+  /**
+   * Cakisma sebebini KOD olarak dondurur, metin olarak degil.
+   *
+   * Cevirisi arayuzde yapilir: serbest metin dondurmek Almanca ekranda Ingilizce
+   * uyari cikariyordu. Detay alanlari (izin turu, arac durumu) koda ek olarak
+   * gider ki mesaj "Fahrer hat an diesem Tag Urlaub" kadar somut olabilsin.
+   */
   private async validateAvailability(
     tx: Prisma.TransactionClient,
     input: {
@@ -224,7 +246,7 @@ export class AssignmentsService {
       endTime?: string | null;
       excludeAssignmentId?: string;
     },
-  ): Promise<string | null> {
+  ): Promise<AssignmentConflict | null> {
     const { start, end } = this.getDayRange(input.date);
 
     const driver = await tx.driver.findUnique({
@@ -232,7 +254,9 @@ export class AssignmentsService {
       select: { id: true, status: true },
     });
     if (!driver) throw new NotFoundException('Driver not found');
-    if (driver.status !== DriverStatus.active) return 'Driver must be active';
+    if (driver.status !== DriverStatus.active) {
+      return { reason: 'driver_inactive', driverStatus: driver.status };
+    }
 
     const driverBlockedByCalendar = await tx.calendarEvent.findFirst({
       where: {
@@ -243,7 +267,7 @@ export class AssignmentsService {
       select: { id: true, status: true },
     });
     if (driverBlockedByCalendar) {
-      return `Driver has ${driverBlockedByCalendar.status} on selected date`;
+      return { reason: 'driver_absent', absenceStatus: driverBlockedByCalendar.status };
     }
 
     const driverAssignments = await tx.assignment.findMany({
@@ -259,7 +283,7 @@ export class AssignmentsService {
       this.timesOverlap(input.startTime, input.endTime, row.startTime, row.endTime),
     );
     if (driverOverlap) {
-      return 'Driver already has an overlapping assignment on selected date/time';
+      return { reason: 'driver_overlap' };
     }
 
     const vehicle = await tx.vehicle.findUnique({
@@ -268,7 +292,7 @@ export class AssignmentsService {
     });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
     if (vehicle.status !== VehicleStatus.active) {
-      return `Vehicle is not available due to status ${vehicle.status}`;
+      return { reason: 'vehicle_inactive', vehicleStatus: vehicle.status };
     }
 
     const vehicleAssignments = await tx.assignment.findMany({
@@ -284,7 +308,7 @@ export class AssignmentsService {
       this.timesOverlap(input.startTime, input.endTime, row.startTime, row.endTime),
     );
     if (vehicleOverlap) {
-      return 'Vehicle already has an overlapping assignment on selected date/time';
+      return { reason: 'vehicle_overlap' };
     }
 
     return null;
@@ -542,7 +566,7 @@ export class AssignmentsService {
         startTime,
         endTime,
       });
-      if (conflict) throw new BadRequestException(conflict);
+      if (conflict) throw new BadRequestException({ code: 'assignment_conflict', ...conflict });
 
       const { start, end } = this.getDayRange(workDate);
 
@@ -712,7 +736,7 @@ export class AssignmentsService {
           endTime: dto.end_time !== undefined ? this.normalizeTime(dto.end_time) : existing.endTime,
           excludeAssignmentId: id,
         });
-        if (conflict) throw new BadRequestException(conflict);
+        if (conflict) throw new BadRequestException({ code: 'assignment_conflict', ...conflict });
       }
 
       if (dateChanged) {

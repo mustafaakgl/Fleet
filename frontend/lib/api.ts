@@ -207,6 +207,54 @@ api.interceptors.response.use(
   },
 );
 
+export type AssignmentConflictReason =
+  | 'driver_inactive'
+  | 'driver_absent'
+  | 'driver_overlap'
+  | 'vehicle_inactive'
+  | 'vehicle_overlap';
+
+export interface AssignmentConflictDetail {
+  reason: AssignmentConflictReason;
+  /** UT (Urlaub) veya KT (Krank) — `driver_absent` icin */
+  absenceStatus?: string;
+  driverStatus?: string;
+  vehicleStatus?: string;
+}
+
+const ASSIGNMENT_CONFLICT_REASONS: ReadonlySet<string> = new Set([
+  'driver_inactive',
+  'driver_absent',
+  'driver_overlap',
+  'vehicle_inactive',
+  'vehicle_overlap',
+]);
+
+/**
+ * Sunucunun reddettigi atamanin sebebini KOD olarak okur.
+ *
+ * Sunucu bilincli olarak metin degil kod donuyor; ceviri burada, kullanicinin
+ * dilinde yapilir. Tanimadigimiz bir sekil gelirse null doner ve cagiran taraf
+ * genel hata mesajina duser.
+ */
+export function readAssignmentConflict(error: unknown): AssignmentConflictDetail | null {
+  if (!axios.isAxiosError(error)) return null;
+
+  const data = error.response?.data as
+    | { code?: string; reason?: string; absenceStatus?: string; driverStatus?: string; vehicleStatus?: string }
+    | undefined;
+
+  if (data?.code !== 'assignment_conflict') return null;
+  if (!data.reason || !ASSIGNMENT_CONFLICT_REASONS.has(data.reason)) return null;
+
+  return {
+    reason: data.reason as AssignmentConflictReason,
+    absenceStatus: data.absenceStatus,
+    driverStatus: data.driverStatus,
+    vehicleStatus: data.vehicleStatus,
+  };
+}
+
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     if (!error.response) {
