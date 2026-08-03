@@ -161,17 +161,20 @@ export function AddressSuggestInput({
           }}
         />
         {loading ? (
-          <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-500" />
         ) : null}
       </div>
 
-      {showHint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      {showHint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
 
       {open && suggestions.length > 0 ? (
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover py-1 shadow-md"
+          // Acik renkler bilincli: `bg-popover` bu projede tanimsiz ve liste
+          // seffaf kaliyordu — arkadaki PK/sehir alanlari icinden okunuyordu.
+          // min-w: dar izgara hucresinde satirlar sikismasin.
+          className="absolute z-50 mt-1 max-h-64 w-full min-w-[260px] divide-y divide-slate-100 overflow-auto rounded-md border border-slate-300 bg-white shadow-lg"
         >
           {suggestions.map((suggestion, index) => {
             const streetLine = [suggestion.street, suggestion.houseNumber]
@@ -187,8 +190,8 @@ export function AddressSuggestInput({
               <li key={suggestion.id} role="option" aria-selected={index === activeIndex}>
                 <button
                   type="button"
-                  className={`w-full px-3 py-2 text-left text-sm hover:bg-accent ${
-                    index === activeIndex ? 'bg-accent' : ''
+                  className={`w-full px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-100 ${
+                    index === activeIndex ? 'bg-slate-100' : 'bg-white'
                   }`}
                   // onMouseDown: input'un blur olup listeyi kapatmasindan once secim yakalanmali
                   onMouseDown={(event) => {
@@ -206,7 +209,7 @@ export function AddressSuggestInput({
                     ) : null}
                   </span>
                   {regionLine ? (
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    <span className="mt-0.5 block truncate text-xs text-slate-500">
                       {regionLine}
                     </span>
                   ) : null}
@@ -214,7 +217,7 @@ export function AddressSuggestInput({
               </li>
             );
           })}
-          <li className="border-t px-3 pt-1 text-[11px] text-muted-foreground">
+          <li className="bg-white px-3 py-1.5 text-[11px] text-slate-500">
             {t('address.suggestFooter')}
           </li>
         </ul>

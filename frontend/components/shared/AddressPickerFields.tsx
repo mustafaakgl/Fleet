@@ -211,7 +211,7 @@ export function AddressPickerFields({
       </div>
 
       {verifying ? (
-        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+        <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {t('address.verifying')}
         </p>
