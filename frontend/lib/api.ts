@@ -2554,6 +2554,8 @@ export interface AddressSuggestion {
   latitude: number;
   longitude: number;
   kind: 'city' | 'street' | 'address' | 'poi';
+  /** `history`: bu kiracinin daha once kullandigi, koordinati dogrulanmis adres */
+  source?: 'history' | 'geocoder';
 }
 
 export interface PickedLocation {

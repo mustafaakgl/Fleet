@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GeocodeSource, type Location, Prisma, TruckAccessStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { addressHash } from './core/address-normalize.util';
+import { readRegionAnchor } from './core/geo-distance.util';
 import {
   DEFAULT_TRUCK_PROFILE,
   type ElevationProfile,
@@ -11,7 +12,11 @@ import {
   type RoutingResult,
   type TruckProfile,
 } from './core/routing.types';
-import { type AddressSuggestion, GeocodingService } from './geocoding.service';
+import {
+  type AddressSuggestion,
+  buildLabel as formatSuggestionLabel,
+  GeocodingService,
+} from './geocoding.service';
 import { RoutingCacheService } from './routing-cache.service';
 import { ValhallaClient } from './valhalla.client';
 
@@ -354,26 +359,121 @@ export class RoutingService {
    * Photon kullaniliyor ve ayni on ekler surekli tekrar ediyor ("Duis", "Duisb",
    * "Duisbu"...), isabet orani cok yuksek oluyor.
    */
+  /**
+   * Adresleri once bu kiracinin kendi gecmisinde, sonra geocoder'da arar.
+   *
+   * Neden gecmis once: bir filo ayni adreslere tekrar tekrar gidiyor. Gecmisten
+   * gelen kayitta koordinat zaten secilmis ve kamyon erisimi dogrulanmis
+   * durumda — geocoder'in en iyi tahmininden her zaman daha iyi.
+   *
+   * DIKKAT: onbellek anahtari kiraci icermiyor ve Redis tum kiracilar arasinda
+   * paylasiliyor. Bu yuzden onbellege YALNIZCA geocoder sonucu yazilir; gecmis
+   * sonuclari her istekte veritabanindan okunur. Aksi halde bir kiracinin musteri
+   * adresleri digerinin oneri listesinde gorunurdu.
+   */
   async suggestAddresses(params: {
     query: string;
     kind: 'city' | 'street';
     city?: string | null;
     limit?: number;
   }): Promise<RoutingResult<AddressSuggestion[]>> {
+    const limit = params.limit ?? 8;
+    const history =
+      params.kind === 'street' ? await this.suggestFromHistory(params.query, params.city, limit) : [];
+
     const key = `suggest:${params.kind}:${(params.city ?? '').toLowerCase()}:${params.query
       .trim()
-      .toLowerCase()}:${params.limit ?? 8}`;
+      .toLowerCase()}:${limit}`;
 
-    const cached = await this.cache.get<AddressSuggestion[]>(key);
-    if (cached) {
-      return { ok: true, value: cached };
+    let remote = await this.cache.get<AddressSuggestion[]>(key);
+    if (!remote) {
+      const result = await this.geocoding.suggest({ ...params, limit, bias: readRegionAnchor() });
+      if (!result.ok) {
+        // Geocoder coktu ama gecmis calisiyor — elimizdekini vermek bos liste
+        // dondurmekten iyi.
+        return history.length > 0 ? { ok: true, value: history } : result;
+      }
+      remote = result.value;
+      await this.cache.set(key, remote);
     }
 
-    const result = await this.geocoding.suggest(params);
-    if (result.ok) {
-      await this.cache.set(key, result.value);
+    const seen = new Set(history.map((item) => item.id));
+    const merged = [...history];
+    for (const suggestion of remote) {
+      if (seen.has(suggestion.id)) continue;
+      seen.add(suggestion.id);
+      merged.push(suggestion);
     }
-    return result;
+
+    return { ok: true, value: merged.slice(0, limit) };
+  }
+
+  /**
+   * Kiracinin daha once kullandigi adreslerde arar.
+   *
+   * Yalnizca koordinati olan kayitlar dondurulur: koordinatsiz bir gecmis kaydi
+   * secilirse sunucu yine adres metninden cozumlemeye duser ve gecmisten
+   * secmenin tek avantaji kaybolur.
+   */
+  private async suggestFromHistory(
+    query: string,
+    city: string | null | undefined,
+    limit: number,
+  ): Promise<AddressSuggestion[]> {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+
+    const cityFilter = city?.trim();
+
+    const rows = await this.prisma.location.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+        AND: [
+          {
+            OR: [
+              { street: { contains: trimmed, mode: 'insensitive' } },
+              { label: { contains: trimmed, mode: 'insensitive' } },
+            ],
+          },
+          ...(cityFilter ? [{ city: { contains: cityFilter, mode: 'insensitive' as const } }] : []),
+        ],
+      },
+      // Son kullanilan once: tekrar eden musteriler listenin basinda kalir
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+
+    return rows.flatMap((row) => {
+      if (row.latitude === null || row.longitude === null) return [];
+
+      const street = row.street;
+      const dedupeKey = [street, row.postalCode, row.city]
+        .map((value) => (value ?? '').toLowerCase())
+        .join('|');
+
+      return [
+        {
+          id: dedupeKey,
+          label: formatSuggestionLabel({
+            name: row.label,
+            street,
+            houseNumber: row.houseNumber,
+            postalCode: row.postalCode,
+            city: row.city,
+          }),
+          street,
+          houseNumber: row.houseNumber,
+          postalCode: row.postalCode,
+          city: row.city,
+          countryCode: row.countryCode,
+          latitude: Number(row.latitude),
+          longitude: Number(row.longitude),
+          kind: 'address' as const,
+          source: 'history' as const,
+        },
+      ];
+    });
   }
 
   /**

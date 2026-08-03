@@ -11,8 +11,9 @@ export class AddressSuggestQueryDto {
   kind!: 'city' | 'street';
 
   /**
-   * Sokak aramasi icin zorunlu. Sehirsiz sokak sorgusu guvenilir degil —
-   * "Bahnhofstr" sehirsiz sorguda Zürich donduruyor.
+   * Opsiyonel daraltici. Verilirse sorgu metnine katilir ve sonuc keskinlesir
+   * ("Bahnhofstr" sehirsiz Zürich donduruyor, "Bahnhofstr Köln" dogru adaylari).
+   * Bossa serbest arama yapilir; siralamayi cagiran taraf ustlenir.
    */
   @IsOptional()
   @IsString()

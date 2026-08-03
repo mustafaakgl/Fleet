@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { isGeocodeFallbackConsistent } from './core/geocode-consistency.util';
+import { haversineMeters } from './core/geo-distance.util';
 import type { RoutingResult } from './core/routing.types';
 
 /** Photon (Komoot) GeoJSON yaniti — kullandigimiz alanlar. */
@@ -61,6 +62,12 @@ export interface AddressSuggestion {
   latitude: number;
   longitude: number;
   kind: SuggestionKind;
+  /**
+   * `history` = an address this tenant has used before, with coordinates and truck
+   * access already verified. The UI marks these so the dispatcher can trust them
+   * over a fresh geocoder guess.
+   */
+  source?: 'history' | 'geocoder';
 }
 
 function classifyKind(osmKey?: string, osmValue?: string): SuggestionKind {
@@ -76,7 +83,8 @@ function classifyKind(osmKey?: string, osmValue?: string): SuggestionKind {
   return 'poi';
 }
 
-function buildLabel(parts: {
+/** Tek satirlik oneri etiketi. Gecmis kayitlari da ayni bicimi kullanmali. */
+export function buildLabel(parts: {
   name?: string | null;
   street?: string | null;
   houseNumber?: string | null;
@@ -186,21 +194,34 @@ export class GeocodingService {
    * Yazarken gosterilecek adres onerileri.
    *
    * Tasarim kararlari olcume dayali:
-   * - Sokak ararken sehir SORGU METNINE katilir. `lat/lon` konum bias'i yetersiz
-   *   kaliyor: Duisburg'a bias'lanmis "Hauptstr" sorgusu Odenhausen donduruyor.
-   *   "Bahnhofstraße Köln" ise dogru sonucu veriyor.
+   * - Sehir VERILIRSE sorgu metnine katilir; bu acik ara en iyi sonucu veriyor.
+   *   "Bahnhofstraße Köln" dogru iki adayi donduruyor.
    * - Posta kodu sorguya katilmaz: "Hauptstraße 47059" Kranenburg/Rheurdt
    *   donduruyor, posta kodu bulanik metin gibi islem goruyor.
    * - Photon ayni caddeyi birden cok kez donduruyor; tekrarlar ayiklanir.
    * - osm_tag KATI filtre degil, yumusak tercih; istenen turle eslesmeyen
    *   sonuclar ayrica elenir.
+   *
+   * Sehirsiz sokak aramasi eskiden REDDEDILIYORDU, cunku "Bahnhofstr" sehirsiz
+   * sorguda Zürich donduruyor ve Photon'un kendi `lat/lon` bias'i yetmiyor
+   * (Duisburg'a bias'lanmis "Hauptstr" -> Odenhausen). Karar degisti: disponenti
+   * once sehir yazmaya zorlamak her adreste iki alan doldurtuyordu. Belirsizligi
+   * ONLEMEK yerine GORUNUR kiliyoruz — etiket posta kodu ve sehri tasidigi icin
+   * "8001 Zürich, CH" satiri zaten secilmez.
+   *
+   * Sonuc duvarini onlemek icin iki onlem: cagiran taraf once kendi adres
+   * gecmisini arar, ve sehirsiz sorguda sonuclari `bias` noktasina uzakliga gore
+   * BIZ siralariz. Bu Photon'un siralamasina guvenmek degil — sonuc kumesini
+   * aldiktan sonra kendi olcutumuzle diziyoruz.
    */
   async suggest(params: {
     query: string;
     kind: 'city' | 'street';
-    /** Sokak ararken zorunlu sayilir — sehirsiz sokak sorgusu guvenilir degil */
+    /** Verilirse sorgu metnine katilir ve sonuc keskinlesir; zorunlu degil */
     city?: string | null;
     limit?: number;
+    /** Sehirsiz sokak sorgusunda siralama capasi (isletme bolgesi) */
+    bias?: { latitude: number; longitude: number } | null;
   }): Promise<RoutingResult<AddressSuggestion[]>> {
     const trimmed = params.query.trim();
     if (trimmed.length < 2) {
@@ -208,16 +229,7 @@ export class GeocodingService {
     }
 
     const city = params.city?.trim() ?? '';
-
-    // Sehirsiz sokak aramasi bilincli olarak reddediliyor. Olculdu: "Bahnhofstr"
-    // sehirsiz sorguda Zürich donduruyor, "Bahnhofstr Köln" ise dogru iki adayi.
-    // Bos liste dondurmek, kullaniciya yanlis sehirdeki bir caddeyi sectirmekten
-    // iyidir — arayuz once sehir secilmesini istemeli.
-    if (params.kind === 'street' && !city) {
-      return { ok: false, error: 'invalid_input', message: 'city_required_for_street_search' };
-    }
-
-    const queryText = params.kind === 'street' ? `${trimmed} ${city}` : trimmed;
+    const queryText = params.kind === 'street' && city ? `${trimmed} ${city}` : trimmed;
 
     const search = new URLSearchParams({
       q: queryText,
@@ -301,7 +313,18 @@ export class GeocodingService {
           latitude,
           longitude,
           kind,
+          source: 'geocoder',
         });
+      }
+
+      // Sadece sehirsiz sokak sorgusunda: sorgu metni ayirt edici olmadigi icin
+      // Photon'un sirasi rastgeleye yakin. Sehir verilmisse sorgu zaten keskin,
+      // karistirmiyoruz.
+      if (params.kind === 'street' && !city && params.bias) {
+        const anchor = params.bias;
+        suggestions.sort(
+          (left, right) => haversineMeters(anchor, left) - haversineMeters(anchor, right),
+        );
       }
 
       return { ok: true, value: suggestions };

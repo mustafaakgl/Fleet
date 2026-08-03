@@ -11,7 +11,7 @@ interface AddressSuggestInputProps {
   onValueChange: (next: string) => void;
   onPick: (suggestion: AddressSuggestion) => void;
   kind: 'city' | 'street';
-  /** Sokak aramasi icin zorunlu; bossa arama yapilmaz */
+  /** Opsiyonel daraltici; bossa serbest arama yapilir */
   city?: string;
   placeholder?: string;
   disabled?: boolean;
@@ -55,9 +55,8 @@ export function AddressSuggestInput({
 
   const searchable = useMemo(() => {
     if (disabled) return false;
-    if (kind === 'street' && !city?.trim()) return false;
     return value.trim().length >= MIN_CHARS;
-  }, [city, disabled, kind, value]);
+  }, [disabled, value]);
 
   useEffect(() => {
     if (suppressNextSearch.current) {
@@ -135,7 +134,9 @@ export function AddressSuggestInput({
     }
   }
 
-  const showHint = Boolean(hint) && kind === 'street' && !city?.trim();
+  // Sehir artik zorunlu degil; ipucu yalnizca hic yazilmamisken ve alan bossa
+  // gosterilir — "isterseniz sehirle daralt" anlaminda, engel olarak degil.
+  const showHint = Boolean(hint) && kind === 'street' && !city?.trim() && value.trim().length === 0;
 
   return (
     <div ref={containerRef} className="relative">
@@ -168,24 +169,47 @@ export function AddressSuggestInput({
           role="listbox"
           className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover py-1 shadow-md"
         >
-          {suggestions.map((suggestion, index) => (
-            <li key={suggestion.id} role="option" aria-selected={index === activeIndex}>
-              <button
-                type="button"
-                className={`w-full px-3 py-2 text-left text-sm hover:bg-accent ${
-                  index === activeIndex ? 'bg-accent' : ''
-                }`}
-                // onMouseDown: input'un blur olup listeyi kapatmasindan once secim yakalanmali
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  choose(suggestion);
-                }}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
-                {suggestion.label}
-              </button>
-            </li>
-          ))}
+          {suggestions.map((suggestion, index) => {
+            const streetLine = [suggestion.street, suggestion.houseNumber]
+              .filter(Boolean)
+              .join(' ');
+            // Ikinci satir sehri ve ulkeyi tasir: sehir artik zorunlu olmadigi
+            // icin yanlis sehirdeki bir cadde ancak burada ayirt edilebilir.
+            const regionLine = [suggestion.postalCode, suggestion.city, suggestion.countryCode]
+              .filter(Boolean)
+              .join(' · ');
+
+            return (
+              <li key={suggestion.id} role="option" aria-selected={index === activeIndex}>
+                <button
+                  type="button"
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-accent ${
+                    index === activeIndex ? 'bg-accent' : ''
+                  }`}
+                  // onMouseDown: input'un blur olup listeyi kapatmasindan once secim yakalanmali
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    choose(suggestion);
+                  }}
+                  onMouseEnter={() => setActiveIndex(index)}
+                >
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-medium">{streetLine || suggestion.label}</span>
+                    {suggestion.source === 'history' ? (
+                      <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                        {t('address.fromHistory')}
+                      </span>
+                    ) : null}
+                  </span>
+                  {regionLine ? (
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {regionLine}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
           <li className="border-t px-3 pt-1 text-[11px] text-muted-foreground">
             {t('address.suggestFooter')}
           </li>
