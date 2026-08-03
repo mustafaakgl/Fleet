@@ -110,6 +110,11 @@ const ALL_ITEMS: Record<string, NavItem> = {
     labelKey: 'nav.fleetFuelAnalytics',
     icon: Droplets,
   },
+  fleetFuelCard: {
+    href: '/fleet-analytics/fuel-card',
+    labelKey: 'nav.fleetFuelCard',
+    icon: CreditCard,
+  },
   fleetTripHistory: {
     href: '/fleet-analytics/trips',
     labelKey: 'nav.fleetTripHistory',
@@ -209,6 +214,7 @@ const TELEMATIK_ITEMS: NavEntry[] = [
   item('liveTracking'),
   item('fleetTripHistory'),
   item('fleetFuelAnalytics'),
+  item('fleetFuelCard'),
   item('telematicsDriverScores'),
   item('telematicsVehicleHealth'),
   item('devices'),
@@ -339,16 +345,12 @@ const IMPORT_ITEM: NavItem = {
   icon: Upload,
 };
 
+/** Stripe subscription for our own product — labelled distinctly from the
+ *  "Abrechnung" section it sits in, so it does not read as a duplicate. */
 const BILLING_ITEM: NavItem = {
   href: '/billing',
-  labelKey: 'nav.billing',
+  labelKey: 'nav.billing.subscription',
   icon: CreditCard,
-};
-
-const GETTING_STARTED_ITEM: NavItem = {
-  href: '/getting-started',
-  labelKey: 'nav.gettingStarted',
-  icon: Rocket,
 };
 
 /** Outgoing invoices — separate from the Stripe subscription page at /billing. */
@@ -356,6 +358,12 @@ const INVOICING_ITEM: NavItem = {
   href: '/invoicing',
   labelKey: 'nav.invoicing',
   icon: Receipt,
+};
+
+const GETTING_STARTED_ITEM: NavItem = {
+  href: '/getting-started',
+  labelKey: 'nav.gettingStarted',
+  icon: Rocket,
 };
 
 export function getNavigationForRole(role: Role): NavGroup[] {
@@ -367,7 +375,15 @@ export function getNavigationForRole(role: Role): NavGroup[] {
   if (role === 'admin' || role === 'boss' || role === 'accounting') {
     const verwaltungGroup = groups.find((g) => g.id === 'verwaltung');
     if (verwaltungGroup) {
-      verwaltungGroup.items.push(INVOICING_ITEM);
+      // Accounting reaches outgoing invoices through here. The Stripe subscription
+      // page is admin-only and shares the section rather than sitting loose in the group.
+      const billingSection: NavSection = {
+        id: 'billing',
+        labelKey: 'nav.billing',
+        icon: CreditCard,
+        items: role === 'admin' ? [BILLING_ITEM, INVOICING_ITEM] : [INVOICING_ITEM],
+      };
+      verwaltungGroup.items.push(billingSection);
     }
   }
 
@@ -376,7 +392,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
     if (verwaltungGroup) {
       if (role === 'admin') {
         verwaltungGroup.items.unshift(GETTING_STARTED_ITEM);
-        verwaltungGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM, BILLING_ITEM);
+        verwaltungGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM);
       }
       verwaltungGroup.items.push(AUDIT_ITEM);
     }

@@ -142,6 +142,22 @@ const statusColors: Record<Exclude<CalendarStatus, ''>, string> = {
   'unent.Fehlen': 'bg-red-600 text-red-700',
 };
 
+function getStatusColorClasses(status: CalendarStatus | undefined): string {
+  if (!status) {
+    return 'bg-slate-200 text-slate-300';
+  }
+
+  return statusColors[status as Exclude<CalendarStatus, ''>] ?? 'bg-slate-200 text-slate-300';
+}
+
+function getStatusBgClass(status: CalendarStatus | undefined): string {
+  return getStatusColorClasses(status).split(' ')[0] ?? 'bg-slate-200';
+}
+
+function getStatusTextClass(status: CalendarStatus | undefined): string {
+  return getStatusColorClasses(status).split(' ')[1] ?? 'text-slate-300';
+}
+
 const absenceTypes: AbsenceType[] = [
   { id: 'su-1', bezeichnung: 'Sonderurlaub', abkuerzung: 'SU', gutschrift: true, allowOvertime: false, antragstyp: 'Workflow (laut Zuständigkeiten)', aktiv: true },
   { id: 'pu', bezeichnung: 'Pflegefreistellung', abkuerzung: 'PU', gutschrift: true, allowOvertime: false, antragstyp: 'Workflow (laut Zuständigkeiten)', aktiv: true },
@@ -762,7 +778,7 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                           const entry = getMergedEntry(employee.id, day);
                           const currentDay = day === 21 && month === 4 && year === 2026;
                           const weekend = isWeekend(year, month, day);
-                          const colorClass = entry.status ? statusColors[entry.status as Exclude<CalendarStatus, ''>] : 'bg-slate-200 text-slate-300';
+                          const colorClass = getStatusColorClasses(entry.status);
                           const shouldDimForFocus = Boolean(
                             statusFocus && entry.status && entry.status !== statusFocus,
                           );
@@ -827,14 +843,14 @@ export function Abteilungskalender({ statusFocus }: { statusFocus?: 'UT' | 'KT' 
                               <div className="relative flex min-h-[40px] flex-col items-center justify-center rounded-sm text-[11px] font-semibold">
                                 <CalendarDayHoverPlus />
                                 <span
-                                  className={`${entry.status ? colorClass.split(' ')[1] : 'text-slate-300'} ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${
+                                  className={`${entry.status ? getStatusTextClass(entry.status) : 'text-slate-300'} ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${
                                     !entry.status ? 'group-hover:opacity-0' : ''
                                   }`}
                                 >
                                   {entry.status}
                                 </span>
                                 <span
-                                  className={`mt-1 h-1 w-6 rounded-full ${colorClass.split(' ')[0]} ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${
+                                  className={`mt-1 h-1 w-6 rounded-full ${getStatusBgClass(entry.status)} ${CALENDAR_DAY_CELL_CONTENT_HOVER} ${
                                     !entry.status ? 'group-hover:opacity-0' : ''
                                   }`}
                                 />

@@ -2,37 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
-import {
-  AlertTriangle,
-  Bell,
-  Building2,
-  CalendarDays,
-  ChevronDown,
-  ClipboardCheck,
-  ClipboardList,
-  Clock,
-  CreditCard,
-  Droplets,
-  FileText,
-  LayoutDashboard,
-  ListTodo,
-  LogOut,
-  MapPinned,
-  Menu,
-  MessageSquare,
-  Rocket,
-  Route,
-  Scale,
-  ScrollText,
-  Shield,
-  Truck,
-  Upload,
-  Users,
-  Wrench,
-  X,
-  Cpu,
-} from 'lucide-react';
+// Nav entry icons come from navigation.ts; only the shell's own icons live here.
+import { Building2, ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -50,73 +21,11 @@ import {
   type NavItem,
   type NavSection,
 } from '@/lib/navigation';
+import { allowedHrefsForRole, type NavRole } from '@/lib/nav-access';
 import type { AuthUser, Role } from '@/lib/types';
 import { useTranslation } from 'react-i18next';
 
-type SidebarRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
-
-type RoleNavItem = {
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  roles: SidebarRole[];
-};
-
-const NAV_ITEMS: RoleNavItem[] = [
-  { label: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.officeQueue', href: '/office/queue', icon: ListTodo, roles: ['office'] },
-  { label: 'nav.assignments', href: '/assignments', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.assignments.dailyOverview', href: '/assignments/daily-overview', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.assignments.planning', href: '/assignments/planning', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.assignments.morningCheckins', href: '/assignments/morning-checkins', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.assignments.vehicleHandovers', href: '/assignments/vehicle-handovers', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.assignments.companyNotifications', href: '/assignments/company-notifications', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.assignments.vacationPlanner', href: '/assignments/vacation-planner', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.assignments.revenueSummary', href: '/assignments/revenue-summary', icon: CalendarDays, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.liveTracking', href: '/live-tracking', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.reminders', href: '/reminders/service', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.messenger', href: '/messenger', icon: MessageSquare, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.notifications', href: '/notifications', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.drivers', href: '/drivers', icon: Users, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.vehicles.list', href: '/vehicles', icon: Truck, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.vehicles.assignments', href: '/vehicles/assignments', icon: Truck, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.fleetTripHistory', href: '/fleet-analytics/trips', icon: Route, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.telematics.driverScores', href: '/telematics/driver-scores', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.telematics.vehicleHealth', href: '/telematics/vehicle-health', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.devices', href: '/devices', icon: Cpu, roles: ['admin', 'boss', 'office'] },
-  { label: 'nav.tachograph.remainingDrivingTime', href: '/tachograph/remaining-driving-time', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.tachograph.infringements', href: '/tachograph/infringements', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.tachograph.dddArchive', href: '/tachograph/ddd-archive', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.tachograph.compliance', href: '/tachograph/compliance', icon: MapPinned, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.companies', href: '/companies', icon: Building2, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.documents', href: '/documents', icon: FileText, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.service.history', href: '/service-history', icon: Wrench, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.section.checks', href: '/license-checks', icon: ClipboardCheck, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.departureChecks', href: '/departure-checks', icon: ClipboardCheck, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.defects', href: '/defects', icon: AlertTriangle, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.reminders.vehicle', href: '/reminders/vehicle', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.reminders.contact', href: '/reminders/contact', icon: Bell, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.accidents', href: '/accidents', icon: AlertTriangle, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.cargoDamage', href: '/cargo-damage', icon: AlertTriangle, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.fines', href: '/fines', icon: Scale, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.workSessions', href: '/work-sessions', icon: Clock, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.fleetFuelAnalytics', href: '/fleet-analytics/fuel', icon: Droplets, roles: ['admin', 'boss', 'accounting', 'office'] },
-  { label: 'nav.requests', href: '/requests', icon: ClipboardList, roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
-  { label: 'nav.costs', href: '/costs', icon: CreditCard, roles: ['admin', 'boss', 'accounting'] },
-  { label: 'nav.gettingStarted', href: '/getting-started', icon: Rocket, roles: ['admin'] },
-  { label: 'nav.privacy', href: '/privacy', icon: Shield, roles: ['admin'] },
-  { label: 'nav.import', href: '/import', icon: Upload, roles: ['admin'] },
-  { label: 'nav.billing', href: '/billing', icon: CreditCard, roles: ['admin'] },
-  { label: 'nav.audit', href: '/audit', icon: ScrollText, roles: ['admin', 'boss'] },
-];
-
-const navConfig: Record<SidebarRole, RoleNavItem[]> = {
-  admin: NAV_ITEMS.filter((item) => item.roles.includes('admin')),
-  boss: NAV_ITEMS.filter((item) => item.roles.includes('boss')),
-  accounting: NAV_ITEMS.filter((item) => item.roles.includes('accounting')),
-  office: NAV_ITEMS.filter((item) => item.roles.includes('office')),
-  driver: NAV_ITEMS.filter((item) => item.roles.includes('driver')),
-};
+type SidebarRole = NavRole;
 
 const SIDEBAR_BG = 'bg-[#1E293B]';
 const SIDEBAR_BORDER = 'border-slate-700';
@@ -194,8 +103,7 @@ export function Sidebar() {
     return map;
   }, [tachographBadgesQuery.data]);
 
-  const allowedNavItems = useMemo(() => navConfig[role], [role]);
-  const allowedHrefs = useMemo(() => new Set(allowedNavItems.map((item) => item.href)), [allowedNavItems]);
+  const allowedHrefs = useMemo(() => allowedHrefsForRole(role), [role]);
 
   const navGroups = useMemo(() => {
     const baseGroups = getNavigationForRole(role as Role);

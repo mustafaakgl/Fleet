@@ -19,6 +19,24 @@ function requireProductionEnv(name: string): string {
   return value;
 }
 
+/**
+ * Photo crypto services accept 64 hex chars or base64 that decodes to 32 bytes,
+ * and fall back to storing photos *unencrypted* when the value does not parse.
+ * A malformed key must therefore stop the boot, not merely log a warning.
+ */
+function assertPhotoEncryptionKey(name: string, value: string): void {
+  if (/^[0-9a-fA-F]{64}$/.test(value)) {
+    return;
+  }
+  if (Buffer.from(value, 'base64').length === 32) {
+    return;
+  }
+  throw new Error(
+    `${name} must be 32 bytes (64 hex characters or base64) in production — ` +
+      'photos would otherwise be stored unencrypted.',
+  );
+}
+
 export function isProductionEnv(): boolean {
   return (process.env.NODE_ENV ?? 'development') === 'production';
 }
@@ -88,6 +106,19 @@ export function validateEnv(): void {
       throw new Error(
         'TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY must not use default placeholder values from .env.example in production.',
       );
+    }
+
+    // A driving licence photo is an identity document. Without a key the crypto
+    // services store photos in the clear and only log a warning, so the key is
+    // required here. DefectPhotoCryptoService falls back to the licence key, so
+    // requiring that one covers defect photos too; a separate defect key is
+    // optional but must still parse if it is set.
+    const licensePhotoKey = requireProductionEnv('LICENSE_PHOTO_ENCRYPTION_KEY');
+    assertPhotoEncryptionKey('LICENSE_PHOTO_ENCRYPTION_KEY', licensePhotoKey);
+
+    const defectPhotoKey = process.env.DEFECT_PHOTO_ENCRYPTION_KEY?.trim();
+    if (defectPhotoKey) {
+      assertPhotoEncryptionKey('DEFECT_PHOTO_ENCRYPTION_KEY', defectPhotoKey);
     }
 
     return;

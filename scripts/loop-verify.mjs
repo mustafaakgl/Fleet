@@ -301,6 +301,7 @@ async function main() {
         '../frontend/lib/tachograph-evidence.spec.ts',
         '../frontend/lib/decode-polyline.spec.ts',
         '../frontend/lib/address-format.spec.ts',
+        '../frontend/lib/nav-access.spec.ts',
         '../mobile-driver/src/lib/navigation-links.spec.ts',
       ],
       { cwd: backendDir, inheritStdout: true, inheritStderr: true },
