@@ -18,6 +18,15 @@ interface AuthenticatedRequest extends Request {
   user: { id: string; email: string; role: string; tenantId: string };
 }
 
+/**
+ * Faturalama uclari.
+ *
+ * Okuma FINANCIAL_ROLES (admin, patron, muhasebe). Yazma icin
+ * `RequiresWrite('accounting')` gerekiyor: global yazma listesi (admin, patron,
+ * office) muhasebeyi DISLIYOR, yani muhasebeci fatura kesemiyordu. Genisletme
+ * uc bazinda — muhasebeye baska modullerde yazma hakki vermiyor. Office ise
+ * controller seviyesindeki @Roles ile zaten disarida.
+ */
 @Controller('invoicing')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...FINANCIAL_ROLES)
@@ -30,7 +39,7 @@ export class InvoicingController {
   }
 
   @Put('billing-profile')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   upsertBillingProfile(
     @Body() dto: UpsertBillingProfileDto,
     @Req() request: AuthenticatedRequest,
@@ -49,7 +58,7 @@ export class InvoicingController {
   }
 
   @Post('invoices')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   createDraft(
     @Body() dto: CreateInvoiceDraftDto,
     @Req() request: AuthenticatedRequest,
@@ -83,7 +92,7 @@ export class InvoicingController {
   }
 
   @Patch('invoices/:id')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   updateDraft(
     @Param('id') id: string,
     @Body() dto: UpdateInvoiceDraftDto,
@@ -93,7 +102,7 @@ export class InvoicingController {
   }
 
   @Post('invoices/:id/lines')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   addDraftLine(
     @Param('id') id: string,
     @Body() dto: ManualInvoiceLineDto,
@@ -103,7 +112,7 @@ export class InvoicingController {
   }
 
   @Patch('invoices/:id/lines/:lineId')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   updateDraftLine(
     @Param('id') id: string,
     @Param('lineId') lineId: string,
@@ -114,7 +123,7 @@ export class InvoicingController {
   }
 
   @Delete('invoices/:id/lines/:lineId')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   deleteDraftLine(
     @Param('id') id: string,
     @Param('lineId') lineId: string,
@@ -124,13 +133,13 @@ export class InvoicingController {
   }
 
   @Post('invoices/:id/finalize')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   finalizeInvoice(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.invoicing.finalizeInvoice(id, request.user.tenantId, request.user.id);
   }
 
   @Post('invoices/:id/send')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   sendInvoice(
     @Param('id') id: string,
     @Body() dto: SendInvoiceDto,
@@ -140,7 +149,7 @@ export class InvoicingController {
   }
 
   @Post('invoices/:id/payments')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   addPayment(
     @Param('id') id: string,
     @Body() dto: CreateInvoicePaymentDto,
@@ -150,13 +159,13 @@ export class InvoicingController {
   }
 
   @Delete('payments/:id')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   deletePayment(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.invoicing.deletePayment(id, request.user.tenantId, request.user.id);
   }
 
   @Get('datev/export')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   exportDatev(
     @Query('from') from: string,
     @Query('to') to: string,
