@@ -1315,7 +1315,10 @@ export interface ServiceRecord {
   vehicle_plate: string;
   driver_id?: string;
   driver_name?: string;
+  /** Tamamlanma tarihi. */
   date: string;
+  /** Servis baslangici; girilmemis olabilir. */
+  start_date?: string | null;
   service_type: string;
   vendor?: string;
   repair_company: string;

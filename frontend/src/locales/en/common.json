@@ -1977,7 +1977,7 @@
   "serviceHistory.create.priorityHelp": "Repair Priority Class (VMRS Code Key 16) is a simple way to classify whether a service or repair was scheduled, non-scheduled, or an emergency.",
   "serviceHistory.create.completionDate": "Completion Date",
   "serviceHistory.create.setStartDate": "Set Start Date",
-  "serviceHistory.create.startDate": "Start Date",
+  "serviceHistory.create.startDate": "Start date",
   "serviceHistory.create.reference": "Reference",
   "serviceHistory.create.referencePlaceholder": "Internal reference or work order number",
   "serviceHistory.create.vendor": "Vendor",

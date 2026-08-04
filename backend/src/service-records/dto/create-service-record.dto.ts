@@ -5,8 +5,14 @@ export class CreateServiceRecordDto {
   @MinLength(1)
   vehicle_id!: string;
 
+  /** Tamamlanma tarihi. */
   @IsDateString()
   date!: string;
+
+  /** Servisin baslangici; tek gunluk islerde bos birakilabilir. */
+  @IsOptional()
+  @IsDateString()
+  start_date?: string;
 
   @IsString()
   @MinLength(1)

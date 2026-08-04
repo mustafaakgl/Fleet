@@ -1977,7 +1977,7 @@
   "serviceHistory.create.priorityHelp": "Die Reparaturpriorität (VMRS Code Key 16) klassifiziert, ob ein Service planmäßig, außerplanmäßig oder ein Notfall war.",
   "serviceHistory.create.completionDate": "Abschlussdatum",
   "serviceHistory.create.setStartDate": "Startdatum setzen",
-  "serviceHistory.create.startDate": "Startdatum",
+  "serviceHistory.create.startDate": "Beginndatum",
   "serviceHistory.create.reference": "Referenz",
   "serviceHistory.create.referencePlaceholder": "Interne Referenz oder Auftragsnummer",
   "serviceHistory.create.vendor": "Werkstatt",

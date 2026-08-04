@@ -1136,7 +1136,15 @@ export const serviceRecordsApi = {
     data: Partial<
       Pick<
         ServiceRecord,
-        'service_type' | 'notes' | 'date' | 'vendor' | 'repair_company' | 'cost_amount' | 'mileage_km' | 'driver_id'
+        | 'service_type'
+        | 'notes'
+        | 'date'
+        | 'start_date'
+        | 'vendor'
+        | 'repair_company'
+        | 'cost_amount'
+        | 'mileage_km'
+        | 'driver_id'
       >
     > & { vehicle_id?: string },
   ) => api.patch<ServiceRecord>(`/service-records/${id}`, data).then((r) => r.data),

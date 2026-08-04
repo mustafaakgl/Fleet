@@ -2078,6 +2078,9 @@ model ServiceRecord {
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   vehicleId     String
   driverId      String?
+  /// Servisin baslangici. Opsiyonel: mevcut kayitlarda yok ve tek gunluk
+  /// islerde girilmesi zorunlu degil. `date` tamamlanma tarihidir.
+  startDate     DateTime?
   date          DateTime
   serviceType   String
   vendor        String?

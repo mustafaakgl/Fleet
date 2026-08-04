@@ -27,6 +27,7 @@ function toClient(row: ServiceRecordWithRelations) {
     driver_id: row.driverId ?? undefined,
     driver_name: row.driver ? `${row.driver.firstName} ${row.driver.lastName}`.trim() : undefined,
     date: row.date.toISOString(),
+    start_date: row.startDate ? row.startDate.toISOString() : null,
     service_type: row.serviceType,
     vendor: row.vendor ?? undefined,
     repair_company: row.repairCompany,
@@ -293,6 +294,7 @@ export class ServiceRecordsService {
         vehicleId: dto.vehicle_id,
         driverId: dto.driver_id,
         date: new Date(dto.date),
+        startDate: dto.start_date ? new Date(dto.start_date) : null,
         serviceType: dto.service_type,
         vendor: dto.vendor?.trim() || null,
         repairCompany: dto.repair_company?.trim() || '—',
@@ -319,6 +321,10 @@ export class ServiceRecordsService {
       data.vehicle = { connect: { id: dto.vehicle_id } };
     }
     if (dto.date !== undefined) data.date = new Date(dto.date);
+    // Bos string temizleme demek: kullanici alani bosaltinca tarih silinmeli.
+    if (dto.start_date !== undefined) {
+      data.startDate = dto.start_date ? new Date(dto.start_date) : null;
+    }
     if (dto.service_type !== undefined) data.serviceType = dto.service_type;
     if (dto.vendor !== undefined) data.vendor = dto.vendor.trim() || null;
     if (dto.repair_company !== undefined) data.repairCompany = dto.repair_company.trim() || '—';

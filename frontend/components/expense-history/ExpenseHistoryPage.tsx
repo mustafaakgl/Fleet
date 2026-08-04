@@ -609,6 +609,10 @@ export function ExpenseHistoryPage() {
                       layout="inline"
                     />
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+                      <MobileField
+                        label={t('serviceHistory.create.startDate')}
+                        value={row.start_date ? formatCompletionDateTime(row.start_date, i18n.language) : '—'}
+                      />
                       <MobileField label={t('serviceHistory.create.completionDate')} value={formatCompletionDateTime(row.date, i18n.language)} />
                       <MobileField label={t('serviceHistory.create.lineItemTask')} value={primaryTask} />
                       <MobileField label={t('serviceHistory.create.cost')} value={formatAmount(row.cost_amount, i18n.language)} />
@@ -642,6 +646,9 @@ export function ExpenseHistoryPage() {
                         sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
                       ) : null}
                     </button>
+                  </TableHead>
+                  <TableHead className={FLEET_TABLE_HEAD}>
+                    {t('serviceHistory.create.startDate')}
                   </TableHead>
                   <TableHead className={FLEET_TABLE_HEAD}>
                     <button
@@ -745,6 +752,9 @@ export function ExpenseHistoryPage() {
                             </span>
                           ) : null}
                         </div>
+                      </TableCell>
+                      <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
+                        {row.start_date ? formatCompletionDateTime(row.start_date, i18n.language) : '—'}
                       </TableCell>
                       <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
                         <div className="flex items-center gap-2">

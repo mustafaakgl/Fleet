@@ -11,6 +11,10 @@ export class UpdateServiceRecordDto {
   date?: string;
 
   @IsOptional()
+  @IsDateString()
+  start_date?: string;
+
+  @IsOptional()
   @IsString()
   @MinLength(1)
   service_type?: string;

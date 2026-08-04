@@ -84,6 +84,7 @@ function vehicleStatusDot(status?: Vehicle['status']) {
 type FormState = {
   vehicle_id: string;
   driver_id: string;
+  start_date: string;
   date: string;
   service_type: string;
   vendor: string;
@@ -96,6 +97,7 @@ function toFormState(record: ServiceRecord): FormState {
   return {
     vehicle_id: record.vehicle_id,
     driver_id: record.driver_id ?? '',
+    start_date: record.start_date ? recordDateIso(record.start_date) : '',
     date: recordDateIso(record.date),
     service_type: record.service_type,
     vendor: record.vendor ?? '',
@@ -234,6 +236,8 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
         vehicle_id: form.vehicle_id,
         driver_id: form.driver_id || undefined,
         date: form.date,
+        // Bos string gonderiliyor: sunucu bunu "tarihi sil" olarak isliyor.
+        start_date: form.start_date,
         service_type: form.service_type.trim(),
         vendor: form.vendor.trim() || undefined,
         repair_company: form.repair_company.trim() || '—',
@@ -449,6 +453,23 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
                     </option>
                   ))}
                 </Select>
+              </DetailFieldRow>
+
+              <DetailFieldRow
+                label={t('serviceHistory.create.startDate')}
+                editing={editing}
+                view={
+                  <span>
+                    {record.start_date ? formatExpenseDate(record.start_date, i18n.language) : '—'}
+                  </span>
+                }
+              >
+                <Input
+                  type="date"
+                  value={form.start_date}
+                  onChange={(event) => updateForm('start_date', event.target.value)}
+                  className="max-w-xs"
+                />
               </DetailFieldRow>
 
               <DetailFieldRow
