@@ -4128,5 +4128,8 @@
   "compNotif.sendAllConfirm": "{{count}} E-Mail(s) jetzt an die Firmen senden? Das lässt sich nicht rückgängig machen.",
   "compNotif.sendAllDone": "{{sent}} E-Mail(s) gesendet.",
   "compNotif.sendAllPartial": "{{sent}} gesendet, {{failed}} fehlgeschlagen: {{companies}}",
-  "compNotif.sendAllFailed": "Sammelversand fehlgeschlagen."
+  "compNotif.sendAllFailed": "Sammelversand fehlgeschlagen.",
+  "serviceHistory.create.sectionInvoices": "Rechnung",
+  "serviceHistory.create.uploadInvoice": "Rechnung hier ablegen oder klicken",
+  "serviceHistory.create.uploadInvoiceHint": "PDF oder Foto der Werkstattrechnung"
 }

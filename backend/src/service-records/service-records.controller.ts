@@ -75,7 +75,7 @@ export class ServiceRecordsController {
   }
 
   @Post()
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   @HttpCode(HttpStatus.CREATED)
   create(
     @Body() dto: CreateServiceRecordDto,
@@ -89,7 +89,7 @@ export class ServiceRecordsController {
   }
 
   @Patch(':id')
-  @RequiresWrite()
+  @RequiresWrite('accounting')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateServiceRecordDto,

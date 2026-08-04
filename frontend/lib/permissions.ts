@@ -28,8 +28,14 @@ export function canEditVehicleHandovers(role: Role) {
   return role === 'admin' || role === 'office';
 }
 
+/**
+ * Muhasebe de dahil: servis kayitlari maliyet kaydidir ve faturasi muhasebede
+ * duruyor. Sunucu tarafinda karsiligi service-records uclarindaki
+ * `@RequiresWrite('accounting')` — biri degisirse digeri de degismeli, yoksa
+ * arayuz duzenleme acar ve kaydederken 403 doner.
+ */
 export function canEditServiceRecords(role: Role) {
-  return role === 'admin' || role === 'boss' || role === 'office';
+  return role === 'admin' || role === 'boss' || role === 'office' || role === 'accounting';
 }
 
 export function canEditDriverVacationEntitlement(role: Role) {

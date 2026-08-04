@@ -22,6 +22,7 @@ import { useExpenseWatchlist } from '@/hooks/useExpenseWatchlist';
 import {
   PendingFileUpload,
   uploadServiceRecordFiles,
+  type ServiceRecordDocumentType,
 } from '@/components/expense-history/ServiceRecordFileUpload';
 import { documentsApi, driversApi, serviceRecordsApi, vehiclesApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
@@ -256,10 +257,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     setReceipts(allDocs.filter((doc) => doc.documentType === 'Receipt'));
   }
 
-  async function uploadAddedFiles(
-    added: File[],
-    documentType: 'Photo' | 'Service Document',
-  ) {
+  async function uploadAddedFiles(added: File[], documentType: ServiceRecordDocumentType) {
     if (!record || added.length === 0) return;
 
     setUploading(true);
@@ -588,6 +586,32 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
               </DetailFieldRow>
 
               <DetailFieldRow
+                label={t('serviceHistory.create.sectionInvoices')}
+                editing={canEdit}
+                view={renderDocumentList(receipts)}
+              >
+                <div className="max-w-xl space-y-3">
+                  {renderDocumentList(receipts)}
+                  <PendingFileUpload
+                    label={t('serviceHistory.create.uploadInvoice')}
+                    hint={t('serviceHistory.create.uploadInvoiceHint')}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    files={[]}
+                    onChange={() => {}}
+                    onAddFiles={(added) => uploadAddedFiles(added, 'Receipt')}
+                    disabled={uploading}
+                    icon="document"
+                  />
+                  {uploading ? (
+                    <p className="flex items-center gap-2 text-xs text-slate-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {t('expenseHistory.detail.uploading')}
+                    </p>
+                  ) : null}
+                </div>
+              </DetailFieldRow>
+
+              <DetailFieldRow
                 label={t('expenseHistory.colRepairCompany')}
                 editing={editing}
                 view={displayText(record.repair_company)}
@@ -629,10 +653,10 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
               <DetailFieldRow
                 label={t('serviceHistory.create.sectionDocuments')}
                 editing={canEdit}
-                view={renderDocumentList([...documents, ...receipts])}
+                view={renderDocumentList(documents)}
               >
                 <div className="max-w-xl space-y-3">
-                  {renderDocumentList([...documents, ...receipts])}
+                  {renderDocumentList(documents)}
                   <PendingFileUpload
                     label={t('serviceHistory.create.uploadDocuments')}
                     hint={t('serviceHistory.create.uploadDocumentsHint')}

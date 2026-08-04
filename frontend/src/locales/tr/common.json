@@ -4128,5 +4128,8 @@
   "compNotif.sendAllConfirm": "{{count}} e-posta şimdi firmalara gönderilsin mi? Bu işlem geri alınamaz.",
   "compNotif.sendAllDone": "{{sent}} e-posta gönderildi.",
   "compNotif.sendAllPartial": "{{sent}} gönderildi, {{failed}} başarısız: {{companies}}",
-  "compNotif.sendAllFailed": "Toplu gönderim başarısız."
+  "compNotif.sendAllFailed": "Toplu gönderim başarısız.",
+  "serviceHistory.create.sectionInvoices": "Fatura",
+  "serviceHistory.create.uploadInvoice": "Faturayı buraya bırakın veya tıklayın",
+  "serviceHistory.create.uploadInvoiceHint": "Servis faturasının PDF'i veya fotoğrafı"
 }

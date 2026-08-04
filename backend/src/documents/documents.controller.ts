@@ -190,7 +190,9 @@ export class DocumentsController {
   }
 
   @Post('upload')
-  @RequiresWrite()
+  // Muhasebe servis kayitlarina fatura yukleyebilmeli. Zaten tum operasyonel
+  // kayitlari OKUYABILIYOR; belge eklemek okuma hakkinin otesine gecmiyor.
+  @RequiresWrite('accounting')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(DOCUMENT_UPLOAD_INTERCEPTOR)

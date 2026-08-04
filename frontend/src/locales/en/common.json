@@ -4128,5 +4128,8 @@
   "compNotif.sendAllConfirm": "Send {{count}} email(s) to the companies now? This cannot be undone.",
   "compNotif.sendAllDone": "{{sent}} email(s) sent.",
   "compNotif.sendAllPartial": "{{sent}} sent, {{failed}} failed: {{companies}}",
-  "compNotif.sendAllFailed": "Bulk send failed."
+  "compNotif.sendAllFailed": "Bulk send failed.",
+  "serviceHistory.create.sectionInvoices": "Invoice",
+  "serviceHistory.create.uploadInvoice": "Drop the invoice here or click to browse",
+  "serviceHistory.create.uploadInvoiceHint": "PDF or photo of the workshop invoice"
 }
