@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { isGeocodeFallbackConsistent } from './core/geocode-consistency.util';
 import { haversineMeters } from './core/geo-distance.util';
+import { queryHasHouseNumber } from './core/house-number.util';
 import type { RoutingResult } from './core/routing.types';
 
 /** Photon (Komoot) GeoJSON yaniti — kullandigimiz alanlar. */
@@ -237,8 +238,17 @@ export class GeocodingService {
       lang: 'de',
       bbox: GERMANY_BBOX,
     });
-    // Sehir ararken yerlesim, sokak ararken yol nesnelerine daralt
-    search.set('osm_tag', params.kind === 'city' ? 'place' : 'highway');
+    // Sehir ararken yerlesime daralt. Sokakta `highway` yol CIZGISI demek ve ev
+    // numarasi tasimaz — kullanici numara yazdiysa kisit kaldirilir, yoksa
+    // "Stralauer Allee 24" numarasiz cadde olarak geri doner ve sofore caddenin
+    // ortasindaki koordinat gider. Numarasiz sorguda kisit korunur: POI gurultusunu
+    // azaltiyor ve zaten ev numarasi beklenmiyor.
+    const wantsHouse = params.kind === 'street' && queryHasHouseNumber(queryText);
+    if (params.kind === 'city') {
+      search.set('osm_tag', 'place');
+    } else if (!wantsHouse) {
+      search.set('osm_tag', 'highway');
+    }
 
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -285,10 +295,15 @@ export class GeocodingService {
         const city = p.city ?? p.district ?? p.name ?? null;
         const postalCode = p.postcode ?? null;
 
-        // Tekilleme anahtari: ayni cadde + posta kodu + sehir tek satir olmali.
-        // Koordinat dahil edilmez; Photon ayni caddenin farkli parcalarini ayri
-        // kayit olarak donduruyor ve kullanici icin hepsi ayni adres.
-        const dedupeKey = [street, postalCode, city].map((v) => (v ?? '').toLowerCase()).join('|');
+        // Tekilleme anahtari: ayni cadde + EV NUMARASI + posta kodu + sehir tek
+        // satir olmali. Koordinat dahil edilmez; Photon ayni caddenin farkli
+        // parcalarini ayri kayit olarak donduruyor ve numarasiz sonuclarda hepsi
+        // kullanici icin ayni adres. Ama ev numarasi anahtardan cikarilirsa 24 ve
+        // 26 numara tek satira coker — sofor icin bunlar ayri adresler.
+        const houseNumber = p.housenumber ?? null;
+        const dedupeKey = [street, houseNumber, postalCode, city]
+          .map((v) => (v ?? '').toLowerCase())
+          .join('|');
         if (seen.has(dedupeKey)) {
           continue;
         }
@@ -301,12 +316,12 @@ export class GeocodingService {
             // Buraya da konursa etiket "Duisburg, Duisburg" olur.
             name: kind === 'city' ? null : p.name,
             street,
-            houseNumber: p.housenumber ?? null,
+            houseNumber,
             postalCode,
             city,
           }),
           street,
-          houseNumber: p.housenumber ?? null,
+          houseNumber,
           postalCode,
           city,
           countryCode: (p.countrycode ?? 'DE').toUpperCase(),

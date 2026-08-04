@@ -448,7 +448,10 @@ export class RoutingService {
       if (row.latitude === null || row.longitude === null) return [];
 
       const street = row.street;
-      const dedupeKey = [street, row.postalCode, row.city]
+      // Ev numarasi anahtara dahil: ayni caddedeki 24 ve 26 numara sofor icin
+      // ayri adresler ve tek satira cokmemeliler. Geocoder tarafiyla ayni anahtar
+      // kullanilmali, yoksa iki kaynak birbirini tekilleyemez.
+      const dedupeKey = [street, row.houseNumber, row.postalCode, row.city]
         .map((value) => (value ?? '').toLowerCase())
         .join('|');
 
