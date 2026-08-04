@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty, IsString } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsDateString, IsNotEmpty, IsString } from 'class-validator';
 
 export class GenerateCompanyEmailDto {
   @IsDateString()
@@ -12,4 +12,16 @@ export class GenerateCompanyEmailDto {
 export class GenerateCompanyEmailsForDateDto {
   @IsDateString()
   date!: string;
+}
+
+/**
+ * Toplu gonderim istegi. Ekran bugun + yarini gosterdigi icin birden fazla gun
+ * gelebiliyor. Ust sinir kazara tum yili gondermeyi engeller.
+ */
+export class SendCompanyEmailsDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(31)
+  @IsDateString({}, { each: true })
+  dates!: string[];
 }

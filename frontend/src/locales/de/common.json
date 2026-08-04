@@ -4121,5 +4121,12 @@
   "tours.skip.stop_not_reachable": "Ein Stopp ist für Lkw nicht erreichbar – Reihenfolge unverändert.",
   "tours.skip.invalid_order": "Der Optimierer lieferte eine ungültige Reihenfolge – Reihenfolge unverändert.",
   "tours.skip.invalid_input": "Tourdaten unvollständig – Reihenfolge unverändert.",
-  "tours.skip.engine_unavailable": "Routendienst nicht erreichbar – bitte später erneut versuchen."
+  "tours.skip.engine_unavailable": "Routendienst nicht erreichbar – bitte später erneut versuchen.",
+  "compNotif.sendAll": "Alle geplanten Einsätze senden ({{count}})",
+  "compNotif.sendAllBusy": "Wird gesendet …",
+  "compNotif.sendAllHint": "Bereits gesendete Mails werden übersprungen.",
+  "compNotif.sendAllConfirm": "{{count}} E-Mail(s) jetzt an die Firmen senden? Das lässt sich nicht rückgängig machen.",
+  "compNotif.sendAllDone": "{{sent}} E-Mail(s) gesendet.",
+  "compNotif.sendAllPartial": "{{sent}} gesendet, {{failed}} fehlgeschlagen: {{companies}}",
+  "compNotif.sendAllFailed": "Sammelversand fehlgeschlagen."
 }

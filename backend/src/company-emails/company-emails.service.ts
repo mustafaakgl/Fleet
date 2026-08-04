@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AssignmentStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { companyEmailMail } from '../mail/mail-templates';
 import { MailService } from '../mail/mail.service';
@@ -113,6 +113,9 @@ export class CompanyEmailsService {
           gte: start,
           lt: end,
         },
+        // Iptal edilen is musteriye bildirilmez. Filtre yoktu: iptal edilmis bir
+        // gorev de e-postaya giriyor ve musteri gelmeyecek bir araci bekliyordu.
+        status: { not: AssignmentStatus.cancelled },
       },
       include: {
         company: true,
@@ -236,6 +239,7 @@ export class CompanyEmailsService {
           gte: start,
           lt: end,
         },
+        status: { not: AssignmentStatus.cancelled },
       },
       select: {
         companyId: true,
@@ -357,6 +361,84 @@ export class CompanyEmailsService {
     });
 
     return updated;
+  }
+
+  /**
+   * Verilen gunlerdeki gonderilebilir tum firma e-postalarini tek seferde yollar.
+   *
+   * Zaten gonderilmis olanlar ATLANIR — disponent butona iki kez basarsa musteri
+   * ayni bildirimi iki kez almamali. Alicisi olmayan taslak da atlanir; bunlar
+   * hata degil, henuz hazir olmayan satirlardir.
+   *
+   * Tek bir adres patlarsa islem durmaz: her sonuc toplanir ve ozet dondurulur,
+   * boylece disponent hangi firmaya ulasilamadigini gorur. Gonderim sirali
+   * yapilir — paralel gonderim SMTP tarafinda hiz sinirina takiliyor.
+   */
+  async sendAllForDates(dates: Array<string | Date>, actorUserId?: string) {
+    if (dates.length === 0) {
+      throw new BadRequestException('At least one date is required');
+    }
+
+    const ranges = dates.map((date) => this.getDayRange(date));
+    const candidates = await this.prisma.companyEmail.findMany({
+      where: {
+        OR: ranges.map((range) => ({ date: { gte: range.start, lt: range.end } })),
+        status: { not: 'sent' },
+      },
+      select: { id: true, recipientEmail: true, company: { select: { name: true } } },
+      orderBy: { date: 'asc' },
+    });
+
+    const results: Array<{ companyName: string; ok: boolean; reason?: string }> = [];
+
+    for (const candidate of candidates) {
+      const companyName = candidate.company?.name ?? 'unknown';
+
+      if (!candidate.recipientEmail?.trim()) {
+        results.push({ companyName, ok: false, reason: 'missing_recipient' });
+        continue;
+      }
+
+      try {
+        const sent = await this.sendEmail(candidate.id, actorUserId);
+        // mode 'log' gelistirme ortami: posta gercekten gitmez ama akis basarilidir.
+        const delivered = sent.mail_sent || sent.mail_mode === 'log';
+        results.push({
+          companyName,
+          ok: delivered,
+          reason: delivered ? undefined : 'delivery_failed',
+        });
+      } catch (error) {
+        results.push({
+          companyName,
+          ok: false,
+          reason: error instanceof Error ? error.name : 'unknown_error',
+        });
+      }
+    }
+
+    const sentCount = results.filter((item) => item.ok).length;
+
+    await this.safeAuditLog({
+      actorUserId,
+      action: 'company_email.bulk_sent',
+      entityType: 'company_email',
+      summary: `Bulk send: ${sentCount}/${results.length}`,
+      metadata: {
+        requested: results.length,
+        sent: sentCount,
+        failed: results.length - sentCount,
+      },
+    });
+
+    return {
+      total: results.length,
+      sent: sentCount,
+      failed: results.filter((item) => !item.ok).map((item) => ({
+        company: item.companyName,
+        reason: item.reason ?? 'unknown_error',
+      })),
+    };
   }
 
   async sendEmail(emailId: string, actorUserId?: string) {

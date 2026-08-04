@@ -10,6 +10,7 @@ import { CompanyEmailsService } from './company-emails.service';
 import {
   GenerateCompanyEmailDto,
   GenerateCompanyEmailsForDateDto,
+  SendCompanyEmailsDto,
 } from './dto/generate-company-email.dto';
 import { UpdateCompanyEmailDto } from './dto/update-company-email.dto';
 
@@ -69,6 +70,16 @@ export class CompanyEmailsController {
   @RequiresWrite()
   markAsDraftReady(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
     return this.companyEmailsService.markAsDraftReady(id, currentUserId);
+  }
+
+  /**
+   * Ekranda gorunen tum hazir e-postalari tek seferde gonderir.
+   * `:id/send` ile ayni yetki: dis dunyaya cikan bir islem, yazma hakki ister.
+   */
+  @Post('send-all')
+  @RequiresWrite()
+  sendAll(@Body() dto: SendCompanyEmailsDto, @CurrentUser('id') currentUserId?: string) {
+    return this.companyEmailsService.sendAllForDates(dto.dates, currentUserId);
   }
 
   @Post(':id/send')

@@ -4121,5 +4121,12 @@
   "tours.skip.stop_not_reachable": "One stop is not reachable by truck – order left unchanged.",
   "tours.skip.invalid_order": "The optimiser returned an invalid order – order left unchanged.",
   "tours.skip.invalid_input": "Tour data incomplete – order left unchanged.",
-  "tours.skip.engine_unavailable": "Routing service unavailable – please try again later."
+  "tours.skip.engine_unavailable": "Routing service unavailable – please try again later.",
+  "compNotif.sendAll": "Send all planned assignments ({{count}})",
+  "compNotif.sendAllBusy": "Sending …",
+  "compNotif.sendAllHint": "Already sent mails are skipped.",
+  "compNotif.sendAllConfirm": "Send {{count}} email(s) to the companies now? This cannot be undone.",
+  "compNotif.sendAllDone": "{{sent}} email(s) sent.",
+  "compNotif.sendAllPartial": "{{sent}} sent, {{failed}} failed: {{companies}}",
+  "compNotif.sendAllFailed": "Bulk send failed."
 }

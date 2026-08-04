@@ -1602,6 +1602,12 @@ export interface CompanyEmailListParams {
   status?: string;
 }
 
+export interface CompanyEmailBulkSendResult {
+  total: number;
+  sent: number;
+  failed: Array<{ company: string; reason: string }>;
+}
+
 export const companyEmailsApi = {
   list: (params?: CompanyEmailListParams) =>
     api.get<CompanyEmail[]>('/company-emails', { params }).then((r) => r.data),
@@ -1619,6 +1625,12 @@ export const companyEmailsApi = {
 
   markDraftReady: (id: string) =>
     api.post<CompanyEmail>(`/company-emails/${id}/mark-draft-ready`).then((r) => r.data),
+
+  /** Verilen gunlerdeki gonderilebilir tum taslaklari tek istekte yollar. */
+  sendAll: (dates: string[]) =>
+    api
+      .post<CompanyEmailBulkSendResult>('/company-emails/send-all', { dates })
+      .then((r) => r.data),
 
   markSent: (id: string) =>
     api.post<CompanyEmail>(`/company-emails/${id}/mark-sent`).then((r) => r.data),

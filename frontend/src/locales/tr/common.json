@@ -4121,5 +4121,12 @@
   "tours.skip.stop_not_reachable": "Duraklardan biri kamyonla erişilemiyor – sıra değiştirilmedi.",
   "tours.skip.invalid_order": "Optimizasyon geçersiz sıra döndürdü – sıra değiştirilmedi.",
   "tours.skip.invalid_input": "Tur verisi eksik – sıra değiştirilmedi.",
-  "tours.skip.engine_unavailable": "Rota servisi erişilemiyor – lütfen sonra tekrar deneyin."
+  "tours.skip.engine_unavailable": "Rota servisi erişilemiyor – lütfen sonra tekrar deneyin.",
+  "compNotif.sendAll": "Planlanan tüm işleri gönder ({{count}})",
+  "compNotif.sendAllBusy": "Gönderiliyor …",
+  "compNotif.sendAllHint": "Daha önce gönderilmiş e-postalar atlanır.",
+  "compNotif.sendAllConfirm": "{{count}} e-posta şimdi firmalara gönderilsin mi? Bu işlem geri alınamaz.",
+  "compNotif.sendAllDone": "{{sent}} e-posta gönderildi.",
+  "compNotif.sendAllPartial": "{{sent}} gönderildi, {{failed}} başarısız: {{companies}}",
+  "compNotif.sendAllFailed": "Toplu gönderim başarısız."
 }

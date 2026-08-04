@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Send } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { getTodayDate, getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { companiesApi, companyEmailsApi } from '@/lib/api';
+import { BRAND_BTN_PRIMARY } from '@/lib/brand-colors';
 import type { CompanyEmail, CompanyEmailStatus } from '@/lib/types';
 import { formatFleetDateTime } from '@/lib/locale-format';
 import {
@@ -123,6 +125,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [sendingAll, setSendingAll] = useState(false);
   const [loadingEmails, setLoadingEmails] = useState(true);
 
   const dates = useMemo(() => [getTodayDate(), getTomorrowDate()], []);
@@ -279,6 +282,54 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
     }
   }
 
+  /**
+   * Gonderilmemis ve alicisi olan satirlar. Zaten gonderilmis olanlar sayilmaz —
+   * buton "kalan is" sayisini gostermeli, tablodaki satir sayisini degil.
+   */
+  const sendableCount = useMemo(
+    () =>
+      notificationRows.filter(
+        (row) => Boolean(row.emailId) && row.status !== 'Sent' && Boolean(row.recipientEmail?.trim()),
+      ).length,
+    [notificationRows],
+  );
+
+  /**
+   * Ekrandaki tum hazir e-postalari tek istekte gonderir.
+   *
+   * Onay soruluyor: bu islem gercek musterilere posta atar ve geri alinamaz.
+   * Zaten gonderilmis satirlari sunucu atliyor, yani ikinci basis musteriye
+   * ikinci bir posta gondermez.
+   */
+  async function sendAllCompanyEmails() {
+    if (sendingAll || sendableCount === 0) return;
+    if (!window.confirm(t('compNotif.sendAllConfirm', { count: sendableCount }))) return;
+
+    setSendingAll(true);
+    try {
+      const result = await companyEmailsApi.sendAll(dates);
+      await refreshEmails();
+
+      if (result.failed.length === 0) {
+        showToast(t('compNotif.sendAllDone', { sent: result.sent }));
+      } else {
+        // Hangi firmaya ulasilamadigi soylenmeli; "kismen basarili" tek basina
+        // disponente ne yapacagini anlatmiyor.
+        showToast(
+          t('compNotif.sendAllPartial', {
+            sent: result.sent,
+            failed: result.failed.length,
+            companies: result.failed.map((item) => item.company).join(', '),
+          }),
+        );
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('compNotif.sendAllFailed'));
+    } finally {
+      setSendingAll(false);
+    }
+  }
+
   async function sendCompanyEmail(row: CompanyNotificationRecord) {
     if (!row.emailId) {
       showToast(t('compNotif.generateFirst'));
@@ -334,6 +385,24 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
       <div>
         <h2 className="text-xl font-bold text-slate-900">{t('compNotif.title')}</h2>
         <p className="text-sm text-slate-600">{t('compNotif.subtitle')}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={sendingAll || sendableCount === 0}
+          onClick={() => void sendAllCompanyEmails()}
+          className={cn(
+            'inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50',
+            BRAND_BTN_PRIMARY,
+          )}
+        >
+          <Send className="h-4 w-4" />
+          {sendingAll
+            ? t('compNotif.sendAllBusy')
+            : t('compNotif.sendAll', { count: sendableCount })}
+        </button>
+        <p className="text-xs text-slate-500">{t('compNotif.sendAllHint')}</p>
       </div>
 
       <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
