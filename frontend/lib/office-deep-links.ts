@@ -1,4 +1,34 @@
-export type OfficeEinsatzTab = 'heute' | 'morgen' | 'betrieb' | 'touren';
+/**
+ * Office Einsatzplan sekmeleri.
+ *
+ * Ilk dordu disponentin gunluk akisi. Sonrakiler yonetim ekranlarinin ayni
+ * sirada office'e de acilmis hali — icerikleri Betrieb sekmesinin alt gorunumleri
+ * olarak zaten vardi, artik ust duzeyde de erisilebiliyorlar.
+ */
+export type OfficeEinsatzTab =
+  | 'heute'
+  | 'morgen'
+  | 'betrieb'
+  | 'touren'
+  | 'daily-overview'
+  | 'planning'
+  | 'vacation-planner'
+  | 'company-notifications'
+  | 'morning-checkins'
+  | 'vehicle-handovers';
+
+const OFFICE_TABS: ReadonlySet<string> = new Set<OfficeEinsatzTab>([
+  'heute',
+  'morgen',
+  'betrieb',
+  'touren',
+  'daily-overview',
+  'planning',
+  'vacation-planner',
+  'company-notifications',
+  'morning-checkins',
+  'vehicle-handovers',
+]);
 
 /** Legacy admin query params (non-office Einsatzplan). */
 export type EinsatzplanPanel = 'tagesplanung' | 'urlaubsplaner' | 'company_notifications';
@@ -27,7 +57,11 @@ export function officeAssignmentsHref(options?: {
 /** Resolves office tab from legacy panel/view query params. */
 export function resolveOfficeTabFromQuery(search: URLSearchParams): OfficeEinsatzTab {
   const tab = search.get('tab');
-  if (tab === 'heute' || tab === 'morgen' || tab === 'betrieb' || tab === 'touren') return tab;
+  if (tab && OFFICE_TABS.has(tab)) return tab as OfficeEinsatzTab;
+
+  // Eski `view=` baglantilari BILEREK Betrieb'e cozulmeye devam ediyor: disari
+  // verilmis linkler (ornegin /office/queue) o sekmenin alt gorunumune gidiyor
+  // ve ayni icerigi gosteriyor. Yeni sekmelere `tab=` ile gelinir.
 
   const view = search.get('view');
   const panel = search.get('panel');

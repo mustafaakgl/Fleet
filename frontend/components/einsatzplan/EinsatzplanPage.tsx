@@ -56,16 +56,49 @@ function isPlanningTab(tab: TopTab): tab is PlanningSubtab {
   return PLANNING_TABS.includes(tab);
 }
 
-const topTabs: Array<{ id: TopTab; labelKey: string; ns: 'common' | 'einsatzplan'; icon: typeof Gauge }> = [
-  { id: 'daily-overview', labelKey: 'nav.assignments.dailyOverview', ns: 'common', icon: CalendarDays },
-  { id: 'planning', labelKey: 'nav.assignments.planning', ns: 'common', icon: ClipboardCheck },
-  { id: 'morning-checkins', labelKey: 'nav.assignments.morningCheckins', ns: 'common', icon: Sunrise },
-  { id: 'vehicle-handovers', labelKey: 'nav.assignments.vehicleHandovers', ns: 'common', icon: Truck },
-  { id: 'company-notifications', labelKey: 'nav.assignments.companyNotifications', ns: 'common', icon: Mail },
-  { id: 'vacation-planner', labelKey: 'nav.assignments.vacationPlanner', ns: 'common', icon: Sun },
-  { id: 'revenue-summary', labelKey: 'nav.assignments.revenueSummary', ns: 'common', icon: Wallet },
-  { id: 'overview', labelKey: 'einsatzplan.dashboard', ns: 'einsatzplan', icon: Gauge },
+type TopTabDef = { id: TopTab; labelKey: string; ns: 'common' | 'einsatzplan'; icon: typeof Gauge };
+
+const TAB_DEFS: Record<TopTab, TopTabDef> = {
+  'daily-overview': { id: 'daily-overview', labelKey: 'nav.assignments.dailyOverview', ns: 'common', icon: CalendarDays },
+  planning: { id: 'planning', labelKey: 'nav.assignments.planning', ns: 'common', icon: ClipboardCheck },
+  'morning-checkins': { id: 'morning-checkins', labelKey: 'nav.assignments.morningCheckins', ns: 'common', icon: Sunrise },
+  'vehicle-handovers': { id: 'vehicle-handovers', labelKey: 'nav.assignments.vehicleHandovers', ns: 'common', icon: Truck },
+  'company-notifications': { id: 'company-notifications', labelKey: 'nav.assignments.companyNotifications', ns: 'common', icon: Mail },
+  'vacation-planner': { id: 'vacation-planner', labelKey: 'nav.assignments.vacationPlanner', ns: 'common', icon: Sun },
+  'revenue-summary': { id: 'revenue-summary', labelKey: 'nav.assignments.revenueSummary', ns: 'common', icon: Wallet },
+  overview: { id: 'overview', labelKey: 'einsatzplan.dashboard', ns: 'einsatzplan', icon: Gauge },
+};
+
+/**
+ * Sekme sirasi role gore. Sira rastgele degil, gunluk isin sirasi.
+ *
+ * Yonetim once parayi gorur (gelir ozeti), muhasebe gormez. Arac devirleri
+ * yonetimde YOK: operasyonel bir ekran ve muhasebe/office'te kaliyor. Sayfaya
+ * dogrudan adresle hala ulasilabilir, sekme cubugunda gorunmuyor.
+ */
+const MANAGEMENT_TABS: TopTab[] = [
+  'revenue-summary',
+  'daily-overview',
+  'planning',
+  'vacation-planner',
+  'company-notifications',
+  'morning-checkins',
+  'overview',
 ];
+
+const ACCOUNTING_TABS: TopTab[] = [
+  'daily-overview',
+  'planning',
+  'vacation-planner',
+  'company-notifications',
+  'morning-checkins',
+  'vehicle-handovers',
+];
+
+function tabsForRole(role?: string): TopTabDef[] {
+  const ids = role === 'accounting' ? ACCOUNTING_TABS : MANAGEMENT_TABS;
+  return ids.map((id) => TAB_DEFS[id]);
+}
 
 export function EinsatzplanPage() {
   const user = getUser();
@@ -76,6 +109,8 @@ export function EinsatzplanPage() {
 }
 
 function EinsatzplanFullView() {
+  const role = getUser()?.role;
+  const topTabs = useMemo(() => tabsForRole(role), [role]);
   const { t } = useTranslation('einsatzplan');
   const { t: tCommon } = useTranslation('common');
   const router = useRouter();

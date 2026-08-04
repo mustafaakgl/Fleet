@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Plus, Route, Sun, Truck } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Mail, Plus, Route, Sun, Sunrise, Truck } from 'lucide-react';
 import { getTomorrowDate, useFleetData } from '@/context/FleetDataContext';
 import { usePlanningDate } from '@/hooks/usePlanningDate';
 import {
@@ -19,6 +19,7 @@ import { BRAND_BTN_PRIMARY, BRAND_LINK, BRAND_TAB_ACTIVE } from '@/lib/brand-col
 import { cn } from '@/lib/utils';
 import { TourPlanningPanel } from '@/components/einsatzplan/TourPlanningPanel';
 import { Tagesplanung } from './Tagesplanung';
+import { UrlaubsplanerPanel } from './UrlaubsplanerPanel';
 
 export function EinsatzplanOfficeView() {
   const { t } = useTranslation('einsatzplan');
@@ -67,12 +68,36 @@ export function EinsatzplanOfficeView() {
             ? ('planning' as const)
             : ('daily-overview' as const);
 
-  const tabs: Array<{ id: OfficeEinsatzTab; labelKey: string; icon: typeof Sun }> = [
-    { id: 'heute', labelKey: 'office.tab.today', icon: Sun },
-    { id: 'morgen', labelKey: 'office.tab.tomorrow', icon: CalendarDays },
-    { id: 'betrieb', labelKey: 'office.tab.operations', icon: ClipboardCheck },
-    { id: 'touren', labelKey: 'office.tab.tours', icon: Route },
+  // Ilk dort disponentin gunluk akisi; sonraki alti yonetim ekranlariyla ayni
+  // sirada. Etiketler iki ayri namespace'te oldugu icin her sekme kendi
+  // namespace'ini tasiyor.
+  const tabs: Array<{
+    id: OfficeEinsatzTab;
+    labelKey: string;
+    ns: 'common' | 'einsatzplan';
+    icon: typeof Sun;
+  }> = [
+    { id: 'heute', labelKey: 'office.tab.today', ns: 'einsatzplan', icon: Sun },
+    { id: 'morgen', labelKey: 'office.tab.tomorrow', ns: 'einsatzplan', icon: CalendarDays },
+    { id: 'betrieb', labelKey: 'office.tab.operations', ns: 'einsatzplan', icon: ClipboardCheck },
+    { id: 'touren', labelKey: 'office.tab.tours', ns: 'einsatzplan', icon: Route },
+    { id: 'daily-overview', labelKey: 'nav.assignments.dailyOverview', ns: 'common', icon: CalendarDays },
+    { id: 'planning', labelKey: 'nav.assignments.planning', ns: 'common', icon: ClipboardCheck },
+    { id: 'vacation-planner', labelKey: 'nav.assignments.vacationPlanner', ns: 'common', icon: Sun },
+    { id: 'company-notifications', labelKey: 'nav.assignments.companyNotifications', ns: 'common', icon: Mail },
+    { id: 'morning-checkins', labelKey: 'nav.assignments.morningCheckins', ns: 'common', icon: Sunrise },
+    { id: 'vehicle-handovers', labelKey: 'nav.assignments.vehicleHandovers', ns: 'common', icon: Truck },
   ];
+
+  /** Tagesplanung alt gorunumu olarak acilan sekmeler. */
+  const PLANNING_TABS = [
+    'daily-overview',
+    'planning',
+    'company-notifications',
+    'morning-checkins',
+    'vehicle-handovers',
+  ] as const;
+  const planningTab = PLANNING_TABS.find((id) => id === activeTab);
 
   return (
     <div className="space-y-5 bg-surface">
@@ -93,7 +118,7 @@ export function EinsatzplanOfficeView() {
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {t(tab.labelKey)}
+                  {tab.ns === 'common' ? tCommon(tab.labelKey) : t(tab.labelKey)}
                 </button>
               );
             })}
@@ -193,6 +218,12 @@ export function EinsatzplanOfficeView() {
           ) : null}
 
           {activeTab === 'touren' ? <TourPlanningPanel date={planningDate} /> : null}
+
+          {activeTab === 'vacation-planner' ? <UrlaubsplanerPanel /> : null}
+
+          {planningTab ? (
+            <Tagesplanung initialSubTab={planningTab} planningDate={planningDate} officeMode />
+          ) : null}
 
           {activeTab === 'betrieb' ? (
             <Tagesplanung
