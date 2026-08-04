@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, Loader2, Mail, Search, Truck, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Mail, Search, Truck, X } from 'lucide-react';
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { createPlanningPlaceholder } from '@/lib/planning-assignment';
 import { vehicleAssignmentsHref } from '@/lib/office-deep-links';
-import { assignmentsApi, companiesApi, vehiclesApi } from '@/lib/api';
+import { companiesApi, vehiclesApi } from '@/lib/api';
 import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
@@ -130,7 +130,6 @@ export function Tagesplanung({
     updateAssignment,
     approveTransportRequest,
     rejectTransportRequest,
-    refetchHydrate,
     assignmentPersistError,
     clearAssignmentPersistError,
   } = useFleetData();
@@ -156,7 +155,6 @@ export function Tagesplanung({
   const [companyOptions, setCompanyOptions] = useState<string[]>([]);
   const [internalDate, setInternalDate] = useState<string>(() => planningDateProp ?? getTodayDate());
   const [kpiFilter, setKpiFilter] = useState<KpiFilter>('all');
-  const [copying, setCopying] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const planningDate = planningDateProp ?? internalDate;
   const dateNavEnabled = !planningDateProp;
@@ -399,25 +397,6 @@ export function Tagesplanung({
     setQuickAssign(null);
   }, []);
 
-  const handleCopyYesterday = useCallback(async () => {
-    if (copying) return;
-    setCopying(true);
-    try {
-      const result = await assignmentsApi.copyDay(shiftDate(planningDate, -1), planningDate);
-      refetchHydrate();
-      setInfoMessage(
-        result.total === 0
-          ? tCommon('dashboard.v2.planning.copyNothing')
-          : tCommon('dashboard.v2.planning.copyDone', { created: result.created, skipped: result.skipped }),
-      );
-    } catch {
-      setInfoMessage(t('planning.copyError'));
-    } finally {
-      setCopying(false);
-      setTimeout(() => setInfoMessage(null), 3200);
-    }
-  }, [copying, planningDate, refetchHydrate, t, tCommon]);
-
   const availableCount = planningRows.filter((row) => row.effectiveAvailability === 'Available').length;
   const vacationCount = planningRows.filter((row) => row.effectiveAvailability === 'Urlaub').length;
   const sickCount = planningRows.filter((row) => row.effectiveAvailability === 'Krank').length;
@@ -610,17 +589,6 @@ export function Tagesplanung({
                   className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {t('planning.dateToday')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleCopyYesterday()}
-                  disabled={copying}
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Copy className="h-4 w-4" />
-                  {copying
-                    ? tCommon('dashboard.v2.planning.copying')
-                    : tCommon('dashboard.v2.planning.copyYesterday')}
                 </button>
               </div>
             ) : (
