@@ -23,6 +23,22 @@ export async function createApp(): Promise<NestExpressApplication> {
   app.use(cookieParser());
   app.setGlobalPrefix('api/v1');
 
+  // Behind a reverse proxy (public demo tunnel, load balancer) the socket peer is
+  // always the proxy, so every visitor would share a single rate-limit bucket —
+  // one person's sixth login attempt locks out everyone. Opting in makes Express
+  // read X-Forwarded-For, which is what the throttler keys on. Off by default:
+  // trusting that header while the app is directly reachable would let clients
+  // spoof their address and walk past the limits altogether.
+  const trustProxy = process.env.TRUST_PROXY?.trim();
+  if (trustProxy) {
+    const hops = Number(trustProxy);
+    if (Number.isFinite(hops)) {
+      app.set('trust proxy', hops);
+    } else {
+      app.set('trust proxy', trustProxy === 'true' ? true : trustProxy);
+    }
+  }
+
   const defaultCorsOrigins = [
     'http://localhost:3001',
     'http://127.0.0.1:3001',

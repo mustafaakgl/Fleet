@@ -13,7 +13,29 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   output: isProductionBuild ? 'standalone' : undefined,
   outputFileTracingRoot: repoRoot,
-  allowedDevOrigins: ['http://localhost:3001', 'http://127.0.0.1:3001'],
+  // Public demo tunnels (cloudflared) reach the dev server under a foreign
+  // Host header; Next 15 rejects those unless they are listed here.
+  allowedDevOrigins: [
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
+    '*.trycloudflare.com',
+    '*.ngrok-free.app',
+    '*.ngrok-free.dev',
+    '*.ngrok.app',
+    '*.ngrok.io',
+    '*.ts.net',
+  ],
+  // Same-origin API proxy so a phone on the public tunnel never has to resolve
+  // localhost:3000 itself. Scoped to the backend's global prefix (api/v1) so the
+  // frontend's own route handlers (/api/leads, /api/route-map) keep working.
+  async rewrites() {
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${process.env.BACKEND_INTERNAL_URL ?? 'http://127.0.0.1:3000'}/api/v1/:path*`,
+      },
+    ];
+  },
   experimental: {
     // Prevent Next devtools segment explorer from injecting a client module
     // that intermittently goes missing from the RSC client manifest in dev.

@@ -8,7 +8,11 @@ import { spawn, spawnSync } from 'node:child_process';
 const command = process.argv[2];
 const forwardedArgs = process.argv.slice(3);
 const port = Number.parseInt(process.env.FRONTEND_PORT || '3001', 10);
-const defaultApiUrl = 'http://localhost:3000/api/v1';
+// Same-origin by design: next.config.ts rewrites /api/v1/* to the backend, so
+// the browser never has to resolve localhost:3000 itself. That keeps the app
+// working when the dev server is reached over a public tunnel or from a phone
+// on the LAN. Set NEXT_PUBLIC_API_URL to override with an absolute URL.
+const defaultApiUrl = '/api/v1';
 const rootDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const frontendDir = path.join(rootDir, 'frontend');
 const nextBin = path.join(frontendDir, 'node_modules', 'next', 'dist', 'bin', 'next');
