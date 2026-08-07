@@ -23,7 +23,9 @@ const TABS = [
   { href: '/driver/requests', icon: FileText, labelKey: 'driverPortal.nav.requests', match: (path: string) =>
     path === '/driver/requests',
   },
-  { href: '/driver/reports', icon: ClipboardList, labelKey: 'driverPortal.nav.reportsNotifications', match: (path: string) =>
+  // Short label on purpose: "Berichte + Benachrichtigungen" cannot fit a fifth of
+  // a 375px bar, and the unread badge already carries the notification part.
+  { href: '/driver/reports', icon: ClipboardList, labelKey: 'driverPortal.nav.reports', match: (path: string) =>
     path === '/driver/reports' ||
     path.startsWith('/driver/accident-report') ||
     path.startsWith('/driver/cargo-damage-report') ||
@@ -79,7 +81,9 @@ export function DriverPortalNav() {
                   </span>
                 ) : null}
               </span>
-              <span className="truncate">{t(tab.labelKey)}</span>
+              {/* w-full is what makes truncate bite: items-center shrinks the span to
+                  its text, so without a width it just overflows onto the next tab. */}
+              <span className="w-full truncate text-center">{t(tab.labelKey)}</span>
             </Link>
           );
         })}

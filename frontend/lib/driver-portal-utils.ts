@@ -13,6 +13,7 @@ export type DriverPortalStatusDomain =
 const STATUS_TRANSLATION_KEYS: Record<DriverPortalStatusDomain, Record<string, string>> = {
   assignment: {
     planned: 'driverPortal.status.assignment.planned',
+    confirmed: 'driverPortal.status.assignment.confirmed',
     in_progress: 'driverPortal.status.assignment.inProgress',
     completed: 'driverPortal.status.assignment.completed',
     cancelled: 'driverPortal.status.assignment.cancelled',

@@ -3705,6 +3705,7 @@
   "driverPortal.home.loadErrorMessages": "Messages",
   "driverPortal.home.loadErrorNotifications": "Notifications",
   "driverPortal.status.assignment.planned": "Planned",
+  "driverPortal.status.assignment.confirmed": "Confirmed",
   "driverPortal.status.assignment.inProgress": "In progress",
   "driverPortal.status.assignment.completed": "Completed",
   "driverPortal.status.assignment.cancelled": "Cancelled",

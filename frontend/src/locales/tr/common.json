@@ -3705,6 +3705,7 @@
   "driverPortal.home.loadErrorMessages": "Mesajlar",
   "driverPortal.home.loadErrorNotifications": "Bildirimler",
   "driverPortal.status.assignment.planned": "Planlandı",
+  "driverPortal.status.assignment.confirmed": "Onaylandı",
   "driverPortal.status.assignment.inProgress": "Devam ediyor",
   "driverPortal.status.assignment.completed": "Tamamlandı",
   "driverPortal.status.assignment.cancelled": "İptal edildi",
