@@ -302,6 +302,7 @@ async function main() {
         '../frontend/lib/decode-polyline.spec.ts',
         '../frontend/lib/address-format.spec.ts',
         '../frontend/lib/nav-access.spec.ts',
+        '../frontend/lib/driver-day-phase.spec.ts',
         '../mobile-driver/src/lib/navigation-links.spec.ts',
       ],
       { cwd: backendDir, inheritStdout: true, inheritStderr: true },

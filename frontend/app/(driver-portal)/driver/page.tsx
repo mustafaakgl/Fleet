@@ -1,107 +1,146 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { AlertTriangle, Bell, Camera, ClipboardCheck, MessageSquare } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DriverAssignmentsPanel } from '@/components/driver-portal/DriverAssignmentsPanel';
-import { DriverDayStatusBanner } from '@/components/driver-portal/DriverDayStatusBanner';
-import { DriverLocationSharingCard } from '@/components/driver-portal/DriverLocationSharingCard';
+import {
+  DriverBlockingTaskLink,
+  DriverNowCard,
+  DriverNowCardSkeleton,
+} from '@/components/driver-portal/DriverNowCard';
 import { DriverPendingTasksCard } from '@/components/driver-portal/DriverPendingTasksCard';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
-import { DriverWorkSessionCard } from '@/components/driver-portal/DriverWorkSessionCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { driverPortalApi, messengerApi } from '@/lib/api';
-import { driverTodayIso, translateStatus } from '@/lib/driver-portal-utils';
+import { driverPortalApi } from '@/lib/api';
+import { resolveDriverDayPhase, type DriverDayPhase } from '@/lib/driver-day-phase';
+import { driverTodayIso } from '@/lib/driver-portal-utils';
+import type { DriverPortalAssignment } from '@/lib/types';
 
+/**
+ * The driver's home answers one question: what should I do right now.
+ *
+ * It used to stack every capability at equal weight — work session, check-in,
+ * handover, location sharing, unread counters, a quick-action grid — with the
+ * day's actual assignment seventh down the page. The day phase now decides, and
+ * everything else is demoted to context.
+ */
 export default function DriverPortalHomePage() {
   const { t, i18n } = useTranslation();
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
   const [driverName, setDriverName] = useState<string | null>(null);
-  const [driverStatus, setDriverStatus] = useState<string | null>(null);
-  const [pendingHandover, setPendingHandover] = useState<{
-    assignmentId: string;
-    vehicleId: string;
-  } | null>(null);
-  const [pendingEquipmentIssuanceId, setPendingEquipmentIssuanceId] = useState<string | null>(null);
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [assignment, setAssignment] = useState<DriverPortalAssignment | null>(null);
+  const [handover, setHandover] = useState<{ assignmentId: string; vehicleId: string } | null>(null);
+  const [equipmentIssuanceId, setEquipmentIssuanceId] = useState<string | null>(null);
+  const [morningCheckinDone, setMorningCheckinDone] = useState(false);
+  const [workSessionActive, setWorkSessionActive] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     const today = driverTodayIso();
-    let active = true;
-    Promise.allSettled([
+    const results = await Promise.allSettled([
       driverPortalApi.me(),
       driverPortalApi.todayAssignments(today),
       driverPortalApi.listHandovers({ date: today, photoStatus: 'missing' }),
       driverPortalApi.listEquipmentIssuances(),
-      messengerApi.getUnreadCount(),
-      driverPortalApi.unreadNotifications(),
-    ])
-      .then((results) => {
-        if (!active) return;
-        const [profile, assignments, handovers, equipmentIssuances, messages, notifications] = results;
+      driverPortalApi.listMorningCheckins(today),
+      driverPortalApi.getCurrentWorkSession(),
+    ]);
+    const [profile, assignments, handovers, equipment, checkins, session] = results;
 
-        const loadErrors: string[] = [];
+    if (profile.status === 'fulfilled') {
+      setDriverName(profile.value.driver.firstName);
+    }
 
-        if (profile.status === 'fulfilled') {
-          setDriverName(profile.value.driver.firstName);
-          setDriverStatus(profile.value.driver.status);
-        } else {
-          loadErrors.push(t('driverPortal.home.loadErrorProfile'));
-        }
+    if (assignments.status === 'fulfilled') {
+      // The office may plan several; the one still open is the one to act on.
+      const open = assignments.value.find(
+        (row) => row.status !== 'completed' && row.status !== 'cancelled',
+      );
+      setAssignment(open ?? assignments.value[0] ?? null);
+    }
 
-        if (assignments.status !== 'fulfilled') {
-          loadErrors.push(t('driverPortal.home.loadErrorAssignments'));
-        }
+    if (handovers.status === 'fulfilled') {
+      const pending = handovers.value.find((row) => row.photoRequired && row.status !== 'completed');
+      setHandover(
+        pending?.assignmentId && pending.vehicleId
+          ? { assignmentId: pending.assignmentId, vehicleId: pending.vehicleId }
+          : null,
+      );
+    }
 
-        if (handovers.status === 'fulfilled') {
-          const pending = handovers.value.find((row) => row.photoRequired && row.status !== 'completed');
-          setPendingHandover(
-            pending?.assignmentId && pending.vehicleId
-              ? { assignmentId: pending.assignmentId, vehicleId: pending.vehicleId }
-              : null,
-          );
-        } else {
-          setPendingHandover(null);
-          loadErrors.push(t('driverPortal.home.loadErrorHandovers'));
-        }
+    if (equipment.status === 'fulfilled') {
+      setEquipmentIssuanceId(equipment.value.find((row) => row.status === 'pending_signature')?.id ?? null);
+    }
 
-        if (equipmentIssuances.status === 'fulfilled') {
-          setPendingEquipmentIssuanceId(
-            equipmentIssuances.value.find((row) => row.status === 'pending_signature')?.id ?? null,
-          );
-        } else {
-          setPendingEquipmentIssuanceId(null);
-          loadErrors.push(t('driverPortal.home.loadErrorEquipment'));
-        }
+    if (checkins.status === 'fulfilled') {
+      setMorningCheckinDone(checkins.value.length > 0);
+    }
 
-        if (messages.status === 'fulfilled') {
-          setUnreadMessages(messages.value.total);
-        } else {
-          setUnreadMessages(0);
-          loadErrors.push(t('driverPortal.home.loadErrorMessages'));
-        }
+    if (session.status === 'fulfilled') {
+      setWorkSessionActive(session.value.active);
+    }
 
-        if (notifications.status === 'fulfilled') {
-          setUnreadNotifications(notifications.value.count);
-        } else {
-          setUnreadNotifications(0);
-          loadErrors.push(t('driverPortal.home.loadErrorNotifications'));
-        }
+    // Only the two reads the phase depends on are worth alarming about; a failed
+    // counter should not put a red box above the driver's actual task.
+    const critical = assignments.status === 'rejected' || session.status === 'rejected';
+    setLoadError(critical ? t('driverPortal.home.loadErrorSummary') : null);
+    setLoading(false);
+  }, [t]);
 
-        setLoadError(loadErrors.length > 0 ? t('driverPortal.home.loadErrorSummary') : null);
-      })
-      .catch(() => {
-        if (!active) return;
+  useEffect(() => {
+    let active = true;
+    void load().catch(() => {
+      if (active) {
         setLoadError(t('driverPortal.home.loadErrorSummary'));
-      });
-
+        setLoading(false);
+      }
+    });
     return () => {
       active = false;
     };
-  }, [t]);
+  }, [load, t]);
+
+  /**
+   * Opens the working day. The work session starts from this action rather than
+   * its own button, and today's check-in is filled from the assignment the office
+   * already planned, so the driver is not asked to retype what the system knows.
+   */
+  const handleStartDay = useCallback(async () => {
+    setStarting(true);
+    setActionError(null);
+    try {
+      if (!workSessionActive) {
+        await driverPortalApi.startWorkSession();
+      }
+      if (!morningCheckinDone && assignment) {
+        await driverPortalApi.createMorningCheckin({
+          date: driverTodayIso(),
+          vehiclePlate: assignment.vehicle.plateNumber,
+          companyName: assignment.company.name,
+          cargoName: assignment.cargoName || undefined,
+        });
+      }
+      await load();
+    } catch {
+      setActionError(t('driverPortal.now.startFailed'));
+    } finally {
+      setStarting(false);
+    }
+  }, [assignment, load, morningCheckinDone, t, workSessionActive]);
+
+  const phase: DriverDayPhase = resolveDriverDayPhase({
+    assignmentStatus: assignment?.status ?? null,
+    // No page for the vehicle check yet (plan step 4); leaving this null keeps the
+    // gate out of the way instead of parking the driver on a dead end.
+    departureCheckDone: null,
+    morningCheckinDone,
+    handoverPhotosPending: handover !== null,
+    workSessionActive,
+  });
 
   const todayLabel = new Intl.DateTimeFormat(i18n.language, {
     weekday: 'long',
@@ -111,28 +150,18 @@ export default function DriverPortalHomePage() {
 
   return (
     <DriverPortalShell>
-      <div className="space-y-5">
-        <Card className="overflow-hidden border-[#1a4d7a]/15 bg-[#1a4d7a] text-white">
-          <CardContent className="p-4">
-            <p className="text-lg font-bold">
-              {t('driverPortal.greeting', { name: driverName ?? t('driverPortal.driver') })}
-            </p>
-            <p className="mt-1 text-sm text-slate-200">{todayLabel}</p>
-            {driverStatus ? (
-              <p className="mt-2 inline-block rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold">
-                {t('driverPortal.home.status')}: {t(translateStatus('driver', driverStatus))}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+      <div className="space-y-4">
+        <div>
+          <p className="text-base font-semibold text-slate-900">
+            {t('driverPortal.greeting', { name: driverName ?? t('driverPortal.driver') })}
+          </p>
+          <p className="text-sm text-slate-600">{todayLabel}</p>
+        </div>
 
         {loadError ? (
           <Card className="border-red-200 bg-red-50">
             <CardContent className="flex items-center justify-between gap-3 p-4">
-              <div>
-                <p className="text-sm font-semibold text-red-900">{t('driverPortal.home.loadErrorTitle')}</p>
-                <p className="text-sm text-red-800">{loadError}</p>
-              </div>
+              <p className="text-sm font-medium text-slate-900">{loadError}</p>
               <Button type="button" variant="outline" onClick={() => window.location.reload()}>
                 {t('common.retry')}
               </Button>
@@ -140,100 +169,38 @@ export default function DriverPortalHomePage() {
           </Card>
         ) : null}
 
-        <DriverWorkSessionCard />
+        {loading ? (
+          <DriverNowCardSkeleton />
+        ) : (
+          <DriverNowCard
+            phase={phase}
+            assignment={assignment}
+            handover={handover}
+            starting={starting}
+            onStartDay={handleStartDay}
+          />
+        )}
 
-        <DriverDayStatusBanner />
+        {actionError ? <p className="text-sm text-red-700">{actionError}</p> : null}
 
-        {pendingEquipmentIssuanceId ? (
-          <Card className="border-amber-300 bg-amber-50">
-            <CardContent className="space-y-2 p-4">
-              <p className="text-sm font-semibold text-amber-900">
-                {t('driverPortal.home.equipmentIssuanceTaskTitle')}
-              </p>
-              <p className="text-sm text-amber-800">
-                {t('driverPortal.home.equipmentIssuanceTaskBody')}
-              </p>
-              <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700">
-                <Link href={`/driver/equipment-issuance?id=${pendingEquipmentIssuanceId}`}>
-                  <ClipboardCheck className="mr-2 h-4 w-4" />
-                  {t('driverPortal.home.equipmentIssuance')}
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : null}
+        {equipmentIssuanceId ? <DriverBlockingTaskLink equipmentIssuanceId={equipmentIssuanceId} /> : null}
 
-        <DriverLocationSharingCard />
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-900">{t('driverPortal.now.todaySection')}</h2>
+          <DriverAssignmentsPanel />
+        </section>
 
-        <div className="grid grid-cols-2 gap-2">
-          <Link
-            href="/driver/messages"
-            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm hover:bg-slate-50"
-          >
-            <span className="flex items-center gap-2 text-slate-700">
-              <MessageSquare className="h-4 w-4 text-[#1a4d7a]" />
-              {t('driverPortal.home.summaryMessages')}
-            </span>
-            <span className="font-semibold text-[#1a4d7a]">{unreadMessages}</span>
-          </Link>
-          <Link
-            href="/driver/notifications"
-            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm hover:bg-slate-50"
-          >
-            <span className="flex items-center gap-2 text-slate-700">
-              <Bell className="h-4 w-4 text-[#1a4d7a]" />
-              {t('driverPortal.home.summaryNotifications')}
-            </span>
-            <span className="font-semibold text-[#1a4d7a]">{unreadNotifications}</span>
-          </Link>
-        </div>
-
-        <DriverAssignmentsPanel />
-
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-slate-900">{t('driverPortal.home.quickActions')}</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button asChild variant="outline" className="justify-start">
-              <Link href="/driver/morning-checkin">
-                <ClipboardCheck className="mr-2 h-4 w-4" />
-                {t('driverPortal.home.morningCheckin')}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="justify-start">
-              <Link href={pendingHandover ? `/driver/handover?assignmentId=${pendingHandover.assignmentId}&vehicleId=${pendingHandover.vehicleId}` : '/driver/handover'}>
-                <Camera className="mr-2 h-4 w-4" />
-                {t('driverPortal.home.handoverPhoto')}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="justify-start">
-              <Link href={pendingEquipmentIssuanceId ? `/driver/equipment-issuance?id=${pendingEquipmentIssuanceId}` : '/driver/equipment-issuance'}>
-                <ClipboardCheck className="mr-2 h-4 w-4" />
-                {t('driverPortal.home.equipmentIssuance')}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="justify-start text-red-700 hover:text-red-800">
-              <Link href="/driver/reports">
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                {t('driverPortal.home.reportAccident')}
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="justify-start text-red-700 hover:text-red-800">
-              <Link href="/driver/reports">
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                {t('driverPortal.home.reportCargo')}
-              </Link>
-            </Button>
-          </div>
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-slate-900">{t('driverPortal.now.pendingSection')}</h2>
           <DriverPendingTasksCard />
-        </div>
-
-        <Link
-          href="/driver/requests"
-          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 hover:bg-slate-50"
-        >
-          {t('driverPortal.home.openRequests')}
-          <span className="text-slate-400">→</span>
-        </Link>
+          <Link
+            href="/driver/requests"
+            className="flex min-h-11 items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900"
+          >
+            {t('driverPortal.home.openRequests')}
+            <span className="text-slate-400">→</span>
+          </Link>
+        </section>
       </div>
     </DriverPortalShell>
   );
