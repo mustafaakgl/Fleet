@@ -292,9 +292,18 @@ async function main() {
           taxCents,
           grossCents,
           paidCents: group.status === 'paid' ? grossCents : 0,
-          taxBreakdown: {
-            standard_1900: { netCents, taxCents, grossCents },
-          },
+          // Same shape calculateInvoiceTotals() produces in src/invoicing/money.ts —
+          // an array of entries carrying their own category and rate. Mock data that
+          // keys the rate into an object instead crashes the invoice detail page.
+          taxBreakdown: [
+            {
+              taxCategory: 'standard',
+              taxRateBasisPoints: 1900,
+              netCents,
+              taxCents,
+              grossCents,
+            },
+          ],
           customerName: company.billingName ?? company.name,
           customerStreet: company.billingStreet ?? 'Industriestrasse 12',
           customerPostalCode: company.billingPostalCode ?? '20095',

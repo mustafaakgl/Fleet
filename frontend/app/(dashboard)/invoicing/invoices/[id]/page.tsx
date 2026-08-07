@@ -140,7 +140,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   const openCents = invoice ? Math.max(0, invoice.grossCents - invoice.paidCents) : 0;
 
-  const taxRows = useMemo(() => invoice?.taxBreakdown ?? [], [invoice]);
+  // taxBreakdown is a Json column, so a row written by an older or third-party
+  // path can hold something other than the array the type promises. `?? []` only
+  // covers null, and a non-array value reached .map() and took the whole page
+  // down with it — the totals still render, so degrade instead of crashing.
+  const taxRows = useMemo(
+    () => (Array.isArray(invoice?.taxBreakdown) ? invoice.taxBreakdown : []),
+    [invoice],
+  );
 
   const runAction = useCallback(
     async (action: () => Promise<InvoiceDetail | unknown>, successMessage?: string) => {
