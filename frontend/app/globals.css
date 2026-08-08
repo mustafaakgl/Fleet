@@ -10,6 +10,44 @@
   --color-foreground: var(--foreground);
 }
 
+/**
+ * Marka paleti.
+ *
+ * Bu renkler tailwind.config.ts icinde de tanimli ama ORASI HIC YUKLENMIYOR:
+ * proje Tailwind 4 kullaniyor ve Tailwind 4'te JS config ancak `@config` ile
+ * devreye girer, o direktif de yok. Sonuc olarak bg-brand-primary tarayicida
+ * seffaf, text-brand-primary siyah hesaplaniyordu — kodda 167 yerde referans
+ * verilen bir palet sessizce olu duruyordu. Gomulu hex'lerin sebebi de buydu.
+ *
+ * `@config` ile config'in tamamini yuklemek YANLIS olurdu: ayni dosya
+ * breakpoint'leri de yeniden tanimliyor (sm:768, md:992, lg:1200) ve uygulama
+ * bugune kadar Tailwind varsayilanlariyla (640/768/1024) gelistirilip gorsel
+ * olarak oturtuldu. Onlari aktive etmek her duyarli sinifi kaydirirdi. Bu
+ * yuzden yalnizca renkler tasindi.
+ */
+@theme {
+  --color-brand-primary: #003366;
+  --color-brand-secondary: #4caf50;
+  --color-brand-warning: #ff9800;
+  --color-brand-danger: #f44336;
+  --color-brand-error: #f44336;
+  --color-brand-info: #2196f3;
+
+  --color-surface: #f5f7fa;
+  --color-surface-card: #ffffff;
+  --color-surface-border: #dee2e6;
+
+  --color-text-primary: #333333;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #adb5bd;
+
+  --color-sidebar-bg: #1e293b;
+  --color-sidebar-text: #f1f5f9;
+  --color-sidebar-active: #3b82f6;
+  --color-sidebar-hover: #334155;
+  --color-sidebar-muted: #94a3b8;
+}
+
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;

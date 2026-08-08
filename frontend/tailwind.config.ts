@@ -1,5 +1,21 @@
 import type { Config } from 'tailwindcss';
 
+/**
+ * DIKKAT: Bu dosya Tailwind tarafindan YUKLENMIYOR.
+ *
+ * Proje Tailwind 4 kullaniyor; orada JS config ancak `app/globals.css` icindeki
+ * bir `@config` direktifiyle devreye girer ve o direktif bilerek eklenmedi.
+ * Marka renkleri bu yuzden globals.css icindeki `@theme` blogunda yasiyor —
+ * RENK DEGISIKLIGI ORAYA YAPILIR, buraya degil.
+ *
+ * Asagidaki `screens`, `spacing`, `fontFamily`, `fontSize` tanimlari da etkisiz.
+ * Olculdu (2026-08-08): derlenmis CSS Tailwind varsayilanlarini kullaniyor
+ * (sm 640 / md 768 / lg 1024), buradaki 768/992/1200 degil. Uygulama bugune
+ * kadar varsayilanlarla gelistirilip gorsel olarak oturtuldugu icin bunlari
+ * aktive etmek her duyarli sinifi kaydirirdi; `xs:`, `min-h-touch`,
+ * `font-heading` gibi siniflarin hicbiri zaten kullanilmiyor.
+ */
+
 const config: Config = {
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',

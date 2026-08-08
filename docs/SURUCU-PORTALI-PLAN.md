@@ -14,7 +14,7 @@
 | 5 | Arıza bildirimi + yakıt girişi | ✅ bitti |
 | 6 | Kalan sürüş süresi | ⏭️ kapsam dışı (karar) |
 | 7 | Durak durumu ("vardım / teslim ettim") | ✅ bitti |
-| — | Token katmanını dirilt | ⬜ ayrı iş, 53 dosya |
+| — | Token katmanını dirilt | ✅ bitti |
 | — | Ehliyet kontrolü · cezalar · seferler · skor | ⬜ sonraki tur |
 
 ## Çıkış noktası
@@ -315,8 +315,33 @@ Tokenları açmak bu dosyaların rengini aynı anda değiştirir; sürücü port
 görsel doğrulama turunu gerektirir. Adım 2 bu yüzden yerleşik paleti anlamsal rollere bağlayarak
 ilerledi.
 
-**Yapılacak.** `globals.css`'e `@theme` ile paleti taşı (veya `@config` ekle), sonra 53 dosyayı
-görsel olarak gözden geçir. Gece modu buna bağlı.
+**Yapılan (2026-08-08).** Palet `globals.css` içindeki `@theme` bloğuna taşındı.
+
+**`@config` bilerek kullanılmadı.** O direktif config'in tamamını yükler ve aynı dosya
+breakpoint'leri de yeniden tanımlıyor. Ölçüldü: derlenmiş CSS Tailwind varsayılanlarını kullanıyor
+(`sm` 640 / `md` 768 / `lg` 1024), config'deki 768/992/1200 değil. Uygulama bugüne kadar
+varsayılanlarla geliştirilip görsel olarak oturtulduğu için onları aktive etmek **her duyarlı
+sınıfı** kaydırırdı. Yalnızca renkler taşındı.
+
+Config'deki diğer ölü tanımlar (`xs:`, `min-h-touch`, `font-heading`, `w-sidebar`) tek tek
+arandı — **hiçbiri kullanılmıyor**, dokunulmadı. Dosyanın başına yüklenmediğini söyleyen bir
+uyarı kondu ki renk değişikliği yanlış yere yapılmasın.
+
+**Doğrulanan — önce/sonra ölçümü.** Etkilenen sayfalarda token taşıyan elemanların hesaplanmış
+renkleri kaydedildi ve karşılaştırıldı. **Her değişiklik onarım, hiçbiri gerileme:**
+
+| Sınıf | Önce | Sonra |
+|---|---|---|
+| `bg-brand-primary` | `rgba(0,0,0,0)` — şeffaf, metni zaten beyaz | `#003366` |
+| `bg-surface` | şeffaf | `#F5F7FA` |
+| `text-brand-primary` | siyah | `#003366` |
+| `ring-surface-border` | varsayılan | `#DEE2E6` |
+
+`bg-brand-primary`'nin metni zaten beyazdı; yani **dört sayfada beyaz metin şeffaf zemin
+üstündeydi — görünmez butonlar**. `/requests` ekran görüntüsü karşılaştırmasında iki görünmez öğe
+ortaya çıktı: "Offen" sekmesindeki **10** sayacı ve sağ üstteki kullanıcı avatarı.
+
+Production build hatasız.
 
 ## Kapsam dışı
 
