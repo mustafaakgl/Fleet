@@ -11,8 +11,8 @@
 | 2 | Ana sayfa → günün fazına göre tek eylem | ✅ bitti |
 | 3 | Abfahrtskontrolle (günlük araç kontrolü) | ✅ bitti |
 | 4 | Tur ekranı — göster | ✅ bitti |
-| 5 | Arıza bildirimi + yakıt girişi | ⬜ sırada |
-| 6 | Kalan sürüş süresi | ⬜ |
+| 5 | Arıza bildirimi + yakıt girişi | ✅ bitti |
+| 6 | Kalan sürüş süresi | ⬜ sırada |
 | 7 | Durak durumu ("vardım / teslim ettim") | ⬜ tasarım kararı bekliyor |
 | — | Token katmanını dirilt | ⬜ ayrı iş, 53 dosya |
 | — | Ehliyet kontrolü · cezalar · seferler · skor | ⬜ sonraki tur |
@@ -188,14 +188,27 @@ turlar backend tarafından zaten gizleniyor.
 **Not.** Tur adı büyük harfe çevrilmiyordu değil — çevriliyordu ve Türkçe dil kuralı "Berlin"i
 "BERLİN" yapıyordu. Etiketler büyütülür, kullanıcı verisi büyütülmez.
 
-## Adım 5 — Arıza bildirimi + yakıt girişi
+## Adım 5 — Arıza bildirimi + yakıt girişi ✅
 
-`DriverReportsForm` bugün kaza + yük hasarını taşıyor; üçüncü tip olarak araç arızası eklenir
-(`POST driver/defects/report`). Yeni sayfa değil, mevcut formun genişletilmesi.
+**Yapılan.** `DriverReportsForm`'a üçüncü kart olarak araç arızası eklendi (marka yeni sayfa değil,
+mevcut formun genişlemesi). Yakıt için yeni `/driver/fuel`.
 
-Yakıt için yeni `/driver/fuel`, `POST driver/fleet/fuel-entries`'e bağlanır.
+Yakıt sayfası hiçbir menüden erişilemez kalmasın diye ana sayfada `on_tour` fazına ikincil bağlantı
+olarak kondu — sürücü yakıtı tur sırasında alıyor. (Raporlardaki B2 bulgusu tam olarak buydu:
+sayfa var, hiçbir yerden bağlı değil.)
 
-**Doğrulama.** Kayıtlar ofis tarafındaki `/defects` ve yakıt ekranlarında görünüyor.
+**Yakalanan backend kuralı.** `POST driver/defects/report` **en az bir fotoğraf** şart koşuyor;
+form ilk halinde bunu bilmiyordu ve gönderim 400 ile dönüyordu. Artık foto zorunlu olarak
+işaretli, gönderimden önce kontrol ediliyor.
+
+**Yol üstünde düzeltilen.** Formdaki mevcut iki gönder butonu `bg-brand-primary` kullanıyordu —
+ölü token olduğu için arka planları hiç yoktu. Çalışan sınıflara çevrildi. Sayfa alt başlığı
+"kaza ve yük hasarı" diyordu, artık arızayı da anıyor.
+
+**Doğrulanan.** Yakıt: 412,5 L · 698,30 € · 184.320 km · dolu depo kaydedildi; virgüllü ondalıklar
+doğru çözüldü. Arıza: fotoğrafla gönderim başarılı, fotoğrafsız gönderim formda engelleniyor.
+İki test kaydı da silindi (arıza `kritisch/offen` olduğu için bırakılsaydı o aracın
+Abfahrtskontrolle'sini bloke ederdi).
 
 ## Adım 6 — Kalan sürüş süresi
 

@@ -10,7 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { driverPortalApi } from '@/lib/api';
-import type { DriverTransportFormOptions } from '@/lib/types';
+import type { DefectSeverity, DriverTransportFormOptions } from '@/lib/types';
+
+const DEFECT_SEVERITIES: DefectSeverity[] = ['gering', 'mittel', 'kritisch'];
 
 function formatVehicleLabel(vehicle: {
   plateNumber: string;
@@ -61,6 +63,16 @@ export function DriverReportsForm() {
   const [cargoError, setCargoError] = useState<string | null>(null);
   const [accidentSuccess, setAccidentSuccess] = useState(false);
   const [cargoSuccess, setCargoSuccess] = useState(false);
+  // Vehicle defect spotted outside the daily check — the third thing a driver
+  // actually needs to report, and the only one that had no form.
+  const [defectVehicleId, setDefectVehicleId] = useState('');
+  const [defectTitle, setDefectTitle] = useState('');
+  const [defectDescription, setDefectDescription] = useState('');
+  const [defectSeverity, setDefectSeverity] = useState<DefectSeverity>('mittel');
+  const [defectPhotos, setDefectPhotos] = useState<File[]>([]);
+  const [defectBusy, setDefectBusy] = useState(false);
+  const [defectError, setDefectError] = useState<string | null>(null);
+  const [defectSuccess, setDefectSuccess] = useState(false);
 
   useEffect(() => {
     driverPortalApi
@@ -166,8 +178,129 @@ export function DriverReportsForm() {
     }
   }
 
+  async function submitDefect(event: React.FormEvent) {
+    event.preventDefault();
+    setDefectError(null);
+    setDefectSuccess(false);
+
+    if (!defectVehicleId) {
+      setDefectError(t('driverPortal.reports.defectVehicleRequired'));
+      return;
+    }
+    if (!defectDescription.trim()) {
+      setDefectError(t('driverPortal.reports.defectDescriptionRequired'));
+      return;
+    }
+    // The endpoint refuses a defect without evidence; catching it here beats an
+    // opaque 400 after the driver has already typed everything.
+    if (defectPhotos.length === 0) {
+      setDefectError(t('driverPortal.reports.defectPhotoRequired'));
+      return;
+    }
+
+    setDefectBusy(true);
+    try {
+      await driverPortalApi.reportDefect(
+        {
+          vehicle_id: defectVehicleId,
+          description: defectDescription.trim(),
+          severity: defectSeverity,
+          title: defectTitle.trim() || undefined,
+        },
+        defectPhotos,
+      );
+      setDefectSuccess(true);
+      setDefectTitle('');
+      setDefectDescription('');
+      setDefectPhotos([]);
+      setDefectSeverity('mittel');
+    } catch {
+      setDefectError(t('driverPortal.reports.defectFailed'));
+    } finally {
+      setDefectBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('driverPortal.reports.defectTitle')}</CardTitle>
+          <p className="text-sm text-slate-600">{t('driverPortal.reports.defectSubtitle')}</p>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={(e) => void submitDefect(e)}>
+            <div className="space-y-2">
+              <Label>{t('driverPortal.reports.vehicle')}</Label>
+              <Select value={defectVehicleId} onChange={(e) => setDefectVehicleId(e.target.value)}>
+                <option value="">{t('driverPortal.requests.selectPlaceholder')}</option>
+                {formOptions?.vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {formatVehicleLabel(vehicle)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('driverPortal.reports.defectShortTitle')}</Label>
+              <Input
+                value={defectTitle}
+                onChange={(e) => setDefectTitle(e.target.value)}
+                placeholder={t('driverPortal.reports.defectShortTitlePlaceholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('driverPortal.reports.description')}</Label>
+              <textarea
+                className="min-h-24 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                placeholder={t('driverPortal.reports.defectDescriptionPlaceholder')}
+                value={defectDescription}
+                onChange={(e) => setDefectDescription(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('driverPortal.departureCheck.defectSeverity')}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {DEFECT_SEVERITIES.map((severity) => (
+                  <button
+                    key={severity}
+                    type="button"
+                    onClick={() => setDefectSeverity(severity)}
+                    className={
+                      defectSeverity === severity
+                        ? 'min-h-11 rounded-md border border-amber-600 bg-amber-600 text-sm font-medium text-white'
+                        : 'min-h-11 rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700'
+                    }
+                  >
+                    {t(`driverPortal.departureCheck.severity.${severity}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <DriverFileInput
+              label={`${t('driverPortal.departureCheck.photos')} *`}
+              hint={t('driverPortal.reports.defectPhotoHint')}
+              files={defectPhotos}
+              onChange={setDefectPhotos}
+              maxFiles={5}
+              accept="image/*"
+            />
+            {defectError ? <p className="text-sm text-red-600">{defectError}</p> : null}
+            {defectSuccess ? (
+              <p className="text-sm text-emerald-700">{t('driverPortal.reports.defectSuccess')}</p>
+            ) : null}
+            <Button
+              type="submit"
+              className="h-12 w-full bg-blue-900 text-white hover:bg-blue-800"
+              disabled={defectBusy}
+            >
+              {defectBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {t('driverPortal.reports.submitDefect')}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>{t('driverPortal.reports.accidentTitle')}</CardTitle>
@@ -217,7 +350,7 @@ export function DriverReportsForm() {
             />
             {accidentError ? <p className="text-sm text-red-600">{accidentError}</p> : null}
             {accidentSuccess ? <p className="text-sm text-emerald-700">{t('driverPortal.reports.accidentSuccess')}</p> : null}
-            <Button type="submit" className="w-full bg-brand-primary hover:bg-brand-primary" disabled={accidentBusy}>
+            <Button type="submit" className="h-12 w-full bg-blue-900 text-white hover:bg-blue-800" disabled={accidentBusy}>
               {accidentBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {t('driverPortal.reports.submitAccident')}
             </Button>
@@ -282,7 +415,7 @@ export function DriverReportsForm() {
             />
             {cargoError ? <p className="text-sm text-red-600">{cargoError}</p> : null}
             {cargoSuccess ? <p className="text-sm text-emerald-700">{t('driverPortal.reports.cargoSuccess')}</p> : null}
-            <Button type="submit" className="w-full bg-brand-primary hover:bg-brand-primary" disabled={cargoBusy}>
+            <Button type="submit" className="h-12 w-full bg-blue-900 text-white hover:bg-blue-800" disabled={cargoBusy}>
               {cargoBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {t('driverPortal.reports.submitCargo')}
             </Button>

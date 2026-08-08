@@ -92,7 +92,7 @@ export function DriverNowCard({ phase, assignment, handover, starting, onStartDa
     title: string;
     body: string;
     action?: { label: string; href?: string; onClick?: () => void };
-    secondary?: { label: string; href: string };
+    secondary?: Array<{ label: string; href: string }>;
   } = (() => {
     switch (phase) {
       case 'no_assignment':
@@ -102,7 +102,7 @@ export function DriverNowCard({ phase, assignment, handover, starting, onStartDa
           title: t('driverPortal.now.noAssignment.title'),
           body: t('driverPortal.now.noAssignment.body'),
           action: { label: t('driverPortal.now.noAssignment.action'), href: '/driver/requests' },
-          secondary: { label: t('driverPortal.now.messagesLink'), href: '/driver/messages' },
+          secondary: [{ label: t('driverPortal.now.messagesLink'), href: '/driver/messages' }],
         };
       case 'departure_check':
         return {
@@ -129,7 +129,12 @@ export function DriverNowCard({ phase, assignment, handover, starting, onStartDa
           // The tour, not the assignment: it carries the stops in order and the
           // navigation links. The assignment stays reachable from "Today" below.
           action: { label: t('driverPortal.now.onTour.action'), href: '/driver/tour' },
-          secondary: { label: t('driverPortal.now.reportLink'), href: '/driver/reports' },
+          // Fuelling and problems both happen mid-tour; this is the only place a
+          // driver would look for them.
+          secondary: [
+            { label: t('driverPortal.now.fuelLink'), href: '/driver/fuel' },
+            { label: t('driverPortal.now.reportLink'), href: '/driver/reports' },
+          ],
         };
       case 'handover':
         return {
@@ -198,11 +203,13 @@ export function DriverNowCard({ phase, assignment, handover, starting, onStartDa
           </div>
         ) : null}
 
-        {view.secondary ? (
-          <div className="mt-2">
-            <Button asChild variant="outline" className="h-11 w-full">
-              <Link href={view.secondary.href}>{view.secondary.label}</Link>
-            </Button>
+        {view.secondary?.length ? (
+          <div className="mt-2 grid gap-2">
+            {view.secondary.map((link) => (
+              <Button key={link.href} asChild variant="outline" className="h-11 w-full">
+                <Link href={link.href}>{link.label}</Link>
+              </Button>
+            ))}
           </div>
         ) : null}
       </CardContent>

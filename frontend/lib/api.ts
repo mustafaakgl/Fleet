@@ -2214,6 +2214,53 @@ function driverMultipartHeaders() {
 export const driverPortalApi = {
   me: () => api.get<DriverPortalMe>('/driver/me').then((r) => r.data),
 
+  /** Vehicle defect the driver spots outside the daily check. */
+  reportDefect: (
+    payload: {
+      vehicle_id: string;
+      description: string;
+      severity: import('./types').DefectSeverity;
+      title?: string;
+    },
+    photos: File[],
+  ) => {
+    const formData = new FormData();
+    formData.append('vehicle_id', payload.vehicle_id);
+    formData.append('description', payload.description);
+    formData.append('severity', payload.severity);
+    if (payload.title) formData.append('title', payload.title);
+    for (const photo of photos) {
+      formData.append('photos', photo);
+    }
+    return api
+      .post('/driver/defects/report', formData, { headers: driverMultipartHeaders() })
+      .then((r) => r.data);
+  },
+
+  createFuelEntry: (
+    payload: {
+      vehicleId: string;
+      liters: number;
+      totalCost: number;
+      enteredAt?: string;
+      odometerKm?: number;
+      isFullTank?: boolean;
+    },
+    receipt?: File,
+  ) => {
+    const formData = new FormData();
+    formData.append('vehicleId', payload.vehicleId);
+    formData.append('liters', String(payload.liters));
+    formData.append('totalCost', String(payload.totalCost));
+    if (payload.enteredAt) formData.append('enteredAt', payload.enteredAt);
+    if (payload.odometerKm !== undefined) formData.append('odometerKm', String(payload.odometerKm));
+    if (payload.isFullTank !== undefined) formData.append('isFullTank', String(payload.isFullTank));
+    if (receipt) formData.append('receipt', receipt);
+    return api
+      .post('/driver/fleet/fuel-entries', formData, { headers: driverMultipartHeaders() })
+      .then((r) => r.data);
+  },
+
   /** Read-only: the tour endpoint offers no writes, so stop status stays with the office. */
   todayTour: (date?: string) =>
     api
