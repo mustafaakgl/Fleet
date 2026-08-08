@@ -20,6 +20,7 @@ const ALLOWED_STATUSES: ReadonlySet<DriverStatus> = new Set([
 
 type DriverWithCurrent = Driver & {
   accidents: { id: string }[];
+  company: { id: string; name: string } | null;
   assignments: {
     vehicle: { plateNumber: string };
     company: { name: string };
@@ -54,6 +55,8 @@ function toClientDriver(row: DriverWithCurrent, licenseComplianceBadge?: string)
     home_address_country: row.homeAddressCountry,
     vacation_entitlement_days: toDecimalNumber(row.vacationEntitlementDays),
     vacation_carry_over_days: toDecimalNumber(row.vacationCarryOverDays),
+    company_id: row.companyId,
+    company_name: row.company?.name ?? null,
     current_vehicle_plate: row.assignments[0]?.vehicle.plateNumber ?? null,
     current_company_name: row.assignments[0]?.company.name ?? null,
     created_at: row.createdAt.toISOString(),
@@ -66,6 +69,7 @@ const currentAssignmentInclude = {
     where: { status: { not: 'rejected' as const } },
     select: { id: true },
   },
+  company: { select: { id: true, name: true } },
   assignments: {
     where: { status: { in: ['planned', 'confirmed', 'in_progress'] as const } },
     orderBy: [{ workDate: 'desc' as const }, { startTime: 'desc' as const }],
@@ -229,6 +233,7 @@ export class DriversService {
         notes: dto.notes,
         vacationEntitlementDays: dto.vacation_entitlement_days ?? 24,
         vacationCarryOverDays: dto.vacation_carry_over_days ?? 0,
+        companyId: dto.company_id,
       },
       include: currentAssignmentInclude,
     });
@@ -294,6 +299,9 @@ export class DriversService {
     }
     if (dto.vacation_carry_over_days !== undefined) {
       data.vacationCarryOverDays = dto.vacation_carry_over_days;
+    }
+    if (dto.company_id !== undefined) {
+      data.company = dto.company_id ? { connect: { id: dto.company_id } } : { disconnect: true };
     }
 
     const updated = await this.prisma.driver.update({

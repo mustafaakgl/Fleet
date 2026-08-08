@@ -17,6 +17,10 @@ export class UpdateDriverDto {
   employee_number?: string;
 
   @IsOptional()
+  @IsString()
+  company_id?: string;
+
+  @IsOptional()
   @IsEmail()
   email?: string;
 

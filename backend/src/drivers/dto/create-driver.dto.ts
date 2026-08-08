@@ -202,4 +202,12 @@ export class CreateDriverDto {
   @Min(-365)
   @Max(365)
   vacation_carry_over_days?: number;
+
+  @ApiProperty({
+    required: false,
+    description: 'Customer company the driver is assigned to (Einsatzplan department)',
+  })
+  @IsOptional()
+  @IsString()
+  company_id?: string;
 }

@@ -47,12 +47,6 @@ import {
 } from '@/lib/service-record-categories';
 import type { ServiceRecord, Vehicle } from '@/lib/types';
 import {
-  getServiceHistoryMockVehicles,
-  isServiceHistoryMockRecord,
-  SERVICE_HISTORY_MOCK_ATTACHMENT_IDS,
-  SERVICE_HISTORY_MOCK_RECORDS,
-} from '@/lib/service-history-mock-data';
-import {
   formatServiceTasks,
   hasServiceRecordAttachments,
   parseServiceRecordLabels,
@@ -237,16 +231,12 @@ export function ExpenseHistoryPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [usingMockData, setUsingMockData] = useState(false);
 
   const vehicleById = useMemo(() => {
     const merged = new Map<string, Vehicle>();
     for (const vehicle of vehicles) merged.set(vehicle.id, vehicle);
-    if (usingMockData) {
-      for (const vehicle of getServiceHistoryMockVehicles()) merged.set(vehicle.id, vehicle);
-    }
     return merged;
-  }, [vehicles, usingMockData]);
+  }, [vehicles]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -263,27 +253,18 @@ export function ExpenseHistoryPage() {
         vehiclesApi.list({ limit: 200 }),
         serviceRecordsApi.getRepairCompanies(),
       ]);
-      const hasApiRows = rows.length > 0;
-      setUsingMockData(!hasApiRows);
-      setRecords(hasApiRows ? rows : SERVICE_HISTORY_MOCK_RECORDS);
-      setVehicles(vehiclePage.data.length > 0 ? vehiclePage.data : getServiceHistoryMockVehicles());
-      setRepairCompanies(
-        hasApiRows
-          ? companies.filter(Boolean)
-          : [...new Set(SERVICE_HISTORY_MOCK_RECORDS.map((row) => row.repair_company).filter(Boolean))],
-      );
-    } catch {
-      setUsingMockData(true);
-      setRecords(SERVICE_HISTORY_MOCK_RECORDS);
-      setVehicles(getServiceHistoryMockVehicles());
-      setRepairCompanies([
-        ...new Set(SERVICE_HISTORY_MOCK_RECORDS.map((row) => row.repair_company).filter(Boolean)),
-      ]);
-      setError(null);
+      setRecords(rows);
+      setVehicles(vehiclePage.data);
+      setRepairCompanies(companies.filter(Boolean));
+    } catch (reloadError) {
+      setRecords([]);
+      setVehicles([]);
+      setRepairCompanies([]);
+      setError(reloadError instanceof Error ? reloadError.message : t('expenseHistory.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [dateFilter, fromFilter, repairCompanyFilter, toFilter, vehicleFilter]);
+  }, [dateFilter, fromFilter, repairCompanyFilter, t, toFilter, vehicleFilter]);
 
   useEffect(() => {
     void reload();
@@ -418,8 +399,7 @@ export function ExpenseHistoryPage() {
 
   function handleExport() {
     if (sortedRecords.length === 0) return;
-    const realRows = sortedRecords.filter((row) => !isServiceHistoryMockRecord(row.id));
-    downloadServiceRecordsCsv(realRows.length > 0 ? realRows : sortedRecords);
+    downloadServiceRecordsCsv(sortedRecords);
   }
 
   return (
@@ -525,12 +505,6 @@ export function ExpenseHistoryPage() {
           {t('expenseHistory.filters')}
         </Button>
       </div>
-
-      {usingMockData ? (
-        <div className="rounded-md border border-amber-100 bg-amber-50/80 px-3 py-2 text-[13px] text-amber-900">
-          {t('serviceHistory.demoDataBanner')}
-        </div>
-      ) : null}
 
       {(serviceTypeFilter ||
         categoryFilter ||
@@ -713,10 +687,7 @@ export function ExpenseHistoryPage() {
                   const taskList = parseServiceRecordTasks(row);
                   const primaryTask = taskList[0] ?? tasks.primary;
                   const labels = parseServiceRecordLabels(row.notes);
-                  const isMock = isServiceHistoryMockRecord(row.id);
-                  const hasAttachment =
-                    (isMock && SERVICE_HISTORY_MOCK_ATTACHMENT_IDS.has(row.id)) ||
-                    hasServiceRecordAttachments(row.notes);
+                  const hasAttachment = hasServiceRecordAttachments(row.notes);
 
                   return (
                     <TableRow
@@ -746,11 +717,6 @@ export function ExpenseHistoryPage() {
                             layout="inline"
                             size="sm"
                           />
-                          {isMock ? (
-                            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium uppercase text-slate-500">
-                              {t('serviceHistory.sampleBadge')}
-                            </span>
-                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
@@ -759,19 +725,17 @@ export function ExpenseHistoryPage() {
                       <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'whitespace-nowrap')}>
                         <div className="flex items-center gap-2">
                           <span>{formatCompletionDateTime(row.date, i18n.language)}</span>
-                          {!isMock ? (
-                            <Link
-                              href={serviceReminderHref({
-                                vehicleId: row.vehicle_id,
-                                task: primaryTask,
-                              })}
-                              className="text-slate-400 hover:text-brand-primary"
-                              title={t('serviceHistory.openReminder')}
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <Wrench className="h-3.5 w-3.5" />
-                            </Link>
-                          ) : null}
+                          <Link
+                            href={serviceReminderHref({
+                              vehicleId: row.vehicle_id,
+                              task: primaryTask,
+                            })}
+                            className="text-slate-400 hover:text-brand-primary"
+                            title={t('serviceHistory.openReminder')}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <Wrench className="h-3.5 w-3.5" />
+                          </Link>
                         </div>
                       </TableCell>
                       <TableCell className={cn(FLEET_TABLE_CELL_MUTED, 'max-w-[8rem] truncate')}>
@@ -867,11 +831,7 @@ export function ExpenseHistoryPage() {
         initialTask={taskFromUrl || undefined}
         onClose={() => setCreateOpen(false)}
         onCreated={(created, options) => {
-          setUsingMockData(false);
-          setRecords((prev) => {
-            const withoutMock = prev.filter((row) => !isServiceHistoryMockRecord(row.id));
-            return [created, ...withoutMock];
-          });
+          setRecords((prev) => [created, ...prev]);
           if (!options?.keepOpen) {
             setCreateOpen(false);
             router.push(`/service-history/${created.id}`);

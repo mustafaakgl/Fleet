@@ -121,24 +121,28 @@ async function loadAllAssignmentsPaginated(limit = DEFAULT_PAGE_LIMIT) {
   return rows;
 }
 
-export async function hydrateFleetData(
-  departmentByDriverId?: Map<string, string>,
-): Promise<FleetHydrationResult> {
-  const dept = (driverId: string) => departmentByDriverId?.get(driverId) ?? DEFAULT_DEPARTMENT;
+export async function hydrateFleetData(): Promise<FleetHydrationResult> {
+  // Surucu kayitlari once yuklenir; departman haritasi onlardan kurulur.
+  const departmentByDriverId = new Map<string, string>();
+  const dept = (driverId: string) => departmentByDriverId.get(driverId) ?? DEFAULT_DEPARTMENT;
   const errors: string[] = [];
 
   let drivers: FleetDriver[] = [];
   try {
     const driverRows = await loadAllDriversPaginated();
-    drivers = driverRows.map((d) => ({
-      id: d.id,
-      name: `${d.first_name} ${d.last_name}`.trim(),
-      department: dept(d.id),
-      accidentCount: d.accident_count ?? 0,
-      riskScore: getDriverRiskScore(d.accident_count ?? 0),
-      vacationEntitlementDays: d.vacation_entitlement_days ?? DEFAULT_VACATION_ENTITLEMENT,
-      vacationCarryOverDays: d.vacation_carry_over_days ?? 0,
-    }));
+    drivers = driverRows.map((d) => {
+      const department = d.company_name?.trim() || DEFAULT_DEPARTMENT;
+      departmentByDriverId.set(d.id, department);
+      return {
+        id: d.id,
+        name: `${d.first_name} ${d.last_name}`.trim(),
+        department,
+        accidentCount: d.accident_count ?? 0,
+        riskScore: getDriverRiskScore(d.accident_count ?? 0),
+        vacationEntitlementDays: d.vacation_entitlement_days ?? DEFAULT_VACATION_ENTITLEMENT,
+        vacationCarryOverDays: d.vacation_carry_over_days ?? 0,
+      };
+    });
   } catch {
     errors.push('drivers');
   }

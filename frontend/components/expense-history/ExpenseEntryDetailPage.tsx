@@ -30,11 +30,6 @@ import { documentHasFile, openAuthenticatedDocument } from '@/lib/file-access';
 import { canEditServiceRecords, canViewFinancials } from '@/lib/permissions';
 import { getRepairPriorityClass } from '@/lib/service-record-categories';
 import {
-  isServiceHistoryMockRecord,
-  SERVICE_HISTORY_MOCK_RECORDS,
-  getServiceHistoryMockVehicles,
-} from '@/lib/service-history-mock-data';
-import {
   parseServiceRecordIssues,
   parseServiceRecordLabels,
   parseServiceRecordReference,
@@ -134,9 +129,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const user = getUser();
-  const canEditRecords = canEditServiceRecords(user?.role ?? 'customer');
-  const isMock = isServiceHistoryMockRecord(entryId);
-  const canEdit = canEditRecords && !isMock;
+  const canEdit = canEditServiceRecords(user?.role ?? 'customer');
   const showAmounts = canViewFinancials(user?.role ?? 'customer');
   const { toggleWatch, watchedIds } = useExpenseWatchlist();
   const watched = watchedIds.includes(entryId);
@@ -159,23 +152,6 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     setLoading(true);
     setError(null);
     try {
-      if (isMock) {
-        const entry = SERVICE_HISTORY_MOCK_RECORDS.find((row) => row.id === entryId);
-        if (!entry) {
-          setRecord(null);
-          setError(t('expenseHistory.detail.notFound'));
-          return;
-        }
-        setRecord(entry);
-        setForm(toFormState(entry));
-        setVehicles(getServiceHistoryMockVehicles());
-        setDrivers([]);
-        setPhotos([]);
-        setDocuments([]);
-        setReceipts([]);
-        return;
-      }
-
       const [entry, vehiclePage, driverPage, allDocs] = await Promise.all([
         serviceRecordsApi.getById(entryId),
         vehiclesApi.list({ limit: 200 }),
@@ -195,7 +171,7 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [entryId, isMock, t]);
+  }, [entryId, t]);
 
   useEffect(() => {
     void load();
@@ -355,9 +331,6 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
             <h1 className="mt-2 text-xl font-bold text-slate-900 sm:text-2xl">
               {t('expenseHistory.detail.title', { id: displayEntryId(record.id) })}
             </h1>
-            {isMock ? (
-              <p className="mt-1 text-[13px] text-amber-700">{t('serviceHistory.sampleBadge')}</p>
-            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

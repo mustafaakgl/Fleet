@@ -108,6 +108,9 @@ export interface Driver {
   accident_count: number;
   current_vehicle_plate?: string | null;
   current_company_name?: string | null;
+  /** Sürücünün bağlı olduğu müşteri firma (Einsatzplan'daki "Abteilung"). */
+  company_id?: string | null;
+  company_name?: string | null;
   email?: string;
   phone?: string;
   license_number?: string;

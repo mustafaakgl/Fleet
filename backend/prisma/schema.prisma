@@ -849,6 +849,8 @@ model Driver {
   tenantId                  String                 @default("default-tenant")
   tenant                    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userId                    String?                @unique
+  /// Sürücünün bağlı olduğu müşteri firma (Einsatzplan'daki "Abteilung").
+  companyId                 String?
   employeeNumber            String
   firstName                 String
   lastName                  String
@@ -877,7 +879,8 @@ model Driver {
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   currentVehicles         Vehicle[]                     @relation("CurrentVehicleDriver")
   assignments             Assignment[]
@@ -914,6 +917,7 @@ model Driver {
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
+  @@index([companyId])
 }
 
 model DriverLicense {
@@ -1142,6 +1146,7 @@ model Company {
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
+  drivers           Driver[]
   assignments       Assignment[]
   transportRequests TransportRequest[]
   accidents         Accident[]

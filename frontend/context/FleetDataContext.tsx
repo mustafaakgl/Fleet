@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { USE_MOCK_FLEET_DATA } from '@/lib/fleet-data-config';
 import { hydrateFleetData } from '@/lib/fleet-hydration';
 import {
   createPlanningPlaceholder,
@@ -31,7 +30,7 @@ import {
   createAssignmentWithLicenseAck,
   shouldWarnLicenseCompliance,
 } from '@/lib/license-compliance-assignment';
-import { getDriverRiskScore, type DriverRiskScore } from '@/lib/utils';
+import type { DriverRiskScore } from '@/lib/utils';
 
 export type CalendarStatusCode = 'UT' | 'KT' | 'FT' | 'AT' | 'HO' | 'GR' | 'SCH';
 export type CalendarStatusSource = 'manual' | 'request' | 'assignment';
@@ -278,16 +277,6 @@ const now = new Date();
 const today = formatDate(now);
 const tomorrow = formatDate(addDays(now, 1));
 
-const initialDrivers: FleetDriver[] = [
-  { id: 'ilker-cukur', name: 'Ilker Cukur', department: 'Go', accidentCount: 1, riskScore: getDriverRiskScore(1), vacationEntitlementDays: 28, vacationCarryOverDays: 3 },
-  { id: 'thomas-scharein', name: 'Thomas Scharein', department: 'Go', accidentCount: 2, riskScore: getDriverRiskScore(2), vacationEntitlementDays: 26, vacationCarryOverDays: 1 },
-  { id: 'sita-diallo', name: 'Sita Diallo', department: 'Krage', accidentCount: 3, riskScore: getDriverRiskScore(3), vacationEntitlementDays: 24, vacationCarryOverDays: 0 },
-  { id: 'andrii-dudiak', name: 'Andrii Dudiak', department: 'Krage', accidentCount: 0, riskScore: getDriverRiskScore(0), vacationEntitlementDays: 24, vacationCarryOverDays: 0 },
-  { id: 'nesrin-feyzula', name: 'Nesrin Feyzula', department: 'Krage', accidentCount: 1, riskScore: getDriverRiskScore(1), vacationEntitlementDays: 24, vacationCarryOverDays: 2 },
-  { id: 'gundrum-andreas', name: 'Gundrum Andreas', department: 'Krage', accidentCount: 0, riskScore: getDriverRiskScore(0), vacationEntitlementDays: 24, vacationCarryOverDays: 0 },
-  { id: 'ozdemir-hakan', name: 'Ozdemir Hakan', department: 'Office', accidentCount: 0, riskScore: getDriverRiskScore(0), vacationEntitlementDays: 24, vacationCarryOverDays: -1 },
-];
-
 const COMPANY_DEFAULT_REVENUE: Record<string, number> = {
   DHL: 850,
   Amazon: 1200,
@@ -297,380 +286,13 @@ const COMPANY_DEFAULT_REVENUE: Record<string, number> = {
   'Internal Dispatch': 0,
 };
 
-const initialCalendarStatuses: FleetCalendarStatus[] = [
-  {
-    id: `status-${today}-sita-ut`,
-    driverId: 'sita-diallo',
-    date: today,
-    status: 'UT',
-    source: 'manual',
-  },
-  {
-    id: `status-${today}-andrii-kt`,
-    driverId: 'andrii-dudiak',
-    date: today,
-    status: 'KT',
-    source: 'manual',
-  },
-];
-
-const initialAssignments: FleetAssignment[] = [
-  {
-    id: 'tp-today-1',
-    date: today,
-    driverId: 'ozdemir-hakan',
-    department: 'Office',
-    availability: 'Available',
-    vehicle: 'B-SG 1556',
-    company: 'Internal Dispatch',
-    routeJob: 'Yard Planning',
-    startTime: '06:30',
-    endTime: '14:30',
-    status: 'In Progress',
-    source: 'manual',
-    expectedRevenue: 0,
-    notes: 'Office dispatch shift',
-  },
-  {
-    id: 'tp-1',
-    date: tomorrow,
-    driverId: 'ilker-cukur',
-    department: 'Go',
-    availability: 'Available',
-    vehicle: 'B-SG 1544',
-    company: 'DHL',
-    routeJob: 'Berlin Route 1',
-    startTime: '07:00',
-    endTime: '16:00',
-    status: 'Planned',
-    source: 'manual',
-    expectedRevenue: 850,
-    notes: '',
-  },
-  {
-    id: 'tp-2',
-    date: tomorrow,
-    driverId: 'thomas-scharein',
-    department: 'Go',
-    availability: 'Available',
-    vehicle: 'B-SG 1556',
-    company: 'Amazon',
-    routeJob: 'Leipzig Tour',
-    startTime: '06:30',
-    endTime: '15:30',
-    status: 'Planned',
-    source: 'manual',
-    expectedRevenue: 1200,
-    notes: '',
-  },
-  {
-    id: 'tp-3',
-    date: tomorrow,
-    driverId: 'sita-diallo',
-    department: 'Krage',
-    availability: 'Urlaub',
-    vehicle: '',
-    company: '',
-    routeJob: '',
-    startTime: '',
-    endTime: '',
-    status: 'Unavailable',
-    source: 'manual',
-    expectedRevenue: 0,
-    notes: '',
-  },
-  {
-    id: 'tp-4',
-    date: tomorrow,
-    driverId: 'andrii-dudiak',
-    department: 'Krage',
-    availability: 'Krank',
-    vehicle: '',
-    company: '',
-    routeJob: '',
-    startTime: '',
-    endTime: '',
-    status: 'Unavailable',
-    source: 'manual',
-    expectedRevenue: 0,
-    notes: '',
-  },
-  {
-    id: 'tp-5',
-    date: tomorrow,
-    driverId: 'nesrin-feyzula',
-    department: 'Krage',
-    availability: 'Available',
-    vehicle: 'B-SG 1569',
-    company: 'DB Schenker',
-    routeJob: 'Hamburg Tour',
-    startTime: '08:00',
-    endTime: '17:00',
-    status: 'Planned',
-    source: 'manual',
-    expectedRevenue: 1050,
-    notes: '',
-  },
-];
-
-const initialTransportRequests: TransportRequest[] = [
-  {
-    id: 'tr-1',
-    driverId: 'ilker-cukur',
-    date: tomorrow,
-    submittedAt: `${today} 17:12`,
-    vehicleId: 'B-SG 1544',
-    companyId: 'DHL',
-    cargoName: 'Electronics pallets',
-    cargoOwner: 'DHL Customer',
-    pickupAddress: 'Berlin Neukolln',
-    deliveryAddress: 'Berlin Mitte',
-    startTime: '07:00',
-    status: 'pending',
-    source: 'mobile_app',
-  },
-  {
-    id: 'tr-2',
-    driverId: 'thomas-scharein',
-    date: tomorrow,
-    submittedAt: `${today} 17:20`,
-    vehicleId: 'B-SG 1556',
-    companyId: 'Amazon',
-    cargoName: 'Parcel boxes',
-    cargoOwner: 'Amazon',
-    pickupAddress: 'Berlin Spandau',
-    deliveryAddress: 'Leipzig',
-    startTime: '06:30',
-    status: 'pending',
-    source: 'mobile_app',
-  },
-  {
-    id: 'tr-3',
-    driverId: 'sita-diallo',
-    date: tomorrow,
-    submittedAt: `${today} 17:25`,
-    vehicleId: 'B-SG 1569',
-    companyId: 'DB Schenker',
-    cargoName: 'Furniture',
-    cargoOwner: 'DB Customer',
-    pickupAddress: 'Berlin Tempelhof',
-    deliveryAddress: 'Hamburg',
-    startTime: '08:00',
-    status: 'needs_review',
-    conflictReason: 'Driver marked Urlaub',
-    source: 'mobile_app',
-  },
-  {
-    id: 'tr-4',
-    driverId: 'andrii-dudiak',
-    date: tomorrow,
-    submittedAt: `${today} 17:28`,
-    vehicleId: 'B-SG 1567',
-    companyId: 'Hermes',
-    cargoName: 'Packages',
-    cargoOwner: 'Hermes',
-    pickupAddress: 'Berlin Lichtenberg',
-    deliveryAddress: 'Potsdam',
-    startTime: '07:15',
-    status: 'needs_review',
-    conflictReason: 'Driver marked Krank',
-    source: 'mobile_app',
-  },
-  {
-    id: 'tr-5',
-    driverId: 'nesrin-feyzula',
-    date: tomorrow,
-    submittedAt: `${today} 17:31`,
-    vehicleId: 'B-SG 1544',
-    companyId: 'UPS',
-    cargoName: 'Medical goods',
-    cargoOwner: 'UPS Client',
-    pickupAddress: 'Berlin Wedding',
-    deliveryAddress: 'Dresden',
-    startTime: '07:30',
-    status: 'needs_review',
-    conflictReason: 'Vehicle already assigned',
-    source: 'mobile_app',
-  },
-];
-
-const initialMorningCheckins: MorningCheckin[] = [
-  {
-    id: 'mc-1',
-    driverId: 'ilker-cukur',
-    date: today,
-    submittedAt: '06:58',
-    vehiclePlate: 'B-SG 1544',
-    company: 'DHL',
-    startLocation: 'Berlin Neukolln',
-    gps: { lat: 52.4811, lng: 13.4369 },
-    status: 'Confirmed',
-    source: 'mobile_app',
-    notes: 'On-site and ready.',
-    phone: '+49 151 0000001',
-  },
-  {
-    id: 'mc-2',
-    driverId: 'thomas-scharein',
-    date: today,
-    submittedAt: '07:05',
-    vehiclePlate: 'B-SG 1556',
-    company: 'Amazon',
-    startLocation: 'Berlin Spandau',
-    gps: { lat: 52.534, lng: 13.1976 },
-    status: 'Waiting for Review',
-    conflictReason: 'Vehicle already planned',
-    source: 'mobile_app',
-    notes: 'Started loading.',
-    phone: '+49 151 0000002',
-  },
-  {
-    id: 'mc-3',
-    driverId: 'sita-diallo',
-    date: today,
-    submittedAt: '07:10',
-    vehiclePlate: 'B-SG 1569',
-    company: 'DB Schenker',
-    startLocation: 'Berlin Mitte',
-    gps: { lat: 52.52, lng: 13.405 },
-    status: 'Waiting for Review',
-    conflictReason: 'Driver marked Urlaub',
-    source: 'mobile_app',
-    notes: 'Requesting manual override.',
-    phone: '+49 151 0000003',
-  },
-  {
-    id: 'mc-4',
-    driverId: 'andrii-dudiak',
-    date: today,
-    submittedAt: '07:12',
-    vehiclePlate: 'B-SG 1567',
-    company: 'Hermes',
-    startLocation: 'Berlin Lichtenberg',
-    gps: { lat: 52.513, lng: 13.4994 },
-    status: 'Waiting for Review',
-    conflictReason: 'Driver marked Krank',
-    source: 'mobile_app',
-    notes: 'Checked in by mistake.',
-    phone: '+49 151 0000004',
-  },
-  {
-    id: 'mc-5',
-    driverId: 'nesrin-feyzula',
-    date: today,
-    submittedAt: '07:20',
-    company: 'UPS',
-    startLocation: 'Berlin Wedding',
-    gps: { lat: 52.5504, lng: 13.3517 },
-    status: 'Missing Vehicle Plate',
-    source: 'mobile_app',
-    notes: 'Forgot to select vehicle.',
-    phone: '+49 151 0000005',
-  },
-  {
-    id: 'mc-6',
-    driverId: 'gundrum-andreas',
-    date: today,
-    submittedAt: '07:25',
-    vehiclePlate: 'B-SG 1570',
-    startLocation: 'Berlin Tempelhof',
-    gps: { lat: 52.469, lng: 13.3857 },
-    status: 'Missing Company',
-    source: 'mobile_app',
-    notes: 'Customer not selected yet.',
-    phone: '+49 151 0000006',
-  },
-];
-
-const initialRequests: FleetRequest[] = [
-  {
-    id: 'REQ-1001',
-    driverId: 'andrii-dudiak',
-    driverName: 'Andrii Dudiak',
-    department: 'Krage',
-    type: 'Krankheit melden',
-    dateFrom: '2026-05-14',
-    dateTo: '2026-05-15',
-    uploadedDocument: 'sick_note.pdf',
-    status: 'Pending',
-    responsibleDepartment: 'Office',
-    submittedAt: '2026-05-13 18:10',
-    notes: 'Fever and doctor consultation.',
-  },
-  {
-    id: 'REQ-1002',
-    driverId: 'sita-diallo',
-    driverName: 'Sita Diallo',
-    department: 'Krage',
-    type: 'Urlaub beantragen',
-    dateFrom: '2026-05-04',
-    dateTo: '2026-05-08',
-    uploadedDocument: '-',
-    status: 'Pending',
-    responsibleDepartment: 'Office',
-    submittedAt: '2026-05-02 09:45',
-    notes: 'Family trip request.',
-  },
-  {
-    id: 'REQ-1003',
-    driverId: 'ilker-cukur',
-    driverName: 'Ilker Cukur',
-    department: 'Go',
-    type: 'Dokument hochladen',
-    dateFrom: null,
-    dateTo: null,
-    uploadedDocument: 'license.pdf',
-    status: 'Needs Review',
-    responsibleDepartment: 'Office',
-    submittedAt: '2026-05-10 11:23',
-    notes: 'New license scan.',
-  },
-  {
-    id: 'REQ-1003B',
-    driverId: 'ilker-cukur',
-    driverName: 'Ilker Cukur',
-    department: 'Go',
-    type: 'Sonstige Abwesenheit',
-    sonstigeAbwesenheitType: 'Homeoffice',
-    dateFrom: '2026-05-22',
-    dateTo: '2026-05-22',
-    uploadedDocument: '-',
-    status: 'Pending',
-    responsibleDepartment: 'Office',
-    submittedAt: '2026-05-21 09:30',
-    notes: 'One day homeoffice due to admin paperwork.',
-  },
-  {
-    id: 'REQ-1004',
-    driverId: 'thomas-scharein',
-    driverName: 'Thomas Scharein',
-    department: 'Go',
-    type: 'Unfall melden',
-    dateFrom: '2026-05-12',
-    dateTo: '2026-05-12',
-    uploadedDocument: 'accident_photos.zip',
-    status: 'Pending',
-    responsibleDepartment: 'Accident Department',
-    submittedAt: '2026-05-12 17:35',
-    notes: 'Minor collision report.',
-  },
-];
-
 export function FleetDataProvider({ children }: { children: React.ReactNode }) {
-  const [drivers, setDrivers] = useState<FleetDriver[]>(USE_MOCK_FLEET_DATA ? initialDrivers : []);
-  const [calendarStatuses, setCalendarStatuses] = useState<FleetCalendarStatus[]>(
-    USE_MOCK_FLEET_DATA ? initialCalendarStatuses : [],
-  );
-  const [requests, setRequests] = useState<FleetRequest[]>(USE_MOCK_FLEET_DATA ? initialRequests : []);
-  const [assignments, setAssignments] = useState<FleetAssignment[]>(
-    USE_MOCK_FLEET_DATA ? initialAssignments : [],
-  );
-  const [morningCheckins, setMorningCheckins] = useState<MorningCheckin[]>(
-    USE_MOCK_FLEET_DATA ? initialMorningCheckins : [],
-  );
-  const [transportRequests, setTransportRequests] = useState<TransportRequest[]>(
-    USE_MOCK_FLEET_DATA ? initialTransportRequests : [],
-  );
+  const [drivers, setDrivers] = useState<FleetDriver[]>([]);
+  const [calendarStatuses, setCalendarStatuses] = useState<FleetCalendarStatus[]>([]);
+  const [requests, setRequests] = useState<FleetRequest[]>([]);
+  const [assignments, setAssignments] = useState<FleetAssignment[]>([]);
+  const [morningCheckins, setMorningCheckins] = useState<MorningCheckin[]>([]);
+  const [transportRequests, setTransportRequests] = useState<TransportRequest[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const [hydrateKey, setHydrateKey] = useState(0);
@@ -689,23 +311,16 @@ export function FleetDataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    const departmentByDriverId = new Map<string, string>(
-      (USE_MOCK_FLEET_DATA ? initialDrivers : []).map((d) => [d.id, d.department]),
-    );
 
     setIsHydrating(true);
     setHydrateError(null);
 
     void (async () => {
-      const data = await hydrateFleetData(departmentByDriverId);
+      const data = await hydrateFleetData();
       if (cancelled) return;
 
       const apply = <T,>(key: string, setter: (value: T[]) => void, value: T[]) => {
-        if (!data.errors.includes(key)) {
-          setter(value);
-        } else if (!USE_MOCK_FLEET_DATA) {
-          setter([]);
-        }
+        setter(data.errors.includes(key) ? [] : value);
       };
 
       apply('drivers', setDrivers, data.drivers);
