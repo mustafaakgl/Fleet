@@ -2261,7 +2261,30 @@ export const driverPortalApi = {
       .then((r) => r.data);
   },
 
-  /** Read-only: the tour endpoint offers no writes, so stop status stays with the office. */
+  /**
+   * Marks a stop. `client_event_id` is what makes a queued retry safe: the
+   * server applies a given event once, so a reconnect cannot double-count it.
+   */
+  markTourStop: (
+    stopId: string,
+    payload: {
+      status: 'arrived' | 'completed' | 'skipped';
+      client_event_id?: string;
+      occurred_at?: string;
+      latitude?: number;
+      longitude?: number;
+    },
+  ) =>
+    api
+      .post<import('./types').DriverTourStopState>(`/driver/tours/stops/${stopId}/mark`, payload)
+      .then((r) => r.data),
+
+  resetTourStop: (stopId: string) =>
+    api
+      .post<import('./types').DriverTourStopState>(`/driver/tours/stops/${stopId}/reset`)
+      .then((r) => r.data),
+
+  /** Read-only for the plan itself; execution is written through markTourStop. */
   todayTour: (date?: string) =>
     api
       .get<{ tour: import('./types').DriverTour | null }>('/driver/tours/today', {

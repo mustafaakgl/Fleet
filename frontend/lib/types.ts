@@ -1777,6 +1777,18 @@ export interface DriverTourStop {
   serviceMinutes: number | null;
   plannedArrivalAt: string | null;
   legDistanceKm: number | null;
+  status: DriverTourStopStatus;
+  arrivedAt: string | null;
+  completedAt: string | null;
+}
+
+export type DriverTourStopStatus = 'pending' | 'arrived' | 'completed' | 'skipped';
+
+export interface DriverTourStopState {
+  id: string;
+  status: DriverTourStopStatus;
+  arrived_at: string | null;
+  completed_at: string | null;
 }
 
 export interface DriverTour {

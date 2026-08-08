@@ -3,7 +3,8 @@ export type DriverOfflineQueueKind =
   | 'request-attachment'
   | 'transport-attachment'
   | 'accident-attachment'
-  | 'location-point';
+  | 'location-point'
+  | 'tour-stop-mark';
 
 export type DriverOfflineQueueItem =
   | {
@@ -49,6 +50,21 @@ export type DriverOfflineQueueItem =
       fileName: string;
       fileType: string;
       file: Blob;
+    }
+  | {
+      /**
+       * Durak isaretlemesi. Surucu sebeke cekmeyen yerde de isaretliyor; bu
+       * kaydin `id`'si sunucuya `client_event_id` olarak gidiyor, boylece
+       * baglanti gelince ayni olay iki kez uygulanmiyor.
+       */
+      id: string;
+      kind: 'tour-stop-mark';
+      createdAt: string;
+      stopId: string;
+      status: 'arrived' | 'completed' | 'skipped';
+      occurredAt: string;
+      latitude?: number;
+      longitude?: number;
     }
   | {
       id: string;

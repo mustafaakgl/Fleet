@@ -1,24 +1,41 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Clock, MapPin, Navigation, Route } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Check, Clock, MapPin, Navigation, Route, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { driverPortalApi } from '@/lib/api';
+import { enqueueTourStopMarkQueueItem } from '@/lib/driver-offline-queue';
+import { isQueueableOfflineError } from '@/lib/driver-offline-queue-core';
 import { buildNavigationUrl, detectMobilePlatform } from '@/lib/navigation-links';
 import { cn } from '@/lib/utils';
-import type { DriverTour, DriverTourStop } from '@/lib/types';
+import type { DriverTour, DriverTourStop, DriverTourStopStatus } from '@/lib/types';
 
 /**
- * The day's tour, stop by stop.
+ * Best-effort position for the marking. Never blocks the tap: if the driver
+ * denied location or the fix is slow, the stop is still marked — a timestamp
+ * without coordinates beats no record at all.
+ */
+async function currentPosition(): Promise<{ latitude: number; longitude: number } | undefined> {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return undefined;
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => resolve(undefined),
+      { timeout: 4000, maximumAge: 60000 },
+    );
+  });
+}
+
+/**
+ * The day's tour, stop by stop, with the driver marking progress.
  *
- * Read-only on purpose: `driver/tours` exposes only `GET today`, so there is no
- * way for the driver to mark a stop as reached yet. Rather than fake a control
- * that does not persist, this screen shows the plan and hands the next leg to
- * the phone's map app. Marking progress needs new endpoints (plan step 7).
+ * A marking is held in the offline queue when there is no signal — losing
+ * reception mid-tour is the normal case, not an error — and the queue item id
+ * travels as `client_event_id` so a reconnect cannot apply the same tap twice.
  */
 
 function formatWindow(stop: DriverTourStop): string | null {
@@ -38,6 +55,8 @@ export default function DriverTourPage() {
   const [tour, setTour] = useState<DriverTour | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busyStopId, setBusyStopId] = useState<string | null>(null);
+  const [queuedStopIds, setQueuedStopIds] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -56,6 +75,68 @@ export default function DriverTourPage() {
       active = false;
     };
   }, [t]);
+
+  const applyLocalStatus = useCallback((stopId: string, status: DriverTourStopStatus) => {
+    setTour((prev) =>
+      prev
+        ? {
+            ...prev,
+            stops: prev.stops.map((s) => (s.id === stopId ? { ...s, status } : s)),
+          }
+        : prev,
+    );
+  }, []);
+
+  const handleMark = useCallback(
+    async (stopId: string, status: Exclude<DriverTourStopStatus, 'pending'>) => {
+      setBusyStopId(stopId);
+      setError(null);
+      const position = await currentPosition();
+      try {
+        await driverPortalApi.markTourStop(stopId, {
+          status,
+          occurred_at: new Date().toISOString(),
+          ...position,
+        });
+        applyLocalStatus(stopId, status);
+      } catch (err) {
+        // No signal is the normal case in a cab, not an error: hold the marking
+        // and let the queue send it when the connection returns.
+        if (isQueueableOfflineError(err)) {
+          await enqueueTourStopMarkQueueItem({
+            stopId,
+            status,
+            occurredAt: new Date().toISOString(),
+            ...position,
+          });
+          applyLocalStatus(stopId, status);
+          setQueuedStopIds((prev) => (prev.includes(stopId) ? prev : [...prev, stopId]));
+        } else {
+          setError(t('driverPortal.tour.markFailed'));
+        }
+      } finally {
+        setBusyStopId(null);
+      }
+    },
+    [applyLocalStatus, t],
+  );
+
+  const handleReset = useCallback(
+    async (stopId: string) => {
+      setBusyStopId(stopId);
+      setError(null);
+      try {
+        await driverPortalApi.resetTourStop(stopId);
+        applyLocalStatus(stopId, 'pending');
+        setQueuedStopIds((prev) => prev.filter((id) => id !== stopId));
+      } catch {
+        setError(t('driverPortal.tour.markFailed'));
+      } finally {
+        setBusyStopId(null);
+      }
+    },
+    [applyLocalStatus, t],
+  );
 
   const platform = useMemo(() => detectMobilePlatform(), []);
   const stops = useMemo(
@@ -122,7 +203,13 @@ export default function DriverTourPage() {
           const arrival = formatArrival(stop.plannedArrivalAt, i18n.language);
 
           return (
-            <Card key={stop.id} className="border-slate-200 bg-white">
+            <Card
+              key={stop.id}
+              className={cn(
+                'border-slate-200 bg-white',
+                stop.status === 'completed' || stop.status === 'skipped' ? 'opacity-60' : null,
+              )}
+            >
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-900 text-sm font-bold text-white">
@@ -172,9 +259,9 @@ export default function DriverTourPage() {
 
                 <Button
                   asChild={Boolean(navUrl)}
-                  disabled={!navUrl}
+                  disabled={!navUrl || stop.status === 'completed'}
                   variant="outline"
-                  className={cn('mt-3 h-11 w-full', !navUrl && 'opacity-50')}
+                  className={cn('mt-3 h-11 w-full', (!navUrl || stop.status === 'completed') && 'opacity-50')}
                 >
                   {navUrl ? (
                     <a href={navUrl} target="_blank" rel="noopener noreferrer">
@@ -185,12 +272,69 @@ export default function DriverTourPage() {
                     <span>{t('driverPortal.tour.noCoordinates')}</span>
                   )}
                 </Button>
+
+                {stop.status === 'pending' ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11"
+                      disabled={busyStopId === stop.id}
+                      onClick={() => void handleMark(stop.id, 'arrived')}
+                    >
+                      {t('driverPortal.tour.markArrived')}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-11 bg-emerald-600 text-white hover:bg-emerald-700"
+                      disabled={busyStopId === stop.id}
+                      onClick={() => void handleMark(stop.id, 'completed')}
+                    >
+                      {t('driverPortal.tour.markCompleted')}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                      <Check className="h-4 w-4" />
+                      {t(`driverPortal.tour.status.${stop.status}`)}
+                      {queuedStopIds.includes(stop.id) ? (
+                        <span className="text-xs font-normal text-amber-700">
+                          · {t('driverPortal.tour.queued')}
+                        </span>
+                      ) : null}
+                    </span>
+                    <div className="flex gap-2">
+                      {stop.status === 'arrived' ? (
+                        <Button
+                          type="button"
+                          className="h-11 bg-emerald-600 text-white hover:bg-emerald-700"
+                          disabled={busyStopId === stop.id}
+                          onClick={() => void handleMark(stop.id, 'completed')}
+                        >
+                          {t('driverPortal.tour.markCompleted')}
+                        </Button>
+                      ) : null}
+                      {/* Eldivenle yanlis dokunus olur; geri alma her zaman acik. */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        disabled={busyStopId === stop.id}
+                        onClick={() => void handleReset(stop.id)}
+                      >
+                        <Undo2 className="mr-1.5 h-4 w-4" />
+                        {t('driverPortal.tour.undo')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
         })}
 
-        <p className="px-1 text-xs text-slate-500">{t('driverPortal.tour.readOnlyNote')}</p>
+        {error ? <p className="px-1 text-sm text-red-700">{error}</p> : null}
       </div>
     );
   };

@@ -162,6 +162,17 @@ async function sendQueuedItem(item: DriverOfflineQueueItem): Promise<void> {
         clientRequestId: item.id,
       });
       return;
+    case 'tour-stop-mark':
+      // Kuyruk kaydinin id'si client_event_id olarak gidiyor: ayni olay
+      // yeniden gonderilirse sunucu ikinci kez uygulamiyor.
+      await driverPortalApi.markTourStop(item.stopId, {
+        status: item.status,
+        client_event_id: item.id,
+        occurred_at: item.occurredAt,
+        latitude: item.latitude,
+        longitude: item.longitude,
+      });
+      return;
   }
 }
 
@@ -350,6 +361,26 @@ export async function enqueueLocationPointQueueItem(params: {
     kind: 'location-point',
     createdAt: new Date().toISOString(),
     payload: params.payload,
+  });
+}
+
+export async function enqueueTourStopMarkQueueItem(params: {
+  stopId: string;
+  status: 'arrived' | 'completed' | 'skipped';
+  occurredAt: string;
+  latitude?: number;
+  longitude?: number;
+}): Promise<string> {
+  const id = crypto.randomUUID();
+  return queueAndMaybeFlush({
+    id,
+    kind: 'tour-stop-mark',
+    createdAt: new Date().toISOString(),
+    stopId: params.stopId,
+    status: params.status,
+    occurredAt: params.occurredAt,
+    latitude: params.latitude,
+    longitude: params.longitude,
   });
 }
 

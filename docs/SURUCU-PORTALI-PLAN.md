@@ -13,7 +13,7 @@
 | 4 | Tur ekranı — göster | ✅ bitti |
 | 5 | Arıza bildirimi + yakıt girişi | ✅ bitti |
 | 6 | Kalan sürüş süresi | ⏭️ kapsam dışı (karar) |
-| 7 | Durak durumu ("vardım / teslim ettim") | 🔄 backend bitti · arayüz sürüyor |
+| 7 | Durak durumu ("vardım / teslim ettim") | ✅ bitti |
 | — | Token katmanını dirilt | ⬜ ayrı iş, 53 dosya |
 | — | Ehliyet kontrolü · cezalar · seferler · skor | ⬜ sonraki tur |
 
@@ -259,8 +259,21 @@ yanlış roldeki kullanıcı 403; geri alma durağı `pending` yapıyor.
 **Bilinen sınır.** Geri alma durağı açar ama **kapanmış görevi yeniden açmaz** — görev durumunun
 sahibi ofis, biz yalnızca kolaylık olsun diye kapatıyoruz. Gerekirse ofis yeniden açar.
 
-**Kalan.** Arayüz: tur ekranında işaretleme düğmeleri ve çevrimdışı kuyruk entegrasyonu
-(`DriverOfflineQueueKind`'a yeni tip eklenecek).
+**Yapılan (arayüz).** Tur ekranında durak başına "Vardım" ve "Tamamlandı"; işaretlenmiş durakta
+"Geri al" her zaman açık (eldivenle yanlış dokunuş olur). Tamamlanan durak soluklaşıyor ve
+navigasyon düğmesi pasifleşiyor ki sürücü sıradakini bulsun. Konum en iyi çabayla alınıyor —
+izin yoksa ya da sinyal gecikirse işaretleme yine de kaydediliyor; koordinatsız zaman damgası
+hiç kayıt olmamasından iyidir.
+
+Çevrimdışı: `DriverOfflineQueueKind`'a `tour-stop-mark` eklendi. Kuyruk kaydının `id`'si sunucuya
+`client_event_id` olarak gidiyor, yani bağlantı gelince aynı dokunuş iki kez uygulanmıyor.
+
+**Doğrulanan (tarayıcı, gerçek tur).** Vardım → `arrived` yazıldı; iki durak da tamamlanınca tur
+`completed` oldu; geri alma durağı `pending` yaptı.
+
+**Doğrulanmayan.** Gerçek çevrimdışı akış tarayıcıda simüle edilmedi — kuyruk kodu bağlandı ve
+dayandığı idempotency ucta doğrulandı, ama "sinyal kesildi, sonra geldi" senaryosu uçtan uca
+denenmedi. Kuyruk altyapısı zaten dört ayrı tip tarafından kullanılıyor.
 
 ---
 
