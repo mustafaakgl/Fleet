@@ -6,7 +6,7 @@
 
 | # | İş | Durum |
 |---|---|---|
-| 0 | Service worker eski sürümü servis ediyor | ⛔ **engelleyici** |
+| 0 | Service worker eski sürümü servis ediyor | ✅ bitti |
 | 1 | Görünür kusurlar (durum etiketi, alt menü) | ✅ bitti |
 | 2 | Ana sayfa → günün fazına göre tek eylem | ✅ bitti |
 | 3 | Abfahrtskontrolle (günlük araç kontrolü) | ⬜ sırada |
@@ -52,23 +52,46 @@ Bunlar sorulup karara bağlandı, yeniden tartışılmadan uygulanır:
 
 ---
 
-## Adım 0 — Service worker ⛔ ENGELLEYİCİ
+## Adım 0 — Service worker ✅
 
-**Sorun.** `/driver` kapsamında kayıtlı bir service worker (`public/driver-portal-sw.js`,
-`hooks/useDriverPortalServiceWorker.ts` ile kaydediliyor) `driver-portal-shell-v1` önbelleğinden
-eski kabuğu sunuyor. Adım 2 doğrulanırken ölçüldü: dev sunucusu yeniden başlatıldı, `.next`
-temizlendi, sayfa zorla yenilendi — **hiçbiri işe yaramadı.** Yalnızca `unregister()` +
-`caches.delete()` sonrası yeni sürüm göründü.
+**Teşhis düzeltmesi.** Bu ilk raporlandığında "üretim riski, düzeltmeler sürücüye ulaşmıyor"
+denmişti. Ölçünce yanlış çıktı: sorun **dev'e özeldi.**
 
-**Neden önce bu.** Sürücü portalına ne yayınlarsak yayınlayalım sürücünün telefonuna ulaşmıyor.
-Bu düzelmeden aşağıdaki adımların hiçbirinin sahada karşılığı olmaz.
+| Ortam | Chunk adı | Cache-first sonucu |
+|---|---|---|
+| Dev | `…/driver/page.js` — hash yok | Eski sürüm kalıcı olarak sabitleniyor |
+| Üretim | `1255-eae4096fb21f1304.js` — hash'li | Yeni build = yeni URL = taze içerik |
 
-**Bakılacaklar.** Cache adının sürümlenmesi (`-v1` elle mi artıyor?), `skipWaiting` /
-`clients.claim` kullanımı, `DriverPortalUpdateBanner`'ın bekleyen worker'ı gerçekten algılayıp
-algılamadığı (bu senaryoda hiç tetiklenmedi).
+Yani üretimde uygulama güncellemeleri sürücüye zaten ulaşıyordu. Yaşanan kırılma dev'deydi:
+`isStaticAsset` `/_next/static/`'i kapsıyor ve işleyici cache-first'tü, dev chunk adları
+sabit olduğu için ilk sürüm sonsuza kadar sabitleniyordu.
 
-**Doğrulama.** Kod değiştirilip yeniden derlendiğinde, site verisi temizlenmeden yeni sürümün
-geldiği tarayıcıda gösterilmeli.
+**Yapılan.**
+
+- **Dev'de kayıt yok.** Dev'de service worker önbelleğinin faydası yok, zararı bu. Ayrıca daha
+  önce kaydı olan tarayıcılar kendiliğinden kurtarılıyor (`unregister` + `driver-portal-shell-*`
+  önbelleklerinin silinmesi), yoksa o makineler sebebi belirsiz şekilde takılı kalırdı.
+- **Önbellek sürümleniyor.** `CACHE_NAME` sabit `-v1`'di, `activate` içindeki temizlik *başka*
+  adlı önbellekleri sildiği için hiçbir zaman silecek bir şey bulamıyordu; sürücünün telefonunda
+  her deploy'un hash'li chunk'ları süresiz birikiyordu. Artık kayıt URL'indeki `?v=` sürümünden
+  türetiliyor ve sürüm build anında git sha'sından geliyor.
+- **Güncelleme banner'ı artık işliyor.** `install` içindeki `skipWaiting()` kaldırıldı: yeni worker
+  hemen devralınca `waiting` durumu hiç oluşmuyordu, banner ise yalnızca bekleyen worker'ı
+  izlediği için ölü koddu — üstelik çalışan sayfanın altından kod değişiyordu. Artık worker
+  bekliyor, banner çıkıyor, sürücü uygun anda yeniliyor. Banner mevcut `SKIP_WAITING` mesajını
+  gönderiyor (o işleyici vardı ama kimse çağırmıyordu) ve devir tamamlanınca sayfayı yeniliyor.
+- **Statik varlıklar stale-while-revalidate.** Hash'li adlarda iki strateji de doğru, ama sabit
+  adlı herhangi bir varlık artık ilk sürümüne çivilenmiyor; önbellekten servis edilip arka planda
+  tazeleniyor.
+
+**Doğrulama.** Dev: önceden kaydı olan tarayıcıda sayfa açıldığında kayıt sayısı 0'a düşüyor ve
+`driver-portal-shell-*` önbellekleri siliniyor (tarayıcıda ölçüldü). Üretim: `npm run verify`
+çıktısında paket `serviceWorker.register("/driver-portal-sw.js" + "?v=" + encodeURIComponent("7b00c8b"))`
+içeriyor — sürüm git sha'sından gömülüyor.
+
+**Kalan bilinen sınır.** Sürüm git sha'sından geliyor; `.git` olmayan bir ortamda (ör. Docker)
+`npm_package_version`'a düşüyor ve o deploy başına değişmez. O ortamda `NEXT_PUBLIC_SW_VERSION`
+CI tarafından verilmeli.
 
 ## Adım 1 — Görünür kusurlar ✅
 

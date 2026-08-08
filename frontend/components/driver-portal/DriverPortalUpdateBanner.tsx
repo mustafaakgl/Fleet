@@ -6,7 +6,7 @@ import { useDriverPortalServiceWorker } from '@/hooks/useDriverPortalServiceWork
 
 export function DriverPortalUpdateBanner() {
   const { t } = useTranslation();
-  const { updateAvailable, acknowledgeUpdate } = useDriverPortalServiceWorker();
+  const { updateAvailable, applyUpdate } = useDriverPortalServiceWorker();
 
   if (!updateAvailable) {
     return null;
@@ -19,10 +19,7 @@ export function DriverPortalUpdateBanner() {
         <button
           type="button"
           className="inline-flex items-center gap-2 rounded-full bg-amber-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-800"
-          onClick={() => {
-            acknowledgeUpdate();
-            window.location.reload();
-          }}
+          onClick={applyUpdate}
         >
           <RotateCcw className="h-3.5 w-3.5" />
           {t('driverPortal.pwa.reload')}

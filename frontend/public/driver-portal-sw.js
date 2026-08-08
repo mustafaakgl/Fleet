@@ -1,4 +1,9 @@
-const CACHE_NAME = 'driver-portal-shell-v1';
+// Cache name is versioned from the registration URL (?v=…), which changes every
+// build. Without that the name was a fixed '-v1', so the activate cleanup below
+// — which drops caches under any *other* name — never had anything to drop and a
+// driver's phone accumulated every hashed chunk of every deploy, forever.
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
+const CACHE_NAME = `driver-portal-shell-${VERSION}`;
 const SHELL_URLS = ['/driver', '/manifest.webmanifest', '/brand/operion-mark.svg', '/brand/operion-logo-navy.svg'];
 
 function isSameOrigin(url) {
@@ -15,9 +20,11 @@ function isStaticAsset(pathname) {
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)).then(() => self.skipWaiting()),
-  );
+  // Deliberately no skipWaiting() here: the new worker waits so the portal can
+  // show its update banner and let the driver reload at a safe moment. Taking
+  // over immediately swapped code under a running page and the banner — which
+  // only ever fires for a *waiting* worker — could never appear.
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)));
 });
 
 self.addEventListener('activate', (event) => {
@@ -51,15 +58,29 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isStaticAsset(requestUrl.pathname)) {
+    // Stale-while-revalidate rather than cache-first. Production chunk names are
+    // content-hashed so either strategy is correct there, but any asset served
+    // under a stable name was previously pinned to its first version with no way
+    // back short of clearing site data. Serving the cached copy and refreshing it
+    // in the background keeps the offline shell while letting it self-heal.
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cached = await cache.match(event.request);
-        if (cached) return cached;
-        const response = await fetch(event.request);
-        if (response.ok) {
-          void cache.put(event.request, response.clone());
+        const network = fetch(event.request)
+          .then((response) => {
+            if (response.ok) {
+              void cache.put(event.request, response.clone());
+            }
+            return response;
+          })
+          .catch(() => undefined);
+
+        if (cached) {
+          void network;
+          return cached;
         }
-        return response;
+        const response = await network;
+        return response ?? Response.error();
       }),
     );
   }

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withSentryConfig } from '@sentry/nextjs';
@@ -7,10 +8,36 @@ const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const isProductionBuild = process.env.NODE_ENV === 'production';
 const sentryEnabled = Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN?.trim());
 
+/**
+ * Version stamped into the driver portal service worker URL so each deploy
+ * installs a new worker and drops the previous cache.
+ *
+ * Must be identical across every process of one build — `next build` may evaluate
+ * this config in several workers, so a timestamp would hand them different values.
+ * The commit sha is stable for a build; the package version is the fallback for
+ * builds without a git directory (e.g. inside Docker).
+ */
+function resolveServiceWorkerVersion(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_SW_VERSION?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return process.env.npm_package_version ?? 'unversioned';
+  }
+}
+
 const nextConfig: NextConfig = {
   // Allow verify/CI builds to write into an isolated dist dir so they don't
   // clobber the running dev server's .next runtime chunks.
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  env: {
+    NEXT_PUBLIC_SW_VERSION: resolveServiceWorkerVersion(),
+  },
   output: isProductionBuild ? 'standalone' : undefined,
   outputFileTracingRoot: repoRoot,
   // Public demo tunnels (cloudflared) reach the dev server under a foreign
