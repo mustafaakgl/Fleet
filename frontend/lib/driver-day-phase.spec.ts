@@ -91,10 +91,14 @@ describe('resolveDriverDayPhase', () => {
     );
   });
 
-  it('does not gate a tour that is already running', () => {
+  /**
+   * The vehicle check now applies to an office-started tour too: skipping it
+   * would let a dispatcher's status change bypass a legally required check.
+   */
+  it('gates an office-started tour on the vehicle check as well', () => {
     assert.equal(
       phaseFor({ assignmentStatus: 'in_progress', departureCheckDone: false }),
-      'on_tour',
+      'departure_check',
     );
   });
 
@@ -117,6 +121,46 @@ describe('resolveDriverDayPhase', () => {
     assert.equal(
       phaseFor({ assignmentStatus: 'in_progress', morningCheckinDone: false }),
       'on_tour',
+    );
+  });
+
+  /**
+   * The backend raises the handover flag only when today's vehicle differs from
+   * yesterday's. Documenting its condition has to happen BEFORE the driver takes
+   * it out, so the gate sits between starting the tour and driving it.
+   */
+  it('demands handover photos before the tour when the vehicle changed', () => {
+    assert.equal(
+      phaseFor({ morningCheckinDone: true, handoverPhotosPending: true }),
+      'handover',
+    );
+  });
+
+  it('never shows the handover step when the vehicle is unchanged', () => {
+    // Same vehicle as yesterday: the backend raises no flag and the driver goes
+    // straight to the tour.
+    assert.equal(
+      phaseFor({ morningCheckinDone: true, handoverPhotosPending: false }),
+      'on_tour',
+    );
+  });
+
+  it('keeps the handover gate for a tour the office marked in_progress', () => {
+    assert.equal(
+      phaseFor({ assignmentStatus: 'in_progress', handoverPhotosPending: true }),
+      'handover',
+    );
+  });
+
+  /** The vehicle check still outranks it: that one happens before boarding. */
+  it('keeps the vehicle check ahead of the handover gate', () => {
+    assert.equal(
+      phaseFor({
+        departureCheckDone: false,
+        morningCheckinDone: true,
+        handoverPhotosPending: true,
+      }),
+      'departure_check',
     );
   });
 

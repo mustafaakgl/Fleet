@@ -65,17 +65,29 @@ export function resolveDriverDayPhase(input: DriverDayInput): DriverDayPhase {
     return workSessionActive ? 'end_shift' : 'day_closed';
   }
 
-  // The office moved it along; do not send the driver back to a start step.
-  if (assignmentStatus === 'in_progress') {
-    return 'on_tour';
-  }
-
   // planned / confirmed: the vehicle check gates the tour.
   if (departureCheckDone === false) {
     return 'departure_check';
   }
 
-  return morningCheckinDone ? 'on_tour' : 'start_tour';
+  // The office moving it to in_progress also counts as started; do not send the
+  // driver back to a start step they cannot undo.
+  const tourStarted = morningCheckinDone || assignmentStatus === 'in_progress';
+  if (!tourStarted) {
+    return 'start_tour';
+  }
+
+  /**
+   * Second gate, after the tour starts: the backend flags a handover when the
+   * vehicle differs from yesterday's, and its condition has to be documented
+   * before the driver takes it out. Same vehicle as yesterday raises no flag and
+   * the driver never sees this step.
+   */
+  if (handoverPhotosPending) {
+    return 'handover';
+  }
+
+  return 'on_tour';
 }
 
 /**

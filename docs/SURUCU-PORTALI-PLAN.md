@@ -277,6 +277,38 @@ denenmedi. Kuyruk altyapısı zaten dört ayrı tip tarafından kullanılıyor.
 
 ---
 
+## Ek — tur başlangıcında zorunlu devir fotoğrafları ✅
+
+**İstenen.** Tur başlatıldıktan sonra araç içi, arka, ön, sağ, sol fotoğrafları zorunlu olsun;
+ama yalnızca araç bir önceki günkünden farklıysa. Aynı araçsa handover sayfası hiç çıkmasın.
+
+**Bulunan.** Kural ve ekranın tamamı zaten yazılmış:
+
+- `handover-photo.util.ts` → `HANDOVER_PHOTO_SLOTS = front, right, left, rear, tail_lift, interior`
+  ve `calculatePhotoRequirement` "araç dünden beri değiştiyse zorunlu" diyor (plaka değişimini de
+  ayrıca kontrol ediyor).
+- `driver-mobile.service.ts:590` → `createMorningCheckin` içinden `ensureHandoverForPlateChange`
+  çağrılıyor. Yani **"Turu başlat"a basıldığı anda** karar veriliyor ve gerekiyorsa handover
+  `photoRequired: true` ile açılıyor.
+- `/driver/handover` sayfası altı slotu canlı kamerayla topluyor, hasar kutusu da var.
+
+**Yapılan.** Yalnızca faz sırası. `handover` fazı yalnızca görev bittikten sonra erişilebiliyordu;
+tur başlangıcına, `start_tour` ile `on_tour` arasına ikinci kapı olarak taşındı. Araç kontrolü
+(Abfahrtskontrolle) hâlâ ondan önce geliyor — o araca binmeden önce yapılır.
+
+Metin de değişti: "ofis bekliyor" yerine sebebini söylüyor — "Bugün dünkünden farklı bir
+araçtasın. Yola çıkmadan önce durumunu kaydet."
+
+**Doğrulanan (gerçek veriyle, iki senaryo).**
+
+| Senaryo | Sonuç |
+|---|---|
+| Dün ve bugün **aynı** araç | handover kaydı hiç oluşmadı, sürücü doğrudan tura geçti |
+| Dün **farklı** araç | `photoRequired: true`, `photoStatus: missing` kaydı açıldı; ana sayfa "Araç devrini belgele" kapısını gösterdi ve "Turu aç" sunmadı |
+
+4 yeni faz testi eklendi (17/17): kapı tur başında devreye giriyor, araç aynıysa hiç görünmüyor,
+ofis `in_progress` yapsa bile kapı duruyor, araç kontrolü kapıdan önce geliyor.
+
 ## UX temeli — enine kesen
 
 Ayrı adım değil, her adımın içinde uygulanır. Kullanım bağlamı tasarımı belirliyor: **kabinde,
