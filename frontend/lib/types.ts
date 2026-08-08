@@ -1754,6 +1754,63 @@ export type DriverRequestType =
   | 'uniform_delivery'
   | 'other';
 
+/** Daily vehicle check (Abfahrtskontrolle) — GET /driver/departure-check/status. */
+export interface DepartureCheckTemplateItem {
+  id: string;
+  item_key: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+  requires_photo_on_defect: boolean;
+}
+
+export interface DepartureCheckVehicleCompliance {
+  vehicle_id: string;
+  has_blocking_defect: boolean;
+  open_critical_defects: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    severity: string;
+    created_at: string;
+  }>;
+  blocks_assignment: boolean;
+  blocks_departure_check: boolean;
+}
+
+export interface DriverDepartureCheckStatus {
+  required: boolean;
+  completed_today: boolean;
+  can_submit: boolean;
+  assignment: {
+    id: string;
+    work_date: string;
+    start_time: string;
+    company_name: string;
+    vehicle_id: string;
+    vehicle_plate: string;
+  } | null;
+  existing_check: {
+    id: string;
+    overall_status: string;
+    performed_at: string;
+  } | null;
+  template: {
+    id: string;
+    name: string;
+    items: DepartureCheckTemplateItem[];
+  } | null;
+  vehicle_compliance: DepartureCheckVehicleCompliance | null;
+}
+
+export interface DepartureCheckItemInput {
+  item_key: string;
+  result: DepartureCheckItemStatus;
+  defect_description?: string;
+  defect_severity?: DefectSeverity;
+}
+
 export interface DriverMorningCheckin {
   id: string;
   date: string;

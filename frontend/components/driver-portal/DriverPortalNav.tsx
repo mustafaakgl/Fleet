@@ -13,6 +13,7 @@ const TABS = [
     path === '/driver' ||
     path.startsWith('/driver/assignments') ||
     path.startsWith('/driver/morning-checkin') ||
+    path.startsWith('/driver/departure-check') ||
     path.startsWith('/driver/handover') ||
     path.startsWith('/driver/notifications') ||
     path.startsWith('/driver/documents'),

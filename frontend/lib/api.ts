@@ -2214,6 +2214,37 @@ function driverMultipartHeaders() {
 export const driverPortalApi = {
   me: () => api.get<DriverPortalMe>('/driver/me').then((r) => r.data),
 
+  departureCheckStatus: () =>
+    api
+      .get<import('./types').DriverDepartureCheckStatus>('/driver/departure-check/status')
+      .then((r) => r.data),
+
+  /**
+   * The endpoint takes the checklist as a JSON `payload` field plus one file field
+   * per item (`photo_<item_key>`), so this cannot be a plain JSON post.
+   */
+  submitDepartureCheck: (
+    payload: {
+      vehicle_id: string;
+      assignment_id?: string;
+      items: import('./types').DepartureCheckItemInput[];
+      latitude?: number;
+      longitude?: number;
+    },
+    photosByItemKey: Record<string, File[]>,
+  ) => {
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(payload));
+    for (const [itemKey, files] of Object.entries(photosByItemKey)) {
+      for (const file of files) {
+        formData.append(`photo_${itemKey}`, file);
+      }
+    }
+    return api
+      .post('/driver/departure-check/submit', formData, { headers: driverMultipartHeaders() })
+      .then((r) => r.data);
+  },
+
   updateLanguage: (language: MessengerLanguage) =>
     api.post<DriverPortalMe>('/driver/me/language', { language }).then((r) => r.data),
 

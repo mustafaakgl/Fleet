@@ -36,6 +36,9 @@ export default function DriverPortalHomePage() {
   const [equipmentIssuanceId, setEquipmentIssuanceId] = useState<string | null>(null);
   const [morningCheckinDone, setMorningCheckinDone] = useState(false);
   const [workSessionActive, setWorkSessionActive] = useState(false);
+  // null = the check does not apply (no assignment) or its status could not be
+  // read; either way the gate stays out of the driver's way.
+  const [departureCheckDone, setDepartureCheckDone] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -48,8 +51,9 @@ export default function DriverPortalHomePage() {
       driverPortalApi.listEquipmentIssuances(),
       driverPortalApi.listMorningCheckins(today),
       driverPortalApi.getCurrentWorkSession(),
+      driverPortalApi.departureCheckStatus(),
     ]);
-    const [profile, assignments, handovers, equipment, checkins, session] = results;
+    const [profile, assignments, handovers, equipment, checkins, session, departureCheck] = results;
 
     if (profile.status === 'fulfilled') {
       setDriverName(profile.value.driver.firstName);
@@ -82,6 +86,15 @@ export default function DriverPortalHomePage() {
 
     if (session.status === 'fulfilled') {
       setWorkSessionActive(session.value.active);
+    }
+
+    if (departureCheck.status === 'fulfilled') {
+      // A vehicle blocked by an open critical defect cannot be checked at all;
+      // gating on it would leave the driver with a door nobody can open.
+      const blocked = departureCheck.value.vehicle_compliance?.blocks_departure_check ?? false;
+      setDepartureCheckDone(
+        departureCheck.value.required && !blocked ? departureCheck.value.completed_today : null,
+      );
     }
 
     // Only the two reads the phase depends on are worth alarming about; a failed
@@ -134,9 +147,7 @@ export default function DriverPortalHomePage() {
 
   const phase: DriverDayPhase = resolveDriverDayPhase({
     assignmentStatus: assignment?.status ?? null,
-    // No page for the vehicle check yet (plan step 4); leaving this null keeps the
-    // gate out of the way instead of parking the driver on a dead end.
-    departureCheckDone: null,
+    departureCheckDone,
     morningCheckinDone,
     handoverPhotosPending: handover !== null,
     workSessionActive,

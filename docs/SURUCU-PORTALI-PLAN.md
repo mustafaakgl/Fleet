@@ -9,8 +9,8 @@
 | 0 | Service worker eski sürümü servis ediyor | ✅ bitti |
 | 1 | Görünür kusurlar (durum etiketi, alt menü) | ✅ bitti |
 | 2 | Ana sayfa → günün fazına göre tek eylem | ✅ bitti |
-| 3 | Abfahrtskontrolle (günlük araç kontrolü) | ⬜ sırada |
-| 4 | Tur ekranı — göster | ⬜ |
+| 3 | Abfahrtskontrolle (günlük araç kontrolü) | ✅ bitti |
+| 4 | Tur ekranı — göster | ⬜ sırada |
 | 5 | Arıza bildirimi + yakıt girişi | ⬜ |
 | 6 | Kalan sürüş süresi | ⬜ |
 | 7 | Durak durumu ("vardım / teslim ettim") | ⬜ tasarım kararı bekliyor |
@@ -121,7 +121,7 @@ sayaçlar gitti.
 **Açık kalan bağ:** `departureCheckDone` şimdilik `null` geçiliyor — Adım 3 bunu gerçek veriye
 bağlayacak ve kapı devreye girecek.
 
-## Adım 3 — Abfahrtskontrolle
+## Adım 3 — Abfahrtskontrolle ✅
 
 **Neden şimdi.** Backend tam hazır (`GET status`, `POST submit`), faz makinesinde kapının yeri
 zaten kodlanmış, yasal olarak günlük zorunlu ve sürücü bunu web'den hiç yapamıyor. Adım 2'yi
@@ -134,8 +134,28 @@ bulunursa arıza bildirimine bağlanır (Adım 5).
 **Ayrım.** Mevcut `/driver/morning-checkin` araç plakası + firma + yük soruyor; bu bir *tur
 başlangıç beyanı*, güvenlik kontrolü değil. İkisi ayrı kalır.
 
-**Doğrulama.** Kontrol kaydı backend'e yazılıyor ve ofis tarafındaki `/departure-checks`
-listesinde görünüyor; kontrol yapılmadan ana sayfa `start_tour` fazına geçmiyor.
+**Yapılan.** `/driver/departure-check` sayfası: şablon kalemleri sıralı, kalem başına
+uygun/kusurlu/geçersiz, kusurda açıklama + ağırlık + fotoğraf. Form eksikken gönderim kilitli
+(kalan madde, eksik açıklama, eksik zorunlu fotoğraf ayrı ayrı bildiriliyor). Ana sayfada
+`departureCheckDone` gerçek veriye bağlandı.
+
+Karar gereği **kusur turu bloke etmiyor** — kayda geçer, ofise gider, sürücü yoluna devam eder.
+Bloke eden tek şey aracın zaten açık kritik kusuru olması; o kural backend'de
+(`blocks_departure_check`) ve sayfa yalnızca bildiriyor. O durumda ana sayfa kapısı da devreye
+girmiyor, yoksa sürücü kimsenin açamayacağı bir kapıya çarpardı.
+
+Tip tarafında yeni tip icat edilmedi: ofis tarafındaki `DepartureCheckItemStatus` ve
+`DefectSeverity` kullanıldı.
+
+**Doğrulanan.** Şablon 7 gerçek kalemle geliyor (Reifen, Bremsen, Beleuchtung, Spiegel,
+Ladungssicherung, Verbandkasten, Warndreieck). Kusur işaretlenince açıklama + ağırlık + foto
+alanları açılıyor ve gönderim kilitleniyor. Hepsi işaretlenince kilit kalkıyor, gönderim
+`DepartureCheck` + 7 `DepartureCheckItemResult` satırı yazıyor. Engelli araçta "Araç kilitli"
+ekranı gerçek kusur adıyla çıkıyor. Ana sayfa kontrol yokken `departure_check` fazında kalıyor ve
+"Turu başlat" sunmuyor; kontrol yapılınca `start_tour`'a geçiyor.
+
+**Not.** Backend'de "onarıldı" (`behoben`) aracı açmıyor; yalnızca `bestaetigt` açıyor. Yani
+kusuru tamir etmek yetmiyor, ofisin teyit etmesi gerekiyor.
 
 ## Adım 4 — Tur ekranı (göster)
 
