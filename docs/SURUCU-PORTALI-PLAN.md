@@ -12,8 +12,8 @@
 | 3 | Abfahrtskontrolle (günlük araç kontrolü) | ✅ bitti |
 | 4 | Tur ekranı — göster | ✅ bitti |
 | 5 | Arıza bildirimi + yakıt girişi | ✅ bitti |
-| 6 | Kalan sürüş süresi | ⬜ sırada |
-| 7 | Durak durumu ("vardım / teslim ettim") | ⬜ tasarım kararı bekliyor |
+| 6 | Kalan sürüş süresi | ⏭️ kapsam dışı (karar) |
+| 7 | Durak durumu ("vardım / teslim ettim") | ⬜ sırada · tasarım kararı bekliyor |
 | — | Token katmanını dirilt | ⬜ ayrı iş, 53 dosya |
 | — | Ehliyet kontrolü · cezalar · seferler · skor | ⬜ sonraki tur |
 
@@ -210,14 +210,20 @@ doğru çözüldü. Arıza: fotoğrafla gönderim başarılı, fotoğrafsız gö
 İki test kaydı da silindi (arıza `kritisch/offen` olduğu için bırakılsaydı o aracın
 Abfahrtskontrolle'sini bloke ederdi).
 
-## Adım 6 — Kalan sürüş süresi
+## Adım 6 — Kalan sürüş süresi ⏭️ KAPSAM DIŞI
 
-561/2006 ihlalinde cezayı yiyen ve ehliyetini riske atan kişi sürücü, ama kalan sürüş ve mola
-süresini yalnızca ofis görüyor (`tachograph/remaining-driving-time`). Ana sayfada kalıcı şerit.
+**2026-08-08 kararı: yapılmayacak.** Unutulmuş değil, bilerek çıkarıldı.
 
-**Risk.** Sürücüye gösterilen sayı yanlışsa güven kaybı büyük olur. Ofis ekranıyla birebir aynı
-kaynaktan beslenmeli, arayüzde yeniden hesap yapılmamalı. Takograf kural motorunun mevcut 33
-testiyle tutarlılık kontrol edilir.
+Öneri şuydu: 561/2006 ihlalinde cezayı yiyen ve ehliyetini riske atan kişi sürücü, ama kalan sürüş
+ve mola süresini yalnızca ofis görüyor (`tachograph/remaining-driving-time`). Ana sayfada kalıcı
+bir şerit düşünülmüştü.
+
+İleride yeniden değerlendirilirse geçerli kalan risk: sürücüye gösterilen sayı yanlışsa güven
+kaybı büyük olur. Ofis ekranıyla birebir aynı kaynaktan beslenmeli, arayüzde yeniden hesap
+yapılmamalı; takograf kural motorunun mevcut 33 testiyle tutarlılık kontrol edilmeli.
+
+**Bağlı iş:** UX temelindeki gece modu bu adıma bağlanmıştı. Artık bağımsız — token katmanı
+diriltildikten sonra kendi başına ele alınabilir.
 
 ## Adım 7 — Durak durumu ("vardım / teslim ettim")
 
@@ -248,7 +254,7 @@ renk (sarı = senin yapman gereken var, kırmızı = sorun bildir, yeşil = tama
 - **Çevrimdışı görünürlüğü (Adım 4).** `DriverOfflineStatusBar` ve `driver-offline-queue-core`
   zaten var; eksik olan sürücünün kuyruğu görmesi — "3 kayıt gönderilmeyi bekliyor". Görmezse
   aynı şeyi tekrar tekrar gönderir.
-- **Gece modu (Adım 6 ile).** `darkMode` hiç yapılandırılmamış. Sürücüler gece sürüyor; kabinde
+- **Gece modu (token diriltmesinden sonra).** `darkMode` hiç yapılandırılmamış. Sürücüler gece sürüyor; kabinde
   03:00'te bembeyaz ekran göz kamaştırır ve gece görüşünü bozar. Moda tercihi değil, sürüş
   güvenliğine dokunuyor. Token katmanı dirilmeden teknik olarak yapılamaz.
 
