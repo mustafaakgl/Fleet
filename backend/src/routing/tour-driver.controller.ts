@@ -1,10 +1,12 @@
-import { Controller, Get, NotFoundException, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { MarkTourStopDto } from './dto/mark-tour-stop.dto';
 import { TourService } from './tour.service';
+import { TourStopService } from './tour-stop.service';
 
 /**
  * Surucu uygulamasinin tur ucu.
@@ -20,6 +22,7 @@ export class TourDriverController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tours: TourService,
+    private readonly stops: TourStopService,
   ) {}
 
   private async resolveDriverId(userId: string): Promise<string> {
@@ -65,6 +68,32 @@ export class TourDriverController {
     return { tour: this.toClientTour(await this.tours.findById(tour.id)) };
   }
 
+  /**
+   * Durak isaretleme. Surucuye Assignment uzerinde yazma yetkisi VERILMEDI:
+   * gorevi kapatma karari sunucuda, "o goreve ait tum duraklar bitti" kosuluyla
+   * aliniyor (bkz. TourStopService.closeFinishedWork).
+   */
+  @Post('stops/:stopId/mark')
+  markStop(
+    @CurrentUser('id') userId: string,
+    @Param('stopId') stopId: string,
+    @Body() dto: MarkTourStopDto,
+  ) {
+    return this.stops.markStop(userId, stopId, {
+      status: dto.status,
+      clientEventId: dto.client_event_id,
+      occurredAt: dto.occurred_at,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+    });
+  }
+
+  /** Yanlis dokunusu geri alir. Eldivenle kullanilan bir ekranda gerekli. */
+  @Post('stops/:stopId/reset')
+  resetStop(@CurrentUser('id') userId: string, @Param('stopId') stopId: string) {
+    return this.stops.resetStop(userId, stopId);
+  }
+
   private toClientTour(tour: Awaited<ReturnType<TourService['findById']>>) {
     return {
       id: tour.id,
@@ -93,6 +122,9 @@ export class TourDriverController {
         serviceMinutes: stop.serviceMinutes,
         plannedArrivalAt: stop.plannedArrivalAt?.toISOString() ?? null,
         legDistanceKm: stop.legDistanceKm === null ? null : Number(stop.legDistanceKm),
+        status: stop.status,
+        arrivedAt: stop.arrivedAt?.toISOString() ?? null,
+        completedAt: stop.completedAt?.toISOString() ?? null,
       })),
     };
   }

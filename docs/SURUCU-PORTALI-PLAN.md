@@ -13,7 +13,7 @@
 | 4 | Tur ekranı — göster | ✅ bitti |
 | 5 | Arıza bildirimi + yakıt girişi | ✅ bitti |
 | 6 | Kalan sürüş süresi | ⏭️ kapsam dışı (karar) |
-| 7 | Durak durumu ("vardım / teslim ettim") | ⬜ sırada · tasarım kararı bekliyor |
+| 7 | Durak durumu ("vardım / teslim ettim") | 🔄 backend bitti · arayüz sürüyor |
 | — | Token katmanını dirilt | ⬜ ayrı iş, 53 dosya |
 | — | Ehliyet kontrolü · cezalar · seferler · skor | ⬜ sonraki tur |
 
@@ -225,17 +225,42 @@ yapılmamalı; takograf kural motorunun mevcut 33 testiyle tutarlılık kontrol 
 **Bağlı iş:** UX temelindeki gece modu bu adıma bağlanmıştı. Artık bağımsız — token katmanı
 diriltildikten sonra kendi başına ele alınabilir.
 
-## Adım 7 — Durak durumu ("vardım / teslim ettim")
+## Adım 7 — Durak durumu ("vardım / teslim ettim") 🔄
 
-**Önce karar.** Durak seviyesinde uç yok. İki yol var ve kod yazılmadan seçilmeli:
+**Karar verildi (2026-08-08).** `driver/fleet/trips` **kullanılmayacak.** O model bir
+**Fahrtenbuch**: `purpose (business|private|commute)`, `classifiedAt`, `purposeLockedAt` ve
+`FleetTripPurposeLog` denetim kaydı — vergi defteri. Üç sebeple uymuyor: granülarite araç+sürücü
+seviyesinde (bizim ihtiyacımız durak seviyesinde), amaç vergi kanıtı (operasyonel olay yazmak
+delil değerini zedeler), ve sınıflandırma sonrası kilitleniyor.
 
-- `driver/fleet/trips` katmanını yeniden kullan (`POST start` / `stop` / `locations` zaten var),
-- ya da `TourStop` için ayrı uç yaz.
+`TourStop`'ta yürütme alanı **hiç yoktu** — sadece planlama vardı. Alanlar eklendi.
 
-Yeni Prisma alanı gerekirse CLAUDE.md 2. kural geçerli: migration + `tenant-scoped-models` +
-`tenant-isolation-check` aynı commit içinde. Mobil ile web aynı sözleşmeyi paylaşmalı.
+**Ürün kararları.** Kanıt olarak yalnızca zaman damgası + konum (imza/foto yok) · çevrimdışı
+kuyruğa alınacak · tüm duraklar bitince görev otomatik kapanacak · yanlış dokunuş geri alınabilir.
 
-**Risk.** Planın en yüksek riskli adımı: yeni uç, yeni durum geçişleri, iki istemci.
+**Yapılan (backend).**
+
+- Migration `20260808200000_tour_stop_execution`: `TourStopStatus` enum'u
+  (`pending/arrived/completed/skipped`) ve `TourStop`'a `status`, `arrivedAt`, `completedAt`,
+  `completedLatitude/Longitude`, `clientEventId`. `TourStop` zaten tenant kayıtlı olduğu için
+  yeni model kaydı gerekmedi.
+- `POST driver/tours/stops/:id/mark` ve `POST driver/tours/stops/:id/reset`.
+- Karar mantığı saf fonksiyonda: `core/tour-stop-transition.util.ts`, 9 test. Çevrimdışı kuyruk
+  olayları **toplu ve sırası bozuk** gelebildiği için idempotency (aynı `client_event_id` iki kez
+  uygulanmaz) ve durum gerilemesi koruması (tamamlanmış durak "vardım" ile geri açılmaz) burada.
+- **Görev kapatma sunucuda ve görev bazında.** Sürücüye `Assignment` üzerinde yazma yetkisi
+  verilmedi; backend "o göreve ait tüm duraklar bitti" koşuluyla kapatıyor. Görev bazında olması
+  şart: bir turun durakları farklı görevlere ait olabiliyor.
+
+**Doğrulanan.** vardım → tamamlandı akışı; aynı olayın tekrarı hiçbir şeyi değiştirmiyor; geri
+gitme denemesi tamamlanmışı bozmuyor; ikinci durak bitince görev **ve** tur `completed` oluyor;
+yanlış roldeki kullanıcı 403; geri alma durağı `pending` yapıyor.
+
+**Bilinen sınır.** Geri alma durağı açar ama **kapanmış görevi yeniden açmaz** — görev durumunun
+sahibi ofis, biz yalnızca kolaylık olsun diye kapatıyoruz. Gerekirse ofis yeniden açar.
+
+**Kalan.** Arayüz: tur ekranında işaretleme düğmeleri ve çevrimdışı kuyruk entegrasyonu
+(`DriverOfflineQueueKind`'a yeni tip eklenecek).
 
 ---
 

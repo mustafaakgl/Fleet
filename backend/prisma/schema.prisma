@@ -461,6 +461,13 @@ enum TourStatus {
 
 /// Bir duragin ne icin durdugu. depot_start/depot_end turun baslangic ve
 /// bitis noktasi; arac genelde depoya doner ve bu bacak da maliyete girer.
+enum TourStopStatus {
+  pending
+  arrived
+  completed
+  skipped
+}
+
 enum TourStopKind {
   depot_start
   pickup
@@ -584,119 +591,123 @@ model Tenant {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  users                 User[]
-  invitations           UserInvitation[]
-  subscription          TenantSubscription?
-  drivers               Driver[]
-  vehicles              Vehicle[]
-  companies             Company[]
-  assignments           Assignment[]
-  transportRequests     TransportRequest[]
-  calendarEvents        CalendarEvent[]
-  requests              Request[]
-  documents             Document[]
-  vehicleHandovers      VehicleHandover[]
-  accidents             Accident[]
-  companyEmails         CompanyEmail[]
-  notifications         Notification[]
-  reminders             Reminder[]
-  morningCheckins       MorningCheckin[]
-  serviceRecords        ServiceRecord[]
-  conversations         Conversation[]
-  messageAttachments    MessageAttachment[]
-  messageTranslations   MessageTranslation[]
-  auditLogs             AuditLog[]
-  driverLocationHistory DriverLocationHistory[]
-  driverLocationLatest  DriverLocationLatest[]
+  users                      User[]
+  invitations                UserInvitation[]
+  subscription               TenantSubscription?
+  drivers                    Driver[]
+  vehicles                   Vehicle[]
+  companies                  Company[]
+  assignments                Assignment[]
+  transportRequests          TransportRequest[]
+  calendarEvents             CalendarEvent[]
+  requests                   Request[]
+  documents                  Document[]
+  vehicleHandovers           VehicleHandover[]
+  accidents                  Accident[]
+  companyEmails              CompanyEmail[]
+  notifications              Notification[]
+  reminders                  Reminder[]
+  morningCheckins            MorningCheckin[]
+  serviceRecords             ServiceRecord[]
+  conversations              Conversation[]
+  messageAttachments         MessageAttachment[]
+  messageTranslations        MessageTranslation[]
+  auditLogs                  AuditLog[]
+  driverLocationHistory      DriverLocationHistory[]
+  driverLocationLatest       DriverLocationLatest[]
   customerAssignmentMessages CustomerAssignmentMessage[]
-  workSessions          WorkSession[]
-  vehicleEquipment      VehicleEquipment[]
-  driverLicenses        DriverLicense[]
-  licenseChecks         LicenseCheck[]
-  checklistTemplates    ChecklistTemplate[]
-  departureChecks       DepartureCheck[]
-  defects               Defect[]
-  defectStatusLogs      DefectStatusLog[]
-  departureCheckReminders DepartureCheckReminderState[]
-  fines                 Fine[]
-  fineStatusLogs        FineStatusLog[]
-  fleetTrips            FleetTrip[]
-  fleetTripPurposeLogs  FleetTripPurposeLog[]
-  fleetDrivingEvents    FleetDrivingEvent[]
-  fleetFuelEntries      FleetFuelEntry[]
-  fuelCardImportBatches FuelCardImportBatch[]
-  fuelCardTransactions  FuelCardTransaction[]
-  fleetMaintenanceRules FleetMaintenanceRule[]
-  devices               Device[]
-  vehicleTelemetryLatest VehicleTelemetryLatest[]
-  vehicleDtcs           VehicleDtc[]
-  tachoProviderCredentials TachoProviderCredential[]
-  dddFiles              DddFile[]
-  tachoActivities       TachoActivity[]
-  tachoInfringements    TachoInfringement[]
-  tachoDownloadSchedules TachoDownloadSchedule[]
-  telemetryQuarantine   TelemetryQuarantine[]
-  equipmentIssuances    EquipmentIssuance[]
-  billingProfile        TenantBillingProfile?
-  rateCards             RateCard[]
-  rateCardItems         RateCardItem[]
-  outgoingInvoices      Invoice[]
-  invoiceLines          InvoiceLine[]
-  invoiceAssignmentClaims InvoiceAssignmentClaim[]
-  invoiceNumberSequences InvoiceNumberSequence[]
-  invoicePayments       InvoicePayment[]
-  invoiceDeliveryAttempts InvoiceDeliveryAttempt[]
-  invoiceAuditEvents    InvoiceAuditEvent[]
-  dunningNotices        DunningNotice[]
-  datevExports          DatevExport[]
-  locations             Location[]
-  tours                 Tour[]
-  tourStops             TourStop[]
+  workSessions               WorkSession[]
+  vehicleEquipment           VehicleEquipment[]
+  driverLicenses             DriverLicense[]
+  licenseChecks              LicenseCheck[]
+  checklistTemplates         ChecklistTemplate[]
+  departureChecks            DepartureCheck[]
+  defects                    Defect[]
+  defectStatusLogs           DefectStatusLog[]
+  departureCheckReminders    DepartureCheckReminderState[]
+  fines                      Fine[]
+  fineStatusLogs             FineStatusLog[]
+  fleetTrips                 FleetTrip[]
+  fleetTripPurposeLogs       FleetTripPurposeLog[]
+  fleetDrivingEvents         FleetDrivingEvent[]
+  fleetFuelEntries           FleetFuelEntry[]
+  fuelCardImportBatches      FuelCardImportBatch[]
+  fuelCardTransactions       FuelCardTransaction[]
+  fleetMaintenanceRules      FleetMaintenanceRule[]
+  devices                    Device[]
+  vehicleTelemetryLatest     VehicleTelemetryLatest[]
+  vehicleDtcs                VehicleDtc[]
+  tachoProviderCredentials   TachoProviderCredential[]
+  dddFiles                   DddFile[]
+  tachoActivities            TachoActivity[]
+  tachoInfringements         TachoInfringement[]
+  tachoDownloadSchedules     TachoDownloadSchedule[]
+  telemetryQuarantine        TelemetryQuarantine[]
+  equipmentIssuances         EquipmentIssuance[]
+  billingProfile             TenantBillingProfile?
+  rateCards                  RateCard[]
+  rateCardItems              RateCardItem[]
+  outgoingInvoices           Invoice[]
+  invoiceLines               InvoiceLine[]
+  invoiceAssignmentClaims    InvoiceAssignmentClaim[]
+  invoiceNumberSequences     InvoiceNumberSequence[]
+  invoicePayments            InvoicePayment[]
+  invoiceDeliveryAttempts    InvoiceDeliveryAttempt[]
+  invoiceAuditEvents         InvoiceAuditEvent[]
+  dunningNotices             DunningNotice[]
+  datevExports               DatevExport[]
+  locations                  Location[]
+  tours                      Tour[]
+  tourStops                  TourStop[]
 }
 
 model TenantBillingProfile {
-  id                      String   @id @default(cuid())
-  tenantId                String   @unique
-  tenant                  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  legalName               String
-  street                  String
-  postalCode              String
-  city                    String
-  countryCode             String   @default("DE")
-  taxNumber               String?
-  vatId                   String?
-  /** BT-30 seller legal registration id (Handelsregisternummer). EN 16931 BR-CO-26 needs
-      this whenever the seller has no VAT id, which is the normal § 19 UStG case. */
-  registrationNumber      String?
-  /** BT-42 seller contact telephone. XRechnung BR-DE-6 makes it mandatory. */
-  phone                   String?
-  iban                    String
-  bic                     String?
-  bankName                String?
-  invoiceNumberFormat     String   @default("RE-{YYYY}-{00001}")
-  defaultPaymentTermDays  Int      @default(14)
-  defaultTaxRateBasisPoints Int    @default(1900)
-  smallBusinessRule       Boolean  @default(false)
-  logoStoredPath          String?
-  invoiceFooterText       String?
-  invoiceEmailCc          String?
-  dunningEnabled          Boolean  @default(true)
-  dunningLevel1Days       Int      @default(1)
-  dunningLevel2Days       Int      @default(14)
-  dunningLevel3Days       Int      @default(28)
-  dunningLevel1FeeCents   Int      @default(0)
-  dunningLevel2FeeCents   Int      @default(500)
-  dunningLevel3FeeCents   Int      @default(1000)
-  datevConsultantNumber   String?
-  datevClientNumber       String?
-  datevChart              String   @default("SKR03")
-  revenueAccount19        String   @default("8400")
-  revenueAccount7         String   @default("8300")
-  revenueAccount0         String   @default("8125")
-  revenueAccountReverseCharge String @default("8337")
-  debtorNumberStart       Int      @default(10000)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id                          String   @id @default(cuid())
+  tenantId                    String   @unique
+  tenant                      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  legalName                   String
+  street                      String
+  postalCode                  String
+  city                        String
+  countryCode                 String   @default("DE")
+  taxNumber                   String?
+  vatId                       String?
+  /**
+   * BT-30 seller legal registration id (Handelsregisternummer). EN 16931 BR-CO-26 needs
+   * this whenever the seller has no VAT id, which is the normal § 19 UStG case.
+   */
+  registrationNumber          String?
+  /**
+   * BT-42 seller contact telephone. XRechnung BR-DE-6 makes it mandatory.
+   */
+  phone                       String?
+  iban                        String
+  bic                         String?
+  bankName                    String?
+  invoiceNumberFormat         String   @default("RE-{YYYY}-{00001}")
+  defaultPaymentTermDays      Int      @default(14)
+  defaultTaxRateBasisPoints   Int      @default(1900)
+  smallBusinessRule           Boolean  @default(false)
+  logoStoredPath              String?
+  invoiceFooterText           String?
+  invoiceEmailCc              String?
+  dunningEnabled              Boolean  @default(true)
+  dunningLevel1Days           Int      @default(1)
+  dunningLevel2Days           Int      @default(14)
+  dunningLevel3Days           Int      @default(28)
+  dunningLevel1FeeCents       Int      @default(0)
+  dunningLevel2FeeCents       Int      @default(500)
+  dunningLevel3FeeCents       Int      @default(1000)
+  datevConsultantNumber       String?
+  datevClientNumber           String?
+  datevChart                  String   @default("SKR03")
+  revenueAccount19            String   @default("8400")
+  revenueAccount7             String   @default("8300")
+  revenueAccount0             String   @default("8125")
+  revenueAccountReverseCharge String   @default("8337")
+  debtorNumberStart           Int      @default(10000)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 
   @@index([tenantId])
 }
@@ -728,70 +739,70 @@ model TenantSubscription {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  tenantId     String     @default("default-tenant")
-  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  fullName     String
-  email        String
-  passwordHash String
-  role         UserRole
-  status       UserStatus @default(active)
-  language     String     @default("de")
-  expoPushToken String?
-  mfaEnabled       Boolean @default(false)
+  id               String     @id @default(cuid())
+  tenantId         String     @default("default-tenant")
+  tenant           Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  fullName         String
+  email            String
+  passwordHash     String
+  role             UserRole
+  status           UserStatus @default(active)
+  language         String     @default("de")
+  expoPushToken    String?
+  mfaEnabled       Boolean    @default(false)
   mfaSecret        String?
   mfaPendingSecret String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  driver             Driver?
-  fleetTripClassifications FleetTrip[] @relation("FleetTripClassifiedBy")
-  fleetTripPurposeLogs     FleetTripPurposeLog[] @relation("FleetTripPurposeChangedBy")
-  createdAssignments Assignment[]   @relation("AssignmentCreatedBy")
-  createdTours       Tour[]         @relation("TourCreatedBy")
-  approvedRequests   Request[]      @relation("ApprovedRequests")
-  uploadedDocuments  Document[]     @relation("DocumentUploadedBy")
-  notifications      Notification[]
-  createdConversations Conversation[]           @relation("ConversationCreatedBy")
-  conversationParticipants ConversationParticipant[]
-  sentMessages       Message[]                  @relation("MessageSentBy")
-  messageReads       MessageRead[]
-  auditLogs         AuditLog[]
-  companyMemberships CompanyUser[]
-  passwordResetTokens PasswordResetToken[]
-  createdPasswordResets PasswordResetToken[] @relation("PasswordResetCreatedBy")
-  sentInvitations   UserInvitation[] @relation("InvitationSentBy")
-  customerAssignmentMessages CustomerAssignmentMessage[]
-  verifiedLicenseChecks      LicenseCheck[] @relation("LicenseCheckVerifiedBy")
-  defectStatusChanges        DefectStatusLog[] @relation("DefectStatusChangedByUser")
-  createdFines               Fine[] @relation("FineCreatedBy")
-  fineStatusChanges          FineStatusLog[] @relation("FineStatusChangedByUser")
-  refreshTokens              RefreshToken[]
-  acknowledgedTachoInfringements TachoInfringement[] @relation("TachoInfringementAcknowledgedBy")
-  payrollMarkedTachoInfringements TachoInfringement[] @relation("TachoInfringementPayrollMarkedBy")
-  issuedEquipmentIssuances EquipmentIssuance[] @relation("EquipmentIssuanceIssuedBy")
-  approvedEquipmentIssuances EquipmentIssuance[] @relation("EquipmentIssuanceApprovedBy")
-  createdInvoices          Invoice[] @relation("InvoiceCreatedBy")
-  finalizedInvoices        Invoice[] @relation("InvoiceFinalizedBy")
-  recordedInvoicePayments  InvoicePayment[] @relation("InvoicePaymentRecordedBy")
-  createdDatevExports      DatevExport[] @relation("DatevExportCreatedBy")
+  driver                          Driver?
+  fleetTripClassifications        FleetTrip[]                 @relation("FleetTripClassifiedBy")
+  fleetTripPurposeLogs            FleetTripPurposeLog[]       @relation("FleetTripPurposeChangedBy")
+  createdAssignments              Assignment[]                @relation("AssignmentCreatedBy")
+  createdTours                    Tour[]                      @relation("TourCreatedBy")
+  approvedRequests                Request[]                   @relation("ApprovedRequests")
+  uploadedDocuments               Document[]                  @relation("DocumentUploadedBy")
+  notifications                   Notification[]
+  createdConversations            Conversation[]              @relation("ConversationCreatedBy")
+  conversationParticipants        ConversationParticipant[]
+  sentMessages                    Message[]                   @relation("MessageSentBy")
+  messageReads                    MessageRead[]
+  auditLogs                       AuditLog[]
+  companyMemberships              CompanyUser[]
+  passwordResetTokens             PasswordResetToken[]
+  createdPasswordResets           PasswordResetToken[]        @relation("PasswordResetCreatedBy")
+  sentInvitations                 UserInvitation[]            @relation("InvitationSentBy")
+  customerAssignmentMessages      CustomerAssignmentMessage[]
+  verifiedLicenseChecks           LicenseCheck[]              @relation("LicenseCheckVerifiedBy")
+  defectStatusChanges             DefectStatusLog[]           @relation("DefectStatusChangedByUser")
+  createdFines                    Fine[]                      @relation("FineCreatedBy")
+  fineStatusChanges               FineStatusLog[]             @relation("FineStatusChangedByUser")
+  refreshTokens                   RefreshToken[]
+  acknowledgedTachoInfringements  TachoInfringement[]         @relation("TachoInfringementAcknowledgedBy")
+  payrollMarkedTachoInfringements TachoInfringement[]         @relation("TachoInfringementPayrollMarkedBy")
+  issuedEquipmentIssuances        EquipmentIssuance[]         @relation("EquipmentIssuanceIssuedBy")
+  approvedEquipmentIssuances      EquipmentIssuance[]         @relation("EquipmentIssuanceApprovedBy")
+  createdInvoices                 Invoice[]                   @relation("InvoiceCreatedBy")
+  finalizedInvoices               Invoice[]                   @relation("InvoiceFinalizedBy")
+  recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
+  createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
 }
 
 model RefreshToken {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String    @unique
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
   /// Rotation chain: when a token is rotated, the replacement's id is stored here.
   replacedById String?
-  revokedAt  DateTime?
-  expiresAt  DateTime
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime  @default(now())
+  revokedAt    DateTime?
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -834,97 +845,97 @@ model PasswordResetToken {
 }
 
 model Driver {
-  id                 String       @id @default(cuid())
-  tenantId           String       @default("default-tenant")
-  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  userId             String?      @unique
-  employeeNumber     String
-  firstName          String
-  lastName           String
-  phone              String?
-  email              String?
-  licenseNumber      String?
-  licenseExpiryDate  DateTime?
-  passportNumber     String?
-  passportExpiryDate DateTime?
-  status             DriverStatus @default(active)
-  riskLevel          RiskLevel    @default(green)
-  notes              String?
-  dateOfBirth        DateTime?    @db.Date
-  homeAddressStreet  String?
-  homeAddressZipCode String?
-  homeAddressCity    String?
-  homeAddressCountry String?
-  vacationEntitlementDays Decimal @default(24) @db.Decimal(5, 2)
-  vacationCarryOverDays   Decimal @default(0) @db.Decimal(5, 2)
-  lastBirthdayNotifiedYear Int?
+  id                        String                 @id @default(cuid())
+  tenantId                  String                 @default("default-tenant")
+  tenant                    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userId                    String?                @unique
+  employeeNumber            String
+  firstName                 String
+  lastName                  String
+  phone                     String?
+  email                     String?
+  licenseNumber             String?
+  licenseExpiryDate         DateTime?
+  passportNumber            String?
+  passportExpiryDate        DateTime?
+  status                    DriverStatus           @default(active)
+  riskLevel                 RiskLevel              @default(green)
+  notes                     String?
+  dateOfBirth               DateTime?              @db.Date
+  homeAddressStreet         String?
+  homeAddressZipCode        String?
+  homeAddressCity           String?
+  homeAddressCountry        String?
+  vacationEntitlementDays   Decimal                @default(24) @db.Decimal(5, 2)
+  vacationCarryOverDays     Decimal                @default(0) @db.Decimal(5, 2)
+  lastBirthdayNotifiedYear  Int?
   locationTrackingConsentAt DateTime?
   locationTrackingStatus    LocationTrackingStatus @default(paused)
   locationTrackingEnabledAt DateTime?
   locationSharingStartedAt  DateTime?
   locationSharingEndedAt    DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  currentVehicles   Vehicle[]          @relation("CurrentVehicleDriver")
-  assignments       Assignment[]
-  transportRequests TransportRequest[]
-  calendarEvents    CalendarEvent[]
-  requests          Request[]
-  vehicleHandovers  VehicleHandover[]
-  accidents         Accident[]
-  morningCheckins   MorningCheckin[]
-  conversations     Conversation[]
-  locationLatest    DriverLocationLatest?
-  locationHistory   DriverLocationHistory[]
-  workSessions      WorkSession[]
-  serviceRecords    ServiceRecord[]
-  driverLicenses    DriverLicense[]
-  licenseChecks     LicenseCheck[]
-  departureChecks   DepartureCheck[]
-  reportedDefects   Defect[] @relation("DefectReportedBy")
-  defectsToConfirm  Defect[] @relation("DefectConfirmationDriver")
-  defectStatusChanges DefectStatusLog[] @relation("DefectStatusChangedByDriver")
+  currentVehicles         Vehicle[]                     @relation("CurrentVehicleDriver")
+  assignments             Assignment[]
+  transportRequests       TransportRequest[]
+  calendarEvents          CalendarEvent[]
+  requests                Request[]
+  vehicleHandovers        VehicleHandover[]
+  accidents               Accident[]
+  morningCheckins         MorningCheckin[]
+  conversations           Conversation[]
+  locationLatest          DriverLocationLatest?
+  locationHistory         DriverLocationHistory[]
+  workSessions            WorkSession[]
+  serviceRecords          ServiceRecord[]
+  driverLicenses          DriverLicense[]
+  licenseChecks           LicenseCheck[]
+  departureChecks         DepartureCheck[]
+  reportedDefects         Defect[]                      @relation("DefectReportedBy")
+  defectsToConfirm        Defect[]                      @relation("DefectConfirmationDriver")
+  defectStatusChanges     DefectStatusLog[]             @relation("DefectStatusChangedByDriver")
   departureCheckReminders DepartureCheckReminderState[]
-  fines                 Fine[]
-  fineStatusChanges     FineStatusLog[] @relation("FineStatusChangedByDriver")
-  fleetTrips            FleetTrip[]
-  fleetDrivingEvents    FleetDrivingEvent[]
-  fleetFuelEntries      FleetFuelEntry[]
-  fuelCardTransactions  FuelCardTransaction[]
-  dddFiles              DddFile[]
-  tachoActivities       TachoActivity[]
-  tachoInfringements    TachoInfringement[]
-  tachoDownloadSchedules TachoDownloadSchedule[]
-  equipmentIssuances    EquipmentIssuance[]
-  tours                 Tour[]
+  fines                   Fine[]
+  fineStatusChanges       FineStatusLog[]               @relation("FineStatusChangedByDriver")
+  fleetTrips              FleetTrip[]
+  fleetDrivingEvents      FleetDrivingEvent[]
+  fleetFuelEntries        FleetFuelEntry[]
+  fuelCardTransactions    FuelCardTransaction[]
+  dddFiles                DddFile[]
+  tachoActivities         TachoActivity[]
+  tachoInfringements      TachoInfringement[]
+  tachoDownloadSchedules  TachoDownloadSchedule[]
+  equipmentIssuances      EquipmentIssuance[]
+  tours                   Tour[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
 }
 
 model DriverLicense {
-  id                 String    @id @default(cuid())
-  tenantId           String    @default("default-tenant")
-  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  driverId           String
-  licenseNumber      String
-  classes            String[]
-  issuedAt           DateTime  @db.Date
-  expiresAt          DateTime  @db.Date
-  issuingAuthority   String
+  id                   String    @id @default(cuid())
+  tenantId             String    @default("default-tenant")
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId             String
+  licenseNumber        String
+  classes              String[]
+  issuedAt             DateTime  @db.Date
+  expiresAt            DateTime  @db.Date
+  issuingAuthority     String
   frontPhotoStoredPath String?
   backPhotoStoredPath  String?
-  nextCheckDueAt     DateTime? @db.Date
-  checkRequestedAt   DateTime?
-  lastReminderSentAt DateTime?
+  nextCheckDueAt       DateTime? @db.Date
+  checkRequestedAt     DateTime?
+  lastReminderSentAt   DateTime?
   lastEscalationSentAt DateTime?
-  lastApprovedCheckAt DateTime?
-  deletedAt          DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  lastApprovedCheckAt  DateTime?
+  deletedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   driver Driver         @relation(fields: [driverId], references: [id], onDelete: Restrict)
   checks LicenseCheck[]
@@ -967,57 +978,57 @@ model LicenseCheck {
 }
 
 model Vehicle {
-  id                     String        @id @default(cuid())
-  tenantId               String        @default("default-tenant")
-  tenant                 Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  plateNumber            String
-  internalCode           String
-  brand                  String
-  model                  String
-  year                   Int?
-  vin                    String?
-  status                 VehicleStatus @default(active)
-  category               VehicleCategory @default(truck)
-  currentDriverId        String?
-  tuvExpiryDate          DateTime?
-  spExpiryDate           DateTime?
-  insuranceExpiryDate    DateTime?
-  registrationExpiryDate DateTime?
-  photoUrl               String?
-  notes                  String?
-  avgConsumptionLPer100Km Decimal?  @db.Decimal(6, 2)
-  initialOdometerKm       Decimal?  @db.Decimal(12, 3)
-  odometerCorrectedKm     Decimal?  @db.Decimal(12, 3)
+  id                      String          @id @default(cuid())
+  tenantId                String          @default("default-tenant")
+  tenant                  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  plateNumber             String
+  internalCode            String
+  brand                   String
+  model                   String
+  year                    Int?
+  vin                     String?
+  status                  VehicleStatus   @default(active)
+  category                VehicleCategory @default(truck)
+  currentDriverId         String?
+  tuvExpiryDate           DateTime?
+  spExpiryDate            DateTime?
+  insuranceExpiryDate     DateTime?
+  registrationExpiryDate  DateTime?
+  photoUrl                String?
+  notes                   String?
+  avgConsumptionLPer100Km Decimal?        @db.Decimal(6, 2)
+  initialOdometerKm       Decimal?        @db.Decimal(12, 3)
+  odometerCorrectedKm     Decimal?        @db.Decimal(12, 3)
   odometerCorrectedAt     DateTime?
-  deletedAt              DateTime?
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
+  deletedAt               DateTime?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
   currentDriver Driver? @relation("CurrentVehicleDriver", fields: [currentDriverId], references: [id], onDelete: SetNull)
 
-  assignments       Assignment[]
-  transportRequests TransportRequest[]
-  vehicleHandovers  VehicleHandover[]
-  accidents         Accident[]
-  serviceRecords    ServiceRecord[]
+  assignments             Assignment[]
+  transportRequests       TransportRequest[]
+  vehicleHandovers        VehicleHandover[]
+  accidents               Accident[]
+  serviceRecords          ServiceRecord[]
   locationLatestSnapshots DriverLocationLatest[]
-  locationHistory   DriverLocationHistory[]
-  equipment         VehicleEquipment[]
-  departureChecks   DepartureCheck[]
-  defects           Defect[]
-  fines             Fine[]
-  fleetTrips        FleetTrip[]
-  fleetFuelEntries  FleetFuelEntry[]
-  fuelCardTransactions FuelCardTransaction[]
-  fleetMaintenanceRules FleetMaintenanceRule[]
-  devices           Device[]
-  telemetryLatest   VehicleTelemetryLatest?
-  dtcs              VehicleDtc[]
-  dddFiles          DddFile[]
-  tachoActivities   TachoActivity[]
-  tachoInfringements TachoInfringement[]
-  tachoDownloadSchedules TachoDownloadSchedule[]
-  tours             Tour[]
+  locationHistory         DriverLocationHistory[]
+  equipment               VehicleEquipment[]
+  departureChecks         DepartureCheck[]
+  defects                 Defect[]
+  fines                   Fine[]
+  fleetTrips              FleetTrip[]
+  fleetFuelEntries        FleetFuelEntry[]
+  fuelCardTransactions    FuelCardTransaction[]
+  fleetMaintenanceRules   FleetMaintenanceRule[]
+  devices                 Device[]
+  telemetryLatest         VehicleTelemetryLatest?
+  dtcs                    VehicleDtc[]
+  dddFiles                DddFile[]
+  tachoActivities         TachoActivity[]
+  tachoInfringements      TachoInfringement[]
+  tachoDownloadSchedules  TachoDownloadSchedule[]
+  tours                   Tour[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -1044,18 +1055,18 @@ model Device {
 }
 
 model VehicleTelemetryLatest {
-  vehicleId      String    @id
-  tenantId       String    @default("default-tenant")
-  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  vehicle        Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  ignition       Boolean   @default(false)
-  rpm            Int?
-  fuelLevelPct   Decimal?  @db.Decimal(5, 2)
-  coolantTemp    Decimal?  @db.Decimal(5, 1)
-  voltage        Decimal?  @db.Decimal(4, 1)
-  odometerKm     Decimal?  @db.Decimal(12, 3)
-  recordedAt     DateTime
-  updatedAt      DateTime  @updatedAt
+  vehicleId    String   @id
+  tenantId     String   @default("default-tenant")
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  ignition     Boolean  @default(false)
+  rpm          Int?
+  fuelLevelPct Decimal? @db.Decimal(5, 2)
+  coolantTemp  Decimal? @db.Decimal(5, 1)
+  voltage      Decimal? @db.Decimal(4, 1)
+  odometerKm   Decimal? @db.Decimal(12, 3)
+  recordedAt   DateTime
+  updatedAt    DateTime @updatedAt
 
   @@index([tenantId])
   @@map("vehicle_telemetry_latest")
@@ -1106,30 +1117,30 @@ model TelemetryProcessedRecord {
 }
 
 model Company {
-  id                  String   @id @default(cuid())
-  tenantId            String   @default("default-tenant")
-  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  name                String
-  email               String?
-  phone               String?
-  address             String?
-  contactPerson       String?
-  defaultDailyRevenue Decimal? @db.Decimal(10, 2)
-  notes               String?
-  billingName         String?
-  billingStreet       String?
-  billingPostalCode   String?
-  billingCity         String?
-  billingCountryCode  String   @default("DE")
-  vatId               String?
-  invoiceEmail        String?
-  leitwegId           String?
-  eInvoicePreference  EInvoicePreference @default(zugferd)
-  defaultTaxCategory  InvoiceTaxCategory @default(standard)
+  id                     String             @id @default(cuid())
+  tenantId               String             @default("default-tenant")
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  name                   String
+  email                  String?
+  phone                  String?
+  address                String?
+  contactPerson          String?
+  defaultDailyRevenue    Decimal?           @db.Decimal(10, 2)
+  notes                  String?
+  billingName            String?
+  billingStreet          String?
+  billingPostalCode      String?
+  billingCity            String?
+  billingCountryCode     String             @default("DE")
+  vatId                  String?
+  invoiceEmail           String?
+  leitwegId              String?
+  eInvoicePreference     EInvoicePreference @default(zugferd)
+  defaultTaxCategory     InvoiceTaxCategory @default(standard)
   defaultPaymentTermDays Int?
-  datevDebtorNumber   Int?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  datevDebtorNumber      Int?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
   assignments       Assignment[]
   transportRequests TransportRequest[]
@@ -1187,12 +1198,12 @@ model Location {
   /// Kucuk harf + noktalama/bosluk sadelestirilmis hali; tenant ici tekillik anahtari
   normalizedHash String
   /// Operasyonda gorunen ad, ornegin "Werk Duisburg" veya "Rampe 3"
-  label       String?
-  street      String?
-  houseNumber String?
-  postalCode  String?
-  city        String?
-  countryCode String  @default("DE")
+  label          String?
+  street         String?
+  houseNumber    String?
+  postalCode     String?
+  city           String?
+  countryCode    String  @default("DE")
 
   latitude          Decimal?       @db.Decimal(10, 7)
   longitude         Decimal?       @db.Decimal(10, 7)
@@ -1203,8 +1214,8 @@ model Location {
   truckAccess          TruckAccessStatus @default(unknown)
   truckAccessCheckedAt DateTime?
   /// Koordinatin snap edildigi kamyon yoluna mesafe (m); buyuk deger supheli geocode
-  truckSnapDistanceM Decimal? @db.Decimal(8, 2)
-  truckAccessNote    String?
+  truckSnapDistanceM   Decimal?          @db.Decimal(8, 2)
+  truckAccessNote      String?
 
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
@@ -1252,7 +1263,7 @@ model Tour {
   plannedFuelLiters  Decimal? @db.Decimal(10, 3)
   /// Maut tahmini. Valhalla tutar hesaplamadigi icin kendi katmanimiz doldurur;
   /// hesaplanamadiginda null kalir ve rapor bunu "bilinmiyor" olarak gosterir.
-  plannedTollCents Int?
+  plannedTollCents   Int?
 
   /// Optimizasyon oncesi durum — kullaniciya "once/sonra" gostermek icin.
   /// Optimizasyon kabul edilmezse geri donulecek referans da budur.
@@ -1267,7 +1278,7 @@ model Tour {
   optimizationError String?
 
   createdById String
-  createdBy   User   @relation("TourCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy   User     @relation("TourCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1290,7 +1301,7 @@ model TourStop {
   tour   Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
 
   /// Yurutulecek sira. Optimizasyon bunu yeniden yazar.
-  sequence Int
+  sequence        Int
   /// Kullanicinin girdigi ilk sira — optimizasyonun ne degistirdigini
   /// gostermek ve gerekirse geri donmek icin korunur.
   plannedSequence Int?
@@ -1306,11 +1317,11 @@ model TourStop {
 
   /// Musterinin kabul ettigi zaman araligi, "HH:MM". Repo genelinde saatler
   /// string tutuluyor (bkz. Assignment.startTime); ayni desen izlendi.
-  windowStart String?
-  windowEnd   String?
+  windowStart    String?
+  windowEnd      String?
   /// Durakta gecen sure (bosaltma, evrak). Cok durakli dagitimda planin
   /// buyuk bolumunu bu olusturur.
-  serviceMinutes Int @default(0)
+  serviceMinutes Int     @default(0)
 
   weightKg Decimal? @db.Decimal(10, 2)
   volumeM3 Decimal? @db.Decimal(10, 3)
@@ -1319,8 +1330,23 @@ model TourStop {
   plannedArrivalAt   DateTime?
   plannedDepartureAt DateTime?
   /// Bir onceki duraktan bu duraga olan bacak
-  legDistanceKm Decimal? @db.Decimal(12, 3)
-  legDurationMin Int?
+  legDistanceKm      Decimal?  @db.Decimal(12, 3)
+  legDurationMin     Int?
+
+  /// Yurutme kaydi. Planlama alanlarindan ayri: plan optimizasyonla yeniden
+  /// yazilabilir, gerceklesen ise degismez.
+  status             TourStopStatus @default(pending)
+  arrivedAt          DateTime?
+  completedAt        DateTime?
+  /// Isaretleme anindaki telefon konumu. Sonradan "orada degildim" itirazi
+  /// gelirse elimizde tek kanit bu.
+  completedLatitude  Decimal?       @db.Decimal(10, 7)
+  completedLongitude Decimal?       @db.Decimal(10, 7)
+  /// Cevrimdisi kuyruk ayni isaretlemeyi baglanti gelince tekrar gonderebilir.
+  /// Son uygulanan istemci olayinin kimligi; ayni kimlik yeniden gelirse islem
+  /// tekrarlanmaz. Sira bozulmasina karsi ayrica durum gerilemesi engelleniyor
+  /// (bkz. tour-stop.service).
+  clientEventId      String?
 
   notes     String?
   createdAt DateTime @default(now())
@@ -1334,39 +1360,39 @@ model TourStop {
 }
 
 model Assignment {
-  id              String           @id @default(cuid())
-  tenantId        String           @default("default-tenant")
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  driverId        String
-  vehicleId       String
-  companyId       String
-  cargoName       String
-  cargoOwner      String
-  pickupAddress   String
-  deliveryAddress String
+  id                   String           @id @default(cuid())
+  tenantId             String           @default("default-tenant")
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId             String
+  vehicleId            String
+  companyId            String
+  cargoName            String
+  cargoOwner           String
+  pickupAddress        String
+  deliveryAddress      String
   /// Geocode edilmis karsiliklari. String alanlar geriye donuk uyumluluk icin
   /// korunur — backfill tamamlanana kadar bu alanlar bos olabilir.
-  pickupLocationId   String?
-  deliveryLocationId String?
-  workDate        DateTime
-  startTime       String?
-  endTime         String?
+  pickupLocationId     String?
+  deliveryLocationId   String?
+  workDate             DateTime
+  startTime            String?
+  endTime              String?
   routeName            String?
   expectedDailyRevenue Decimal?         @db.Decimal(10, 2)
   status               AssignmentStatus @default(planned)
   notes                String?
-  createdById     String
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdById          String
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
-  driver           Driver            @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  vehicle          Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  pickupLocation   Location?         @relation("AssignmentPickupLocation", fields: [pickupLocationId], references: [id], onDelete: SetNull)
-  deliveryLocation Location?         @relation("AssignmentDeliveryLocation", fields: [deliveryLocationId], references: [id], onDelete: SetNull)
-  createdBy        User              @relation("AssignmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  driver           Driver                      @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle          Vehicle                     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  company          Company                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  pickupLocation   Location?                   @relation("AssignmentPickupLocation", fields: [pickupLocationId], references: [id], onDelete: SetNull)
+  deliveryLocation Location?                   @relation("AssignmentDeliveryLocation", fields: [deliveryLocationId], references: [id], onDelete: SetNull)
+  createdBy        User                        @relation("AssignmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   calendarEvents   CalendarEvent[]
-  transportRequest TransportRequest? @relation("TransportRequestAssignment")
+  transportRequest TransportRequest?           @relation("TransportRequestAssignment")
   vehicleHandovers VehicleHandover[]
   accidents        Accident[]
   morningCheckins  MorningCheckin[]
@@ -1385,17 +1411,17 @@ model Assignment {
 }
 
 model RateCard {
-  id        String   @id @default(cuid())
-  tenantId  String   @default("default-tenant")
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  id        String         @id @default(cuid())
+  tenantId  String         @default("default-tenant")
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
   name      String
   validFrom DateTime
   validTo   DateTime?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
   items     RateCardItem[]
 
   @@index([tenantId])
@@ -1405,77 +1431,77 @@ model RateCard {
 model RateCardItem {
   id                 String             @id @default(cuid())
   tenantId           String             @default("default-tenant")
-  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  rateCardId          String
-  rateCard            RateCard           @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
-  description         String
-  unit                InvoiceUnit
-  unitPriceCents      Int
-  taxRateBasisPoints  Int                @default(1900)
-  taxCategory         InvoiceTaxCategory @default(standard)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  invoiceLines        InvoiceLine[]
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  rateCardId         String
+  rateCard           RateCard           @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+  description        String
+  unit               InvoiceUnit
+  unitPriceCents     Int
+  taxRateBasisPoints Int                @default(1900)
+  taxCategory        InvoiceTaxCategory @default(standard)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  invoiceLines       InvoiceLine[]
 
   @@index([tenantId])
   @@index([rateCardId])
 }
 
 model Invoice {
-  id                     String                @id @default(cuid())
-  tenantId               String                @default("default-tenant")
-  tenant                 Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId              String
-  company                Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  kind                   InvoiceKind           @default(invoice)
-  status                 OutgoingInvoiceStatus @default(draft)
-  number                 String?
-  invoiceDate            DateTime
-  servicePeriodStart     DateTime
-  servicePeriodEnd       DateTime
-  paymentTermDays        Int                   @default(14)
-  dueDate                DateTime?
-  currency               String                @default("EUR")
-  netCents               Int                   @default(0)
-  taxCents               Int                   @default(0)
-  grossCents             Int                   @default(0)
-  paidCents              Int                   @default(0)
-  taxBreakdown           Json?
-  customerName           String?
-  customerStreet         String?
-  customerPostalCode     String?
-  customerCity           String?
-  customerCountryCode    String?
-  customerVatId          String?
-  customerEmail          String?
-  leitwegId              String?
-  supplierSnapshot       Json?
-  notes                  String?
-  originalInvoiceId      String?
-  originalInvoice        Invoice?              @relation("InvoiceCorrections", fields: [originalInvoiceId], references: [id], onDelete: Restrict)
-  corrections            Invoice[]             @relation("InvoiceCorrections")
-  pdfStoredPath          String?
-  pdfSha256              String?
-  zugferdXmlStoredPath   String?
-  zugferdXmlSha256       String?
-  xrechnungStoredPath    String?
-  xrechnungSha256        String?
-  finalizedAt            DateTime?
-  sentAt                 DateTime?
-  paidAt                 DateTime?
-  cancelledAt            DateTime?
-  dunningOptOut          Boolean               @default(false)
-  createdById            String
-  createdBy              User                  @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  finalizedById          String?
-  finalizedBy            User?                 @relation("InvoiceFinalizedBy", fields: [finalizedById], references: [id], onDelete: Restrict)
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
-  lines                  InvoiceLine[]
-  payments               InvoicePayment[]
-  deliveryAttempts       InvoiceDeliveryAttempt[]
-  auditEvents            InvoiceAuditEvent[]
-  dunningNotices         DunningNotice[]
+  id                   String                   @id @default(cuid())
+  tenantId             String                   @default("default-tenant")
+  tenant               Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId            String
+  company              Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  kind                 InvoiceKind              @default(invoice)
+  status               OutgoingInvoiceStatus    @default(draft)
+  number               String?
+  invoiceDate          DateTime
+  servicePeriodStart   DateTime
+  servicePeriodEnd     DateTime
+  paymentTermDays      Int                      @default(14)
+  dueDate              DateTime?
+  currency             String                   @default("EUR")
+  netCents             Int                      @default(0)
+  taxCents             Int                      @default(0)
+  grossCents           Int                      @default(0)
+  paidCents            Int                      @default(0)
+  taxBreakdown         Json?
+  customerName         String?
+  customerStreet       String?
+  customerPostalCode   String?
+  customerCity         String?
+  customerCountryCode  String?
+  customerVatId        String?
+  customerEmail        String?
+  leitwegId            String?
+  supplierSnapshot     Json?
+  notes                String?
+  originalInvoiceId    String?
+  originalInvoice      Invoice?                 @relation("InvoiceCorrections", fields: [originalInvoiceId], references: [id], onDelete: Restrict)
+  corrections          Invoice[]                @relation("InvoiceCorrections")
+  pdfStoredPath        String?
+  pdfSha256            String?
+  zugferdXmlStoredPath String?
+  zugferdXmlSha256     String?
+  xrechnungStoredPath  String?
+  xrechnungSha256      String?
+  finalizedAt          DateTime?
+  sentAt               DateTime?
+  paidAt               DateTime?
+  cancelledAt          DateTime?
+  dunningOptOut        Boolean                  @default(false)
+  createdById          String
+  createdBy            User                     @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  finalizedById        String?
+  finalizedBy          User?                    @relation("InvoiceFinalizedBy", fields: [finalizedById], references: [id], onDelete: Restrict)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  lines                InvoiceLine[]
+  payments             InvoicePayment[]
+  deliveryAttempts     InvoiceDeliveryAttempt[]
+  auditEvents          InvoiceAuditEvent[]
+  dunningNotices       DunningNotice[]
 
   @@unique([tenantId, number])
   @@index([tenantId])
@@ -1485,30 +1511,30 @@ model Invoice {
 }
 
 model InvoiceLine {
-  id                    String             @id @default(cuid())
-  tenantId              String             @default("default-tenant")
-  tenant                Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  invoiceId             String
-  invoice               Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  position              Int
-  description           String
-  quantity              Decimal            @db.Decimal(10, 3)
-  unit                  InvoiceUnit
-  unitPriceCents        Int
-  taxRateBasisPoints    Int
-  taxCategory           InvoiceTaxCategory
-  netCents              Int
-  taxCents              Int
-  grossCents            Int
-  source                InvoiceLineSource
-  assignmentId          String?
-  assignment            Assignment?        @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
-  rateCardItemId        String?
-  rateCardItem          RateCardItem?       @relation(fields: [rateCardItemId], references: [id], onDelete: SetNull)
-  serviceDate           DateTime?
-  sourceSnapshot        Json?
-  createdAt             DateTime            @default(now())
-  assignmentClaim       InvoiceAssignmentClaim?
+  id                 String                  @id @default(cuid())
+  tenantId           String                  @default("default-tenant")
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId          String
+  invoice            Invoice                 @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  position           Int
+  description        String
+  quantity           Decimal                 @db.Decimal(10, 3)
+  unit               InvoiceUnit
+  unitPriceCents     Int
+  taxRateBasisPoints Int
+  taxCategory        InvoiceTaxCategory
+  netCents           Int
+  taxCents           Int
+  grossCents         Int
+  source             InvoiceLineSource
+  assignmentId       String?
+  assignment         Assignment?             @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  rateCardItemId     String?
+  rateCardItem       RateCardItem?           @relation(fields: [rateCardItemId], references: [id], onDelete: SetNull)
+  serviceDate        DateTime?
+  sourceSnapshot     Json?
+  createdAt          DateTime                @default(now())
+  assignmentClaim    InvoiceAssignmentClaim?
 
   @@unique([invoiceId, position])
   @@index([tenantId])
@@ -1517,14 +1543,14 @@ model InvoiceLine {
 }
 
 model InvoiceAssignmentClaim {
-  id           String      @id @default(cuid())
-  tenantId     String      @default("default-tenant")
-  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  assignmentId String      @unique
-  assignment   Assignment  @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
-  invoiceLineId String     @unique
-  invoiceLine  InvoiceLine @relation(fields: [invoiceLineId], references: [id], onDelete: Cascade)
-  createdAt    DateTime    @default(now())
+  id            String      @id @default(cuid())
+  tenantId      String      @default("default-tenant")
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  assignmentId  String      @unique
+  assignment    Assignment  @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  invoiceLineId String      @unique
+  invoiceLine   InvoiceLine @relation(fields: [invoiceLineId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
 
   @@index([tenantId])
 }
@@ -1595,18 +1621,18 @@ model InvoiceAuditEvent {
 }
 
 model DunningNotice {
-  id            String   @id @default(cuid())
-  tenantId      String   @default("default-tenant")
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  invoiceId     String
-  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
-  level         Int
-  feeCents      Int      @default(0)
-  pdfStoredPath String
-  pdfSha256     String
+  id             String   @id @default(cuid())
+  tenantId       String   @default("default-tenant")
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId      String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  level          Int
+  feeCents       Int      @default(0)
+  pdfStoredPath  String
+  pdfSha256      String
   recipientEmail String
-  sentAt        DateTime
-  createdAt     DateTime @default(now())
+  sentAt         DateTime
+  createdAt      DateTime @default(now())
 
   @@unique([invoiceId, level])
   @@index([tenantId])
@@ -1614,18 +1640,18 @@ model DunningNotice {
 }
 
 model DatevExport {
-  id          String            @id @default(cuid())
-  tenantId    String            @default("default-tenant")
-  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  periodStart DateTime
-  periodEnd   DateTime
-  createdById String
-  createdBy   User              @relation("DatevExportCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  id             String            @id @default(cuid())
+  tenantId       String            @default("default-tenant")
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdById    String
+  createdBy      User              @relation("DatevExportCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   fileStoredPath String
-  fileSha256  String
-  invoiceIds  Json
-  status      DatevExportStatus @default(generated)
-  createdAt   DateTime          @default(now())
+  fileSha256     String
+  invoiceIds     Json
+  status         DatevExportStatus @default(generated)
+  createdAt      DateTime          @default(now())
 
   @@index([tenantId])
   @@index([periodStart, periodEnd])
@@ -1673,21 +1699,21 @@ model DriverLocationLatest {
 }
 
 model DriverLocationHistory {
-  id         String         @id @default(cuid())
-  tenantId   String         @default("default-tenant")
-  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  clientRequestId String?    @unique @map("client_request_id")
-  driverId   String
-  vehicleId  String?
-  latitude   Decimal        @db.Decimal(10, 7)
-  longitude  Decimal        @db.Decimal(10, 7)
-  accuracyM  Float?
-  speedMps   Float?
-  headingDeg Float?
-  altitudeM  Float?
-  recordedAt DateTime
-  receivedAt DateTime       @default(now())
-  source     LocationSource @default(mobile)
+  id              String         @id @default(cuid())
+  tenantId        String         @default("default-tenant")
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  clientRequestId String?        @unique @map("client_request_id")
+  driverId        String
+  vehicleId       String?
+  latitude        Decimal        @db.Decimal(10, 7)
+  longitude       Decimal        @db.Decimal(10, 7)
+  accuracyM       Float?
+  speedMps        Float?
+  headingDeg      Float?
+  altitudeM       Float?
+  recordedAt      DateTime
+  receivedAt      DateTime       @default(now())
+  source          LocationSource @default(mobile)
 
   driver  Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
   vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
@@ -1774,25 +1800,25 @@ model Request {
 }
 
 model Document {
-  id           String            @id @default(uuid())
-  tenantId     String            @default("default-tenant")
-  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  clientRequestId String?        @unique @map("client_request_id")
-  ownerType    DocumentOwnerType
-  ownerId      String
-  documentType String
-  fileName     String
-  fileUrl      String?
-  expiryDate   DateTime?
-  status       DocumentStatus    @default(valid)
-  notes        String?
-  uploadedById String?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id              String            @id @default(uuid())
+  tenantId        String            @default("default-tenant")
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  clientRequestId String?           @unique @map("client_request_id")
+  ownerType       DocumentOwnerType
+  ownerId         String
+  documentType    String
+  fileName        String
+  fileUrl         String?
+  expiryDate      DateTime?
+  status          DocumentStatus    @default(valid)
+  notes           String?
+  uploadedById    String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  uploadedBy    User?          @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
-  handoverPhoto            HandoverPhoto?
-  finalEquipmentIssuance   EquipmentIssuance?
+  uploadedBy             User?              @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  handoverPhoto          HandoverPhoto?
+  finalEquipmentIssuance EquipmentIssuance?
 
   @@index([tenantId])
   @@index([ownerType, ownerId])
@@ -1842,8 +1868,8 @@ model HandoverPhoto {
   fileHash         String                        @unique @map("file_hash")
   clientTakenAt    DateTime?                     @map("client_taken_at")
   exifTakenAt      DateTime?                     @map("exif_taken_at")
-  gpsLat           Decimal?                      @db.Decimal(10, 7) @map("gps_lat")
-  gpsLng           Decimal?                      @db.Decimal(10, 7) @map("gps_lng")
+  gpsLat           Decimal?                      @map("gps_lat") @db.Decimal(10, 7)
+  gpsLng           Decimal?                      @map("gps_lng") @db.Decimal(10, 7)
   deviceInfo       String?                       @map("device_info")
   validationStatus HandoverPhotoValidationStatus @default(validated) @map("validation_status")
   createdAt        DateTime                      @default(now())
@@ -1858,19 +1884,19 @@ model HandoverPhoto {
 }
 
 model VehicleHandover {
-  id                String              @id @default(uuid())
-  tenantId          String              @default("default-tenant")
-  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  driverId          String
-  vehicleId         String
-  previousVehicleId String?
-  assignmentId      String?
-  handoverType      HandoverType
-  handoverDateTime  DateTime
-  photoRequired     Boolean             @default(false)
-  photoStatus       HandoverPhotoStatus @default(not_required)
-  damageDetected    Boolean             @default(false)
-  damageNotes       String?
+  id                        String              @id @default(uuid())
+  tenantId                  String              @default("default-tenant")
+  tenant                    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId                  String
+  vehicleId                 String
+  previousVehicleId         String?
+  assignmentId              String?
+  handoverType              HandoverType
+  handoverDateTime          DateTime
+  photoRequired             Boolean             @default(false)
+  photoStatus               HandoverPhotoStatus @default(not_required)
+  damageDetected            Boolean             @default(false)
+  damageNotes               String?
   equipmentFirstAidKit      Boolean?
   equipmentFireExtinguisher Boolean?
   equipmentStraps           Boolean?
@@ -1878,10 +1904,10 @@ model VehicleHandover {
   equipmentNotes            String?
   equipmentVerifiedAt       DateTime?
   equipmentInventoryChecks  Json?
-  status            HandoverStatus      @default(pending)
-  notes             String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  status                    HandoverStatus      @default(pending)
+  notes                     String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
 
   driver         Driver          @relation(fields: [driverId], references: [id], onDelete: Restrict)
   vehicle        Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
@@ -1920,19 +1946,19 @@ model WorkSession {
 }
 
 model VehicleEquipment {
-  id           String                 @id @default(uuid())
-  tenantId     String                 @default("default-tenant")
-  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  vehicleId    String
-  vehicle      Vehicle                @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  name         String
-  quantity     Int                    @default(1)
-  serialNumber String?
-  notes        String?
+  id              String                 @id @default(uuid())
+  tenantId        String                 @default("default-tenant")
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId       String
+  vehicle         Vehicle                @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  name            String
+  quantity        Int                    @default(1)
+  serialNumber    String?
+  notes           String?
   photoDocumentId String?
-  status       VehicleEquipmentStatus @default(active)
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
+  status          VehicleEquipmentStatus @default(active)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
   @@index([tenantId])
   @@index([vehicleId, status])
@@ -1987,8 +2013,8 @@ model CompanyEmail {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
   @@unique([companyId, date])
+  @@index([tenantId])
   @@index([companyId, date])
 }
 
@@ -2073,9 +2099,9 @@ model MorningCheckin {
 }
 
 model ServiceRecord {
-  id            String   @id @default(cuid())
-  tenantId      String   @default("default-tenant")
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  id            String    @id @default(cuid())
+  tenantId      String    @default("default-tenant")
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   vehicleId     String
   driverId      String?
   /// Servisin baslangici. Opsiyonel: mevcut kayitlarda yok ve tek gunluk
@@ -2085,14 +2111,14 @@ model ServiceRecord {
   serviceType   String
   vendor        String?
   repairCompany String
-  costAmount    Decimal  @db.Decimal(10, 2)
+  costAmount    Decimal   @db.Decimal(10, 2)
   mileageKm     Int?
   notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  driver  Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver        Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
   linkedDefects Defect[]
 
   @@index([tenantId])
@@ -2110,11 +2136,11 @@ model Conversation {
   department    MessengerDepartment @default(general)
   subject       String?
   lastMessageAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
-  driver       Driver                     @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  createdBy    User                       @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  driver       Driver                    @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  createdBy    User                      @relation("ConversationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   participants ConversationParticipant[]
   messages     Message[]
 
@@ -2125,11 +2151,11 @@ model Conversation {
 }
 
 model ConversationParticipant {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   conversationId String
   userId         String
   role           UserRole
-  joinedAt       DateTime @default(now())
+  joinedAt       DateTime  @default(now())
   lastReadAt     DateTime?
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -2152,8 +2178,8 @@ model Message {
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation("MessageSentBy", fields: [senderUserId], references: [id], onDelete: Restrict)
+  conversation Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User                 @relation("MessageSentBy", fields: [senderUserId], references: [id], onDelete: Restrict)
   reads        MessageRead[]
   attachments  MessageAttachment[]
   translations MessageTranslation[]
@@ -2180,15 +2206,15 @@ model MessageTranslation {
 }
 
 model MessageAttachment {
-  id        String   @id @default(cuid())
-  tenantId  String   @default("default-tenant")
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  messageId String
-  fileName  String
-  mimeType  String
-  sizeBytes Int
+  id         String   @id @default(cuid())
+  tenantId   String   @default("default-tenant")
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  messageId  String
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
   storedPath String
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
@@ -2211,18 +2237,18 @@ model MessageRead {
 }
 
 model AuditLog {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   tenantId    String?
   tenant      Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   actorUserId String?
-  actorUser   User?  @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorUser   User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   action     String
   entityType String
   entityId   String?
 
-  summary   String?
-  metadata  Json?
+  summary  String?
+  metadata Json?
 
   ipAddress String?
   userAgent String?
@@ -2258,17 +2284,17 @@ model ChecklistTemplate {
 }
 
 model ChecklistTemplateItem {
-  id                   String            @id @default(cuid())
-  templateId           String
-  template             ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  sortOrder            Int
-  itemKey              String
-  label                String
-  description          String?
-  requiresPhotoOnDefect Boolean          @default(true)
-  isActive             Boolean           @default(true)
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
+  id                    String            @id @default(cuid())
+  templateId            String
+  template              ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sortOrder             Int
+  itemKey               String
+  label                 String
+  description           String?
+  requiresPhotoOnDefect Boolean           @default(true)
+  isActive              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   departureCheckItemResults DepartureCheckItemResult[]
 
@@ -2298,12 +2324,12 @@ model DepartureCheck {
   offlineCapturedAt    DateTime?
   createdAt            DateTime                    @default(now())
 
-  driver     Driver          @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  vehicle    Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  assignment Assignment?     @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  driver      Driver                     @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle     Vehicle                    @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  assignment  Assignment?                @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  template    ChecklistTemplate          @relation(fields: [templateId], references: [id], onDelete: Restrict)
   itemResults DepartureCheckItemResult[]
-  defects    Defect[]
+  defects     Defect[]
 
   @@unique([driverId, vehicleId, workDate])
   @@index([tenantId])
@@ -2314,17 +2340,17 @@ model DepartureCheck {
 }
 
 model DepartureCheckItemResult {
-  id                 String                   @id @default(cuid())
-  departureCheckId   String
-  templateItemId     String?
-  itemKey            String
-  itemLabel          String
-  sortOrder          Int
-  result             DepartureCheckItemStatus
-  defectDescription  String?
-  photoStoredPaths   String[]
-  photoMetadata      Json?
-  createdAt          DateTime                 @default(now())
+  id                String                   @id @default(cuid())
+  departureCheckId  String
+  templateItemId    String?
+  itemKey           String
+  itemLabel         String
+  sortOrder         Int
+  result            DepartureCheckItemStatus
+  defectDescription String?
+  photoStoredPaths  String[]
+  photoMetadata     Json?
+  createdAt         DateTime                 @default(now())
 
   departureCheck DepartureCheck         @relation(fields: [departureCheckId], references: [id], onDelete: Cascade)
   templateItem   ChecklistTemplateItem? @relation(fields: [templateItemId], references: [id], onDelete: SetNull)
@@ -2420,44 +2446,44 @@ model DepartureCheckReminderState {
 
 /// Traffic fine (Bußgeld) with driver matching and status workflow.
 model Fine {
-  id                      String                @id @default(cuid())
-  tenantId                String                @default("default-tenant")
-  tenant                  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  vehicleId               String
-  driverId                String?
-  matchType               FineMatchType         @default(unmatched)
-  matchedWorkSessionId    String?
-  matchedAssignmentId     String?
-  violationAt             DateTime
-  violationLocation       String
-  violationType           String
-  violationCategory       FineViolationCategory
-  amount                  Decimal?              @db.Decimal(10, 2)
-  paymentDueDate          DateTime?             @db.Date
-  noticeDate              DateTime?             @db.Date
-  documentStoredPath      String?
-  documentMimeType        String?
-  status                  FineStatus            @default(neu)
-  notes                   String?
-  matchCandidates         Json?
-  matchToleranceMinutes   Int                   @default(30)
-  driverNotifiedAt        DateTime?
-  driverAcknowledgedAt    DateTime?
-  driverAckMetadata       Json?
-  lastDriverReminderSentAt DateTime?
+  id                         String                @id @default(cuid())
+  tenantId                   String                @default("default-tenant")
+  tenant                     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId                  String
+  driverId                   String?
+  matchType                  FineMatchType         @default(unmatched)
+  matchedWorkSessionId       String?
+  matchedAssignmentId        String?
+  violationAt                DateTime
+  violationLocation          String
+  violationType              String
+  violationCategory          FineViolationCategory
+  amount                     Decimal?              @db.Decimal(10, 2)
+  paymentDueDate             DateTime?             @db.Date
+  noticeDate                 DateTime?             @db.Date
+  documentStoredPath         String?
+  documentMimeType           String?
+  status                     FineStatus            @default(neu)
+  notes                      String?
+  matchCandidates            Json?
+  matchToleranceMinutes      Int                   @default(30)
+  driverNotifiedAt           DateTime?
+  driverAcknowledgedAt       DateTime?
+  driverAckMetadata          Json?
+  lastDriverReminderSentAt   DateTime?
   lastDriverEscalationSentAt DateTime?
-  lastPaymentReminderDays Int?
-  lastPaymentReminderSentAt DateTime?
-  createdByUserId         String?
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
+  lastPaymentReminderDays    Int?
+  lastPaymentReminderSentAt  DateTime?
+  createdByUserId            String?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
 
-  vehicle              Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  driver               Driver?      @relation(fields: [driverId], references: [id], onDelete: SetNull)
-  matchedWorkSession   WorkSession? @relation(fields: [matchedWorkSessionId], references: [id], onDelete: SetNull)
-  matchedAssignment    Assignment?  @relation(fields: [matchedAssignmentId], references: [id], onDelete: SetNull)
-  createdBy            User?        @relation("FineCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  statusLogs             FineStatusLog[]
+  vehicle            Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver             Driver?         @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  matchedWorkSession WorkSession?    @relation(fields: [matchedWorkSessionId], references: [id], onDelete: SetNull)
+  matchedAssignment  Assignment?     @relation(fields: [matchedAssignmentId], references: [id], onDelete: SetNull)
+  createdBy          User?           @relation("FineCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  statusLogs         FineStatusLog[]
 
   @@index([tenantId])
   @@index([vehicleId, violationAt])
@@ -2493,40 +2519,40 @@ model FineStatusLog {
 // --- Fleet analytics (phone GPS Phase 1; Faz 2 device/API adapters write same tables) ---
 
 model FleetTrip {
-  id             String               @id @default(cuid())
-  tenantId       String               @default("default-tenant")
-  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  vehicleId      String
-  driverId       String
-  source         FleetTelemetrySource @default(phone)
-  purpose        TripPurpose?
-  purposeNote    String?
+  id              String               @id @default(cuid())
+  tenantId        String               @default("default-tenant")
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId       String
+  driverId        String
+  source          FleetTelemetrySource @default(phone)
+  purpose         TripPurpose?
+  purposeNote     String?
   businessContact String?
-  classifiedAt   DateTime?
-  classifiedById String?
+  classifiedAt    DateTime?
+  classifiedById  String?
   purposeLockedAt DateTime?
-  odoStartKm     Decimal?             @db.Decimal(12, 3)
-  odoEndKm       Decimal?             @db.Decimal(12, 3)
-  startedAt      DateTime
-  endedAt        DateTime?
-  distanceKm     Decimal?             @db.Decimal(12, 3)
-  durationS      Int?
-  avgSpeedKmh    Decimal?             @db.Decimal(8, 2)
-  maxSpeedKmh    Decimal?             @db.Decimal(8, 2)
-  idleS          Int?
-  score          Decimal?             @db.Decimal(5, 2)
-  hasDataGap     Boolean              @default(false)
-  status         FleetTripStatus      @default(active)
-  assignmentId   String?
-  workSessionId  String?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  odoStartKm      Decimal?             @db.Decimal(12, 3)
+  odoEndKm        Decimal?             @db.Decimal(12, 3)
+  startedAt       DateTime
+  endedAt         DateTime?
+  distanceKm      Decimal?             @db.Decimal(12, 3)
+  durationS       Int?
+  avgSpeedKmh     Decimal?             @db.Decimal(8, 2)
+  maxSpeedKmh     Decimal?             @db.Decimal(8, 2)
+  idleS           Int?
+  score           Decimal?             @db.Decimal(5, 2)
+  hasDataGap      Boolean              @default(false)
+  status          FleetTripStatus      @default(active)
+  assignmentId    String?
+  workSessionId   String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
-  vehicle      Vehicle                  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  driver       Driver                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
-  assignment   Assignment?              @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  workSession  WorkSession?             @relation(fields: [workSessionId], references: [id], onDelete: SetNull)
-  classifiedBy User?                    @relation("FleetTripClassifiedBy", fields: [classifiedById], references: [id], onDelete: SetNull)
+  vehicle        Vehicle                  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver         Driver                   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  assignment     Assignment?              @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  workSession    WorkSession?             @relation(fields: [workSessionId], references: [id], onDelete: SetNull)
+  classifiedBy   User?                    @relation("FleetTripClassifiedBy", fields: [classifiedById], references: [id], onDelete: SetNull)
   locationPoints FleetTripLocationPoint[]
   drivingEvents  FleetDrivingEvent[]
   purposeLogs    FleetTripPurposeLog[]
@@ -2541,18 +2567,18 @@ model FleetTrip {
 }
 
 model FleetTripPurposeLog {
-  id          String      @id @default(cuid())
-  tenantId    String      @default("default-tenant")
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  id          String       @id @default(cuid())
+  tenantId    String       @default("default-tenant")
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   tripId      String
-  trip        FleetTrip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip        FleetTrip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
   oldPurpose  TripPurpose?
   newPurpose  TripPurpose
   oldNote     String?
   newNote     String?
   changedById String
-  changedBy   User        @relation("FleetTripPurposeChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
-  changedAt   DateTime    @default(now())
+  changedBy   User         @relation("FleetTripPurposeChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+  changedAt   DateTime     @default(now())
   reason      String?
 
   @@index([tenantId])
@@ -2562,16 +2588,16 @@ model FleetTripPurposeLog {
 }
 
 model FleetTripLocationPoint {
-  id          String               @id @default(cuid())
-  tripId      String
-  recordedAt  DateTime
-  latitude    Decimal              @db.Decimal(10, 7)
-  longitude   Decimal              @db.Decimal(10, 7)
-  speedKmh    Float?
-  headingDeg  Float?
-  accuracyM   Float?
-  source      FleetTelemetrySource @default(phone)
-  receivedAt  DateTime             @default(now())
+  id         String               @id @default(cuid())
+  tripId     String
+  recordedAt DateTime
+  latitude   Decimal              @db.Decimal(10, 7)
+  longitude  Decimal              @db.Decimal(10, 7)
+  speedKmh   Float?
+  headingDeg Float?
+  accuracyM  Float?
+  source     FleetTelemetrySource @default(phone)
+  receivedAt DateTime             @default(now())
 
   trip FleetTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
@@ -2605,21 +2631,21 @@ model FleetDrivingEvent {
 }
 
 model FleetFuelEntry {
-  id                 String   @id @default(cuid())
-  tenantId           String   @default("default-tenant")
-  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  vehicleId          String
-  driverId           String
-  enteredAt          DateTime
-  liters             Decimal  @db.Decimal(10, 3)
-  totalCost          Decimal  @db.Decimal(12, 2)
-  currency           String   @default("EUR")
-  odometerKm         Decimal? @db.Decimal(12, 3)
-  isFullTank         Boolean  @default(false)
-  receiptStoredPath  String?
-  receiptMimeType    String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(cuid())
+  tenantId          String   @default("default-tenant")
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId         String
+  driverId          String
+  enteredAt         DateTime
+  liters            Decimal  @db.Decimal(10, 3)
+  totalCost         Decimal  @db.Decimal(12, 2)
+  currency          String   @default("EUR")
+  odometerKm        Decimal? @db.Decimal(12, 3)
+  isFullTank        Boolean  @default(false)
+  receiptStoredPath String?
+  receiptMimeType   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Restrict)
@@ -2691,17 +2717,17 @@ model FuelCardTransaction {
 }
 
 model FleetMaintenanceRule {
-  id              String    @id @default(cuid())
-  tenantId        String    @default("default-tenant")
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  vehicleId       String
-  name            String
-  intervalKm      Decimal?  @db.Decimal(12, 3)
-  intervalDays    Int?
-  lastDoneAtKm    Decimal?  @db.Decimal(12, 3)
-  lastDoneAtDate  DateTime? @db.Date
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  tenantId       String    @default("default-tenant")
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId      String
+  name           String
+  intervalKm     Decimal?  @db.Decimal(12, 3)
+  intervalDays   Int?
+  lastDoneAtKm   Decimal?  @db.Decimal(12, 3)
+  lastDoneAtDate DateTime? @db.Date
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
@@ -2711,30 +2737,30 @@ model FleetMaintenanceRule {
 }
 
 model DddFile {
-  id               String        @id @default(cuid())
-  tenantId         String        @default("default-tenant")
-  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  vehicleId        String?
-  vehicle          Vehicle?      @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  driverId         String?
-  driver           Driver?       @relation(fields: [driverId], references: [id], onDelete: SetNull)
-  uploadedByUserId String?
-  fileType         DddFileType
-  source           DddFileSource @default(manual)
-  capturedAt       DateTime
-  storedPath       String
-  sizeBytes        Int
-  sha256           String
-  generation       Int?
-  signatureValid   Boolean?
-  skippedBlocks    Json?
-  status           DddFileProcessingStatus @default(pending)
+  id                     String                  @id @default(cuid())
+  tenantId               String                  @default("default-tenant")
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId              String?
+  vehicle                Vehicle?                @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId               String?
+  driver                 Driver?                 @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  uploadedByUserId       String?
+  fileType               DddFileType
+  source                 DddFileSource           @default(manual)
+  capturedAt             DateTime
+  storedPath             String
+  sizeBytes              Int
+  sha256                 String
+  generation             Int?
+  signatureValid         Boolean?
+  skippedBlocks          Json?
+  status                 DddFileProcessingStatus @default(pending)
   processingErrorSummary String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
-  activities    TachoActivity[]
-  infringements TachoInfringement[]
+  activities                 TachoActivity[]
+  infringements              TachoInfringement[]
   fulfilledDownloadSchedules TachoDownloadSchedule[] @relation("TachoScheduleFulfilledByFile")
 
   @@unique([tenantId, sha256])
@@ -2746,14 +2772,14 @@ model DddFile {
 }
 
 model TachoProviderCredential {
-  id               String      @id @default(cuid())
-  tenantId         String      @default("default-tenant")
-  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  id               String        @id @default(cuid())
+  tenantId         String        @default("default-tenant")
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   provider         TachoProvider
   encryptedPayload String
   lastUsedAt       DateTime?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@unique([tenantId, provider])
   @@index([tenantId])
@@ -2785,15 +2811,15 @@ model TachoActivity {
 }
 
 model TachoInfringement {
-  id         String                @id @default(cuid())
-  tenantId   String                @default("default-tenant")
-  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  driverId   String
-  driver     Driver                @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  vehicleId  String?
-  vehicle    Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  dddFileId  String?
-  dddFile    DddFile?              @relation(fields: [dddFileId], references: [id], onDelete: SetNull)
+  id                  String                @id @default(cuid())
+  tenantId            String                @default("default-tenant")
+  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  driverId            String
+  driver              Driver                @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicleId           String?
+  vehicle             Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  dddFileId           String?
+  dddFile             DddFile?              @relation(fields: [dddFileId], references: [id], onDelete: SetNull)
   type                TachoInfringementType
   severity            DtcSeverity
   occurredAt          DateTime
@@ -2818,28 +2844,28 @@ model TachoInfringement {
 }
 
 model TachoDownloadSchedule {
-  id             String               @id @default(cuid())
-  tenantId       String               @default("default-tenant")
-  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  subject        TachoDownloadSubject
-  driverId       String?
-  driver         Driver?              @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  vehicleId      String?
-  vehicle        Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  intervalDays   Int                  @default(28)
-  nextDueAt      DateTime
-  lastDownloadAt DateTime?
-  lastFulfilledAt DateTime?
-  lastFulfilledDddFileId String?
-  lastFulfilledDddFile DddFile?       @relation("TachoScheduleFulfilledByFile", fields: [lastFulfilledDddFileId], references: [id], onDelete: SetNull)
-  lastReminderStage TachoDownloadReminderStage?
-  lastReminderSentAt DateTime?
-  enabled        Boolean              @default(true)
-  lastAttemptAt  DateTime?
-  lastError      String?
-  consecutiveFailureCount Int         @default(0)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                      String                      @id @default(cuid())
+  tenantId                String                      @default("default-tenant")
+  tenant                  Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  subject                 TachoDownloadSubject
+  driverId                String?
+  driver                  Driver?                     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicleId               String?
+  vehicle                 Vehicle?                    @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  intervalDays            Int                         @default(28)
+  nextDueAt               DateTime
+  lastDownloadAt          DateTime?
+  lastFulfilledAt         DateTime?
+  lastFulfilledDddFileId  String?
+  lastFulfilledDddFile    DddFile?                    @relation("TachoScheduleFulfilledByFile", fields: [lastFulfilledDddFileId], references: [id], onDelete: SetNull)
+  lastReminderStage       TachoDownloadReminderStage?
+  lastReminderSentAt      DateTime?
+  enabled                 Boolean                     @default(true)
+  lastAttemptAt           DateTime?
+  lastError               String?
+  consecutiveFailureCount Int                         @default(0)
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
 
   @@index([tenantId])
   @@index([subject, nextDueAt])

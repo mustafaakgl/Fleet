@@ -8,6 +8,7 @@ import { TourDriverController } from './tour-driver.controller';
 import { RouteDeviationService } from './route-deviation.service';
 import { RoutingService } from './routing.service';
 import { TourService } from './tour.service';
+import { TourStopService } from './tour-stop.service';
 import { ValhallaClient } from './valhalla.client';
 
 /**
@@ -20,7 +21,7 @@ import { ValhallaClient } from './valhalla.client';
 @Module({
   imports: [PrismaModule],
   controllers: [RoutingController, TourController, TourDriverController],
-  providers: [ValhallaClient, GeocodingService, RoutingCacheService, RoutingService, TourService, RouteDeviationService],
+  providers: [ValhallaClient, GeocodingService, RoutingCacheService, RoutingService, TourService, TourStopService, RouteDeviationService],
   exports: [RoutingService, TourService, RouteDeviationService, ValhallaClient],
 })
 export class RoutingModule {}
