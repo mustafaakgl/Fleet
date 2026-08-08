@@ -303,6 +303,7 @@ async function main() {
         '../frontend/lib/address-format.spec.ts',
         '../frontend/lib/nav-access.spec.ts',
         '../frontend/lib/driver-day-phase.spec.ts',
+        '../frontend/lib/navigation-links.spec.ts',
         '../mobile-driver/src/lib/navigation-links.spec.ts',
       ],
       { cwd: backendDir, inheritStdout: true, inheritStderr: true },

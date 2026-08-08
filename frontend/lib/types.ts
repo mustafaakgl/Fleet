@@ -1754,6 +1754,41 @@ export type DriverRequestType =
   | 'uniform_delivery'
   | 'other';
 
+/** Driver's tour for the day — GET /driver/tours/today. Read-only today. */
+export interface DriverTourStop {
+  id: string;
+  sequence: number;
+  kind: string;
+  assignmentId: string | null;
+  address: string | null;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /**
+   * Routing's verdict on whether a truck reaches this point. An enum, not a
+   * boolean — 'unknown' and 'check_failed' mean "not confirmed", which is a
+   * weaker statement than 'unreachable'.
+   */
+  truckAccess: 'unknown' | 'reachable' | 'unreachable' | 'check_failed';
+  windowStart: string | null;
+  windowEnd: string | null;
+  serviceMinutes: number | null;
+  plannedArrivalAt: string | null;
+  legDistanceKm: number | null;
+}
+
+export interface DriverTour {
+  id: string;
+  name: string | null;
+  workDate: string;
+  status: string;
+  plannedDistanceKm: number | null;
+  plannedDurationMin: number | null;
+  stops: DriverTourStop[];
+}
+
 /** Daily vehicle check (Abfahrtskontrolle) — GET /driver/departure-check/status. */
 export interface DepartureCheckTemplateItem {
   id: string;

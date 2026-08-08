@@ -2214,6 +2214,14 @@ function driverMultipartHeaders() {
 export const driverPortalApi = {
   me: () => api.get<DriverPortalMe>('/driver/me').then((r) => r.data),
 
+  /** Read-only: the tour endpoint offers no writes, so stop status stays with the office. */
+  todayTour: (date?: string) =>
+    api
+      .get<{ tour: import('./types').DriverTour | null }>('/driver/tours/today', {
+        params: date ? { date } : undefined,
+      })
+      .then((r) => r.data.tour),
+
   departureCheckStatus: () =>
     api
       .get<import('./types').DriverDepartureCheckStatus>('/driver/departure-check/status')

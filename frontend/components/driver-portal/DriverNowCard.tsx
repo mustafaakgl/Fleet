@@ -126,9 +126,9 @@ export function DriverNowCard({ phase, assignment, handover, starting, onStartDa
           icon: Truck,
           title: t('driverPortal.now.onTour.title'),
           body: t('driverPortal.now.onTour.body'),
-          action: assignment
-            ? { label: t('driverPortal.now.onTour.action'), href: `/driver/assignments/${assignment.id}` }
-            : undefined,
+          // The tour, not the assignment: it carries the stops in order and the
+          // navigation links. The assignment stays reachable from "Today" below.
+          action: { label: t('driverPortal.now.onTour.action'), href: '/driver/tour' },
           secondary: { label: t('driverPortal.now.reportLink'), href: '/driver/reports' },
         };
       case 'handover':

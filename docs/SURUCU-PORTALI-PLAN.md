@@ -10,8 +10,8 @@
 | 1 | Görünür kusurlar (durum etiketi, alt menü) | ✅ bitti |
 | 2 | Ana sayfa → günün fazına göre tek eylem | ✅ bitti |
 | 3 | Abfahrtskontrolle (günlük araç kontrolü) | ✅ bitti |
-| 4 | Tur ekranı — göster | ⬜ sırada |
-| 5 | Arıza bildirimi + yakıt girişi | ⬜ |
+| 4 | Tur ekranı — göster | ✅ bitti |
+| 5 | Arıza bildirimi + yakıt girişi | ⬜ sırada |
 | 6 | Kalan sürüş süresi | ⬜ |
 | 7 | Durak durumu ("vardım / teslim ettim") | ⬜ tasarım kararı bekliyor |
 | — | Token katmanını dirilt | ⬜ ayrı iş, 53 dosya |
@@ -157,7 +157,7 @@ ekranı gerçek kusur adıyla çıkıyor. Ana sayfa kontrol yokken `departure_ch
 **Not.** Backend'de "onarıldı" (`behoben`) aracı açmıyor; yalnızca `bestaetigt` açıyor. Yani
 kusuru tamir etmek yetmiyor, ofisin teyit etmesi gerekiyor.
 
-## Adım 4 — Tur ekranı (göster)
+## Adım 4 — Tur ekranı (göster) ✅
 
 **Yapılacak.** `GET driver/tours/today` ile durak listesi, sıra, adres, zaman penceresi, harita
 uygulamasına derin bağlantı. `mobile-driver/src/lib/navigation-links.ts` derin bağlantıları
@@ -165,7 +165,28 @@ uygulamasına derin bağlantı. `mobile-driver/src/lib/navigation-links.ts` deri
 
 Salt okunur olduğu için ekran da salt okunur olur; durum güncelleme Adım 7'de.
 
-**Doğrulama.** Sürücü hesabıyla tur açılıyor, duraklar doğru sırada, 375 px ekran görüntüsü.
+**Yapılan.** `/driver/tour`: özet kartı (durak sayısı + planlanan km), sıralı duraklar, alış/teslim
+etiketi, zaman penceresi, planlanan varış ve durak başına navigasyon bağlantısı. `on_tour` fazının
+birincil eylemi artık göreve değil tura gidiyor.
+
+Navigasyon yardımcısı `frontend/lib/navigation-links.ts` olarak **kopyalandı**, import edilmedi:
+frontend Docker imajı yalnızca `frontend/` bağlamından kuruluyor (`COPY . .`), yani paketler arası
+import üretim build'ini kırardı. İki kopyanın sessizce ayrışmaması için aynı URL kurallarını
+kilitleyen 14 test yazıldı ve `loop-verify.mjs`'e kaydedildi.
+
+**Yakalanan hata.** `truckAccess` ilk yazımda `boolean` sanılmıştı; aslında enum
+(`unknown | reachable | unreachable | check_failed`) ve `=== false` kontrolü hiçbir zaman doğru
+olmayacaktı. Mobil ekran doğru yapıyordu — referans alındı: `unreachable` kırmızı bulgu,
+`reachable` dışındaki her şey sarı "doğrulanmadı" notu.
+
+**Doğrulanan.** Ekran gerçek turla açıldı (2 durak, biri `reachable` biri `unreachable`):
+sıra, adres, pencere, planlanan varış ve kırmızı "kamyon giremiyor" uyarısı doğru çıktı.
+Navigasyon bağlantıları adres değil koordinat taşıyor
+(`…destination=52.532100,13.384600&travelmode=driving`). Tur yokken boş durum çıkıyor; taslak
+turlar backend tarafından zaten gizleniyor.
+
+**Not.** Tur adı büyük harfe çevrilmiyordu değil — çevriliyordu ve Türkçe dil kuralı "Berlin"i
+"BERLİN" yapıyordu. Etiketler büyütülür, kullanıcı verisi büyütülmez.
 
 ## Adım 5 — Arıza bildirimi + yakıt girişi
 
