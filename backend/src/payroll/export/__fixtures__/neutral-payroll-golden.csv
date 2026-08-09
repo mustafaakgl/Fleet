@@ -1,0 +1,8 @@
+LOHN;2026-08;12345;54321
+Personalnummer;Nachname;Vorname;Lohnart;Lohnartschluessel;Menge;Einheit;Jahr;Monat;Kostenstelle;Kostentraeger;Rueckrechnung
+1001;Albrecht;Dieter;regular;1000;168,00;Stunden;2026;8;KST-1;;
+1001;Albrecht;Dieter;overtime;1100;6,00;Stunden;2026;8;KST-1;;
+1001;Albrecht;Dieter;night;1200;7,00;Stunden;2026;8;KST-1;;
+1001;Albrecht;Dieter;vacation;2000;2;Tage;2026;8;KST-1;;
+1002;Yilmaz;Adar;regular;1000;160,00;Stunden;2026;8;KST-2;;
+1002;Yilmaz;Adar;overtime;1100;2,00;Stunden;2026;8;KST-2;;2026-07

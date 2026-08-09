@@ -6,7 +6,8 @@ export type StorageBucket =
   | 'fine-documents'
   | 'message-attachments'
   | 'invoice-documents'
-  | 'datev-exports';
+  | 'datev-exports'
+  | 'payroll-exports';
 
 export abstract class StorageService {
   /** Internal storage path persisted in the database (not publicly served). */

@@ -7,6 +7,7 @@ import { InvoiceDocumentStorageService } from './invoice-document-storage.servic
 import { LicensePhotoCryptoService } from './license-photo-crypto.service';
 import { LicensePhotoStorageService } from './license-photo-storage.service';
 import { LocalStorageService } from './local-storage.service';
+import { PayrollExportStorageService } from './payroll-export-storage.service';
 import { ObjectStorageService } from './object-storage.service';
 import { StorageService } from './storage.service';
 
@@ -20,6 +21,7 @@ import { StorageService } from './storage.service';
     DefectPhotoCryptoService,
     DefectPhotoStorageService,
     DatevExportStorageService,
+    PayrollExportStorageService,
     FineDocumentStorageService,
     InvoiceDocumentStorageService,
     {
@@ -36,6 +38,7 @@ import { StorageService } from './storage.service';
     DefectPhotoCryptoService,
     DefectPhotoStorageService,
     DatevExportStorageService,
+    PayrollExportStorageService,
     FineDocumentStorageService,
     InvoiceDocumentStorageService,
   ],

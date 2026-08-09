@@ -75,6 +75,8 @@ export const TENANT_SCOPED_MODELS = new Set([
   'PayrollPeriod',
   'PayrollDay',
   'PayrollEntry',
+  'PayrollWageTypeMapping',
+  'PayrollExport',
 ]);
 
 export function isTenantScopedModel(model: string): boolean {

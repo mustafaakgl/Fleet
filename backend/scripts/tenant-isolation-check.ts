@@ -537,6 +537,20 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollEntry.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollEntry.count()),
       }),
+      verifyTenantScopedModel({
+        label: 'PayrollWageTypeMapping', tenantA, tenantB,
+        unscopedCountA: () => base.payrollWageTypeMapping.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.payrollWageTypeMapping.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollWageTypeMapping.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollWageTypeMapping.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'PayrollExport', tenantA, tenantB,
+        unscopedCountA: () => base.payrollExport.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.payrollExport.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollExport.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollExport.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

@@ -1,15 +1,19 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
-import type { Request } from 'express';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { FINANCIAL_ROLES } from '../common/utils/permissions';
+import { CreatePayrollCorrectionsDto } from './dto/create-payroll-corrections.dto';
+import { ExportPayrollPeriodDto } from './dto/export-payroll-period.dto';
 import { OpenPayrollPeriodDto } from './dto/open-payroll-period.dto';
 import { UpsertDayTypeMappingDto } from './dto/upsert-day-type-mapping.dto';
 import { UpsertDriverPayrollProfileDto } from './dto/upsert-driver-payroll-profile.dto';
 import { UpsertPublicHolidayDto } from './dto/upsert-public-holiday.dto';
 import { UpsertTenantPayrollProfileDto } from './dto/upsert-tenant-payroll-profile.dto';
+import { UpsertWageTypeMappingDto } from './dto/upsert-wage-type-mapping.dto';
+import { PayrollExportService } from './payroll-export.service';
 import { PayrollPeriodService } from './payroll-period.service';
 import { PayrollSettingsService } from './payroll-settings.service';
 
@@ -31,6 +35,7 @@ export class PayrollController {
   constructor(
     private readonly settings: PayrollSettingsService,
     private readonly periods: PayrollPeriodService,
+    private readonly exports: PayrollExportService,
   ) {}
 
   @Get('profile')
@@ -128,6 +133,69 @@ export class PayrollController {
   @RequiresWrite('accounting')
   approvePeriod(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.periods.approve(id, request.user.id);
+  }
+
+  @Get('wage-type-mappings')
+  listWageTypeMappings(@Req() request: AuthenticatedRequest) {
+    return this.settings.listWageTypeMappings(request.user.tenantId);
+  }
+
+  @Put('wage-type-mappings')
+  @RequiresWrite('accounting')
+  upsertWageTypeMapping(
+    @Body() dto: UpsertWageTypeMappingDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.settings.upsertWageTypeMapping(request.user.tenantId, dto, request.user.id);
+  }
+
+  /** Donem dondurulduktan sonra gelen degisiklikler — "nachtragliche Anderungen". */
+  @Get('periods/:id/late-changes')
+  listLateChanges(@Param('id') id: string) {
+    return this.exports.listLateChanges(id);
+  }
+
+  /** Kaynak donemin farkini BU doneme duzeltme kalemi olarak tasir. */
+  @Post('periods/:id/corrections')
+  @RequiresWrite('accounting')
+  createCorrections(
+    @Param('id') id: string,
+    @Body() dto: CreatePayrollCorrectionsDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.exports.createCorrections(dto.sourcePeriodId, id, request.user.id);
+  }
+
+  @Post('periods/:id/export')
+  @RequiresWrite('accounting')
+  exportPeriod(
+    @Param('id') id: string,
+    @Body() dto: ExportPayrollPeriodDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.exports.exportPeriod(id, dto.format ?? 'neutral_csv', request.user.id);
+  }
+
+  @Post('periods/:id/lock')
+  @RequiresWrite('accounting')
+  lockPeriod(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.exports.lockPeriod(id, request.user.id);
+  }
+
+  @Get('exports')
+  listExports(@Query('periodId') periodId?: string) {
+    return this.exports.listExports(periodId);
+  }
+
+  @Get('exports/:id/download')
+  async downloadExport(@Param('id') id: string, @Res() response: Response) {
+    const file = await this.exports.downloadExport(id);
+    response.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.fileName)}"`,
+      'Cache-Control': 'private, no-store',
+    });
+    file.stream.pipe(response);
   }
 
   @Get('holidays')

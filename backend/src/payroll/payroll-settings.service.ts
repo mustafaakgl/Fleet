@@ -12,6 +12,7 @@ import { UpsertDayTypeMappingDto } from './dto/upsert-day-type-mapping.dto';
 import { UpsertDriverPayrollProfileDto } from './dto/upsert-driver-payroll-profile.dto';
 import { UpsertPublicHolidayDto } from './dto/upsert-public-holiday.dto';
 import { UpsertTenantPayrollProfileDto } from './dto/upsert-tenant-payroll-profile.dto';
+import { UpsertWageTypeMappingDto } from './dto/upsert-wage-type-mapping.dto';
 
 /**
  * DATEV Lohn yapilandirmasi (Faz 4a).
@@ -297,6 +298,48 @@ export class PayrollSettingsService {
     await this.ensureDefaultMappings(tenantId);
     const rows = await this.prisma.payrollDayTypeMapping.findMany();
     return new Map(rows.map((row) => [row.calendarCode, { dayType: row.dayType, paid: row.paid }]));
+  }
+
+  // ------------------------------------------------------------ wage types
+
+  /**
+   * Kova → DATEV Lohnart eslemesi. Varsayilan TOHUMLANMIYOR: Lohnart
+   * numaralari Steuerberater'a ozel ve uydurulmus bir numara sessizce yanlis
+   * hesaba yazar. Bos liste, ihracatin acikca reddetmesi demek.
+   */
+  async listWageTypeMappings(_tenantId: string) {
+    return this.prisma.payrollWageTypeMapping.findMany({ orderBy: { wageType: 'asc' } });
+  }
+
+  async upsertWageTypeMapping(
+    tenantId: string,
+    dto: UpsertWageTypeMappingDto,
+    actorUserId: string,
+  ) {
+    const number = dto.datevWageTypeNumber.trim();
+    if (!number) {
+      throw new BadRequestException('A DATEV wage type number is required');
+    }
+
+    const existing = await this.prisma.payrollWageTypeMapping.findFirst({
+      where: { wageType: dto.wageType },
+    });
+    const data = { datevWageTypeNumber: number, enabled: dto.enabled ?? true };
+    const row = existing
+      ? await this.prisma.payrollWageTypeMapping.update({ where: { id: existing.id }, data })
+      : await this.prisma.payrollWageTypeMapping.create({
+          data: { ...data, tenantId, wageType: dto.wageType },
+        });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'payroll.wage_type_mapping_saved',
+      entityType: 'payroll_wage_type_mapping',
+      entityId: row.id,
+      summary: `Wage type ${dto.wageType} mapped to DATEV ${number}`,
+    });
+
+    return row;
   }
 
   // ------------------------------------------------------------- holidays

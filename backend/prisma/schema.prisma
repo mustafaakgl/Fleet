@@ -313,6 +313,38 @@ enum PayrollDayTypeSource {
   none
 }
 
+/// Bordro kalem turleri. DATEV Lohnart numaralari koda GOMULMUYOR; bu enum
+/// yalnizca "hangi kova" diyor, numarayi PayrollWageTypeMapping veriyor.
+enum PayrollWageType {
+  regular
+  overtime
+  night
+  /// §3b EStG'nin daha yuksek oranli 00–04 bandi; ayri Lohnart alabilir.
+  night_core
+  sunday
+  holiday
+  vacation
+  sick
+  unpaid_absence
+}
+
+/// Ihracat bicimi.
+///
+/// `neutral_csv` ILK VE VARSAYILAN: hedef DATEV urunu (LODAS mi Lohn und
+/// Gehalt mi) henuz belli degil. Notr dosya Steuerberater'a gonderilebilecek
+/// tam veriyi tasiyor; gercek bicim belli olunca yalnizca yazici eklenecek,
+/// sema degismeyecek. Enum bu yuzden bastan uc degerli.
+enum PayrollExportFormat {
+  neutral_csv
+  lodas
+  lohn_und_gehalt
+}
+
+enum PayrollExportStatus {
+  generated
+  downloaded
+}
+
 enum PayrollEmploymentType {
   full_time
   part_time
@@ -757,6 +789,8 @@ model Tenant {
   payrollPeriods             PayrollPeriod[]
   payrollDays                PayrollDay[]
   payrollEntries             PayrollEntry[]
+  payrollWageTypeMappings    PayrollWageTypeMapping[]
+  payrollExports             PayrollExport[]
 }
 
 model TenantBillingProfile {
@@ -883,6 +917,7 @@ model User {
   createdInvoices                 Invoice[]                   @relation("InvoiceCreatedBy")
   finalizedInvoices               Invoice[]                   @relation("InvoiceFinalizedBy")
   approvedPayrollPeriods          PayrollPeriod[]             @relation("PayrollPeriodApprovedBy")
+  createdPayrollExports           PayrollExport[]             @relation("PayrollExportCreatedBy")
   recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
   createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
 
@@ -2202,6 +2237,8 @@ model PayrollPeriod {
 
   days              PayrollDay[]
   entries           PayrollEntry[]
+  exports           PayrollExport[]
+  correctionEntries PayrollEntry[]  @relation("PayrollEntryCorrectsPeriod")
 
   @@unique([tenantId, year, month])
   @@index([tenantId])
@@ -2270,6 +2307,12 @@ model PayrollEntry {
   kind                PayrollEntryKind @default(regular)
   /// Duzeltme kalemi hangi donemi duzeltiyor (Ruckrechnung).
   correctsPeriodId    String?
+  correctsPeriod      PayrollPeriod?   @relation("PayrollEntryCorrectsPeriod", fields: [correctsPeriodId], references: [id], onDelete: Restrict)
+  /// Duzeltme, kaynak donemin BU ANA kadar gelen degisikliklerini kapsiyor.
+  /// Gec gelen olaylar "onaydan sonra yazilmis olay" olarak turetiliyor
+  /// (createdAt > approvedAt); bu damga olmadan ayni degisiklik her seferinde
+  /// yeniden duzeltme olarak cikardi.
+  correctionThroughAt DateTime?
 
   /// Soll: ay icindeki hedef sure.
   targetMinutes   Int @default(0)
@@ -2310,6 +2353,52 @@ model PayrollEntry {
   @@index([periodId])
   @@index([tenantId, driverId])
   @@index([correctsPeriodId])
+}
+
+/// Bordro kovasi → DATEV Lohnart numarasi.
+///
+/// Numaralar koda gomulmuyor: her Steuerberater kendi Lohnart planini
+/// kullaniyor ve bunlar sirkete gore degisiyor.
+model PayrollWageTypeMapping {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  wageType            PayrollWageType
+  datevWageTypeNumber String
+  /// Kapali ise bu kova ihracata girmez — her sirket her kovayi ayri Lohnart
+  /// olarak gondermiyor (ornegin gece cekirdegini ayirmayan var).
+  enabled             Boolean         @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, wageType])
+  @@index([tenantId])
+}
+
+/// Uretilmis DATEV Lohn dosyasi. DatevExport ile ayni sekil, AYRI tablo.
+model PayrollExport {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  periodId String
+  period   PayrollPeriod       @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  format   PayrollExportFormat @default(neutral_csv)
+
+  fileStoredPath String
+  fileSha256     String
+  /// Dosyaya giren kalemlerin kimlikleri — dosya ile veri arasindaki bag.
+  entryIds       Json
+  status         PayrollExportStatus @default(generated)
+
+  createdById String
+  createdBy   User     @relation("PayrollExportCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([periodId, createdAt])
 }
 
 /// Zeiterfassung'un ham kaydi: vardiya icindeki her giris/mola/cikis dokunusu.
