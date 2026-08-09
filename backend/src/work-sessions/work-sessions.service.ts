@@ -1,9 +1,17 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { WorkSessionEndReason, WorkSessionSource, WorkSessionStatus, Prisma } from '@prisma/client';
+import {
+  WorkSessionEndReason,
+  WorkSessionSource,
+  WorkSessionStatus,
+  WorkTimeEventSource,
+  WorkTimeEventType,
+  Prisma,
+} from '@prisma/client';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WorkTimeService } from '../work-time/work-time.service';
 import { CorrectWorkSessionDto } from './dto/correct-work-session.dto';
 
 const STALE_SESSION_HOURS = 12;
@@ -97,7 +105,31 @@ export class WorkSessionsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly driverNotify: DriverNotifyService,
+    private readonly workTime: WorkTimeService,
   ) {}
+
+  /**
+   * Vardiya olayini Zeiterfassung kaydina yazar.
+   *
+   * Hatasi vardiyayi DUSURMEZ: WorkSession'in kendisi bu ozellikten once de
+   * calisiyordu ve surucunun gunu bir olay satiri yuzunden kapanmamazlik
+   * etmemeli. Eksik kalan olay, ilk sonraki dokunusta `ensureOpeningEvent`
+   * tarafindan zaten tamamlaniyor.
+   */
+  private async recordTimeEventSafely(params: {
+    workSessionId: string;
+    driverId: string;
+    type: WorkTimeEventType;
+    source: WorkTimeEventSource;
+    occurredAt: Date;
+    supersedesEventId?: string | null;
+  }): Promise<void> {
+    try {
+      await this.workTime.appendEvent(params);
+    } catch (error) {
+      console.warn('Work time event append failed:', error);
+    }
+  }
 
   async getActiveSessionForDriver(driverId: string) {
     return this.prisma.workSession.findFirst({
@@ -123,7 +155,11 @@ export class WorkSessionsService {
     return row ? toClient(row) : null;
   }
 
-  async startSession(driverId: string, actorUserId?: string) {
+  async startSession(
+    driverId: string,
+    actorUserId?: string,
+    eventSource: WorkTimeEventSource = WorkTimeEventSource.driver_web,
+  ) {
     const active = await this.getActiveSessionForDriver(driverId);
     if (active) {
       return active;
@@ -137,6 +173,14 @@ export class WorkSessionsService {
         lastSeenAt: new Date(),
       },
       include: includeDriver,
+    });
+
+    await this.recordTimeEventSafely({
+      workSessionId: row.id,
+      driverId,
+      type: WorkTimeEventType.clock_in,
+      source: eventSource,
+      occurredAt: row.startedAt,
     });
 
     await safeAuditLog(this.auditService, {
@@ -164,21 +208,35 @@ export class WorkSessionsService {
     return row;
   }
 
-  async endSession(driverId: string, reason: WorkSessionEndReason, actorUserId?: string) {
+  async endSession(
+    driverId: string,
+    reason: WorkSessionEndReason,
+    actorUserId?: string,
+    eventSource: WorkTimeEventSource = WorkTimeEventSource.driver_web,
+  ) {
     const active = await this.getActiveSessionForDriver(driverId);
     if (!active) {
       return null;
     }
 
+    const endedAt = new Date();
     const row = await this.prisma.workSession.update({
       where: { id: active.id },
       data: {
         status: WorkSessionStatus.ended,
-        endedAt: new Date(),
+        endedAt,
         endReason: reason,
-        lastSeenAt: new Date(),
+        lastSeenAt: endedAt,
       },
       include: includeDriver,
+    });
+
+    await this.recordTimeEventSafely({
+      workSessionId: row.id,
+      driverId,
+      type: WorkTimeEventType.clock_out,
+      source: eventSource,
+      occurredAt: endedAt,
     });
 
     await safeAuditLog(this.auditService, {
@@ -263,6 +321,10 @@ export class WorkSessionsService {
     const correctedEndedAt = correctionPayload(row, dto);
     const originalEndAt = row.endedAt ?? row.originalEndAt ?? null;
 
+    // Duzeltilen cikis olayi SILINMEZ; yenisi eskisinin ustunu cizer. Kimligi
+    // yazmadan once okunuyor cunku append sonrasi "son cikis" artik yenisi olur.
+    const supersedesEventId = await this.workTime.findLatestClockOut(row.id).catch(() => null);
+
     const updated = await this.prisma.workSession.update({
       where: { id: row.id },
       data: {
@@ -275,6 +337,18 @@ export class WorkSessionsService {
         lastSeenAt: correctedEndedAt,
       },
       include: includeDriver,
+    });
+
+    await this.recordTimeEventSafely({
+      workSessionId: updated.id,
+      driverId: updated.driverId,
+      type: WorkTimeEventType.clock_out,
+      source:
+        source === WorkSessionSource.office_correction
+          ? WorkTimeEventSource.office
+          : WorkTimeEventSource.driver_web,
+      occurredAt: correctedEndedAt,
+      supersedesEventId,
     });
 
     await safeAuditLog(this.auditService, {

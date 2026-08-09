@@ -271,6 +271,24 @@ enum WorkSessionStatus {
   ended
 }
 
+/// Zeiterfassung olay turleri. Vardiya bu dortlunun sirasindan yeniden
+/// hesaplanabilir; hicbir toplam alani saklanmaz.
+enum WorkTimeEventType {
+  clock_in
+  break_start
+  break_end
+  clock_out
+}
+
+/// Olayi kimin urettigi. Ofis duzeltmesi de olay olarak yazilir — kayit
+/// append-only, gecmis satir guncellenmez.
+enum WorkTimeEventSource {
+  driver_web
+  driver_mobile
+  office
+  auto
+}
+
 enum MessengerDepartment {
   dispatch
   hr
@@ -659,6 +677,7 @@ model Tenant {
   locations                  Location[]
   tours                      Tour[]
   tourStops                  TourStop[]
+  workTimeEvents             WorkTimeEvent[]
 }
 
 model TenantBillingProfile {
@@ -914,6 +933,7 @@ model Driver {
   tachoDownloadSchedules  TachoDownloadSchedule[]
   equipmentIssuances      EquipmentIssuance[]
   tours                   Tour[]
+  workTimeEvents          WorkTimeEvent[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -1287,7 +1307,8 @@ model Tour {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  stops TourStop[]
+  stops          TourStop[]
+  workTimeEvents WorkTimeEvent[]
 
   @@index([tenantId])
   @@index([tenantId, workDate])
@@ -1408,6 +1429,7 @@ model Assignment {
   invoiceLines     InvoiceLine[]
   invoiceClaim     InvoiceAssignmentClaim?
   tourStops        TourStop[]
+  workTimeEvents   WorkTimeEvent[]
 
   @@index([tenantId])
   @@index([driverId, workDate])
@@ -1944,10 +1966,71 @@ model WorkSession {
 
   matchedFines Fine[]
   fleetTrips   FleetTrip[]
+  timeEvents   WorkTimeEvent[]
 
   @@index([tenantId])
   @@index([driverId, status])
   @@index([driverId, startedAt])
+}
+
+/// Zeiterfassung'un ham kaydi: vardiya icindeki her giris/mola/cikis dokunusu.
+///
+/// APPEND-ONLY. Satir guncellenmez, silinmez; ofis duzeltmesi de yeni bir olay
+/// olarak yazilir. Boylece gunun toplami her zaman olay dizisinden yeniden
+/// hesaplanabilir ve "kim ne zaman neyi degistirdi" kaybolmaz — Almanya'da
+/// baslangic, bitis ve toplam calisma suresinin belgelenmesi zorunlu.
+///
+/// WorkSession KALDI: vardiyanin kabi ve aktif/bitti durumu orada duruyor,
+/// bu tablo onun icindeki detay. Toplamlar hicbir yerde saklanmiyor.
+model WorkTimeEvent {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  workSessionId String
+  workSession   WorkSession @relation(fields: [workSessionId], references: [id], onDelete: Cascade)
+  driverId      String
+  driver        Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  type       WorkTimeEventType
+  /// Olayin GERCEKLESTIGI an — cevrimdisi yakalanip sonra gonderilebilir, bu
+  /// yuzden createdAt'ten ayri tutuluyor. Gun hesabi bunu esas alir.
+  occurredAt DateTime
+  source     WorkTimeEventSource
+
+  /// Olayin hangi ise/tura denk geldigi. Bos olabilir: mola bir gorevin
+  /// ustunde olmak zorunda degil.
+  assignmentId String?
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  tourId       String?
+  tour         Tour?       @relation(fields: [tourId], references: [id], onDelete: SetNull)
+
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  /// Bu olayin gecersiz kildigi onceki olay. Ofis bir cikisi duzeltince satir
+  /// GUNCELLENMEZ, yenisi yazilir ve eskisinin ustunu cizer. Zamana gore
+  /// siralama tek basina yetmiyordu: duzeltme saati ileri alirsa katlama
+  /// duzeltmeyi degil orijinali uygulardi.
+  supersedesEventId String?        @unique
+  supersedes        WorkTimeEvent? @relation("WorkTimeEventSupersede", fields: [supersedesEventId], references: [id], onDelete: SetNull)
+  supersededBy      WorkTimeEvent? @relation("WorkTimeEventSupersede")
+
+  /// Cevrimdisi kuyruk ayni olayi baglanti gelince tekrar gonderebilir; ayni
+  /// kimlik ikinci kez yazilmaz (bkz. TourStop.clientEventId ile ayni desen).
+  clientEventId String?
+  /// Olayi ureten istemci cihazi. Device modeline FK DEGIL: orasi telematik
+  /// kutusu, burada kastedilen surucunun telefonu/tarayicisi.
+  deviceId      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, clientEventId])
+  @@index([tenantId])
+  @@index([workSessionId, occurredAt])
+  @@index([tenantId, driverId, occurredAt])
+  @@index([assignmentId])
+  @@index([tourId])
 }
 
 model VehicleEquipment {

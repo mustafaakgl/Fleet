@@ -29,6 +29,7 @@ import { CreateDriverTransportRequestDto } from './dto/create-driver-transport-r
 import { CreateDriverAccidentDto } from './dto/create-driver-accident.dto';
 import { CreateDriverHandoverDto } from './dto/create-driver-handover.dto';
 import { EndWorkSessionDto } from './dto/end-work-session.dto';
+import { WorkTimeBreakDto } from './dto/work-time-break.dto';
 import { SubmitHandoverEquipmentChecklistDto } from './dto/submit-handover-equipment.dto';
 import { UploadHandoverPhotoDto } from './dto/upload-handover-photo.dto';
 import { UploadDriverAttachmentDto } from './dto/upload-driver-attachment.dto';
@@ -181,6 +182,23 @@ export class DriverMobileController {
   @HttpCode(HttpStatus.OK)
   endWorkSession(@CurrentUser('id') userId: string, @Body() body: EndWorkSessionDto) {
     return this.driverMobile.endWorkSession(userId, body?.reason ?? 'manual');
+  }
+
+  @Get('work-sessions/time')
+  getWorkTimeShift(@CurrentUser('id') userId: string) {
+    return this.driverMobile.getWorkTimeShift(userId);
+  }
+
+  @Post('work-sessions/break/start')
+  @HttpCode(HttpStatus.OK)
+  startWorkTimeBreak(@CurrentUser('id') userId: string, @Body() dto: WorkTimeBreakDto) {
+    return this.driverMobile.startWorkTimeBreak(userId, dto ?? {});
+  }
+
+  @Post('work-sessions/break/end')
+  @HttpCode(HttpStatus.OK)
+  endWorkTimeBreak(@CurrentUser('id') userId: string, @Body() dto: WorkTimeBreakDto) {
+    return this.driverMobile.endWorkTimeBreak(userId, dto ?? {});
   }
 
   @Post('work-sessions/heartbeat')

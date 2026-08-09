@@ -481,6 +481,13 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.tourStop.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.tourStop.count()),
       }),
+      verifyTenantScopedModel({
+        label: 'WorkTimeEvent', tenantA, tenantB,
+        unscopedCountA: () => base.workTimeEvent.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.workTimeEvent.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.workTimeEvent.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.workTimeEvent.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

@@ -9,6 +9,8 @@ import {
   RequestType,
   RequestStatus,
   TransportRequestStatus,
+  WorkTimeEventSource,
+  WorkTimeEventType,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,6 +27,8 @@ import { TrackingService } from '../tracking/tracking.service';
 import { WorkSessionsService } from '../work-sessions/work-sessions.service';
 import { CorrectWorkSessionDto } from '../work-sessions/dto/correct-work-session.dto';
 import { DepartureCheckService } from '../departure-check/departure-check.service';
+import { WorkTimeService } from '../work-time/work-time.service';
+import { WorkTimeBreakDto } from './dto/work-time-break.dto';
 import type { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
 import {
   allRequiredHandoverPhotosUploaded,
@@ -133,6 +137,7 @@ export class DriverMobileService {
     private readonly documentsService: DocumentsService,
     private readonly workSessions: WorkSessionsService,
     private readonly departureCheck: DepartureCheckService,
+    private readonly workTime: WorkTimeService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -944,6 +949,80 @@ export class DriverMobileService {
       needsReconciliation: session.staleOpen,
       session,
     };
+  }
+
+  /**
+   * Aktif vardiyanin Zeiterfassung ozeti: ne zaman baslandi, ne kadar mola
+   * verildi, net ne kadar calisildi. Toplamlar saklanmiyor, olaylardan
+   * hesaplaniyor — surucu ekranindaki sayaç da bunu okuyor.
+   */
+  async getWorkTimeShift(userId: string) {
+    const { driver } = await this.resolveDriver(userId);
+    const session = await this.workSessions.getActiveSessionForDriver(driver.id);
+    if (!session) {
+      return { active: false, shift: null };
+    }
+    return { active: true, shift: await this.workTime.getShift(session.id) };
+  }
+
+  startWorkTimeBreak(userId: string, dto: WorkTimeBreakDto) {
+    return this.appendWorkTimeBreak(userId, WorkTimeEventType.break_start, dto);
+  }
+
+  endWorkTimeBreak(userId: string, dto: WorkTimeBreakDto) {
+    return this.appendWorkTimeBreak(userId, WorkTimeEventType.break_end, dto);
+  }
+
+  private async appendWorkTimeBreak(
+    userId: string,
+    type: WorkTimeEventType,
+    dto: WorkTimeBreakDto,
+  ) {
+    const { driver } = await this.resolveDriver(userId);
+    const session = await this.workSessions.getActiveSessionForDriver(driver.id);
+    if (!session) {
+      throw new BadRequestException({ code: 'no_active_work_session' });
+    }
+
+    // Olayin bagi kendi isine olmali: id disaridan geliyor ve dogrulanmazsa
+    // surucu molasini baskasinin gorevine iliskilendirebilirdi.
+    if (dto.assignment_id) {
+      const owned = await this.prisma.assignment.findFirst({
+        where: { id: dto.assignment_id, driverId: driver.id },
+        select: { id: true },
+      });
+      if (!owned) {
+        throw new BadRequestException({ code: 'assignment_not_yours' });
+      }
+    }
+    if (dto.tour_id) {
+      const owned = await this.prisma.tour.findFirst({
+        where: { id: dto.tour_id, driverId: driver.id },
+        select: { id: true },
+      });
+      if (!owned) {
+        throw new BadRequestException({ code: 'tour_not_yours' });
+      }
+    }
+
+    const shift = await this.workTime.appendEvent({
+      workSessionId: session.id,
+      driverId: driver.id,
+      type,
+      source:
+        dto.source === 'driver_mobile'
+          ? WorkTimeEventSource.driver_mobile
+          : WorkTimeEventSource.driver_web,
+      occurredAt: dto.occurred_at,
+      clientEventId: dto.client_event_id ?? null,
+      deviceId: dto.device_id ?? null,
+      assignmentId: dto.assignment_id ?? null,
+      tourId: dto.tour_id ?? null,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+    });
+
+    return { active: true, shift };
   }
 
   async startWorkSession(userId: string) {
