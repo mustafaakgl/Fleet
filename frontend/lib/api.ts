@@ -959,6 +959,94 @@ export interface PayrollDayRow {
   anomalies: string[] | null;
 }
 
+export type PayrollDayType =
+  | 'work'
+  | 'vacation'
+  | 'sick'
+  | 'holiday'
+  | 'off'
+  | 'absence_unpaid';
+
+export type PayrollWageType =
+  | 'regular'
+  | 'overtime'
+  | 'night'
+  | 'night_core'
+  | 'sunday'
+  | 'holiday'
+  | 'vacation'
+  | 'sick'
+  | 'unpaid_absence';
+
+export interface TenantPayrollProfile {
+  id: string;
+  datevConsultantNumber: string | null;
+  datevClientNumber: string | null;
+  bundesland: string | null;
+  nightWindowStartMinute: number;
+  nightWindowEndMinute: number;
+  nightCoreStartMinute: number;
+  nightCoreEndMinute: number;
+  roundingMinutes: number;
+  defaultWeeklyTargetMinutes: number;
+}
+
+export interface DriverPayrollProfileRow {
+  driverId: string;
+  firstName: string;
+  lastName: string;
+  employeeNumber: string;
+  /** Personel numarasi yoksa bu surucu bordroya giremez. */
+  ready: boolean;
+  profile: {
+    datevPersonnelNumber: string;
+    weeklyTargetMinutes: number | null;
+    monthlyTargetMinutes: number | null;
+    costCenter: string | null;
+    costUnit: string | null;
+    employmentType: string;
+  } | null;
+}
+
+export interface PayrollDayTypeMappingRow {
+  id: string;
+  calendarCode: string;
+  dayType: PayrollDayType;
+  paid: boolean;
+}
+
+export interface PayrollWageTypeMappingRow {
+  id: string;
+  wageType: PayrollWageType;
+  datevWageTypeNumber: string;
+  enabled: boolean;
+}
+
+export interface PublicHolidayRow {
+  id: string;
+  date: string;
+  name: string;
+  bundesland: string | null;
+}
+
+export interface PayrollExportRow {
+  id: string;
+  periodId: string;
+  format: 'neutral_csv' | 'lodas' | 'lohn_und_gehalt';
+  fileSha256: string;
+  status: 'generated' | 'downloaded';
+  createdAt: string;
+}
+
+export interface PayrollLateChange {
+  id: string;
+  driverId: string;
+  type: string;
+  occurredAt: string;
+  source: string;
+  createdAt: string;
+}
+
 export const payrollApi = {
   listPeriods: () => api.get<PayrollPeriodRow[]>('/payroll/periods').then((r) => r.data),
   openPeriod: (year: number, month: number) =>
@@ -978,6 +1066,70 @@ export const payrollApi = {
   approve: (id: string) =>
     api.post<PayrollPeriodRow>(`/payroll/periods/${id}/approve`).then((r) => r.data),
 
+  // ── Donem sonrasi: duzeltme, ihracat, kilit ───────────────────────────────
+  listLateChanges: (id: string) =>
+    api
+      .get<{ periodId: string; since: string | null; events: PayrollLateChange[] }>(
+        `/payroll/periods/${id}/late-changes`,
+      )
+      .then((r) => r.data),
+  createCorrections: (targetPeriodId: string, sourcePeriodId: string) =>
+    api
+      .post<{ created: number }>(`/payroll/periods/${targetPeriodId}/corrections`, {
+        sourcePeriodId,
+      })
+      .then((r) => r.data),
+  exportPeriod: (id: string, format: 'neutral_csv' | 'lodas' | 'lohn_und_gehalt' = 'neutral_csv') =>
+    api.post<PayrollExportRow>(`/payroll/periods/${id}/export`, { format }).then((r) => r.data),
+  lockPeriod: (id: string) =>
+    api.post<PayrollPeriodRow>(`/payroll/periods/${id}/lock`).then((r) => r.data),
+  listExports: (periodId?: string) =>
+    api
+      .get<PayrollExportRow[]>('/payroll/exports', { params: periodId ? { periodId } : undefined })
+      .then((r) => r.data),
+  downloadExport: (id: string) =>
+    api.get<Blob>(`/payroll/exports/${id}/download`, { responseType: 'blob' }).then((r) => r.data),
+
+  // ── Yapilandirma ──────────────────────────────────────────────────────────
+  getTenantProfile: () =>
+    api.get<TenantPayrollProfile | null>('/payroll/profile').then((r) => r.data),
+  saveTenantProfile: (payload: Partial<TenantPayrollProfile>) =>
+    api.put<TenantPayrollProfile>('/payroll/profile', payload).then((r) => r.data),
+  listDriverProfiles: () =>
+    api.get<DriverPayrollProfileRow[]>('/payroll/drivers').then((r) => r.data),
+  saveDriverProfile: (
+    driverId: string,
+    payload: {
+      datevPersonnelNumber: string;
+      weeklyTargetMinutes?: number;
+      monthlyTargetMinutes?: number;
+      costCenter?: string;
+      costUnit?: string;
+    },
+  ) => api.put(`/payroll/drivers/${driverId}/profile`, payload).then((r) => r.data),
+  listDayTypeMappings: () =>
+    api
+      .get<{ mappings: PayrollDayTypeMappingRow[]; unmappedCodes: string[] }>(
+        '/payroll/day-type-mappings',
+      )
+      .then((r) => r.data),
+  saveDayTypeMapping: (payload: { calendarCode: string; dayType: PayrollDayType; paid: boolean }) =>
+    api.put<PayrollDayTypeMappingRow>('/payroll/day-type-mappings', payload).then((r) => r.data),
+  listWageTypeMappings: () =>
+    api.get<PayrollWageTypeMappingRow[]>('/payroll/wage-type-mappings').then((r) => r.data),
+  saveWageTypeMapping: (payload: {
+    wageType: PayrollWageType;
+    datevWageTypeNumber: string;
+    enabled?: boolean;
+  }) => api.put<PayrollWageTypeMappingRow>('/payroll/wage-type-mappings', payload).then((r) => r.data),
+  listHolidays: (year?: string) =>
+    api
+      .get<PublicHolidayRow[]>('/payroll/holidays', { params: year ? { year } : undefined })
+      .then((r) => r.data),
+  saveHoliday: (payload: { date: string; name: string; bundesland?: string }) =>
+    api.post<PublicHolidayRow>('/payroll/holidays', payload).then((r) => r.data),
+  deleteHoliday: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/payroll/holidays/${id}`).then((r) => r.data),
 };
 
 export const workSessionsApi = {

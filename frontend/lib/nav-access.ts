@@ -65,6 +65,7 @@ export const NAV_ACCESS: NavAccessRule[] = [
   { href: '/import', roles: ['admin'] },
   { href: '/billing', roles: ['admin'] },
   { href: '/invoicing', roles: ['admin', 'boss', 'accounting'] },
+  { href: '/payroll', roles: ['admin', 'boss', 'accounting'] },
   { href: '/audit', roles: ['admin', 'boss'] },
 ];
 

@@ -1,32 +1,33 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard,
-  Users,
-  Truck,
-  Building2,
-  FileText,
-  MapPinned,
-  CalendarDays,
-  Bell,
-  MessageSquare,
-  ClipboardList,
-  ClipboardCheck,
-  ListTodo,
-  Wrench,
-  Shield,
-  Upload,
-  CreditCard,
-  Rocket,
-  ScrollText,
-  Clock,
-  IdCard,
-  Scale,
   AlertTriangle,
-  Euro,
-  Droplets,
-  Route,
+  Bell,
+  Building2,
+  CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
+  Clock,
   Cpu,
+  CreditCard,
+  Droplets,
+  Euro,
+  FileText,
+  IdCard,
+  LayoutDashboard,
+  ListTodo,
+  MapPinned,
+  MessageSquare,
   Receipt,
+  Rocket,
+  Route,
+  Scale,
+  ScrollText,
+  Shield,
+  Truck,
+  Upload,
+  Users,
+  Wallet,
+  Wrench,
 } from 'lucide-react';
 import type { Role } from './types';
 
@@ -360,6 +361,13 @@ const INVOICING_ITEM: NavItem = {
   icon: Receipt,
 };
 
+/** Lohnvorbereitung — DATEV Lohn tarafi; /invoicing (Rechnungswesen) ayri. */
+const PAYROLL_ITEM: NavItem = {
+  href: '/payroll',
+  labelKey: 'nav.payroll',
+  icon: Wallet,
+};
+
 const GETTING_STARTED_ITEM: NavItem = {
   href: '/getting-started',
   labelKey: 'nav.gettingStarted',
@@ -381,7 +389,10 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         id: 'billing',
         labelKey: 'nav.billing',
         icon: CreditCard,
-        items: role === 'admin' ? [BILLING_ITEM, INVOICING_ITEM] : [INVOICING_ITEM],
+        items:
+          role === 'admin'
+            ? [BILLING_ITEM, INVOICING_ITEM, PAYROLL_ITEM]
+            : [INVOICING_ITEM, PAYROLL_ITEM],
       };
       verwaltungGroup.items.push(billingSection);
     }
