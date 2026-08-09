@@ -7,7 +7,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { EInvoicePreference, OutgoingInvoiceStatus } from '@prisma/client';
+import { EInvoicePreference, InvoiceLineSource, OutgoingInvoiceStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { MailService, type SendMailParams } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -49,6 +49,23 @@ type CompanyRow = {
   eInvoicePreference: EInvoicePreference;
 };
 
+type InvoiceLineRow = {
+  tenantId: string;
+  invoiceId: string;
+  position: number;
+  source: InvoiceLineSource;
+  assignmentId: string | null;
+  serviceDate: Date | null;
+  sourceSnapshot: Record<string, unknown> | null;
+};
+
+/** Only the columns the trip overview falls back to when a snapshot predates the plate. */
+type AssignmentRow = {
+  id: string;
+  tenantId: string;
+  vehicle: { plateNumber: string };
+};
+
 type ProfileRow = {
   id: string;
   tenantId: string;
@@ -74,6 +91,8 @@ type DeliveryAttemptRow = {
 
 type Store = {
   invoices: InvoiceRow[];
+  lines: InvoiceLineRow[];
+  assignments: AssignmentRow[];
   companies: CompanyRow[];
   profiles: ProfileRow[];
   documents: Array<{ storedPath: string; contents: Buffer }>;
@@ -112,6 +131,12 @@ function createFakePrisma(store: Store) {
     return tenantId ? applyTenantScope(operation, args, tenantId, model) : args;
   }
 
+  function linesOf(invoiceId: string): InvoiceLineRow[] {
+    return store.lines
+      .filter((line) => line.invoiceId === invoiceId)
+      .sort((left, right) => left.position - right.position);
+  }
+
   const client = {
     invoice: {
       findUnique: async (args: {
@@ -125,7 +150,7 @@ function createFakePrisma(store: Store) {
         if (args.include?.company) {
           result.company = store.companies.find((company) => company.id === found.companyId);
         }
-        if (args.include?.lines) result.lines = [];
+        if (args.include?.lines) result.lines = linesOf(found.id);
         return result;
       },
       update: async (args: {
@@ -141,8 +166,24 @@ function createFakePrisma(store: Store) {
         if (args.include?.company) {
           result.company = store.companies.find((company) => company.id === found.companyId);
         }
-        if (args.include?.lines) result.lines = [];
+        if (args.include?.lines) result.lines = linesOf(found.id);
         return result;
+      },
+    },
+    assignment: {
+      findMany: async (args: { where: { id: { in: string[] } } }) => {
+        // findMany scoping wraps the caller's filter as `AND: [where, { tenantId }]`,
+        // so both clauses have to be read back out to reproduce the real isolation.
+        const where = scope('Assignment', 'findMany', args).where as Record<string, unknown>;
+        const clauses = (where.AND as Array<Record<string, unknown>> | undefined) ?? [where];
+        const ids = clauses.find((clause) => 'id' in clause)?.id as { in: string[] } | undefined;
+        const tenantId = clauses.find((clause) => 'tenantId' in clause)?.tenantId as
+          | string
+          | undefined;
+        return store.assignments
+          .filter((row) => ids?.in.includes(row.id) ?? true)
+          .filter((row) => tenantId === undefined || row.tenantId === tenantId)
+          .map((row) => ({ id: row.id, vehicle: row.vehicle }));
       },
     },
     tenantBillingProfile: {
@@ -259,6 +300,26 @@ function invoice(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
   };
 }
 
+function line(overrides: Partial<InvoiceLineRow> = {}): InvoiceLineRow {
+  return {
+    tenantId: 'tenant-a',
+    invoiceId: 'invoice-a',
+    position: 1,
+    source: InvoiceLineSource.assignment,
+    assignmentId: 'assignment-a',
+    serviceDate: new Date('2026-07-02T00:00:00.000Z'),
+    sourceSnapshot: {
+      cargoName: 'Paletten',
+      routeName: 'Berlin – Hamburg',
+      pickupAddress: 'Berlin, Alexanderplatz 1',
+      deliveryAddress: 'Hamburg, Speicherstadt 4',
+      workDate: '2026-07-02T00:00:00.000Z',
+      vehiclePlate: 'B-FL 1234',
+    },
+    ...overrides,
+  };
+}
+
 function company(overrides: Partial<CompanyRow> = {}): CompanyRow {
   return {
     id: 'company-a',
@@ -287,6 +348,10 @@ function billingProfile(overrides: Partial<ProfileRow> = {}): ProfileRow {
 function createStore(overrides: Partial<Store> = {}): Store {
   return {
     invoices: [invoice()],
+    lines: [line()],
+    // The live plate differs from the snapshotted one on purpose: the mail must quote the
+    // vehicle that actually drove, not whatever the assignment carries today.
+    assignments: [{ id: 'assignment-a', tenantId: 'tenant-a', vehicle: { plateNumber: 'B-XX 9999' } }],
     companies: [company()],
     profiles: [billingProfile()],
     documents: [
@@ -487,6 +552,163 @@ describe('InvoicingService send', () => {
     assert.match(mail.text, /Invoice number: RE-2026-00001/);
     assert.match(mail.text, /Payable by: 10\.08\.2026/);
     assert.match(mail.text, /Kind regards/);
+    assert.ok(mail.text.includes('Invoiced trips:'));
+    assert.ok(mail.text.includes('Route: Berlin – Hamburg | Load: Paletten | Vehicle: B-FL 1234'));
+  });
+
+  it('uses the Turkish labels for the trip overview', async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    await TenantContext.run('tenant-a', () =>
+      service.sendInvoice('invoice-a', 'tenant-a', 'user-a', { language: 'tr' }),
+    );
+
+    const mail = store.mails[0];
+    assert.ok(mail.text.includes('Faturalanan seferler:'));
+    assert.ok(
+      mail.text.includes('Guzergah: Berlin – Hamburg | Yuk: Paletten | Arac: B-FL 1234'),
+    );
+  });
+
+  it('lists every invoiced trip with date, route, load and vehicle', async () => {
+    const store = createStore({
+      lines: [
+        line(),
+        line({
+          position: 2,
+          assignmentId: 'assignment-b',
+          serviceDate: new Date('2026-07-09T00:00:00.000Z'),
+          sourceSnapshot: {
+            cargoName: 'Kühlware',
+            routeName: 'Hamburg – Bremen',
+            pickupAddress: 'Hamburg',
+            deliveryAddress: 'Bremen',
+            workDate: '2026-07-09T00:00:00.000Z',
+            vehiclePlate: 'HH-FL 4321',
+          },
+        }),
+      ],
+    });
+    const service = createService(store);
+
+    await TenantContext.run('tenant-a', () => service.sendInvoice('invoice-a', 'tenant-a', 'user-a'));
+
+    const mail = store.mails[0];
+    assert.ok(mail.text.includes('Abgerechnete Fahrten:'));
+    assert.ok(
+      mail.text.includes(
+        '- 02.07.2026 | Strecke: Berlin – Hamburg | Ladung: Paletten | Fahrzeug: B-FL 1234',
+      ),
+    );
+    assert.ok(
+      mail.text.includes(
+        '- 09.07.2026 | Strecke: Hamburg – Bremen | Ladung: Kühlware | Fahrzeug: HH-FL 4321',
+      ),
+    );
+    // The plate is the one that drove, not the vehicle the assignment carries today.
+    assert.doesNotMatch(mail.text, /B-XX 9999/);
+
+    const html = mail.html ?? '';
+    assert.ok(html.includes('Abgerechnete Fahrten'));
+    assert.ok(html.includes('<th align="left"'));
+    assert.ok(html.includes('B-FL 1234'));
+    assert.ok(html.includes('HH-FL 4321'));
+  });
+
+  it('names the assignment vehicle for lines invoiced before the plate was snapshotted', async () => {
+    const store = createStore({
+      lines: [
+        line({
+          sourceSnapshot: {
+            cargoName: 'Paletten',
+            routeName: 'Berlin – Hamburg',
+            pickupAddress: 'Berlin',
+            deliveryAddress: 'Hamburg',
+            workDate: '2026-07-02T00:00:00.000Z',
+          },
+        }),
+      ],
+    });
+    const service = createService(store);
+
+    await TenantContext.run('tenant-a', () => service.sendInvoice('invoice-a', 'tenant-a', 'user-a'));
+
+    assert.ok(store.mails[0].text.includes('Fahrzeug: B-XX 9999'));
+  });
+
+  it('falls back to the address pair when the trip carries no route name', async () => {
+    const store = createStore({
+      lines: [
+        line({
+          sourceSnapshot: {
+            cargoName: 'Paletten',
+            routeName: null,
+            pickupAddress: 'Berlin, Alexanderplatz 1',
+            deliveryAddress: 'Hamburg, Speicherstadt 4',
+            workDate: '2026-07-02T00:00:00.000Z',
+            vehiclePlate: 'B-FL 1234',
+          },
+        }),
+      ],
+    });
+    const service = createService(store);
+
+    await TenantContext.run('tenant-a', () => service.sendInvoice('invoice-a', 'tenant-a', 'user-a'));
+
+    assert.ok(
+      store.mails[0].text.includes(
+        'Strecke: Berlin, Alexanderplatz 1 → Hamburg, Speicherstadt 4',
+      ),
+    );
+  });
+
+  it('leaves the overview out of an invoice that carries no trips', async () => {
+    const store = createStore({
+      lines: [
+        line({
+          source: InvoiceLineSource.manual,
+          assignmentId: null,
+          sourceSnapshot: null,
+        }),
+      ],
+    });
+    const service = createService(store);
+
+    await TenantContext.run('tenant-a', () => service.sendInvoice('invoice-a', 'tenant-a', 'user-a'));
+
+    const mail = store.mails[0];
+    assert.doesNotMatch(mail.text, /Abgerechnete Fahrten/);
+    assert.doesNotMatch(mail.html ?? '', /Abgerechnete Fahrten/);
+    // The invoice facts must still be there — only the trip list is conditional.
+    assert.match(mail.text, /Rechnungsnummer: RE-2026-00001/);
+  });
+
+  it('caps a long trip list and points to the attachment for the rest', async () => {
+    const store = createStore({
+      lines: Array.from({ length: 30 }, (_unused, index) =>
+        line({
+          position: index + 1,
+          assignmentId: `assignment-${index}`,
+          sourceSnapshot: {
+            cargoName: `Ladung ${index + 1}`,
+            routeName: `Route ${index + 1}`,
+            pickupAddress: 'Berlin',
+            deliveryAddress: 'Hamburg',
+            workDate: '2026-07-02T00:00:00.000Z',
+            vehiclePlate: 'B-FL 1234',
+          },
+        }),
+      ),
+    });
+    const service = createService(store);
+
+    await TenantContext.run('tenant-a', () => service.sendInvoice('invoice-a', 'tenant-a', 'user-a'));
+
+    const mail = store.mails[0];
+    assert.ok(mail.text.includes('Ladung: Ladung 25'));
+    assert.doesNotMatch(mail.text, /Ladung: Ladung 26/);
+    assert.ok(mail.text.includes('sowie 5 weitere Positionen'));
   });
 
   it('records a failed attempt without touching the invoice, and the retry succeeds', async () => {

@@ -172,11 +172,30 @@ function escapeHtml(value: string): string {
 }
 
 /**
+ * One invoiced trip as the customer recognises it: which day, which route, what was
+ * carried and on which vehicle. Assembled from the invoice line snapshots, so the
+ * overview keeps showing what was invoiced even after the assignment is edited.
+ */
+export type InvoiceServiceRow = {
+  serviceDate: Date | null;
+  route: string | null;
+  cargo: string | null;
+  vehiclePlate: string | null;
+};
+
+/**
+ * A month of daily tours can run to a hundred lines. The complete list is in the attached
+ * invoice; the cover letter only carries enough of it to be recognisable at a glance.
+ */
+const MAX_SERVICE_ROWS = 25;
+
+/**
  * Cover letter for a finalized invoice. The legally binding content lives in the attached
  * PDF/XML, so this mail only restates the identifying data a bookkeeper needs to file it:
- * number, service period, amount, due date and the bank account to pay into. Everything is
- * taken from the invoice snapshot, never from live master data — the letter and the
- * attachment must agree even after the customer or the billing profile is edited.
+ * number, service period, amount, due date and the bank account to pay into, plus the
+ * trip overview that lets the customer match the amount against their own dispatch list.
+ * Everything is taken from the invoice snapshot, never from live master data — the letter
+ * and the attachment must agree even after the customer or the billing profile is edited.
  */
 export function invoiceDeliveryMail(params: {
   invoiceNumber: string;
@@ -194,6 +213,7 @@ export function invoiceDeliveryMail(params: {
   includesXml: boolean;
   footerText: string | null;
   language?: string | null;
+  services?: InvoiceServiceRow[];
 }): MailTemplateResult {
   const language = resolveMailLanguage(params.language);
   const copy = {
@@ -209,6 +229,14 @@ export function invoiceDeliveryMail(params: {
         invoiceAmount: 'Rechnungsbetrag',
         payableUntil: 'Zahlbar bis',
         bank: 'Bank',
+      },
+      services: {
+        heading: 'Abgerechnete Fahrten',
+        date: 'Datum',
+        route: 'Strecke',
+        cargo: 'Ladung',
+        vehicle: 'Fahrzeug',
+        more: 'sowie {{count}} weitere Positionen – die vollständige Aufstellung finden Sie in der beigefügten Rechnung.',
       },
       salutation: 'Sehr geehrte Damen und Herren,',
       intro: `anbei erhalten Sie unsere Rechnung ${params.invoiceNumber} vom {{invoiceDate}}.`,
@@ -234,6 +262,14 @@ export function invoiceDeliveryMail(params: {
         payableUntil: 'Payable by',
         bank: 'Bank',
       },
+      services: {
+        heading: 'Invoiced trips',
+        date: 'Date',
+        route: 'Route',
+        cargo: 'Load',
+        vehicle: 'Vehicle',
+        more: 'plus {{count}} further items – the complete list is in the attached invoice.',
+      },
       salutation: 'Dear Sir or Madam,',
       intro: 'Please find attached our invoice {{invoiceNumber}} dated {{invoiceDate}}.',
       transfer: 'Please transfer the amount{{dueDate}} and use the invoice number as payment reference.',
@@ -256,6 +292,14 @@ export function invoiceDeliveryMail(params: {
         invoiceAmount: 'Fatura tutari',
         payableUntil: 'Son odeme tarihi',
         bank: 'Banka',
+      },
+      services: {
+        heading: 'Faturalanan seferler',
+        date: 'Tarih',
+        route: 'Guzergah',
+        cargo: 'Yuk',
+        vehicle: 'Arac',
+        more: 've {{count}} kalem daha – tam dokumu ekteki faturada bulabilirsiniz.',
       },
       salutation: 'Sayin Yetkili,',
       intro: '{{invoiceDate}} tarihli {{invoiceNumber}} no.lu faturamiz ekte bilginize sunulmustur.',
@@ -287,6 +331,23 @@ export function invoiceDeliveryMail(params: {
   if (params.bic) facts.push(['BIC', params.bic]);
   if (params.bankName) facts.push([copy.facts.bank, params.bankName]);
 
+  // The trips keep the order the invoice lists them in, so the letter and the attachment
+  // can be read side by side. A missing value stays visible as a dash rather than
+  // collapsing the row — a blank cell reads like an omission the customer should query.
+  const services = params.services ?? [];
+  const shownServices = services.slice(0, MAX_SERVICE_ROWS);
+  const hiddenServiceCount = services.length - shownServices.length;
+  const serviceCells = shownServices.map((service) => ({
+    date: service.serviceDate ? formatGermanDate(service.serviceDate) : '–',
+    route: service.route?.trim() || '–',
+    cargo: service.cargo?.trim() || '–',
+    vehicle: service.vehiclePlate?.trim() || '–',
+  }));
+  const moreServicesNote =
+    hiddenServiceCount > 0
+      ? copy.services.more.replace('{{count}}', String(hiddenServiceCount))
+      : null;
+
   const transferDueDate = dueDate
     ? copy.transferDueDate.replace('{{dueDate}}', dueDate)
     : '';
@@ -302,6 +363,20 @@ export function invoiceDeliveryMail(params: {
       .replace('{{invoiceDate}}', invoiceDate),
     '',
     ...facts.map(([label, value]) => `${label}: ${value}`),
+    ...(serviceCells.length
+      ? [
+          '',
+          `${copy.services.heading}:`,
+          '',
+          ...serviceCells.map(
+            (service) =>
+              `- ${service.date} | ${copy.services.route}: ${service.route}` +
+              ` | ${copy.services.cargo}: ${service.cargo}` +
+              ` | ${copy.services.vehicle}: ${service.vehicle}`,
+          ),
+          ...(moreServicesNote ? [moreServicesNote] : []),
+        ]
+      : []),
     '',
     copy.transfer.replace('{{dueDate}}', transferDueDate),
     attachmentNote,
@@ -318,6 +393,34 @@ export function invoiceDeliveryMail(params: {
     )
     .join('');
 
+  const serviceHeaderCells = [
+    copy.services.date,
+    copy.services.route,
+    copy.services.cargo,
+    copy.services.vehicle,
+  ]
+    .map(
+      (label) =>
+        `<th align="left" style="padding:6px 12px 6px 0;border-bottom:1px solid #DEE2E6;color:#4B5563;font-size:12px;font-weight:600">${escapeHtml(label)}</th>`,
+    )
+    .join('');
+  const serviceRows = serviceCells
+    .map(
+      (service) =>
+        `<tr>${[service.date, service.route, service.cargo, service.vehicle]
+          .map(
+            (value) =>
+              `<td style="padding:6px 12px 6px 0;border-bottom:1px solid #F1F3F5;font-size:13px;vertical-align:top">${escapeHtml(value)}</td>`,
+          )
+          .join('')}</tr>`,
+    )
+    .join('');
+  const serviceTable = serviceCells.length
+    ? `<p style="font-size:14px;margin:20px 0 8px"><strong>${escapeHtml(copy.services.heading)}</strong></p>
+    <table style="border-collapse:collapse;width:100%"><thead><tr>${serviceHeaderCells}</tr></thead><tbody>${serviceRows}</tbody></table>
+    ${moreServicesNote ? `<p style="font-size:13px;color:#4B5563;margin:8px 0 0">${escapeHtml(moreServicesNote)}</p>` : ''}`
+    : '';
+
   const html = htmlLayout(`
     <p>${copy.salutation}</p>
     <p>${copy.htmlIntro
@@ -325,6 +428,7 @@ export function invoiceDeliveryMail(params: {
       .replace('{{invoiceDate}}', invoiceDate)
       .replace('{{customerName}}', escapeHtml(params.customerName))}</p>
     <table style="border-collapse:collapse;margin:16px 0">${rows}</table>
+    ${serviceTable}
     <p style="font-size:14px">${copy.htmlTransfer.replace('{{dueDate}}', htmlTransferDueDate)}</p>
     <p style="font-size:14px;color:#4B5563">${attachmentNote}</p>
     ${params.footerText ? `<p style="font-size:13px;color:#4B5563;white-space:pre-wrap">${escapeHtml(params.footerText)}</p>` : ''}

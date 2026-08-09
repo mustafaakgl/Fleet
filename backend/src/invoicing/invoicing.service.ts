@@ -19,7 +19,7 @@ import {
 import type { Readable } from 'node:stream';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
-import { invoiceDeliveryMail } from '../mail/mail-templates';
+import { invoiceDeliveryMail, type InvoiceServiceRow } from '../mail/mail-templates';
 import { MailService, type MailAttachment, type SendMailResult } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DatevExportStorageService } from '../storage/datev-export-storage.service';
@@ -516,6 +516,7 @@ export class InvoicingService {
               expectedDailyRevenue: true,
               invoiceClaim: { select: { id: true } },
               company: { select: { defaultDailyRevenue: true } },
+              vehicle: { select: { plateNumber: true } },
             },
           })
         : Promise.resolve([]),
@@ -580,6 +581,9 @@ export class InvoicingService {
           pickupAddress: assignment.pickupAddress,
           deliveryAddress: assignment.deliveryAddress,
           workDate: assignment.workDate.toISOString(),
+          // The plate the customer saw at their gate. Kept here so the delivery mail can
+          // name it even after the assignment is reassigned to another vehicle.
+          vehiclePlate: assignment.vehicle.plateNumber,
         },
       } satisfies Prisma.InvoiceLineCreateWithoutInvoiceInput;
     });
@@ -1723,6 +1727,69 @@ export class InvoicingService {
   }
 
   /**
+   * The trip overview the delivery mail puts under the invoice facts: one row per
+   * invoiced assignment with date, route, cargo and vehicle. Values come from the line
+   * snapshot so the mail keeps describing what was invoiced even after the assignment is
+   * edited. Only the plate is read live, and only for lines invoiced before it was
+   * snapshotted — otherwise those older invoices would show a dash where the customer
+   * expects the truck that stood at their gate. Manual lines carry no trip and are left
+   * out; the amounts still come from the attached invoice, not from this list.
+   */
+  private async buildServiceOverview(
+    lines: Array<{
+      source: InvoiceLineSource;
+      assignmentId: string | null;
+      serviceDate: Date | null;
+      sourceSnapshot: Prisma.JsonValue | null;
+    }>,
+  ): Promise<InvoiceServiceRow[]> {
+    const assignmentLines = lines.filter((line) => line.source === InvoiceLineSource.assignment);
+    if (assignmentLines.length === 0) return [];
+
+    const idsWithoutPlate = [
+      ...new Set(
+        assignmentLines
+          .filter(
+            (line) =>
+              line.assignmentId !== null &&
+              readSnapshotString(line.sourceSnapshot, 'vehiclePlate') === null,
+          )
+          .map((line) => line.assignmentId as string),
+      ),
+    ];
+    const platesById = new Map<string, string>();
+    if (idsWithoutPlate.length > 0) {
+      const rows = await this.prisma.assignment.findMany({
+        where: { id: { in: idsWithoutPlate } },
+        select: { id: true, vehicle: { select: { plateNumber: true } } },
+      });
+      for (const row of rows) platesById.set(row.id, row.vehicle.plateNumber);
+    }
+
+    return assignmentLines.map((line) => {
+      const snapshot = line.sourceSnapshot;
+      const routeName = readSnapshotString(snapshot, 'routeName');
+      const pickup = readSnapshotString(snapshot, 'pickupAddress');
+      const delivery = readSnapshotString(snapshot, 'deliveryAddress');
+      const snapshotWorkDate = readSnapshotString(snapshot, 'workDate');
+      const workDate = snapshotWorkDate ? new Date(snapshotWorkDate) : null;
+      return {
+        serviceDate:
+          line.serviceDate ?? (workDate && !Number.isNaN(workDate.getTime()) ? workDate : null),
+        // A named route is what the customer's own dispatch list calls the trip; the
+        // address pair is the fallback for assignments that were never given a name.
+        route:
+          routeName ??
+          (pickup && delivery ? `${pickup} → ${delivery}` : pickup ?? delivery),
+        cargo: readSnapshotString(snapshot, 'cargoName'),
+        vehiclePlate:
+          readSnapshotString(snapshot, 'vehiclePlate') ??
+          (line.assignmentId ? platesById.get(line.assignmentId) ?? null : null),
+      } satisfies InvoiceServiceRow;
+    });
+  }
+
+  /**
    * E-mails a finalized invoice to the customer, PDF (and where it is the legally original
    * document, the XML) attached. Every attempt — successful or not — is written to
    * InvoiceDeliveryAttempt, and a failure never changes the invoice itself, so a bounced
@@ -1738,6 +1805,15 @@ export class InvoicingService {
       where: { id },
       include: {
         company: { select: { name: true, invoiceEmail: true, eInvoicePreference: true } },
+        lines: {
+          orderBy: { position: 'asc' },
+          select: {
+            source: true,
+            assignmentId: true,
+            serviceDate: true,
+            sourceSnapshot: true,
+          },
+        },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
@@ -1789,6 +1865,7 @@ export class InvoicingService {
         profile?.invoiceFooterText ??
         null,
       language: dto.language ?? 'de',
+      services: await this.buildServiceOverview(invoice.lines),
     });
 
     const mailMode = this.mailService.isEnabled() ? 'smtp' : 'log';

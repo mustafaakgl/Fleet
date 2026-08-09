@@ -51,6 +51,7 @@ function assignment(overrides: Record<string, unknown> = {}) {
     expectedDailyRevenue: new Prisma.Decimal('1000.00'),
     invoiceClaim: null,
     company: { defaultDailyRevenue: new Prisma.Decimal('900.00') },
+    vehicle: { plateNumber: 'B-FL 1234' },
     ...overrides,
   };
 }
