@@ -173,6 +173,15 @@ async function sendQueuedItem(item: DriverOfflineQueueItem): Promise<void> {
         longitude: item.longitude,
       });
       return;
+    case 'work-time-event':
+      await driverPortalApi.markWorkTimeBreak(item.eventType, {
+        client_event_id: item.id,
+        occurred_at: item.occurredAt,
+        source: 'driver_web',
+        latitude: item.latitude,
+        longitude: item.longitude,
+      });
+      return;
   }
 }
 
@@ -378,6 +387,28 @@ export async function enqueueTourStopMarkQueueItem(params: {
     createdAt: new Date().toISOString(),
     stopId: params.stopId,
     status: params.status,
+    occurredAt: params.occurredAt,
+    latitude: params.latitude,
+    longitude: params.longitude,
+  });
+}
+
+/**
+ * Mola dokunusunu kuyruga alir. Cevrimici ise aninda gider; degilse baglanti
+ * gelince ayni `id` ile gonderilir ve sunucu ikinci kez yazmaz.
+ */
+export async function enqueueWorkTimeEventQueueItem(params: {
+  eventType: 'break_start' | 'break_end';
+  occurredAt: string;
+  latitude?: number;
+  longitude?: number;
+}): Promise<string> {
+  const id = crypto.randomUUID();
+  return queueAndMaybeFlush({
+    id,
+    kind: 'work-time-event',
+    createdAt: new Date().toISOString(),
+    eventType: params.eventType,
     occurredAt: params.occurredAt,
     latitude: params.latitude,
     longitude: params.longitude,

@@ -41,6 +41,18 @@ function makeLocationItem(id: string, createdAt: string): DriverOfflineQueueItem
   };
 }
 
+function makeWorkTimeItem(id: string, createdAt: string): DriverOfflineQueueItem {
+  return {
+    id,
+    kind: 'work-time-event',
+    createdAt,
+    eventType: 'break_start',
+    // Dokunus ani gonderim aninden ONCE: surucu tunelde molaya cikip yarim
+    // saat sonra sinyal bulabiliyor.
+    occurredAt: '2026-08-10T10:14:00.000Z',
+  };
+}
+
 describe('driver-offline-queue-core', () => {
   it('sorts queued jobs by age, then id', () => {
     const items = sortQueueItems([
@@ -105,5 +117,23 @@ describe('driver-offline-queue-core', () => {
     assert.equal(isQueueableOfflineError({ code: 'ECONNABORTED' }), true);
     assert.equal(isQueueableOfflineError(new Error('Network Error')), true);
     assert.equal(isQueueableOfflineError({ response: {} }), false);
+  });
+
+  it('mola dokunusunu kuyrukta tasir ve gonderince siler', async () => {
+    const store = createMemoryStore([makeWorkTimeItem('break-1', '2026-08-10T10:44:00.000Z')]);
+    const sent: DriverOfflineQueueItem[] = [];
+
+    const snapshot = await flushQueue(store, {
+      async send(item) {
+        sent.push(item);
+      },
+    });
+
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].kind, 'work-time-event');
+    // Kuyruk kimligi sunucuya client_event_id olarak gidiyor; degismeden
+    // gitmesi ayni molanin iki kez yazilmamasinin tek garantisi.
+    assert.equal(sent[0].id, 'break-1');
+    assert.equal(snapshot.pendingCount, 0);
   });
 });

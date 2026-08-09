@@ -26,6 +26,7 @@ import {
   FLEET_TABLE_ROW,
 } from '@/lib/fleet-table';
 import { MobileDataCard, MobileField, MobileFieldGrid } from '@/components/ui/MobileDataCard';
+import { ZeiterfassungMonth } from '@/components/work-time/ZeiterfassungMonth';
 import { formatFleetDateTime, formatFleetDurationMinutes } from '@/lib/locale-format';
 import { cn } from '@/lib/utils';
 
@@ -192,6 +193,10 @@ export default function WorkSessionsPage() {
           {t('workSessions.exportCsv')}
         </Button>
       </div>
+
+      {/* Aylik Zeiterfassung: Soll/Ist/Pause/Uberstunden. Asagidaki vardiya
+          listesi ham kayit olarak duruyor, silinmedi. */}
+      <ZeiterfassungMonth />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>

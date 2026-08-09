@@ -4,7 +4,8 @@ export type DriverOfflineQueueKind =
   | 'transport-attachment'
   | 'accident-attachment'
   | 'location-point'
-  | 'tour-stop-mark';
+  | 'tour-stop-mark'
+  | 'work-time-event';
 
 export type DriverOfflineQueueItem =
   | {
@@ -62,6 +63,22 @@ export type DriverOfflineQueueItem =
       createdAt: string;
       stopId: string;
       status: 'arrived' | 'completed' | 'skipped';
+      occurredAt: string;
+      latitude?: number;
+      longitude?: number;
+    }
+  | {
+      /**
+       * Mola dokunusu (Zeiterfassung). Durak isaretlemesiyle ayni desen: bu
+       * kaydin `id`'si sunucuya `client_event_id` olarak gidiyor, boylece
+       * baglanti gelince ayni mola iki kez yazilmiyor. `occurredAt` dokunus
+       * anidir, gonderim ani degil — surucu tunelde molaya cikip yarim saat
+       * sonra sinyal bulursa mola yine dogru saatte kayda geciyor.
+       */
+      id: string;
+      kind: 'work-time-event';
+      createdAt: string;
+      eventType: 'break_start' | 'break_end';
       occurredAt: string;
       latitude?: number;
       longitude?: number;

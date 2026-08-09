@@ -874,11 +874,111 @@ export interface DriverWorkSessionState {
   staleSince: string | null;
 }
 
+/** Zeiterfassung gun ozeti — toplamlar sunucuda olaylardan hesaplaniyor. */
+export interface WorkTimeShift {
+  workSessionId: string;
+  driverId: string;
+  state: 'off' | 'working' | 'on_break';
+  startedAt: string | null;
+  endedAt: string | null;
+  grossMinutes: number;
+  breakMinutes: number;
+  netMinutes: number;
+  requiredBreakMinutes: number;
+  anomalies: string[];
+  events: Array<{
+    id: string;
+    type: 'clock_in' | 'break_start' | 'break_end' | 'clock_out';
+    occurredAt: string;
+    source: 'driver_web' | 'driver_mobile' | 'office' | 'auto';
+    supersededBy: string | null;
+  }>;
+}
+
 export interface DriverWorkSessionCurrentResponse {
   active: boolean;
   needsReconciliation?: boolean;
   session: DriverWorkSessionState | null;
 }
+
+// ─── Zeiterfassung / Payroll ─────────────────────────────────────────────────
+
+export type PayrollPeriodStatus = 'draft' | 'review' | 'approved' | 'exported' | 'locked';
+
+export interface PayrollPeriodRow {
+  id: string;
+  year: number;
+  month: number;
+  status: PayrollPeriodStatus;
+  approvedAt: string | null;
+  lockedAt: string | null;
+  _count?: { entries: number; days: number };
+}
+
+export interface PayrollEntryRow {
+  id: string;
+  driverId: string;
+  kind: 'regular' | 'correction';
+  correctsPeriodId: string | null;
+  targetMinutes: number;
+  workedMinutes: number;
+  creditedMinutes: number;
+  overtimeMinutes: number;
+  regularMinutes: number;
+  /** Ist + kredi − Soll. Negatif olabilir; ekrandaki +6h / −2h. */
+  balanceMinutes: number;
+  nightMinutes: number;
+  nightCoreMinutes: number;
+  sundayMinutes: number;
+  holidayMinutes: number;
+  vacationDays: number;
+  sickDays: number;
+  unpaidAbsenceDays: number;
+  /** Gun satirlarindan toplanip okuma aninda ekleniyor; kalemde sutun degil. */
+  breakMinutes?: number;
+  driver?: { id: string; firstName: string; lastName: string; employeeNumber: string };
+}
+
+export interface PayrollPeriodDetail extends PayrollPeriodRow {
+  entries: PayrollEntryRow[];
+}
+
+export interface PayrollDayRow {
+  id: string;
+  date: string;
+  dayType: 'work' | 'vacation' | 'sick' | 'holiday' | 'off' | 'absence_unpaid' | null;
+  dayTypeSource: 'holiday_table' | 'calendar' | 'events' | 'unmapped' | 'none';
+  calendarCode: string | null;
+  paid: boolean;
+  workedMinutes: number;
+  breakMinutes: number;
+  nightMinutes: number;
+  nightCoreMinutes: number;
+  sundayMinutes: number;
+  holidayMinutes: number;
+  anomalies: string[] | null;
+}
+
+export const payrollApi = {
+  listPeriods: () => api.get<PayrollPeriodRow[]>('/payroll/periods').then((r) => r.data),
+  openPeriod: (year: number, month: number) =>
+    api.post<PayrollPeriodRow>('/payroll/periods', { year, month }).then((r) => r.data),
+  getPeriod: (id: string) =>
+    api.get<PayrollPeriodDetail>(`/payroll/periods/${id}`).then((r) => r.data),
+  getDriverDays: (periodId: string, driverId: string) =>
+    api
+      .get<PayrollDayRow[]>(`/payroll/periods/${periodId}/drivers/${driverId}/days`)
+      .then((r) => r.data),
+  recompute: (id: string) =>
+    api.post<PayrollPeriodDetail>(`/payroll/periods/${id}/recompute`).then((r) => r.data),
+  submit: (id: string) =>
+    api.post<PayrollPeriodRow>(`/payroll/periods/${id}/submit`).then((r) => r.data),
+  reopen: (id: string) =>
+    api.post<PayrollPeriodRow>(`/payroll/periods/${id}/reopen`).then((r) => r.data),
+  approve: (id: string) =>
+    api.post<PayrollPeriodRow>(`/payroll/periods/${id}/approve`).then((r) => r.data),
+
+};
 
 export const workSessionsApi = {
   list: (params?: {
@@ -2588,6 +2688,28 @@ export const driverPortalApi = {
 
   heartbeatWorkSession: () =>
     api.post<DriverWorkSessionCurrentResponse>('/driver/work-sessions/heartbeat').then((r) => r.data),
+
+  getWorkTimeShift: () =>
+    api
+      .get<{ active: boolean; shift: WorkTimeShift | null }>('/driver/work-sessions/time')
+      .then((r) => r.data),
+
+  markWorkTimeBreak: (
+    kind: 'break_start' | 'break_end',
+    payload: {
+      client_event_id?: string;
+      occurred_at?: string;
+      source?: 'driver_web' | 'driver_mobile';
+      latitude?: number;
+      longitude?: number;
+    } = {},
+  ) =>
+    api
+      .post<{ active: boolean; shift: WorkTimeShift }>(
+        `/driver/work-sessions/break/${kind === 'break_start' ? 'start' : 'end'}`,
+        payload,
+      )
+      .then((r) => r.data),
 
   reconcileWorkSession: (payload: { ended_at: string; reason: string; note?: string }) =>
     api.post<{ session: DriverWorkSessionState }>('/driver/work-sessions/reconcile', payload).then((r) => r.data),
