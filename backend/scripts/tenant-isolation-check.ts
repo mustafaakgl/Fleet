@@ -516,6 +516,27 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollDayTypeMapping.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollDayTypeMapping.count()),
       }),
+      verifyTenantScopedModel({
+        label: 'PayrollPeriod', tenantA, tenantB,
+        unscopedCountA: () => base.payrollPeriod.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.payrollPeriod.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollPeriod.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollPeriod.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'PayrollDay', tenantA, tenantB,
+        unscopedCountA: () => base.payrollDay.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.payrollDay.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollDay.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollDay.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'PayrollEntry', tenantA, tenantB,
+        unscopedCountA: () => base.payrollEntry.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.payrollEntry.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollEntry.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollEntry.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

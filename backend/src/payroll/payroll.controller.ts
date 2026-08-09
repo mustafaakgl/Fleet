@@ -5,10 +5,12 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { FINANCIAL_ROLES } from '../common/utils/permissions';
+import { OpenPayrollPeriodDto } from './dto/open-payroll-period.dto';
 import { UpsertDayTypeMappingDto } from './dto/upsert-day-type-mapping.dto';
 import { UpsertDriverPayrollProfileDto } from './dto/upsert-driver-payroll-profile.dto';
 import { UpsertPublicHolidayDto } from './dto/upsert-public-holiday.dto';
 import { UpsertTenantPayrollProfileDto } from './dto/upsert-tenant-payroll-profile.dto';
+import { PayrollPeriodService } from './payroll-period.service';
 import { PayrollSettingsService } from './payroll-settings.service';
 
 interface AuthenticatedRequest extends Request {
@@ -26,7 +28,10 @@ interface AuthenticatedRequest extends Request {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...FINANCIAL_ROLES)
 export class PayrollController {
-  constructor(private readonly settings: PayrollSettingsService) {}
+  constructor(
+    private readonly settings: PayrollSettingsService,
+    private readonly periods: PayrollPeriodService,
+  ) {}
 
   @Get('profile')
   getTenantProfile() {
@@ -74,6 +79,55 @@ export class PayrollController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.settings.upsertDayTypeMapping(request.user.tenantId, dto, request.user.id);
+  }
+
+  @Get('periods')
+  listPeriods() {
+    return this.periods.listPeriods();
+  }
+
+  /** Ay yoksa acar. Donem kaydi bordronun ilk adimi, ayrica olusturma ucu yok. */
+  @Post('periods')
+  @RequiresWrite('accounting')
+  openPeriod(
+    @Body() dto: OpenPayrollPeriodDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.periods.getOrCreatePeriod(request.user.tenantId, dto.year, dto.month);
+  }
+
+  @Get('periods/:id')
+  getPeriod(@Param('id') id: string) {
+    return this.periods.getPeriod(id);
+  }
+
+  @Get('periods/:id/drivers/:driverId/days')
+  getPeriodDriverDays(@Param('id') id: string, @Param('driverId') driverId: string) {
+    return this.periods.getPeriodDriverDays(id, driverId);
+  }
+
+  @Post('periods/:id/recompute')
+  @RequiresWrite('accounting')
+  recomputePeriod(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.periods.recomputePeriod(id, request.user.id);
+  }
+
+  @Post('periods/:id/submit')
+  @RequiresWrite('accounting')
+  submitPeriod(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.periods.submitForReview(id, request.user.id);
+  }
+
+  @Post('periods/:id/reopen')
+  @RequiresWrite('accounting')
+  reopenPeriod(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.periods.reopen(id, request.user.id);
+  }
+
+  @Post('periods/:id/approve')
+  @RequiresWrite('accounting')
+  approvePeriod(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.periods.approve(id, request.user.id);
   }
 
   @Get('holidays')

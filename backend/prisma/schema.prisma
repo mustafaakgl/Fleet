@@ -284,6 +284,35 @@ enum PayrollDayType {
   absence_unpaid
 }
 
+/// Donem yasam dongusu. `approved` DONDURMA NOKTASI: gun satirlari orada
+/// kesinlesir, sonrasinda gelen gec olay donemi degistirmez, sonraki doneme
+/// duzeltme olarak tasinir.
+enum PayrollPeriodStatus {
+  draft
+  review
+  approved
+  exported
+  locked
+}
+
+/// `correction`: kilitlenmis bir donemin sonradan degisen saatleri icin
+/// sonraki doneme yazilan duzeltme kalemi (Ruckrechnung).
+enum PayrollEntryKind {
+  regular
+  correction
+}
+
+/// Gun tipinin nereden geldigi. Denetimde "bu izin gunu nereden cikti"
+/// sorusunun cevabi; eslesme bulunamadiginda `unmapped` kaliyor ve donem
+/// onaylanamiyor.
+enum PayrollDayTypeSource {
+  holiday_table
+  calendar
+  events
+  unmapped
+  none
+}
+
 enum PayrollEmploymentType {
   full_time
   part_time
@@ -725,6 +754,9 @@ model Tenant {
   driverPayrollProfiles      DriverPayrollProfile[]
   publicHolidays             PublicHoliday[]
   payrollDayTypeMappings     PayrollDayTypeMapping[]
+  payrollPeriods             PayrollPeriod[]
+  payrollDays                PayrollDay[]
+  payrollEntries             PayrollEntry[]
 }
 
 model TenantBillingProfile {
@@ -850,6 +882,7 @@ model User {
   approvedEquipmentIssuances      EquipmentIssuance[]         @relation("EquipmentIssuanceApprovedBy")
   createdInvoices                 Invoice[]                   @relation("InvoiceCreatedBy")
   finalizedInvoices               Invoice[]                   @relation("InvoiceFinalizedBy")
+  approvedPayrollPeriods          PayrollPeriod[]             @relation("PayrollPeriodApprovedBy")
   recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
   createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
 
@@ -982,6 +1015,8 @@ model Driver {
   tours                   Tour[]
   workTimeEvents          WorkTimeEvent[]
   payrollProfile          DriverPayrollProfile?
+  payrollDays             PayrollDay[]
+  payrollEntries          PayrollEntry[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -2145,6 +2180,136 @@ model PayrollDayTypeMapping {
 
   @@unique([tenantId, calendarCode])
   @@index([tenantId])
+}
+
+/// Bordro donemi (bir takvim ayi).
+model PayrollPeriod {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  year   Int
+  month  Int
+  status PayrollPeriodStatus @default(draft)
+
+  approvedById String?
+  approvedBy   User?     @relation("PayrollPeriodApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt   DateTime?
+  lockedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  days              PayrollDay[]
+  entries           PayrollEntry[]
+
+  @@unique([tenantId, year, month])
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+/// Donem × surucu × YEREL takvim gunu.
+///
+/// Neden gun satiri var: gece/Pazar/tatil ayrimi gun bazinda doguyor. Yalnizca
+/// aylik kova saklansaydi "bu 7 gece saati hangi gunlerden" sorusu bir daha
+/// cevaplanamazdi. Fatura tarafindaki Invoice → InvoiceLine iliskisinin ayni
+/// deseni: toplam + donmus kalemler.
+///
+/// Gun YEREL takvim gunudur: gece yarisini asan vardiya iki satira bolunur,
+/// cunku zam hesabi dakikanin gerceklestigi gune baglidir.
+model PayrollDay {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  periodId String
+  period   PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  driverId String
+  driver   Driver        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  date DateTime
+
+  /// Eslesme bulunamadiysa BOS kalir ve donem onaylanamaz — sessizce bir
+  /// varsayilana dusmek yanlis tarafa da dusebilir.
+  dayType       PayrollDayType?
+  dayTypeSource PayrollDayTypeSource
+  /// Gun tipini veren takvim kodu (uiStatus veya CalendarStatus).
+  calendarCode  String?
+  paid          Boolean              @default(true)
+
+  workedMinutes    Int @default(0)
+  breakMinutes     Int @default(0)
+  nightMinutes     Int @default(0)
+  nightCoreMinutes Int @default(0)
+  sundayMinutes    Int @default(0)
+  holidayMinutes   Int @default(0)
+
+
+  /// Zeiterfassung anomalileri + bordroya ozel olanlar (string dizisi).
+  anomalies Json?
+
+  createdAt DateTime @default(now())
+
+  @@unique([periodId, driverId, date])
+  @@index([tenantId])
+  @@index([periodId, driverId])
+  @@index([tenantId, driverId, date])
+}
+
+/// Donem × surucu toplami — DATEV'e giden satirin kendisi.
+model PayrollEntry {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  periodId String
+  period   PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  driverId String
+  driver   Driver        @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  kind                PayrollEntryKind @default(regular)
+  /// Duzeltme kalemi hangi donemi duzeltiyor (Ruckrechnung).
+  correctsPeriodId    String?
+
+  /// Soll: ay icindeki hedef sure.
+  targetMinutes   Int @default(0)
+  /// Ist: fiilen calisilan net sure.
+  workedMinutes   Int @default(0)
+  /// Ucretli devamsizligin hedef uzerinden kredilendigi sure.
+  creditedMinutes Int @default(0)
+  /// Hedefi asan kisim; DATEV'e ayri Lohnart olarak gider (asilmadiysa 0).
+  overtimeMinutes Int @default(0)
+  /// Fazla mesai disinda kalan calisma.
+  regularMinutes  Int @default(0)
+  /// Ist + kredi − Soll. NEGATIF OLABILIR: ekrandaki +6h / −2h bu alan.
+  /// overtimeMinutes'tan ayri cunku eksi bakiye odenebilir bir sey degil.
+  balanceMinutes  Int @default(0)
+
+  nightMinutes     Int @default(0)
+  nightCoreMinutes Int @default(0)
+  sundayMinutes    Int @default(0)
+  holidayMinutes   Int @default(0)
+
+  vacationDays      Int @default(0)
+  sickDays          Int @default(0)
+  unpaidAbsenceDays Int @default(0)
+
+  /// Onay aninda donan surucu profili (personel no, Kostenstelle, hedef).
+  /// Gecmis donem yeniden hesaplansa bile O GUNKU degerler kullanilsin diye —
+  /// InvoiceLine.sourceSnapshot ile ayni gerekce.
+  driverProfileSnapshot Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// NOT: `correctsPeriodId` regular kalemlerde NULL ve Postgres NULL'lari
+  /// tekil saymaz. Regular satirin ikinci kez olusmasi pratikte mumkun degil:
+  /// yeniden hesap tek islemde sil-ve-yaz olarak calisiyor.
+  @@unique([periodId, driverId, kind, correctsPeriodId])
+  @@index([tenantId])
+  @@index([periodId])
+  @@index([tenantId, driverId])
+  @@index([correctsPeriodId])
 }
 
 /// Zeiterfassung'un ham kaydi: vardiya icindeki her giris/mola/cikis dokunusu.
