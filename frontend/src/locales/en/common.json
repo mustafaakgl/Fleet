@@ -4361,5 +4361,10 @@
   "payroll.drivers.weeklyHours": "Weekly target",
   "payroll.drivers.weeklyHoursDefault": "Default",
   "payroll.drivers.costCenter": "Cost centre",
-  "payroll.drivers.missingWarning": "{{count}} drivers still have no personnel number and cannot be paid out."
+  "payroll.drivers.missingWarning": "{{count}} drivers still have no personnel number and cannot be paid out.",
+  "workTime.tachoCompare": "Tacho {{tacho}} ({{delta}})",
+  "workTime.tachoTitle": "Rest recorded by the tachograph inside the shift, compared with the logged break. A cross-check only — the payable time stays the driver's own record.",
+  "workTime.anomaly.tacho_break_mismatch": "Deviates from the tachograph",
+  "payroll.settings.tachoTolerance": "Tacho tolerance (minutes)",
+  "payroll.settings.invalidTolerance": "Please enter a tolerance between 0 and 240 minutes."
 }

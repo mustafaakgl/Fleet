@@ -4361,5 +4361,10 @@
   "payroll.drivers.weeklyHours": "Haftalık hedef",
   "payroll.drivers.weeklyHoursDefault": "Varsayılan",
   "payroll.drivers.costCenter": "Masraf yeri",
-  "payroll.drivers.missingWarning": "{{count}} sürücünün henüz personel numarası yok ve bordroya giremez."
+  "payroll.drivers.missingWarning": "{{count}} sürücünün henüz personel numarası yok ve bordroya giremez.",
+  "workTime.tachoCompare": "Takograf {{tacho}} ({{delta}})",
+  "workTime.tachoTitle": "Takografın vardiya içinde kaydettiği dinlenme, sürücünün girdiği molayla karşılaştırılıyor. Yalnızca doğrulama — bordroya giren süre sürücünün kendi kaydıdır.",
+  "workTime.anomaly.tacho_break_mismatch": "Takografla uyuşmuyor",
+  "payroll.settings.tachoTolerance": "Takograf toleransı (dakika)",
+  "payroll.settings.invalidTolerance": "0 ile 240 dakika arasında bir tolerans girin."
 }

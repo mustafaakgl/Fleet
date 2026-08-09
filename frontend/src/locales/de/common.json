@@ -4361,5 +4361,10 @@
   "payroll.drivers.weeklyHours": "Wochensoll",
   "payroll.drivers.weeklyHoursDefault": "Standard",
   "payroll.drivers.costCenter": "Kostenstelle",
-  "payroll.drivers.missingWarning": "{{count}} Fahrer haben noch keine Personalnummer und können nicht abgerechnet werden."
+  "payroll.drivers.missingWarning": "{{count}} Fahrer haben noch keine Personalnummer und können nicht abgerechnet werden.",
+  "workTime.tachoCompare": "Tacho {{tacho}} ({{delta}})",
+  "workTime.tachoTitle": "Ruhezeit laut Tachograph innerhalb der Schicht, verglichen mit der erfassten Pause. Nur ein Abgleich — die abgerechnete Zeit bleibt die Fahrererfassung.",
+  "workTime.anomaly.tacho_break_mismatch": "Abweichung zum Tachographen",
+  "payroll.settings.tachoTolerance": "Tacho-Toleranz (Minuten)",
+  "payroll.settings.invalidTolerance": "Bitte eine Toleranz zwischen 0 und 240 Minuten angeben."
 }

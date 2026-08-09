@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { PayrollEntryKind, PayrollPeriodStatus, Prisma } from '@prisma/client';
+import { PayrollEntryKind, PayrollPeriodStatus, Prisma, TachoWorkState } from '@prisma/client';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +15,11 @@ import {
   localDatesOfMonth,
   type PayrollDayDraft,
 } from './core/payroll-aggregate.util';
+import {
+  compareBreakWithTacho,
+  intersectIntervals,
+  TACHO_BREAK_MISMATCH_ANOMALY,
+} from './core/tacho-comparison.util';
 import {
   bucketWorkIntervals,
   DEFAULT_PAYROLL_TIME_ZONE,
@@ -43,6 +48,11 @@ type DriverBucketSet = {
   buckets: Map<string, DayBuckets>;
   breakMinutesByDate: Map<string, number>;
   anomaliesByDate: Map<string, string[]>;
+  /**
+   * Takografin VARDIYA PENCERESINE dusen REST dakikalari. Anahtar yoksa o gun
+   * icin takograf verisi yok demektir — sifirla karistirilmamali.
+   */
+  tachoRestByDate: Map<string, number>;
 };
 
 function assertMonth(year: number, month: number): void {
@@ -196,7 +206,7 @@ export class PayrollPeriodService {
     const queryTo = new Date(monthEnd);
     queryTo.setUTCDate(queryTo.getUTCDate() + BOUNDARY_DAYS + 1);
 
-    const [profile, holidays, rules, sessions, calendarRows] = await Promise.all([
+    const [profile, holidays, rules, sessions, calendarRows, tachoRest] = await Promise.all([
       this.settings.getTenantProfile(),
       this.prisma.publicHoliday.findMany({
         where: { date: { gte: monthStart, lte: monthEnd } },
@@ -223,6 +233,18 @@ export class PayrollPeriodService {
         where: { date: { gte: queryFrom, lt: queryTo } },
         select: { driverId: true, date: true, status: true, uiStatus: true },
       }),
+      // Yalnizca REST: `available` (Bereitschaft) mola degil, surucu emre
+      // amade bekliyor. Kartsiz kayitlarin driverId'si bos oldugu icin
+      // eslestirilemez, disarida kaliyorlar.
+      this.prisma.tachoActivity.findMany({
+        where: {
+          workState: TachoWorkState.rest,
+          driverId: { not: null },
+          startedAt: { lt: queryTo },
+          endedAt: { gt: queryFrom },
+        },
+        select: { driverId: true, startedAt: true, endedAt: true },
+      }),
     ]);
 
     const bucketOptions = {
@@ -238,6 +260,16 @@ export class PayrollPeriodService {
       holidayDates: new Set(holidays.map((row) => localDateOf(row.date))),
     };
 
+    // Takograf araliklari surucu bazinda toplanıyor; her vardiya kendi
+    // penceresiyle kesistirecek.
+    const tachoByDriver = new Map<string, WorkInterval[]>();
+    for (const row of tachoRest) {
+      if (!row.driverId) continue;
+      const list = tachoByDriver.get(row.driverId) ?? [];
+      list.push({ from: row.startedAt, to: row.endedAt });
+      tachoByDriver.set(row.driverId, list);
+    }
+
     const perDriver = new Map<string, DriverBucketSet>();
     for (const session of sessions) {
       const folded = foldWorkTimeEvents(toFoldable(session.timeEvents), asOf);
@@ -247,11 +279,33 @@ export class PayrollPeriodService {
           buckets: new Map(),
           breakMinutesByDate: new Map(),
           anomaliesByDate: new Map(),
+          tachoRestByDate: new Map(),
         };
 
       mergeBuckets(set.buckets, bucketWorkIntervals(folded.workIntervals, bucketOptions));
       for (const day of bucketWorkIntervals(folded.breakIntervals, bucketOptions)) {
         addMinutes(set.breakMinutesByDate, day.localDate, day.workedMinutes);
+      }
+
+      // Takograf REST'i YALNIZCA vardiya penceresi icinde molayla
+      // karsilastirilabilir: gunluk dinlenme (gece 11 saat) de REST olarak
+      // yaziliyor ve pencere disini saymak her gunu devasa sapma gosterirdi.
+      const shiftWindow =
+        folded.startedAt !== null
+          ? { from: folded.startedAt, to: folded.endedAt ?? asOf }
+          : null;
+      if (shiftWindow) {
+        const restInWindow = intersectIntervals(
+          tachoByDriver.get(session.driverId) ?? [],
+          shiftWindow,
+        );
+        // Takograf verisi hic yoksa gun ANAHTARSIZ kaliyor; sifir yazmak
+        // "surucu hic dinlenmedi" demek olurdu.
+        if (restInWindow.length > 0) {
+          for (const day of bucketWorkIntervals(restInWindow, bucketOptions)) {
+            addMinutes(set.tachoRestByDate, day.localDate, day.workedMinutes);
+          }
+        }
       }
 
       // Anomali vardiyanin BASLADIGI gune yaziliyor: "cikis eksik" uyarisi
@@ -311,7 +365,22 @@ export class PayrollPeriodService {
       // saydigi bir gosterge; toplamdan ayriliyor.
       const { unmappedDays: _unmappedDays, ...entryTotals } = totals;
 
-      dayRows.push(...days.map((day) => toDayRow(period.tenantId, period.id, driverId, day)));
+      // Takograf karsilastirmasi gun satirlarina yaziliyor ama TOPLAMLARA
+      // GIRMIYOR: bordronun kaynagi surucunun kendi kaydi, takograf yalnizca
+      // dogrulama. Uyusmazlik anomali listesine ekleniyor, saati degistirmiyor.
+      const tolerance = profile?.tachoBreakToleranceMinutes ?? 15;
+      for (const day of days) {
+        const comparison = compareBreakWithTacho({
+          driverBreakMinutes: day.breakMinutes,
+          workedMinutes: day.workedMinutes,
+          tachoRestMinutes: set?.tachoRestByDate.get(day.localDate),
+          toleranceMinutes: tolerance,
+        });
+        if (comparison?.mismatch) {
+          day.anomalies.push(TACHO_BREAK_MISMATCH_ANOMALY);
+        }
+        dayRows.push(toDayRow(period.tenantId, period.id, driverId, day, comparison));
+      }
       entryRows.push({
         tenantId: period.tenantId,
         periodId: period.id,
@@ -460,6 +529,7 @@ function toDayRow(
   periodId: string,
   driverId: string,
   day: PayrollDayDraft,
+  tacho: { tachoRestMinutes: number; deltaMinutes: number } | null,
 ): Prisma.PayrollDayCreateManyInput {
   return {
     tenantId,
@@ -476,6 +546,9 @@ function toDayRow(
     nightCoreMinutes: day.nightCoreMinutes,
     sundayMinutes: day.sundayMinutes,
     holidayMinutes: day.holidayMinutes,
+    // Karsilastirilamayan gun NULL kaliyor: takograf verisi yok demek.
+    tachoRestMinutes: tacho?.tachoRestMinutes ?? null,
+    tachoDeltaMinutes: tacho?.deltaMinutes ?? null,
     anomalies: day.anomalies.length > 0 ? day.anomalies : Prisma.DbNull,
   };
 }

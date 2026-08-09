@@ -956,6 +956,10 @@ export interface PayrollDayRow {
   nightCoreMinutes: number;
   sundayMinutes: number;
   holidayMinutes: number;
+  /** Takograf dogrulamasi. NULL = o gun icin DDD verisi yok. */
+  tachoRestMinutes: number | null;
+  /** Takograf eksi surucu; pozitif = takograf daha cok dinlenme gormus. */
+  tachoDeltaMinutes: number | null;
   anomalies: string[] | null;
 }
 
@@ -989,6 +993,7 @@ export interface TenantPayrollProfile {
   nightCoreEndMinute: number;
   roundingMinutes: number;
   defaultWeeklyTargetMinutes: number;
+  tachoBreakToleranceMinutes: number;
 }
 
 export interface DriverPayrollProfileRow {

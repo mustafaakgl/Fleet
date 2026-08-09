@@ -281,6 +281,27 @@ export function ZeiterfassungMonth() {
                           {t(`workTime.dayType.${day.dayType}`)}
                         </span>
                       ) : null}
+                      {/* Takograf DOGRULAMA: bordro saatini degistirmiyor,
+                          yalnizca surucunun kaydiyla tutup tutmadigini
+                          gosteriyor. Veri yoksa hic gosterilmiyor. */}
+                      {day.tachoRestMinutes !== null ? (
+                        <span
+                          className={
+                            (day.anomalies ?? []).includes('tacho_break_mismatch')
+                              ? 'rounded bg-amber-100 px-1.5 text-xs text-amber-900'
+                              : 'rounded bg-slate-200 px-1.5 text-xs text-slate-600'
+                          }
+                          title={t('workTime.tachoTitle')}
+                        >
+                          {t('workTime.tachoCompare', {
+                            tacho: formatHours(day.tachoRestMinutes),
+                            delta:
+                              day.tachoDeltaMinutes === null
+                                ? ''
+                                : formatSignedHours(day.tachoDeltaMinutes),
+                          })}
+                        </span>
+                      ) : null}
                       {day.dayTypeSource === 'unmapped' ? (
                         <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">
                           {t('workTime.anomaly.calendar_code_unmapped', {

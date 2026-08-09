@@ -2119,6 +2119,10 @@ model TenantPayrollProfile {
 
   /// Gunluk sureler bu adima yuvarlanir. 1 = yuvarlama yok.
   roundingMinutes            Int @default(1)
+  /// Surucunun bastigi mola ile takografin REST kaydi arasindaki kabul edilen
+  /// fark. Ikisi dakikasi dakikasina tutmaz: surucu dugmeye basmayi geciktirir,
+  /// takograf aracin duruşundan sayar. Bu esigin USTU incelenmeli.
+  tachoBreakToleranceMinutes Int @default(15)
   /// Surucunun kendi hedefi yoksa gecerli olan haftalik hedef.
   defaultWeeklyTargetMinutes Int @default(2400) // 40 saat
 
@@ -2281,6 +2285,17 @@ model PayrollDay {
   sundayMinutes    Int @default(0)
   holidayMinutes   Int @default(0)
 
+  /// Takograf karsilastirmasi. BORDRONUN KAYNAGI DEGIL — surucunun kendi
+  /// kaydi ana kayit, bunlar yalnizca dogrulama. Takograf verisi olmayan
+  /// gunde ikisi de BOS kalir; sifir yazmak "surucu hic dinlenmedi" demek
+  /// olurdu ve DDD dosyasinin gelmemis olmasi bunu ima etmez.
+  ///
+  /// Yalnizca VARDIYA PENCERESINE dusen REST sayilir: takograf gunluk
+  /// dinlenmeyi (gece 11 saat) de REST yaziyor ve onu molayla karsilastirmak
+  /// her gunu devasa bir sapma gibi gosterirdi.
+  tachoRestMinutes  Int?
+  /// Takograf eksi surucu. Pozitif = takograf daha cok dinlenme gormus.
+  tachoDeltaMinutes Int?
 
   /// Zeiterfassung anomalileri + bordroya ozel olanlar (string dizisi).
   anomalies Json?

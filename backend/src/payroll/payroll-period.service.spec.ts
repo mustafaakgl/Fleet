@@ -25,9 +25,12 @@ type EventRow = {
 type SessionRow = { id: string; driverId: string; timeEvents: EventRow[] };
 type CalendarRow = { driverId: string; date: Date; status: string; uiStatus: string | null };
 
+type TachoRow = { driverId: string; startedAt: Date; endedAt: Date };
+
 type Store = {
   periods: Array<Record<string, unknown>>;
   sessions: SessionRow[];
+  tacho: TachoRow[];
   calendar: CalendarRow[];
   holidays: Array<{ date: Date }>;
   driverProfiles: Array<Record<string, unknown>>;
@@ -103,6 +106,7 @@ function createFakePrisma(store: Store) {
       },
     },
     workSession: { findMany: async () => store.sessions },
+    tachoActivity: { findMany: async () => store.tacho },
     calendarEvent: { findMany: async () => store.calendar },
     publicHoliday: { findMany: async () => store.holidays },
     driverPayrollProfile: { findMany: async () => store.driverProfiles },
@@ -159,6 +163,7 @@ function createStore(overrides: Partial<Store> = {}): Store {
       },
     ],
     sessions: [],
+    tacho: [],
     calendar: [],
     holidays: [],
     driverProfiles: [
@@ -182,6 +187,7 @@ function createService(store: Store): PayrollPeriodService {
   const prisma = createFakePrisma(store) as unknown as PrismaService;
   const settings = {
     getTenantProfile: async () => ({
+      tachoBreakToleranceMinutes: 15,
       nightWindowStartMinute: 1_200,
       nightWindowEndMinute: 360,
       nightCoreStartMinute: 0,
@@ -454,3 +460,109 @@ describe('PayrollPeriodService yasam dongusu', () => {
   });
 });
 
+describe('PayrollPeriodService takograf karsilastirmasi', () => {
+  const asOf = new Date('2026-09-01T00:00:00.000Z');
+
+  it('vardiya icindeki REST ile surucunun molasini karsilastirir ve sapmayi isaretler', async () => {
+    // Surucu 45 dk mola yazdi; takograf vardiya icinde 75 dk REST gordu.
+    const store = createStore({
+      sessions: [weekdayShift('driver-a')],
+      tacho: [
+        {
+          driverId: 'driver-a',
+          startedAt: new Date('2026-08-10T09:45:00.000Z'),
+          endedAt: new Date('2026-08-10T11:00:00.000Z'),
+        },
+      ],
+    });
+    const service = createService(store);
+
+    await service.recomputePeriod('period-a', 'user-a', asOf);
+
+    const day = dayOf(store, '2026-08-10');
+    assert.equal(day?.tachoRestMinutes, 75);
+    assert.equal(day?.tachoDeltaMinutes, 30); // 75 − 45
+    assert.ok((day?.anomalies as string[]).includes('tacho_break_mismatch'));
+    // Bordro saati DEGISMEDI: takograf dogrulama kaynagi, hesap kaynagi degil.
+    assert.equal(day?.workedMinutes, 495);
+    assert.equal(day?.breakMinutes, 45);
+  });
+
+  it('gunluk dinlenmeyi karsilastirmaya KATMAZ', async () => {
+    // 11 saatlik gece dinlenmesi vardiyanin tamamen disinda. Katilsaydi her
+    // gun devasa sapma cikardi.
+    const store = createStore({
+      sessions: [weekdayShift('driver-a')],
+      tacho: [
+        {
+          driverId: 'driver-a',
+          startedAt: new Date('2026-08-09T18:00:00.000Z'),
+          endedAt: new Date('2026-08-10T05:00:00.000Z'),
+        },
+        {
+          driverId: 'driver-a',
+          startedAt: new Date('2026-08-10T10:00:00.000Z'),
+          endedAt: new Date('2026-08-10T10:50:00.000Z'),
+        },
+      ],
+    });
+    const service = createService(store);
+
+    await service.recomputePeriod('period-a', 'user-a', asOf);
+
+    const day = dayOf(store, '2026-08-10');
+    assert.equal(day?.tachoRestMinutes, 50);
+    assert.equal(day?.tachoDeltaMinutes, 5);
+    assert.ok(!(((day?.anomalies as string[] | null) ?? []).includes('tacho_break_mismatch')));
+  });
+
+  it('tolerans icindeki farki isaretlemez ama degerleri yine yazar', async () => {
+    const store = createStore({
+      sessions: [weekdayShift('driver-a')],
+      tacho: [
+        {
+          driverId: 'driver-a',
+          startedAt: new Date('2026-08-10T10:00:00.000Z'),
+          endedAt: new Date('2026-08-10T10:55:00.000Z'),
+        },
+      ],
+    });
+    const service = createService(store);
+
+    await service.recomputePeriod('period-a', 'user-a', asOf);
+
+    const day = dayOf(store, '2026-08-10');
+    assert.equal(day?.tachoRestMinutes, 55);
+    assert.equal(day?.tachoDeltaMinutes, 10);
+    assert.ok(!(((day?.anomalies as string[] | null) ?? []).includes('tacho_break_mismatch')));
+  });
+
+  it('takograf verisi olmayan gunu BOS birakir, sifir yazmaz', async () => {
+    const store = createStore({ sessions: [weekdayShift('driver-a')] });
+    const service = createService(store);
+
+    await service.recomputePeriod('period-a', 'user-a', asOf);
+
+    const day = dayOf(store, '2026-08-10');
+    assert.equal(day?.tachoRestMinutes, null);
+    assert.equal(day?.tachoDeltaMinutes, null);
+  });
+
+  it('baska surucunun takografini karistirmaz', async () => {
+    const store = createStore({
+      sessions: [weekdayShift('driver-a')],
+      tacho: [
+        {
+          driverId: 'driver-b',
+          startedAt: new Date('2026-08-10T10:00:00.000Z'),
+          endedAt: new Date('2026-08-10T11:30:00.000Z'),
+        },
+      ],
+    });
+    const service = createService(store);
+
+    await service.recomputePeriod('period-a', 'user-a', asOf);
+
+    assert.equal(dayOf(store, '2026-08-10')?.tachoRestMinutes, null);
+  });
+});

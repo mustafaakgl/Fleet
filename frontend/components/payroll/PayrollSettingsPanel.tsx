@@ -65,6 +65,7 @@ export function PayrollSettingsPanel() {
     coreStart: '00:00',
     coreEnd: '04:00',
     weeklyHours: '40',
+    tachoTolerance: '15',
   });
   const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
 
@@ -91,6 +92,7 @@ export function PayrollSettingsPanel() {
           coreStart: minutesToTime(tenant.nightCoreStartMinute),
           coreEnd: minutesToTime(tenant.nightCoreEndMinute),
           weeklyHours: String(Math.round(tenant.defaultWeeklyTargetMinutes / 60)),
+          tachoTolerance: String(tenant.tachoBreakToleranceMinutes),
         });
       }
     } catch {
@@ -119,6 +121,11 @@ export function PayrollSettingsPanel() {
       setError(t('payroll.settings.invalidWeeklyHours'));
       return;
     }
+    const tolerance = Number(form.tachoTolerance);
+    if (!Number.isInteger(tolerance) || tolerance < 0 || tolerance > 240) {
+      setError(t('payroll.settings.invalidTolerance'));
+      return;
+    }
 
     setBusy(true);
     setError(null);
@@ -132,6 +139,7 @@ export function PayrollSettingsPanel() {
         nightCoreStartMinute: coreStart,
         nightCoreEndMinute: coreEnd,
         defaultWeeklyTargetMinutes: Math.round(weeklyHours * 60),
+        tachoBreakToleranceMinutes: tolerance,
       });
       setSaved(true);
       await load();
@@ -232,6 +240,15 @@ export function PayrollSettingsPanel() {
                 onChange={(event) => setForm((f) => ({ ...f, coreEnd: event.target.value }))}
               />
             </div>
+          </label>
+          <label className="text-sm">
+            {/* Surucu dugmeye basmayi geciktirir, takograf aracin durusundan
+                sayar; bu esigin ustundeki fark incelenir. */}
+            <span className="mb-1 block text-slate-600">{t('payroll.settings.tachoTolerance')}</span>
+            <Input
+              value={form.tachoTolerance}
+              onChange={(event) => setForm((f) => ({ ...f, tachoTolerance: event.target.value }))}
+            />
           </label>
           <div className="flex items-end">
             <Button disabled={busy} onClick={() => void saveProfile()}>
