@@ -488,6 +488,34 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.workTimeEvent.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.workTimeEvent.count()),
       }),
+      verifyTenantScopedModel({
+        label: 'TenantPayrollProfile', tenantA, tenantB,
+        unscopedCountA: () => base.tenantPayrollProfile.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.tenantPayrollProfile.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.tenantPayrollProfile.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.tenantPayrollProfile.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'DriverPayrollProfile', tenantA, tenantB,
+        unscopedCountA: () => base.driverPayrollProfile.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.driverPayrollProfile.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.driverPayrollProfile.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.driverPayrollProfile.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'PublicHoliday', tenantA, tenantB,
+        unscopedCountA: () => base.publicHoliday.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.publicHoliday.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.publicHoliday.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.publicHoliday.count()),
+      }),
+      verifyTenantScopedModel({
+        label: 'PayrollDayTypeMapping', tenantA, tenantB,
+        unscopedCountA: () => base.payrollDayTypeMapping.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.payrollDayTypeMapping.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollDayTypeMapping.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollDayTypeMapping.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

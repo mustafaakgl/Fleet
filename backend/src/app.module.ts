@@ -56,6 +56,7 @@ import { TelematicsModule } from './telematics/telematics.module';
 import { DevicesModule } from './devices/devices.module';
 import { EquipmentIssuancesModule } from './equipment-issuances/equipment-issuances.module';
 import { InvoicingModule } from './invoicing/invoicing.module';
+import { PayrollModule } from './payroll/payroll.module';
 import { WorkTimeModule } from './work-time/work-time.module';
 import { ThrottlerAuditFilter } from './common/filters/throttler-audit.filter';
 import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
@@ -123,6 +124,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     DevicesModule,
     EquipmentIssuancesModule,
     InvoicingModule,
+    PayrollModule,
     WorkTimeModule,
     HealthModule,
     MetricsModule,

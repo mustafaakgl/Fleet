@@ -271,6 +271,49 @@ enum WorkSessionStatus {
   ended
 }
 
+/// Bordro gun tipi. Takvim kodundan turetilir (bkz. PayrollDayTypeMapping),
+/// koda gomulu degildir — "SCH ucretli calisma sayilir mi" teknik degil bordro
+/// kararidir ve tenant'a gore degisir.
+enum PayrollDayType {
+  work
+  vacation
+  sick
+  holiday
+  off
+  /// Izinsiz devamsizlik. `off`tan ayri: bu ucretten dusuluyor.
+  absence_unpaid
+}
+
+enum PayrollEmploymentType {
+  full_time
+  part_time
+  mini_job
+  working_student
+  apprentice
+}
+
+/// Tatil takviminin hangi eyalet listesinden geldigi. Vergi ayricalikli
+/// Feiertagszuschlag (§3b EStG) hangi gunun yasal tatil oldugunu bilmeyi
+/// gerektiriyor ve bu eyalete gore degisiyor.
+enum GermanState {
+  BW
+  BY
+  BE
+  BB
+  HB
+  HH
+  HE
+  MV
+  NI
+  NW
+  RP
+  SL
+  SN
+  ST
+  SH
+  TH
+}
+
 /// Zeiterfassung olay turleri. Vardiya bu dortlunun sirasindan yeniden
 /// hesaplanabilir; hicbir toplam alani saklanmaz.
 enum WorkTimeEventType {
@@ -678,6 +721,10 @@ model Tenant {
   tours                      Tour[]
   tourStops                  TourStop[]
   workTimeEvents             WorkTimeEvent[]
+  payrollProfile             TenantPayrollProfile?
+  driverPayrollProfiles      DriverPayrollProfile[]
+  publicHolidays             PublicHoliday[]
+  payrollDayTypeMappings     PayrollDayTypeMapping[]
 }
 
 model TenantBillingProfile {
@@ -934,6 +981,7 @@ model Driver {
   equipmentIssuances      EquipmentIssuance[]
   tours                   Tour[]
   workTimeEvents          WorkTimeEvent[]
+  payrollProfile          DriverPayrollProfile?
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -1971,6 +2019,132 @@ model WorkSession {
   @@index([tenantId])
   @@index([driverId, status])
   @@index([driverId, startedAt])
+}
+
+/// DATEV Lohn tarafinin tenant ayari.
+///
+/// TenantBillingProfile'in aynadaki esi: orasi Rechnungswesen (AR/EXTF), burasi
+/// Lohn. AYRI tutuluyorlar cunku DATEV'de iki farkli urun ve Mandantennummer
+/// bile ayri olabiliyor; birinin ayarini digerine karistirmak yanlis dosyayi
+/// yanlis muhasebeye gonderir.
+model TenantPayrollProfile {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  datevConsultantNumber String?
+  datevClientNumber     String?
+
+  /// Tatil listesinin cekildigi eyalet. Bos ise tatil tablosu elle doldurulur.
+  bundesland GermanState?
+
+  /// Gece penceresi GUN ICI DAKIKA olarak (0–1439). Repo saatleri "HH:MM"
+  /// string tutuyor ama bu pencere gece yarisini asiyor ve dakika aritmetigine
+  /// giriyor; string olsaydi her kullanimda cevrilmesi gerekirdi.
+  nightWindowStartMinute Int @default(1200) // 20:00
+  nightWindowEndMinute   Int @default(360) //  06:00
+  /// §3b EStG'nin daha yuksek oranli cekirdek bandi.
+  nightCoreStartMinute   Int @default(0) //    00:00
+  nightCoreEndMinute     Int @default(240) //  04:00
+
+  /// Gunluk sureler bu adima yuvarlanir. 1 = yuvarlama yok.
+  roundingMinutes            Int @default(1)
+  /// Surucunun kendi hedefi yoksa gecerli olan haftalik hedef.
+  defaultWeeklyTargetMinutes Int @default(2400) // 40 saat
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+/// Surucunun bordro kimligi ve hedefi.
+///
+/// Gecerlilik araligi (validFrom/validTo) BILEREK yok: donem onaylandiginda
+/// PayrollEntry profilin o anki halini snapshot'liyor, gecmis donem yeniden
+/// hesaplansa bile dogru degerleri oradan okuyor. Iki ayri tarihce mekanizmasi
+/// tutmak gereksiz karmasa olurdu.
+model DriverPayrollProfile {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  driverId String @unique
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  /// DATEV personel numarasi. Tenant icinde tekil — iki surucuye ayni numara
+  /// verilirse bordro satirlari sessizce birlesir.
+  datevPersonnelNumber String
+
+  /// Bos ise tenant varsayilani gecerli.
+  weeklyTargetMinutes  Int?
+  /// Dolu ise aylik hedef haftaliktan turetilmez, dogrudan bu kullanilir.
+  monthlyTargetMinutes Int?
+
+  costCenter     String?
+  costUnit       String?
+  employmentType PayrollEmploymentType @default(full_time)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, datevPersonnelNumber])
+  @@index([tenantId])
+}
+
+/// Yasal tatil gunleri.
+///
+/// Takvimdeki FT kaydi ANA KAYNAK DEGIL: o elle girilen planlama izgarasi.
+/// Feiertagszuschlag vergi ayricalikli oldugu icin hangi gunun yasal tatil
+/// oldugu denetlenebilir bir tablodan gelmeli; takvimdeki FT bu tabloyla
+/// karsilastirilip ayrisma anomali olarak gosterilir (takograf REST ile
+/// surucunun molasini karsilastirmakla ayni mantik).
+///
+/// Anahtar (tenantId, date): bir filo pratikte tek eyalette calisiyor ve o
+/// eyalet TenantPayrollProfile'da duruyor. `bundesland` burada yalnizca
+/// "bu satir hangi listeden geldi" kaydidir, anahtarin parcasi degil.
+model PublicHoliday {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  date       DateTime
+  name       String
+  bundesland GermanState?
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@index([tenantId, date])
+}
+
+/// Takvim kodu → bordro gun tipi eslemesi.
+///
+/// Koda gomulmuyor, cunku kod seti tenant'in kendi Einsatzplan aliskanligindan
+/// geliyor ve bordro anlamlari sirkete gore degisiyor. Ayrica CalendarStatus
+/// enum'u bordro icin fazla bulanik: `WE` hem hafta sonu hem "unent.Fehlen"
+/// (biri ucretsiz tatil, digeri ucretten dusulen devamsizlik), `AB` ise
+/// eslesmeyen her seyin cop kutusu. Bu yuzden eslesme once CalendarEvent.uiStatus
+/// uzerinden aranir, bulunamazsa CalendarStatus'a duser.
+model PayrollDayTypeMapping {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// CalendarEvent.uiStatus veya CalendarStatus degeri. Enum DEGIL: uiStatus
+  /// serbest metin ('unent.Fehlen', 'k. Auftrag', 'SU') ve enum'da yok.
+  calendarCode String
+  dayType      PayrollDayType
+  /// Ucretli sayilir mi. `work` disindaki tipler icin de anlamli: ucretli izin
+  /// ile ucretsiz devamsizligi ayiran alan bu.
+  paid         Boolean        @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, calendarCode])
+  @@index([tenantId])
 }
 
 /// Zeiterfassung'un ham kaydi: vardiya icindeki her giris/mola/cikis dokunusu.
