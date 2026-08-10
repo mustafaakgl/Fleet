@@ -13,6 +13,8 @@ interface AddressSuggestInputProps {
   kind: 'city' | 'street';
   /** Opsiyonel daraltici; bossa serbest arama yapilir */
   city?: string;
+  /** Formdaki serbest metin ulke alani; sunucu tanirsa sonuclari daraltir */
+  country?: string;
   placeholder?: string;
   disabled?: boolean;
   /** Alan pasifken gosterilecek ipucu, ornegin "sehirle daraltin" */
@@ -41,6 +43,7 @@ export function AddressSuggestInput({
   onPick,
   kind,
   city,
+  country,
   placeholder,
   disabled = false,
   hint,
@@ -76,7 +79,13 @@ export function AddressSuggestInput({
     const handle = setTimeout(() => {
       setLoading(true);
       routingApi
-        .suggest({ q: value.trim(), kind, city: city?.trim() || undefined, limit: 8 })
+        .suggest({
+          q: value.trim(),
+          kind,
+          city: city?.trim() || undefined,
+          country: country?.trim() || undefined,
+          limit: 8,
+        })
         .then((response) => {
           if (cancelled) return;
           setSuggestions(response.suggestions);
@@ -98,7 +107,7 @@ export function AddressSuggestInput({
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [city, kind, searchable, value]);
+  }, [city, country, kind, searchable, value]);
 
   useEffect(() => {
     function onDocumentClick(event: MouseEvent) {

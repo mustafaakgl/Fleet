@@ -9,10 +9,29 @@ export const DEFAULT_ADDRESS_COUNTRY = 'Deutschland';
 
 /**
  * Adres ayristirmasinda ulke adini sehirden ayirmak icin kullanilir.
- * Bilincli olarak dar tutuldu: burada olmayan bir metin sehir sayilir, yani
- * gercek bir sehir adi yanlislikla elenmez.
+ *
+ * Bilincli olarak dar: burada olmayan bir metin sehir sayilir, yani gercek bir
+ * sehir adi yanlislikla elenmez. Liste DACH disina da acildi cunku geocoder
+ * artik BeNeLux ve komsu ulkeleri de buluyor — eskiden yalnizca sokak ve ulke
+ * doldurulmus bir NL adresi ("Kerkstraat, Niederlande") geri ayristirilirken
+ * ulke SEHIR alanina dusuyordu.
+ *
+ * Sunucudaki tam liste backend/src/routing/core/country-code.util.ts'te; burasi
+ * yalnizca metni ayirmaya yeter, ISO koda cevirmeye degil.
  */
-const COUNTRY_NAMES = new Set(['deutschland', 'germany', 'de', 'österreich', 'austria', 'at']);
+const COUNTRY_NAMES = new Set([
+  'de', 'deutschland', 'germany',
+  'at', 'österreich', 'oesterreich', 'austria',
+  'ch', 'schweiz', 'switzerland', 'suisse',
+  'nl', 'niederlande', 'netherlands', 'nederland',
+  'be', 'belgien', 'belgium', 'belgië', 'belgie', 'belgique',
+  'lu', 'luxemburg', 'luxembourg',
+  'fr', 'frankreich', 'france',
+  'it', 'italien', 'italy', 'italia',
+  'pl', 'polen', 'poland', 'polska',
+  'cz', 'tschechien', 'czechia', 'česko', 'cesko',
+  'dk', 'dänemark', 'daenemark', 'denmark', 'danmark',
+]);
 
 function isCountryName(value: string): boolean {
   return COUNTRY_NAMES.has(value.trim().toLowerCase());

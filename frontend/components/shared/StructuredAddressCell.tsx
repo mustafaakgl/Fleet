@@ -111,6 +111,7 @@ export function StructuredAddressCell({
       <AddressSuggestInput
         kind="street"
         city={parts.city}
+        country={parts.country || DEFAULT_ADDRESS_COUNTRY}
         value={parts.street}
         disabled={disabled}
         placeholder={t('address.streetShort')}

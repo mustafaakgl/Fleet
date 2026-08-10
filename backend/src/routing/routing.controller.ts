@@ -65,6 +65,7 @@ export class RoutingController {
       query: query.q,
       kind: query.kind,
       city: query.city ?? null,
+      country: query.country ?? null,
       limit: query.limit,
     });
 

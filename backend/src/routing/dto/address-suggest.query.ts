@@ -20,6 +20,16 @@ export class AddressSuggestQueryDto {
   @MaxLength(120)
   city?: string;
 
+  /**
+   * Formdaki serbest metin ulke alani ("Deutschland", "NL", "Belgien").
+   * Tanindigi olcude sonuclar o ulkeye daraltilir; taninmayan metin yok sayilir
+   * — bilinmeyen bir ulke adi yuzunden listeyi bosaltmak filtrelememekten kotu.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  country?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

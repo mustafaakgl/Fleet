@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { DEFAULT_GEOCODING_BBOX, readGeocodingBbox } from './core/geocode-bbox.util';
 import { isGeocodeFallbackConsistent } from './core/geocode-consistency.util';
 import { haversineMeters } from './core/geo-distance.util';
 import { queryHasHouseNumber } from './core/house-number.util';
@@ -37,16 +38,6 @@ export interface GeocodeHit {
    */
   confidence: number;
 }
-
-/**
- * Almanya sinirlayici kutusu. Kaba bir dikdortgen oldugu icin Isvicre'nin kuzeyini
- * ve Avusturya'nin batisini da kapsiyor — olculdu: sehirsiz "Bahnhofstr" sorgusu
- * bbox gonderilse bile Zürich (47.377) donduruyor, cunku Zürich kutunun icinde.
- * Bu yuzden bbox tek basina yeterli degil; sokak aramasi sehir baglami ister.
- * Ulke koduna gore sert filtre KOYULMADI: Alman filolar AT/NL/BE'ye de sefer
- * yapiyor, sinir otesi adresler gecerli.
- */
-const GERMANY_BBOX = '5.87,47.27,15.04,55.06';
 
 export type SuggestionKind = 'city' | 'street' | 'address' | 'poi';
 
@@ -108,6 +99,8 @@ export function buildLabel(parts: {
 @Injectable()
 export class GeocodingService {
   private readonly logger = new Logger(GeocodingService.name);
+  /** Gecersiz GEOCODING_BBOX her tus vurusunda degil, bir kez loglanir */
+  private invalidBboxWarned = false;
 
   private get baseUrl(): string {
     return (process.env.PHOTON_URL?.trim() || 'https://photon.komoot.io').replace(/\/+$/, '');
@@ -120,6 +113,37 @@ export class GeocodingService {
 
   get selfHosted(): boolean {
     return Boolean(process.env.PHOTON_URL?.trim());
+  }
+
+  /**
+   * Aramanin sinirlandirilacagi kutu; `null` ise kisit gonderilmez.
+   *
+   * Photon'da bbox SERT filtre, yumusak tercih degil — kutu disinda hicbir aday
+   * donmez. Bu yuzden gecersiz bir ayar istegi dusurmez, varsayilana doner:
+   * yanlis yazilmis bir kutu yuzunden adres aramasini komple kaybetmek, biraz
+   * genis aramaktan kotu.
+   *
+   * DIKKAT: kutu, indeksin kendisini genisletmez. Self-host Photon Almanya
+   * indeksiyle kurulduysa (PHOTON_URL) kutuyu buyutmek NL/BE sonucu getirmez;
+   * Avrupa indeksi gerekir.
+   */
+  private get searchBbox(): string | null {
+    const setting = readGeocodingBbox();
+    if (setting.kind === 'bbox') {
+      return setting.value;
+    }
+    if (setting.kind === 'global') {
+      return null;
+    }
+
+    if (!this.invalidBboxWarned) {
+      this.invalidBboxWarned = true;
+      this.logger.warn(
+        `GEOCODING_BBOX="${setting.raw}" is not a valid "minLon,minLat,maxLon,maxLat" box — ` +
+          `falling back to ${DEFAULT_GEOCODING_BBOX}`,
+      );
+    }
+    return DEFAULT_GEOCODING_BBOX;
   }
 
   /**
@@ -214,12 +238,21 @@ export class GeocodingService {
    * gecmisini arar, ve sehirsiz sorguda sonuclari `bias` noktasina uzakliga gore
    * BIZ siralariz. Bu Photon'un siralamasina guvenmek degil — sonuc kumesini
    * aldiktan sonra kendi olcutumuzle diziyoruz.
+   *
+   * Ulke, sehir gibi sorgu metnine KATILMAZ; sonuc kumesi ISO koduna gore
+   * elenir. Olculdu: Photon sorgudaki ulke adini kullanmiyor
+   * ("Bahnhofstrasse Koeln Deutschland" ile "... Oesterreich" ayni Köln
+   * sonuclarini donduruyor), ama tanimadigi bir kelime aramayi olduruyor
+   * ("Hauptstrasse Freedonia" -> bos). Metne eklemek bu yuzden ya etkisiz ya
+   * yikici; filtre ise deterministik.
    */
   async suggest(params: {
     query: string;
     kind: 'city' | 'street';
     /** Verilirse sorgu metnine katilir ve sonuc keskinlesir; zorunlu degil */
     city?: string | null;
+    /** ISO 3166-1 alpha-2. Verilirse sonuclar bu ulkeye daraltilir. */
+    countryCode?: string | null;
     limit?: number;
     /** Sehirsiz sokak sorgusunda siralama capasi (isletme bolgesi) */
     bias?: { latitude: number; longitude: number } | null;
@@ -231,13 +264,23 @@ export class GeocodingService {
 
     const city = params.city?.trim() ?? '';
     const queryText = params.kind === 'street' && city ? `${trimmed} ${city}` : trimmed;
+    const countryFilter = params.countryCode?.trim().toUpperCase() || null;
+
+    const limit = Math.min(params.limit ?? 8, 20);
+    // Ulke filtresi Photon'da yok, elemeyi biz yapiyoruz — istenen sayida aday
+    // kalabilmesi icin fazladan cekiyoruz. Aksi halde "8 oneri" istegi, komsu
+    // ulkelerden gelen adaylar elendikten sonra 2 satira dusebilir.
+    const fetchLimit = countryFilter ? Math.min(limit * 3, 30) : limit;
 
     const search = new URLSearchParams({
       q: queryText,
-      limit: String(Math.min(params.limit ?? 8, 20)),
+      limit: String(fetchLimit),
       lang: 'de',
-      bbox: GERMANY_BBOX,
     });
+    const bbox = this.searchBbox;
+    if (bbox) {
+      search.set('bbox', bbox);
+    }
     // Sehir ararken yerlesime daralt. Sokakta `highway` yol CIZGISI demek ve ev
     // numarasi tasimaz — kullanici numara yazdiysa kisit kaldirilir, yoksa
     // "Stralauer Allee 24" numarasiz cadde olarak geri doner ve sofore caddenin
@@ -278,6 +321,11 @@ export class GeocodingService {
         }
 
         const p = feature.properties ?? {};
+
+        const featureCountry = (p.countrycode ?? 'DE').toUpperCase();
+        if (countryFilter && featureCountry !== countryFilter) {
+          continue;
+        }
 
         // osm_tag Photon'da KATI filtre degil, yumusak tercih: `place` istenince
         // de POI donebiliyor ("Duisb" -> Trier'deki "Duisburger Hof"). Istenen
@@ -324,7 +372,7 @@ export class GeocodingService {
           houseNumber,
           postalCode,
           city,
-          countryCode: (p.countrycode ?? 'DE').toUpperCase(),
+          countryCode: featureCountry,
           latitude,
           longitude,
           kind,
@@ -342,7 +390,9 @@ export class GeocodingService {
         );
       }
 
-      return { ok: true, value: suggestions };
+      // Ulke filtresi icin fazladan cektik; siralamadan SONRA kesiyoruz ki
+      // capaya en yakin adaylar elenmesin.
+      return { ok: true, value: suggestions.slice(0, limit) };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown transport failure';
       this.logger.warn(`Photon suggest failed: ${message}`);
@@ -357,8 +407,11 @@ export class GeocodingService {
       q: query,
       limit: '1',
       lang: 'de',
-      bbox: GERMANY_BBOX,
     });
+    const bbox = this.searchBbox;
+    if (bbox) {
+      params.set('bbox', bbox);
+    }
 
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), this.timeoutMs);

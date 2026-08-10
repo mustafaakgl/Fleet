@@ -40,6 +40,17 @@ describe('address-format', () => {
     assert.equal(parseFormattedAddress('Hauptstraße 5, deutschland').city, '');
   });
 
+  it('recognises the neighbouring countries the geocoder now reaches', () => {
+    // Geocoder kutusu DACH + BeNeLux'e acildi; DE/AT disi bir ulke adi da
+    // sehir alanina dusmemeli.
+    for (const country of ['Niederlande', 'Nederland', 'Belgien', 'België', 'Schweiz', 'France']) {
+      const parsed = parseFormattedAddress(`Kerkstraat 12, ${country}`);
+      assert.equal(parsed.city, '', country);
+      assert.equal(parsed.street, 'Kerkstraat 12', country);
+      assert.equal(parsed.country, country, country);
+    }
+  });
+
   it('keeps zip and city apart', () => {
     const parsed = parseFormattedAddress('Hauptstraße 5, 47059 Duisburg, Deutschland');
     assert.equal(parsed.zipCode, '47059');

@@ -3070,10 +3070,20 @@ export interface RoutePreview {
 
 export const routingApi = {
   /**
-   * Adres onerileri. Sokak ararken `city` zorunlu — sehirsiz sokak sorgusu
-   * komsu ulkelerden sonuc donduruyor, sunucu bunu 400 ile reddediyor.
+   * Adres onerileri.
+   *
+   * `city` opsiyonel daraltici. `country` formdaki serbest metin ulke alani:
+   * sunucu tanidigi olcude sonuclari o ulkeye daraltir, taniyamadigi metni yok
+   * sayar — yani "Deutschland" yazip da Almanya disi bir adres arayan kullanici
+   * bos liste degil, ulkeyi duzeltmesi gereken bir liste gorur.
    */
-  suggest: (params: { q: string; kind: 'city' | 'street'; city?: string; limit?: number }) =>
+  suggest: (params: {
+    q: string;
+    kind: 'city' | 'street';
+    city?: string;
+    country?: string;
+    limit?: number;
+  }) =>
     api
       .get<{ suggestions: AddressSuggestion[]; degraded: boolean; reason?: string }>(
         '/routing/address-suggestions',

@@ -176,6 +176,7 @@ export function AddressPickerFields({
       <div className="space-y-2">
         <AddressSuggestInput
           kind="city"
+          country={parts.country || DEFAULT_ADDRESS_COUNTRY}
           value={parts.city}
           disabled={disabled}
           placeholder={t('address.cityPlaceholder')}
@@ -186,6 +187,7 @@ export function AddressPickerFields({
         <AddressSuggestInput
           kind="street"
           city={parts.city}
+          country={parts.country || DEFAULT_ADDRESS_COUNTRY}
           value={parts.street}
           disabled={disabled}
           placeholder={t('address.streetPlaceholder')}

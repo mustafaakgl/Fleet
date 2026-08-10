@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GeocodeSource, type Location, Prisma, TruckAccessStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { addressHash } from './core/address-normalize.util';
+import { toCountryCode } from './core/country-code.util';
 import { readRegionAnchor } from './core/geo-distance.util';
 import {
   DEFAULT_TRUCK_PROFILE,
@@ -375,19 +376,33 @@ export class RoutingService {
     query: string;
     kind: 'city' | 'street';
     city?: string | null;
+    /** Formdaki serbest metin ulke alani; taninmiyorsa yok sayilir */
+    country?: string | null;
     limit?: number;
   }): Promise<RoutingResult<AddressSuggestion[]>> {
     const limit = params.limit ?? 8;
+    const countryCode = toCountryCode(params.country);
     const history =
-      params.kind === 'street' ? await this.suggestFromHistory(params.query, params.city, limit) : [];
+      params.kind === 'street'
+        ? await this.suggestFromHistory(params.query, params.city, countryCode, limit)
+        : [];
 
-    const key = `suggest:${params.kind}:${(params.city ?? '').toLowerCase()}:${params.query
-      .trim()
-      .toLowerCase()}:${limit}`;
+    // Ulke onbellek anahtarinda: aksi halde DE ile daraltilmis bir liste,
+    // ayni caddeyi NL icin arayan bir sonraki istege servis edilirdi.
+    const key = `suggest:${params.kind}:${(params.city ?? '').toLowerCase()}:${
+      countryCode ?? '*'
+    }:${params.query.trim().toLowerCase()}:${limit}`;
 
     let remote = await this.cache.get<AddressSuggestion[]>(key);
     if (!remote) {
-      const result = await this.geocoding.suggest({ ...params, limit, bias: readRegionAnchor() });
+      const result = await this.geocoding.suggest({
+        query: params.query,
+        kind: params.kind,
+        city: params.city,
+        countryCode,
+        limit,
+        bias: readRegionAnchor(),
+      });
       if (!result.ok) {
         // Geocoder coktu ama gecmis calisiyor — elimizdekini vermek bos liste
         // dondurmekten iyi.
@@ -418,6 +433,8 @@ export class RoutingService {
   private async suggestFromHistory(
     query: string,
     city: string | null | undefined,
+    /** ISO 3166-1 alpha-2 veya null; geocoder tarafiyla ayni daraltma olmali */
+    countryCode: string | null,
     limit: number,
   ): Promise<AddressSuggestion[]> {
     const trimmed = query.trim();
@@ -429,6 +446,7 @@ export class RoutingService {
       where: {
         latitude: { not: null },
         longitude: { not: null },
+        ...(countryCode ? { countryCode } : {}),
         AND: [
           {
             OR: [
