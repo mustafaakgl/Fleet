@@ -47,6 +47,11 @@ function definedOnly<T extends object>(value: T): Partial<T> {
   ) as Partial<T>;
 }
 
+/** Kayit verilen anda gecerli mi. */
+function isValidAt(row: { validFrom: Date; validTo: Date | null }, asOf: Date): boolean {
+  return row.validFrom <= asOf && (row.validTo === null || row.validTo >= asOf);
+}
+
 function normalizeDay(value: string | Date, field: string): Date {
   const date = value instanceof Date ? new Date(value) : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -90,6 +95,7 @@ export class PayrollSettingsService {
       datevConsultantNumber: dto.datevConsultantNumber?.trim() || null,
       datevClientNumber: dto.datevClientNumber?.trim() || null,
       bundesland: dto.bundesland ?? null,
+      datevPayrollSystem: dto.datevPayrollSystem ?? null,
       ...(dto.nightWindowStartMinute !== undefined && {
         nightWindowStartMinute: dto.nightWindowStartMinute,
       }),
@@ -103,6 +109,9 @@ export class PayrollSettingsService {
       ...(dto.roundingMinutes !== undefined && { roundingMinutes: dto.roundingMinutes }),
       ...(dto.defaultWeeklyTargetMinutes !== undefined && {
         defaultWeeklyTargetMinutes: dto.defaultWeeklyTargetMinutes,
+      }),
+      ...(dto.tachoBreakToleranceMinutes !== undefined && {
+        tachoBreakToleranceMinutes: dto.tachoBreakToleranceMinutes,
       }),
     };
 
@@ -124,39 +133,62 @@ export class PayrollSettingsService {
   // ---------------------------------------------------------------- driver
 
   /**
-   * Butun suruculer ve varsa bordro profilleri. Profili OLMAYAN surucu de
-   * listeleniyor: ayarlar ekraninin ilk isi eksikleri gostermek.
+   * Suruculer ve O ANDA gecerli bordro profili surumu. Profili OLMAYAN surucu
+   * de listeleniyor: ayarlar ekraninin ilk isi eksikleri gostermek.
+   *
+   * Profil surumlu oldugu icin "en son kayit" almak yanlis olurdu: gelecekte
+   * baslayan bir surum bugunun profili degildir.
    */
-  async listDriverProfiles() {
+  async listDriverProfiles(asOf: Date = new Date()) {
     // Durum filtresi YOK: aydan once ayrilmis bir surucunun calistigi gunler de
     // o ayin bordrosuna giriyor, listeden dusurmek onu gorunmez yapardi.
-    const drivers = await this.prisma.driver.findMany({
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        employeeNumber: true,
-        payrollProfile: true,
-      },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-    });
+    const [drivers, profiles] = await Promise.all([
+      this.prisma.driver.findMany({
+        select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      }),
+      this.prisma.driverPayrollProfile.findMany(),
+    ]);
 
-    return drivers.map((driver) => ({
-      driverId: driver.id,
-      firstName: driver.firstName,
-      lastName: driver.lastName,
-      employeeNumber: driver.employeeNumber,
-      profile: driver.payrollProfile,
-      /** Bu surucu bordroya girebilir mi — personel numarasi olmadan giremez. */
-      ready: driver.payrollProfile !== null,
-    }));
+    const currentByDriver = new Map<string, (typeof profiles)[number]>();
+    for (const profile of profiles) {
+      if (!isValidAt(profile, asOf)) continue;
+      const current = currentByDriver.get(profile.driverId);
+      if (!current || profile.validFrom > current.validFrom) {
+        currentByDriver.set(profile.driverId, profile);
+      }
+    }
+
+    return drivers.map((driver) => {
+      const profile = currentByDriver.get(driver.id) ?? null;
+      return {
+        driverId: driver.id,
+        firstName: driver.firstName,
+        lastName: driver.lastName,
+        employeeNumber: driver.employeeNumber,
+        profile,
+        /** DATEV'e girebilir mi — personel numarasi BLOKLAYICI kosul. */
+        ready: profile !== null && profile.datevPersonnelNumber.trim().length > 0,
+        versionCount: profiles.filter((row) => row.driverId === driver.id).length,
+      };
+    });
   }
 
+  /**
+   * Surucu profilini kaydeder.
+   *
+   * DATEV'E GIDEN ALAN DEGISTIYSE yeni SURUM acilir, mevcut surum kapatilir.
+   * Ustune yazmak, gecmis bir donemi yeniden uretirken bugunun personel
+   * numarasini kullanmak demek olurdu. DATEV'e gitmeyen alanlar (hedef sure
+   * gibi) yerinde guncelleniyor — her hedef degisikligi icin surum acmak
+   * gecmisi gereksiz kalabaliklastirirdi.
+   */
   async upsertDriverProfile(
     tenantId: string,
     driverId: string,
     dto: UpsertDriverPayrollProfileDto,
     actorUserId: string,
+    asOf: Date = new Date(),
   ) {
     const personnelNumber = dto.datevPersonnelNumber.trim();
     if (!personnelNumber) {
@@ -171,6 +203,28 @@ export class PayrollSettingsService {
       throw new NotFoundException('Driver not found');
     }
 
+    const validFrom = normalizeDay(asOf, 'validFrom');
+    const existing = await this.prisma.driverPayrollProfile.findMany({ where: { driverId } });
+    const current = existing
+      .filter((row) => isValidAt(row, asOf))
+      .sort((a, b) => b.validFrom.getTime() - a.validFrom.getTime())[0];
+
+    // Ayni anda baska bir surucude ayni numara varsa DATEV'de iki kisinin
+    // saatleri tek satirda birlesir. Hazirlik dogrulamasi da bunu tutuyor ama
+    // hatayi kaydetme aninda vermek kullaniciya daha erken soyluyor.
+    const clash = await this.prisma.driverPayrollProfile.findFirst({
+      where: { datevPersonnelNumber: personnelNumber, driverId: { not: driverId } },
+    });
+    if (clash && isValidAt(clash, asOf)) {
+      throw new ConflictException('This DATEV personnel number is already used by another driver');
+    }
+
+    const datevFieldsChanged =
+      current !== undefined &&
+      (current.datevPersonnelNumber !== personnelNumber ||
+        (current.costCenter ?? null) !== (dto.costCenter?.trim() || null) ||
+        (current.costUnit ?? null) !== (dto.costUnit?.trim() || null));
+
     const data = {
       datevPersonnelNumber: personnelNumber,
       weeklyTargetMinutes: dto.weeklyTargetMinutes ?? null,
@@ -178,32 +232,44 @@ export class PayrollSettingsService {
       costCenter: dto.costCenter?.trim() || null,
       costUnit: dto.costUnit?.trim() || null,
       ...(dto.employmentType !== undefined && { employmentType: dto.employmentType }),
+      ...(dto.datevPayrollSystem !== undefined && { datevPayrollSystem: dto.datevPayrollSystem }),
     };
 
-    try {
-      const existing = await this.prisma.driverPayrollProfile.findFirst({ where: { driverId } });
-      const row = existing
-        ? await this.prisma.driverPayrollProfile.update({ where: { id: existing.id }, data })
-        : await this.prisma.driverPayrollProfile.create({ data: { ...data, driverId, tenantId } });
-
-      await safeAuditLog(this.auditService, {
-        actorUserId,
-        action: 'payroll.driver_profile_saved',
-        entityType: 'driver_payroll_profile',
-        entityId: row.id,
-        summary: 'Driver payroll profile saved',
-        metadata: { driverId },
+    let row;
+    if (!current) {
+      row = await this.prisma.driverPayrollProfile.create({
+        data: { ...data, driverId, tenantId, validFrom },
       });
-
-      return row;
-    } catch (error) {
-      // Ayni personel numarasi iki suruculye verilirse DATEV tarafinda iki
-      // kisinin saatleri tek satirda birlesir — sessiz gecilemez.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('This DATEV personnel number is already used by another driver');
-      }
-      throw error;
+    } else if (!datevFieldsChanged) {
+      row = await this.prisma.driverPayrollProfile.update({ where: { id: current.id }, data });
+    } else if (current.validFrom.getTime() === validFrom.getTime()) {
+      // Ayni gun icinde ikinci duzeltme: yeni surum acmak yerine gunu duzelt,
+      // yoksa aralik cakisir ve hazirlik dogrulamasi bunu bloklar.
+      row = await this.prisma.driverPayrollProfile.update({ where: { id: current.id }, data });
+    } else {
+      const previousEnd = new Date(validFrom);
+      previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+      row = await this.prisma.$transaction(async (tx) => {
+        await tx.driverPayrollProfile.update({
+          where: { id: current.id },
+          data: { validTo: previousEnd },
+        });
+        return tx.driverPayrollProfile.create({
+          data: { ...data, driverId, tenantId, validFrom },
+        });
+      });
     }
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: 'payroll.driver_profile_saved',
+      entityType: 'driver_payroll_profile',
+      entityId: row.id,
+      summary: datevFieldsChanged ? 'Driver payroll profile versioned' : 'Driver payroll profile saved',
+      metadata: { driverId, versioned: datevFieldsChanged },
+    });
+
+    return row;
   }
 
   // ------------------------------------------------------------- mappings
@@ -308,7 +374,9 @@ export class PayrollSettingsService {
    * hesaba yazar. Bos liste, ihracatin acikca reddetmesi demek.
    */
   async listWageTypeMappings(_tenantId: string) {
-    return this.prisma.payrollWageTypeMapping.findMany({ orderBy: { wageType: 'asc' } });
+    return this.prisma.payrollWageTypeMapping.findMany({
+      orderBy: [{ payrollSystem: 'asc' }, { movementType: 'asc' }, { validFrom: 'desc' }],
+    });
   }
 
   async upsertWageTypeMapping(
@@ -321,14 +389,34 @@ export class PayrollSettingsService {
       throw new BadRequestException('A DATEV wage type number is required');
     }
 
+    // Ayni urun+tur+baslangic tekil: ayni tarihten gecerli ikinci bir numara
+    // hangisinin dogru oldugunu belirsiz birakirdi.
+    const validFrom = dto.validFrom ? normalizeDay(dto.validFrom, 'validFrom') : normalizeDay(new Date(), 'validFrom');
+    const validTo = dto.validTo ? normalizeDay(dto.validTo, 'validTo') : null;
+    if (validTo && validTo < validFrom) {
+      throw new BadRequestException('validTo must be on or after validFrom');
+    }
+
     const existing = await this.prisma.payrollWageTypeMapping.findFirst({
-      where: { wageType: dto.wageType },
+      where: { payrollSystem: dto.payrollSystem, movementType: dto.movementType, validFrom },
     });
-    const data = { datevWageTypeNumber: number, enabled: dto.enabled ?? true };
+    const data = {
+      datevWageTypeNumber: number,
+      enabled: dto.enabled ?? true,
+      validTo,
+      costCenter: dto.costCenter?.trim() || null,
+      costUnit: dto.costUnit?.trim() || null,
+    };
     const row = existing
       ? await this.prisma.payrollWageTypeMapping.update({ where: { id: existing.id }, data })
       : await this.prisma.payrollWageTypeMapping.create({
-          data: { ...data, tenantId, wageType: dto.wageType },
+          data: {
+            ...data,
+            tenantId,
+            payrollSystem: dto.payrollSystem,
+            movementType: dto.movementType,
+            validFrom,
+          },
         });
 
     await safeAuditLog(this.auditService, {
@@ -336,7 +424,7 @@ export class PayrollSettingsService {
       action: 'payroll.wage_type_mapping_saved',
       entityType: 'payroll_wage_type_mapping',
       entityId: row.id,
-      summary: `Wage type ${dto.wageType} mapped to DATEV ${number}`,
+      summary: `${dto.payrollSystem} wage type ${dto.movementType} mapped to DATEV ${number}`,
     });
 
     return row;

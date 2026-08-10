@@ -971,16 +971,25 @@ export type PayrollDayType =
   | 'off'
   | 'absence_unpaid';
 
-export type PayrollWageType =
-  | 'regular'
-  | 'overtime'
-  | 'night'
-  | 'night_core'
-  | 'sunday'
-  | 'holiday'
+/** DATEV'in iki bordro urunu; Lohnart planlari ayri. */
+export type DatevPayrollSystem = 'lodas' | 'lohn_und_gehalt';
+
+/**
+ * Fleet'in kendi hareket dili. DATEV Lohnart'i DEGIL — disari cikan numara
+ * esleme tablosundan geliyor.
+ */
+export type PayrollMovementType =
+  | 'regular_hours'
+  | 'overtime_hours'
+  | 'night_hours'
+  | 'night_core_hours'
+  | 'sunday_hours'
+  | 'holiday_hours'
   | 'vacation'
-  | 'sick'
-  | 'unpaid_absence';
+  | 'sickness'
+  | 'unpaid_absence'
+  | 'allowance'
+  | 'expense';
 
 export interface TenantPayrollProfile {
   id: string;
@@ -994,6 +1003,8 @@ export interface TenantPayrollProfile {
   roundingMinutes: number;
   defaultWeeklyTargetMinutes: number;
   tachoBreakToleranceMinutes: number;
+  /** Hedef DATEV urunu. Bos ise ihracat DATEV-hazir sayilmaz. */
+  datevPayrollSystem: DatevPayrollSystem | null;
 }
 
 export interface DriverPayrollProfileRow {
@@ -1003,6 +1014,9 @@ export interface DriverPayrollProfileRow {
   employeeNumber: string;
   /** Personel numarasi yoksa bu surucu bordroya giremez. */
   ready: boolean;
+  /** Kac profil surumu var — gecmis donem o tarihteki surumle uretilir. */
+  versionCount: number;
+  /** O ANDA gecerli surum. */
   profile: {
     datevPersonnelNumber: string;
     weeklyTargetMinutes: number | null;
@@ -1010,6 +1024,9 @@ export interface DriverPayrollProfileRow {
     costCenter: string | null;
     costUnit: string | null;
     employmentType: string;
+    datevPayrollSystem: DatevPayrollSystem | null;
+    validFrom: string;
+    validTo: string | null;
   } | null;
 }
 
@@ -1022,9 +1039,15 @@ export interface PayrollDayTypeMappingRow {
 
 export interface PayrollWageTypeMappingRow {
   id: string;
-  wageType: PayrollWageType;
+  payrollSystem: DatevPayrollSystem;
+  movementType: PayrollMovementType;
   datevWageTypeNumber: string;
   enabled: boolean;
+  /** Lohnart planlari yil icinde degisiyor; gecmis donem o tarihteki numarayla uretilir. */
+  validFrom: string;
+  validTo: string | null;
+  costCenter: string | null;
+  costUnit: string | null;
 }
 
 export interface PublicHolidayRow {
@@ -1110,6 +1133,7 @@ export const payrollApi = {
       monthlyTargetMinutes?: number;
       costCenter?: string;
       costUnit?: string;
+      datevPayrollSystem?: DatevPayrollSystem;
     },
   ) => api.put(`/payroll/drivers/${driverId}/profile`, payload).then((r) => r.data),
   listDayTypeMappings: () =>
@@ -1123,9 +1147,14 @@ export const payrollApi = {
   listWageTypeMappings: () =>
     api.get<PayrollWageTypeMappingRow[]>('/payroll/wage-type-mappings').then((r) => r.data),
   saveWageTypeMapping: (payload: {
-    wageType: PayrollWageType;
+    payrollSystem: DatevPayrollSystem;
+    movementType: PayrollMovementType;
     datevWageTypeNumber: string;
     enabled?: boolean;
+    validFrom?: string;
+    validTo?: string;
+    costCenter?: string;
+    costUnit?: string;
   }) => api.put<PayrollWageTypeMappingRow>('/payroll/wage-type-mappings', payload).then((r) => r.data),
   listHolidays: (year?: string) =>
     api

@@ -1,4 +1,4 @@
-import { PayrollEmploymentType } from '@prisma/client';
+import { DatevPayrollSystem, PayrollEmploymentType } from '@prisma/client';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class UpsertDriverPayrollProfileDto {
@@ -12,4 +12,6 @@ export class UpsertDriverPayrollProfileDto {
   @IsOptional() @IsString() @MaxLength(36) costCenter?: string;
   @IsOptional() @IsString() @MaxLength(36) costUnit?: string;
   @IsOptional() @IsEnum(PayrollEmploymentType) employmentType?: PayrollEmploymentType;
+  /** Bos ise tenant varsayilani gecerli. */
+  @IsOptional() @IsEnum(DatevPayrollSystem) datevPayrollSystem?: DatevPayrollSystem;
 }

@@ -8,7 +8,16 @@ import { DEFAULT_DAY_TYPE_MAPPINGS } from './core/day-type-mapping';
 import { PayrollSettingsService } from './payroll-settings.service';
 
 type MappingRow = { id: string; tenantId: string; calendarCode: string; dayType: PayrollDayType; paid: boolean };
-type ProfileRow = { id: string; tenantId: string; driverId: string; datevPersonnelNumber: string } & Record<string, unknown>;
+type ProfileRow = {
+  id: string;
+  tenantId: string;
+  driverId: string;
+  datevPersonnelNumber: string;
+  validFrom: Date;
+  validTo: Date | null;
+  costCenter: string | null;
+  costUnit: string | null;
+} & Record<string, unknown>;
 type HolidayRow = { id: string; tenantId: string; date: Date; name: string; bundesland: string | null };
 type CalendarRow = { status: string; uiStatus: string | null; date: Date };
 
@@ -25,7 +34,7 @@ function createFakePrisma(store: Store) {
   let sequence = 0;
   const nextId = (prefix: string) => `${prefix}-${(sequence += 1)}`;
 
-  return {
+  const client = {
     tenantPayrollProfile: {
       findFirst: async () => store.tenantProfiles[0] ?? null,
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -39,43 +48,36 @@ function createFakePrisma(store: Store) {
       },
     },
     driver: {
-      findMany: async () =>
-        store.drivers.map((driver) => ({
-          ...driver,
-          payrollProfile: store.driverProfiles.find((row) => row.driverId === driver.id) ?? null,
-        })),
+      findMany: async () => store.drivers,
       findUnique: async ({ where }: { where: { id: string } }) =>
         store.drivers.find((driver) => driver.id === where.id) ?? null,
     },
     driverPayrollProfile: {
-      findFirst: async ({ where }: { where: { driverId: string } }) =>
-        store.driverProfiles.find((row) => row.driverId === where.driverId) ?? null,
+      findMany: async ({ where }: { where?: { driverId?: string } } = {}) =>
+        store.driverProfiles.filter((row) => !where?.driverId || row.driverId === where.driverId),
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const number = where.datevPersonnelNumber as string | undefined;
+        const notDriver = (where.driverId as { not?: string } | undefined)?.not;
+        return (
+          store.driverProfiles.find(
+            (row) =>
+              (number === undefined || row.datevPersonnelNumber === number) &&
+              (notDriver === undefined || row.driverId !== notDriver),
+          ) ?? null
+        );
+      },
       create: async ({ data }: { data: Record<string, unknown> }) => {
-        const personnelNumber = data.datevPersonnelNumber as string;
-        if (store.driverProfiles.some((row) => row.datevPersonnelNumber === personnelNumber)) {
-          throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-            code: 'P2002',
-            clientVersion: 'test',
-          });
-        }
-        const row = { id: nextId('driver-profile'), ...data } as ProfileRow;
+        const row = {
+          id: nextId('driver-profile'),
+          validTo: null,
+          ...data,
+        } as unknown as ProfileRow;
         store.driverProfiles.push(row);
         return row;
       },
       update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         const row = store.driverProfiles.find((entry) => entry.id === where.id);
         if (!row) throw new Error('no row');
-        const personnelNumber = data.datevPersonnelNumber as string;
-        if (
-          store.driverProfiles.some(
-            (entry) => entry.id !== row.id && entry.datevPersonnelNumber === personnelNumber,
-          )
-        ) {
-          throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-            code: 'P2002',
-            clientVersion: 'test',
-          });
-        }
         Object.assign(row, data);
         return row;
       },
@@ -130,6 +132,11 @@ function createFakePrisma(store: Store) {
       },
     },
   };
+
+  return {
+    ...client,
+    $transaction: async (fn: (tx: typeof client) => Promise<unknown>) => fn(client),
+  };
 }
 
 function createStore(overrides: Partial<Store> = {}): Store {
@@ -179,6 +186,23 @@ describe('PayrollSettingsService tenant profile', () => {
     );
 
     assert.equal((row as { nightWindowStartMinute: number }).nightWindowStartMinute, 1200);
+  });
+
+  it("DATEV alanlarini KAYDEDER — DTO'da eksik kalirsa sessizce yutulurdu", async () => {
+    // Bu testin sebebi somut: tachoBreakToleranceMinutes ve datevPayrollSystem
+    // bir sure DTO'da yoktu; ekran gonderiyordu, sunucu sessizce atiyordu ve ne
+    // tsc ne de baska bir test bunu yakaliyordu.
+    const store = createStore();
+    const service = createService(store);
+
+    await service.upsertTenantProfile(
+      'tenant-a',
+      { datevPayrollSystem: 'lodas', tachoBreakToleranceMinutes: 25 },
+      'user-a',
+    );
+
+    assert.equal(store.tenantProfiles[0].datevPayrollSystem, 'lodas');
+    assert.equal(store.tenantProfiles[0].tachoBreakToleranceMinutes, 25);
   });
 
   it('bos gece penceresini reddeder', async () => {
@@ -245,6 +269,68 @@ describe('PayrollSettingsService driver profiles', () => {
       service.upsertDriverProfile('tenant-a', 'driver-x', { datevPersonnelNumber: '1001' }, 'user-a'),
       (error: unknown) => error instanceof NotFoundException,
     );
+  });
+});
+
+describe('PayrollSettingsService profil surumleme', () => {
+  const JAN = new Date('2026-01-15T00:00:00.000Z');
+  const JUL = new Date('2026-07-15T00:00:00.000Z');
+
+  it('personel numarasi degisince YENI SURUM acar, eskisini kapatir', async () => {
+    // Ustune yazmak, gecmis bir donemi yeniden uretirken bugunun numarasini
+    // kullanmak demek olurdu.
+    const store = createStore();
+    const service = createService(store);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '2002' }, 'user-a', JUL);
+
+    assert.equal(store.driverProfiles.length, 2);
+    const [first, second] = store.driverProfiles;
+    assert.equal(first.datevPersonnelNumber, '1001');
+    assert.equal(first.validTo?.toISOString().slice(0, 10), '2026-07-14');
+    assert.equal(second.datevPersonnelNumber, '2002');
+    assert.equal(second.validTo, null);
+  });
+
+  it('DATEV disi alan degisiminde surum ACMAZ', async () => {
+    // Her hedef sure degisikligi icin surum acmak gecmisi kalabaliklastirirdi.
+    const store = createStore();
+    const service = createService(store);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile(
+      'tenant-a',
+      'driver-a',
+      { datevPersonnelNumber: '1001', weeklyTargetMinutes: 1_800 },
+      'user-a',
+      JUL,
+    );
+
+    assert.equal(store.driverProfiles.length, 1);
+    assert.equal(store.driverProfiles[0].weeklyTargetMinutes, 1_800);
+  });
+
+  it('ayni gun ikinci duzeltmede aralik cakistirmaz', async () => {
+    const store = createStore();
+    const service = createService(store);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1009' }, 'user-a', JAN);
+
+    assert.equal(store.driverProfiles.length, 1);
+    assert.equal(store.driverProfiles[0].datevPersonnelNumber, '1009');
+  });
+
+  it('listede O ANDA gecerli surumu verir', async () => {
+    const store = createStore();
+    const service = createService(store);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '2002' }, 'user-a', JUL);
+
+    const inMarch = await service.listDriverProfiles(new Date('2026-03-01T00:00:00.000Z'));
+    const inAugust = await service.listDriverProfiles(new Date('2026-08-01T00:00:00.000Z'));
+
+    assert.equal(inMarch.find((r) => r.driverId === 'driver-a')?.profile?.datevPersonnelNumber, '1001');
+    assert.equal(inAugust.find((r) => r.driverId === 'driver-a')?.profile?.datevPersonnelNumber, '2002');
+    assert.equal(inAugust.find((r) => r.driverId === 'driver-a')?.versionCount, 2);
   });
 });
 

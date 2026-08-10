@@ -128,6 +128,18 @@ function DriverRow({
           {row.lastName} {row.firstName}
         </p>
         <p className="text-xs text-slate-500">{row.employeeNumber}</p>
+        {/* Profil surumlu: personel numarasi degisince yeni surum aciliyor ve
+            gecmis donem O TARIHTEKI numarayla uretiliyor. */}
+        {row.versionCount > 1 ? (
+          <p className="text-xs text-slate-500">
+            {t('payroll.drivers.versions', { count: row.versionCount })}
+          </p>
+        ) : null}
+        {row.profile ? (
+          <p className="text-xs text-slate-400">
+            {t('payroll.drivers.validFrom', { date: row.profile.validFrom.slice(0, 10) })}
+          </p>
+        ) : null}
       </div>
       <label className="text-sm">
         <span className="mb-1 block text-xs text-slate-600">{t('payroll.drivers.personnelNumber')}</span>
@@ -168,6 +180,10 @@ function DriverRow({
       >
         {t('payroll.settings.save')}
       </Button>
+      {dirty && personnelNumber !== (row.profile?.datevPersonnelNumber ?? '') && row.profile ? (
+        // Kaydetmeden once soyluyoruz: numara degisimi surum acar, ustune yazmaz.
+        <p className="w-full text-xs text-amber-700">{t('payroll.drivers.willVersion')}</p>
+      ) : null}
     </div>
   );
 }

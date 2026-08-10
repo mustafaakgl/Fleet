@@ -5,7 +5,7 @@ import {
   PayrollEntryKind,
   PayrollExportFormat,
   PayrollPeriodStatus,
-  PayrollWageType,
+  PayrollMovementType,
   Prisma,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
@@ -36,7 +36,26 @@ type Store = {
   periods: PeriodRow[];
   entries: EntryRow[];
   events: Array<{ id: string; driverId: string; occurredAt: Date; createdAt: Date }>;
-  mappings: Array<{ wageType: PayrollWageType; datevWageTypeNumber: string; enabled: boolean }>;
+  mappings: Array<{
+    payrollSystem: 'lodas' | 'lohn_und_gehalt';
+    movementType: PayrollMovementType;
+    datevWageTypeNumber: string;
+    enabled: boolean;
+    validFrom: Date;
+    validTo: Date | null;
+    costCenter: string | null;
+    costUnit: string | null;
+  }>;
+  profiles: Array<{
+    driverId: string;
+    datevPersonnelNumber: string;
+    datevPayrollSystem: 'lodas' | 'lohn_und_gehalt' | null;
+    costCenter: string | null;
+    costUnit: string | null;
+    validFrom: Date;
+    validTo: Date | null;
+  }>;
+  days: Array<{ driverId: string; anomalies: string[] | null }>;
   exports: Array<Record<string, unknown>>;
   saved: Array<{ fileName: string; contents: string }>;
   /** computePeriod'un dondurecegi taze kalemler. */
@@ -48,6 +67,22 @@ const PROFILE_SNAPSHOT = {
   costCenter: 'KST-1',
   costUnit: null,
 };
+
+function wageMapping(
+  movementType: PayrollMovementType,
+  datevWageTypeNumber: string,
+): Store['mappings'][number] {
+  return {
+    payrollSystem: 'lodas',
+    movementType,
+    datevWageTypeNumber,
+    enabled: true,
+    validFrom: new Date('2026-01-01T00:00:00.000Z'),
+    validTo: null,
+    costCenter: null,
+    costUnit: null,
+  };
+}
 
 function period(overrides: Partial<PeriodRow> = {}): PeriodRow {
   return {
@@ -125,7 +160,21 @@ function createFakePrisma(store: Store) {
       findMany: async ({ where }: { where: { createdAt: { gt: Date } } }) =>
         store.events.filter((row) => row.createdAt.getTime() > where.createdAt.gt.getTime()),
     },
+    driverPayrollProfile: { findMany: async () => store.profiles },
+    payrollWageTypeMapping: { findMany: async () => store.mappings },
+    payrollDay: { findMany: async () => store.days },
     payrollExport: {
+      findFirst: async ({ where, orderBy }: { where?: Record<string, unknown>; orderBy?: unknown }) => {
+        const rows = store.exports
+          .filter((row) => !where || Object.entries(where).every(([k, v]) => row[k] === v))
+          .sort((a, b) => Number(b.version ?? 0) - Number(a.version ?? 0));
+        return rows[0] ?? null;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const row = store.exports.find((entry) => entry.id === where.id);
+        if (row) Object.assign(row, data);
+        return row;
+      },
       findMany: async () => store.exports,
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row = { id: `export-${(sequence += 1)}`, ...data };
@@ -147,9 +196,21 @@ function createStore(overrides: Partial<Store> = {}): Store {
     entries: [entry()],
     events: [],
     mappings: [
-      { wageType: PayrollWageType.regular, datevWageTypeNumber: '1000', enabled: true },
-      { wageType: PayrollWageType.overtime, datevWageTypeNumber: '1100', enabled: true },
+      wageMapping(PayrollMovementType.regular_hours, '1000'),
+      wageMapping(PayrollMovementType.overtime_hours, '1100'),
     ],
+    profiles: [
+      {
+        driverId: 'driver-a',
+        datevPersonnelNumber: '1001',
+        datevPayrollSystem: null,
+        costCenter: 'KST-1',
+        costUnit: null,
+        validFrom: new Date('2026-01-01T00:00:00.000Z'),
+        validTo: null,
+      },
+    ],
+    days: [],
     exports: [],
     saved: [],
     freshEntries: [],
@@ -163,13 +224,14 @@ function createService(store: Store): PayrollExportService {
   } as unknown as PayrollPeriodService;
 
   const settings = {
-    listWageTypeMappings: async () => store.mappings,
-    getTenantProfile: async () => ({ datevConsultantNumber: '12345', datevClientNumber: '54321' }),
+    getTenantProfile: async () => ({
+      datevConsultantNumber: '12345',
+      datevClientNumber: '54321',
+      datevPayrollSystem: 'lodas' as const,
+    }),
   } as unknown as PayrollSettingsService;
 
   const storage = {
-    buildFileName: (year: number, month: number, format: string) =>
-      `lohn-${format}-${year}${String(month).padStart(2, '0')}.csv`,
     save: async (fileName: string, contents: Buffer) => {
       store.saved.push({ fileName, contents: contents.toString('utf8') });
       return { storedPath: `/uploads/payroll-exports/${fileName}`, sha256: 'abc', byteSize: contents.length };
@@ -328,50 +390,83 @@ describe('PayrollExportService ihracat', () => {
     const row = await service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a');
 
     assert.equal(store.saved.length, 1);
-    assert.equal(store.saved[0].fileName, 'lohn-neutral_csv-202607.csv');
     const csv = store.saved[0].contents;
-    assert.match(csv, /^LOHN;2026-07;12345;54321/);
-    assert.match(csv, /1001;Albrecht;Dieter;regular;1000;166,00;Stunden/);
-    assert.match(csv, /1001;Albrecht;Dieter;overtime;1100;2,00;Stunden/);
+    assert.match(csv, /^LOHN;2026-07;12345;54321;lodas/);
+    assert.match(csv, /1001;regular_hours;1000;166,00;Stunden/);
+    assert.match(csv, /1001;overtime_hours;1100;2,00;Stunden/);
     assert.equal(store.periods[0].status, PayrollPeriodStatus.exported);
     assert.deepEqual((row as { entryIds: string[] }).entryIds, ['entry-1']);
   });
 
-  it('eslenmemis kova ihracata girmez', async () => {
-    // gece kovasi eslenmemis; dosyada gece satiri olmamali.
+  it('eslenmemis kovayi SESSIZCE ATLAMAZ, ihracati durdurur', async () => {
+    // Onceki davranis kovayi dosyadan dusuruyordu; odenmis gece saatlerinin
+    // sessizce kaybolmasi demekti. Artik hazirlik dogrulamasi bunu bloklar.
     const store = createStore({
       entries: [entry({ nightMinutes: 300, regularMinutes: 9_780 })],
     });
     const service = createService(store);
 
-    await service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a');
+    await assert.rejects(
+      service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a'),
+      (error: unknown) =>
+        (error as { getResponse(): { code: string; issues: Array<{ code: string }> } })
+          .getResponse()
+          .issues.some((issue) => issue.code === 'wage_type_unmapped'),
+    );
 
-    assert.doesNotMatch(store.saved[0].contents, /;night;/);
+    assert.deepEqual(store.saved, []);
+  });
+
+  it('yanlis dosyayi DUZELTMEZ, yeni surum uretip eskisini superseded yapar', async () => {
+    const store = createStore();
+    const service = createService(store);
+
+    const first = await service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a');
+    const second = await service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a');
+
+    assert.equal((first as { version: number }).version, 1);
+    assert.equal((second as { version: number }).version, 2);
+    assert.equal((second as { supersedesExportId: string }).supersedesExportId, (first as { id: string }).id);
+    // Eski dosya SILINMIYOR: hangi dosyanin gonderildigi kanitlanabilmeli.
+    assert.equal(store.exports.find((row) => row.id === (first as { id: string }).id)?.status, 'superseded');
+    assert.equal(store.saved.length, 2);
+  });
+
+  it('kaynak ozetini ve kayit sayisini yazar', async () => {
+    const store = createStore({ entries: [entry({ overtimeMinutes: 120, regularMinutes: 9_960 })] });
+    const service = createService(store);
+
+    const row = (await service.exportPeriod(
+      'period-jul',
+      PayrollExportFormat.neutral_csv,
+      'user-a',
+    )) as { recordCount: number; sourceHash: string };
+
+    assert.equal(row.recordCount, 2);
+    assert.match(row.sourceHash, /^[0-9a-f]{64}$/);
   });
 
   it('hic esleme yoksa reddeder', async () => {
-    const store = createStore({ mappings: [] });
+    const store = createStore({ mappings: [], entries: [entry({ regularMinutes: 10_080 })] });
     const service = createService(store);
 
     await assert.rejects(
       service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a'),
       (error: unknown) =>
         (error as { getResponse(): { code: string } }).getResponse().code ===
-        'payroll_wage_types_unmapped',
+        'payroll_period_not_datev_ready',
     );
   });
 
-  it('personel numarasi olmayan kalemde durur', async () => {
-    const store = createStore({
-      entries: [entry({ driverProfileSnapshot: Prisma.JsonNull as unknown as null })],
-    });
+  it('personel numarasi olmayan surucuyu DATEV-hazir saymaz', async () => {
+    const store = createStore({ profiles: [] });
     const service = createService(store);
 
     await assert.rejects(
       service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a'),
       (error: unknown) =>
         (error as { getResponse(): { code: string } }).getResponse().code ===
-        'payroll_entry_personnel_number_missing',
+        'payroll_period_not_datev_ready',
     );
   });
 
@@ -383,16 +478,19 @@ describe('PayrollExportService ihracat', () => {
       service.exportPeriod('period-aug', PayrollExportFormat.neutral_csv, 'user-a'),
       (error: unknown) =>
         (error as { getResponse(): { code: string } }).getResponse().code ===
-        'payroll_period_not_approved',
+        'payroll_period_not_datev_ready',
     );
   });
 
-  it('henuz yazicisi olmayan bicimi acikca reddeder', async () => {
+  it('henuz yazicisi olmayan DATEV ASCII bicimini acikca reddeder', async () => {
+    // LODAS/Lohn und Gehalt duzenleri resmi spec'e gore yazilip gercek DATEV
+    // uygulamasinda test-import edilmeden dogru sayilmayacak; tahmine dayali
+    // dosya uretmektense reddediliyor.
     const store = createStore();
     const service = createService(store);
 
     await assert.rejects(
-      service.exportPeriod('period-jul', PayrollExportFormat.lodas, 'user-a'),
+      service.exportPeriod('period-jul', PayrollExportFormat.datev_ascii, 'user-a'),
       (error: unknown) =>
         error instanceof BadRequestException &&
         (error.getResponse() as { code: string }).code === 'payroll_export_format_unsupported',

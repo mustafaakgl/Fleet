@@ -1,23 +1,81 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  DatevPayrollSystem,
   PayrollEntryKind,
   PayrollExportFormat,
   PayrollExportStatus,
+  PayrollMovementType,
   PayrollPeriodStatus,
   Prisma,
 } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PayrollExportStorageService } from '../storage/payroll-export-storage.service';
 import {
-  renderNeutralPayrollCsv,
-  WAGE_TYPE_SOURCES,
-  type NeutralCsvRow,
-} from './export/neutral-csv';
+  buildNormalizedMovements,
+  summarizeMovements,
+  type WageTypeRule,
+} from './core/payroll-movement.mapper';
+import type { NormalizedPayrollMovement } from './core/payroll-movement';
+import { evaluateDatevReadiness } from './datev/core/datev-payroll-validation';
+import type { DatevPayrollContext, PayrollFileWriter } from './datev/core/datev-payroll.types';
+import { neutralCsvWriter } from './export/neutral-csv';
 import { PayrollPeriodService } from './payroll-period.service';
 import { PayrollSettingsService } from './payroll-settings.service';
+
+/**
+ * Bicim → yazici.
+ *
+ * `datev_ascii` HENUZ YOK: LODAS ve Lohn und Gehalt duzenleri resmi spec'e
+ * gore yazilacak ve gercek DATEV uygulamasinda test-import edilmeden dogru
+ * sayilmayacak. Tahmine dayali bir dosya uretmektense ihracat acikca
+ * reddediyor.
+ */
+const WRITERS: Partial<Record<PayrollExportFormat, PayrollFileWriter>> = {
+  [PayrollExportFormat.neutral_csv]: neutralCsvWriter,
+};
+
+/** Kalemdeki dolu kovalardan hangi hareket turlerinin kullanildigini cikarir. */
+function collectUsedMovementTypes(
+  entries: ReadonlyArray<Record<string, unknown>>,
+): PayrollMovementType[] {
+  const pairs: Array<[PayrollMovementType, string]> = [
+    [PayrollMovementType.regular_hours, 'regularMinutes'],
+    [PayrollMovementType.overtime_hours, 'overtimeMinutes'],
+    [PayrollMovementType.night_hours, 'nightMinutes'],
+    [PayrollMovementType.night_core_hours, 'nightCoreMinutes'],
+    [PayrollMovementType.sunday_hours, 'sundayMinutes'],
+    [PayrollMovementType.holiday_hours, 'holidayMinutes'],
+    [PayrollMovementType.vacation, 'vacationDays'],
+    [PayrollMovementType.sickness, 'sickDays'],
+    [PayrollMovementType.unpaid_absence, 'unpaidAbsenceDays'],
+  ];
+  const used = new Set<PayrollMovementType>();
+  for (const entry of entries) {
+    for (const [type, field] of pairs) {
+      if ((entry[field] as number | undefined) ?? 0) used.add(type);
+    }
+  }
+  return [...used];
+}
+
+/**
+ * Ihracata giren verinin ozeti.
+ *
+ * Donem sonradan degistiyse (Ruckrechnung, yeniden hesap) bu ozet tutmaz ve
+ * elde duran dosyanin bayatladigi anlasilir. Siralama sabitleniyor ki ayni
+ * veri hep ayni ozeti versin.
+ */
+function hashExportSource(movements: readonly NormalizedPayrollMovement[]): string {
+  const canonical = movements
+    .map((m) => [m.personnelNumber, m.type, m.quantity, m.wageType ?? '', m.sourceId].join('|'))
+    .sort()
+    .join('\n');
+  return createHash('sha256').update(canonical).digest('hex');
+}
 
 /**
  * DATEV Lohn ihracati ve Ruckrechnung (Faz 4c).
@@ -221,103 +279,238 @@ export class PayrollExportService {
   }
 
   // ---------------------------------------------------------------- ihracat
+  // ------------------------------------------------------- DATEV hazirligi
 
-  async exportPeriod(
-    periodId: string,
-    format: PayrollExportFormat,
-    actorUserId: string,
-  ) {
+  /**
+   * Donemi hem hesaba hem DATEV kosullarina karsi degerlendirir.
+   *
+   * `approved` ile `DATEV-bereit` ayri seyler: hesap dogru olabilir ama
+   * personel numarasi, Lohnart plani veya Berater/Mandant eksikse dosya
+   * uretilemez. Ekran ikisini ayri gosterdigi icin bu ucun ciktisi da ayri.
+   */
+  async evaluateReadiness(periodId: string, asOf: Date = new Date()) {
     const period = await this.requirePeriod(periodId);
-    if (!EXPORTABLE_STATUSES.includes(period.status)) {
-      throw new ConflictException({ code: 'payroll_period_not_approved' });
-    }
-    if (format !== PayrollExportFormat.neutral_csv) {
-      // LODAS ve Lohn und Gehalt yazicilari hedef urun netlestiginde eklenecek;
-      // enum bastan uc degerli ki o gun sema degismesin.
-      throw new BadRequestException({ code: 'payroll_export_format_unsupported' });
-    }
+    const source = await this.loadExportSource(period, asOf);
 
-    const [entries, mappings, profile] = await Promise.all([
+    return {
+      periodId,
+      periodStatus: period.status,
+      payrollSystem: source.payrollSystem,
+      driverCount: new Set(source.entries.map((entry) => entry.driverId)).size,
+      movementCount: source.movements.length,
+      summary: summarizeMovements(source.movements),
+      ...evaluateDatevReadiness({
+        periodStatus: period.status,
+        payrollSystem: source.payrollSystem,
+        consultantNumber: source.tenantProfile?.datevConsultantNumber ?? null,
+        clientNumber: source.tenantProfile?.datevClientNumber ?? null,
+        driverIds: [...new Set(source.entries.map((entry) => entry.driverId))],
+        profiles: source.profiles,
+        usedMovementTypes: source.usedMovementTypes,
+        wageTypeRules: source.rules,
+        dayAnomalies: source.dayAnomalies,
+        asOf: source.asOf,
+      }),
+    };
+  }
+
+  /**
+   * Ihracatin ihtiyac duydugu her seyi tek yerde toplar.
+   *
+   * Hazirlik kontrolu ile dosya uretimi AYNI kaynagi okumali; iki ayri sorgu
+   * olsaydi "hazir" diyen ekran ile "eksik" diyen ihracat arasinda fark
+   * cikabilirdi.
+   */
+  private async loadExportSource(
+    period: { id: string; tenantId: string; year: number; month: number },
+    asOf: Date,
+  ) {
+    // Esleme ve profil, DONEMIN SONUNA gore cozuluyor: gecmis bir ay yeniden
+    // uretildiginde o tarihte gecerli olan numara kullanilmali.
+    const periodEnd = new Date(Date.UTC(period.year, period.month, 0, 23, 59, 59));
+
+    const [entries, profileRows, ruleRows, tenantProfile, dayRows] = await Promise.all([
       this.prisma.payrollEntry.findMany({
-        where: { periodId },
+        where: { periodId: period.id },
         include: {
           driver: { select: { firstName: true, lastName: true } },
           correctsPeriod: { select: { year: true, month: true } },
         },
         orderBy: [{ kind: 'asc' }, { driver: { lastName: 'asc' } }],
       }),
-      this.settings.listWageTypeMappings(period.tenantId),
+      this.prisma.driverPayrollProfile.findMany(),
+      this.prisma.payrollWageTypeMapping.findMany(),
       this.settings.getTenantProfile(),
+      this.prisma.payrollDay.findMany({
+        where: { periodId: period.id },
+        select: { driverId: true, anomalies: true },
+      }),
     ]);
 
-    const enabled = new Map(
-      mappings.filter((row) => row.enabled).map((row) => [row.wageType, row.datevWageTypeNumber]),
+    const profiles = profileRows.map((row) => ({
+      driverId: row.driverId,
+      personnelNumber: row.datevPersonnelNumber,
+      validFrom: row.validFrom,
+      validTo: row.validTo,
+    }));
+
+    // Surucu profili tenant varsayilanini ezebiliyor; farkli suruculer farkli
+    // DATEV urunune gidiyorsa tek dosya uretilemez ve bu hazirlikta cikar.
+    const payrollSystem =
+      profileRows.find((row) => row.datevPayrollSystem)?.datevPayrollSystem ??
+      tenantProfile?.datevPayrollSystem ??
+      null;
+
+    const rules: WageTypeRule[] = ruleRows.map((row) => ({
+      payrollSystem: row.payrollSystem,
+      movementType: row.movementType,
+      externalWageType: row.datevWageTypeNumber,
+      enabled: row.enabled,
+      validFrom: row.validFrom,
+      validTo: row.validTo,
+      costCenter: row.costCenter,
+      costUnit: row.costUnit,
+    }));
+
+    const identities = new Map(
+      profileRows
+        .filter((row) => {
+          const from = row.validFrom.getTime();
+          const to = row.validTo?.getTime() ?? Number.POSITIVE_INFINITY;
+          return from <= periodEnd.getTime() && periodEnd.getTime() <= to;
+        })
+        .map((row) => [
+          row.driverId,
+          {
+            driverId: row.driverId,
+            personnelNumber: row.datevPersonnelNumber,
+            costCenter: row.costCenter,
+            costUnit: row.costUnit,
+          },
+        ]),
     );
-    if (enabled.size === 0) {
-      throw new ConflictException({ code: 'payroll_wage_types_unmapped' });
+
+    const usedMovementTypes = collectUsedMovementTypes(entries);
+
+    const dayAnomalies = new Map<string, string[]>();
+    for (const row of dayRows) {
+      const anomalies = Array.isArray(row.anomalies) ? (row.anomalies as string[]) : [];
+      if (anomalies.length === 0) continue;
+      dayAnomalies.set(row.driverId, [...(dayAnomalies.get(row.driverId) ?? []), ...anomalies]);
     }
 
-    const rows: NeutralCsvRow[] = [];
-    const usedEntryIds: string[] = [];
-    for (const entry of entries) {
-      const personnelNumber = readSnapshot(entry.driverProfileSnapshot, 'datevPersonnelNumber');
-      if (!personnelNumber) {
-        // Onay kapisi bunu zaten engelliyor; duzeltme kalemleri onaydan sonra
-        // yazildigi icin ikinci bir kontrol burada duruyor.
-        throw new ConflictException({
-          code: 'payroll_entry_personnel_number_missing',
-          driverId: entry.driverId,
-        });
-      }
+    const built = payrollSystem
+      ? buildNormalizedMovements({
+          entries,
+          identities,
+          rules,
+          payrollSystem,
+          year: period.year,
+          month: period.month,
+          asOf: periodEnd,
+        })
+      : { movements: [], unmapped: [], missingIdentity: [] };
 
-      let wroteAny = false;
-      for (const source of WAGE_TYPE_SOURCES) {
-        const wageTypeNumber = enabled.get(source.wageType);
-        if (!wageTypeNumber) continue;
-        const quantity = entry[source.field];
-        if (quantity <= 0) continue;
+    return {
+      entries,
+      profiles,
+      rules,
+      tenantProfile,
+      payrollSystem,
+      identities,
+      usedMovementTypes,
+      dayAnomalies,
+      movements: built.movements,
+      asOf: periodEnd,
+    };
+  }
 
-        rows.push({
-          personnelNumber,
-          lastName: entry.driver.lastName,
-          firstName: entry.driver.firstName,
-          wageType: source.wageType,
-          datevWageTypeNumber: wageTypeNumber,
-          quantity,
-          unit: source.unit,
-          costCenter: readSnapshot(entry.driverProfileSnapshot, 'costCenter'),
-          costUnit: readSnapshot(entry.driverProfileSnapshot, 'costUnit'),
-          correctsPeriod: entry.correctsPeriod
-            ? `${entry.correctsPeriod.year}-${String(entry.correctsPeriod.month).padStart(2, '0')}`
-            : null,
-        });
-        wroteAny = true;
-      }
-      if (wroteAny) usedEntryIds.push(entry.id);
+  // ---------------------------------------------------------------- ihracat
+
+  /**
+   * Dosya uretir.
+   *
+   * DEGISMEZ: var olan bir ihracat GUNCELLENMEZ. Yanlissa yenisi uretilir,
+   * eskisi `superseded` olur ve dosyasi yerinde kalir — hangi dosyanin
+   * gonderildigi sonradan kanitlanabilmeli.
+   */
+  async exportPeriod(
+    periodId: string,
+    format: PayrollExportFormat,
+    actorUserId: string,
+    asOf: Date = new Date(),
+  ) {
+    const period = await this.requirePeriod(periodId);
+    const source = await this.loadExportSource(period, asOf);
+
+    const readiness = evaluateDatevReadiness({
+      periodStatus: period.status,
+      payrollSystem: source.payrollSystem,
+      consultantNumber: source.tenantProfile?.datevConsultantNumber ?? null,
+      clientNumber: source.tenantProfile?.datevClientNumber ?? null,
+      driverIds: [...new Set(source.entries.map((entry) => entry.driverId))],
+      profiles: source.profiles,
+      usedMovementTypes: source.usedMovementTypes,
+      wageTypeRules: source.rules,
+      dayAnomalies: source.dayAnomalies,
+      asOf: source.asOf,
+    });
+    if (!readiness.ready) {
+      throw new ConflictException({
+        code: 'payroll_period_not_datev_ready',
+        issues: readiness.issues,
+      });
     }
 
-    const csv = renderNeutralPayrollCsv({
+    const writer = WRITERS[format];
+    if (!writer) {
+      // LODAS ve Lohn und Gehalt ASCII yazicilari resmi bicim dogrulanana
+      // kadar eklenmiyor; sessizce bos dosya uretmektense acikca reddediliyor.
+      throw new BadRequestException({ code: 'payroll_export_format_unsupported' });
+    }
+
+    const context: DatevPayrollContext = {
+      payrollSystem: source.payrollSystem!,
+      consultantNumber: source.tenantProfile!.datevConsultantNumber!,
+      clientNumber: source.tenantProfile!.datevClientNumber!,
       year: period.year,
       month: period.month,
-      profile: {
-        consultantNumber: profile?.datevConsultantNumber ?? null,
-        clientNumber: profile?.datevClientNumber ?? null,
-      },
-      rows,
+      generatedAt: asOf,
+    };
+
+    const payload = writer.render(source.movements, context);
+    const stored = await this.storage.save(
+      `${period.id}-v${await this.nextVersion(period.id, context.payrollSystem, format)}-${writer.fileName(context)}`,
+      Buffer.from(payload, 'utf8'),
+    );
+
+    const version = await this.nextVersion(period.id, context.payrollSystem, format);
+    const previous = await this.prisma.payrollExport.findFirst({
+      where: { periodId: period.id, payrollSystem: context.payrollSystem, format },
+      orderBy: { version: 'desc' },
     });
 
-    const fileName = this.storage.buildFileName(period.year, period.month, format);
-    const stored = await this.storage.save(fileName, Buffer.from(csv, 'utf8'));
-
     const exportRow = await this.prisma.$transaction(async (tx) => {
+      if (previous) {
+        // Eski dosya SILINMIYOR, yalnizca gecersiz isaretleniyor.
+        await tx.payrollExport.update({
+          where: { id: previous.id },
+          data: { status: PayrollExportStatus.superseded },
+        });
+      }
       const created = await tx.payrollExport.create({
         data: {
           tenantId: period.tenantId,
           periodId: period.id,
+          payrollSystem: context.payrollSystem,
           format,
-          fileStoredPath: stored.storedPath,
-          fileSha256: stored.sha256,
-          entryIds: usedEntryIds,
+          version,
+          payloadStoredPath: stored.storedPath,
+          payloadSha256: stored.sha256,
+          entryIds: [...new Set(source.movements.map((movement) => movement.sourceId))],
+          recordCount: source.movements.length,
+          sourceHash: hashExportSource(source.movements),
+          supersedesExportId: previous?.id ?? null,
           createdById: actorUserId,
         },
       });
@@ -333,13 +526,31 @@ export class PayrollExportService {
       action: 'payroll.period_exported',
       entityType: 'payroll_period',
       entityId: period.id,
-      summary: `Payroll export generated for ${period.year}-${String(period.month).padStart(2, '0')}`,
-      metadata: { exportId: exportRow.id, rowCount: rows.length, format },
+      summary: `Payroll export v${version} generated for ${period.year}-${String(period.month).padStart(2, '0')}`,
+      metadata: {
+        exportId: exportRow.id,
+        format,
+        payrollSystem: context.payrollSystem,
+        recordCount: source.movements.length,
+        supersedes: previous?.id ?? null,
+      },
     });
 
     return exportRow;
   }
 
+  private async nextVersion(
+    periodId: string,
+    payrollSystem: DatevPayrollSystem,
+    format: PayrollExportFormat,
+  ): Promise<number> {
+    const latest = await this.prisma.payrollExport.findFirst({
+      where: { periodId, payrollSystem, format },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    return (latest?.version ?? 0) + 1;
+  }
   async listExports(periodId?: string) {
     return this.prisma.payrollExport.findMany({
       where: periodId ? { periodId } : undefined,
@@ -351,7 +562,7 @@ export class PayrollExportService {
     const row = await this.prisma.payrollExport.findUnique({ where: { id } });
     if (!row) throw new NotFoundException({ code: 'payroll_export_not_found' });
 
-    const file = await this.storage.open(row.fileStoredPath);
+    const file = await this.storage.open(row.payloadStoredPath);
     if (!file) {
       throw new NotFoundException({ code: 'payroll_export_file_missing' });
     }
@@ -363,8 +574,8 @@ export class PayrollExportService {
 
     return {
       stream: file.stream,
-      fileName: row.fileStoredPath.split('/').pop() ?? 'lohn-export.csv',
-      mimeType: this.storage.mimeTypeFor(row.fileStoredPath),
+      fileName: row.payloadStoredPath.split('/').pop() ?? 'lohn-export.csv',
+      mimeType: this.storage.mimeTypeFor(row.payloadStoredPath),
     };
   }
 

@@ -1,57 +1,29 @@
-import { PayrollWageType } from '@prisma/client';
+import type { DatevPayrollContext, PayrollFileWriter } from '../datev/core/datev-payroll.types';
+import type { NormalizedPayrollMovement } from '../core/payroll-movement';
 
 /**
- * Notr bordro ihracati.
+ * Fleet'in kendi notr bordro dosyasi.
  *
- * Hedef DATEV urunu (LODAS mi Lohn und Gehalt mi) henuz belli degil. Bu dosya
- * Steuerberater'in ihtiyaci olan TAM veriyi tasiyor: kim, hangi Lohnart, ne
- * kadar, hangi donem, hangi Kostenstelle. Gercek bicim netlestiginde yalnizca
- * yeni bir yazici eklenecek — veri modeli ve toplama mantigi degismeyecek.
+ * DATEV'E VERILMEZ. Iki isi var: ihracatin ne urettigini insan gozuyle
+ * dogrulamak ve Steuerberater'a "ham veri" gostermek. Gercek DATEV dosyalari
+ * ayri yazicilardan cikiyor (bkz. payroll/datev/).
  *
  * Bicim EXTF yazicisiyla ayni konvansiyonlari izliyor (noktali virgul ayirici,
- * Alman ondalik virgulu) ki iki dosyayi ayni araclarla acan muhasebeci sasirmasin.
+ * Alman ondalik virgulu) ki iki dosyayi ayni araclarla acan muhasebeci
+ * sasirmasin — ama kod olarak onunla hicbir sey paylasmiyor.
  */
-
-export type NeutralCsvProfile = {
-  consultantNumber: string | null;
-  clientNumber: string | null;
-};
-
-export type NeutralCsvRow = {
-  personnelNumber: string;
-  lastName: string;
-  firstName: string;
-  wageType: PayrollWageType;
-  datevWageTypeNumber: string;
-  /** Saat kalemlerinde dakika, gun kalemlerinde gun sayisi. */
-  quantity: number;
-  unit: 'hours' | 'days';
-  costCenter: string | null;
-  costUnit: string | null;
-  /** Duzeltme kalemi ise duzeltilen donem "YYYY-MM"; degilse bos. */
-  correctsPeriod: string | null;
-};
-
-export type NeutralCsvInput = {
-  year: number;
-  month: number;
-  profile: NeutralCsvProfile;
-  rows: readonly NeutralCsvRow[];
-};
 
 const HEADER = [
   'Personalnummer',
-  'Nachname',
-  'Vorname',
+  'Bewegungsart',
   'Lohnart',
-  'Lohnartschluessel',
   'Menge',
   'Einheit',
   'Jahr',
   'Monat',
   'Kostenstelle',
   'Kostentraeger',
-  'Rueckrechnung',
+  'Quelle',
 ] as const;
 
 /**
@@ -63,87 +35,67 @@ function sanitize(value: string): string {
   return value.replace(/[;\r\n]+/g, ' ').trim();
 }
 
-/** 495 dakika → "8,25". Alman ondalik virgulu, iki basamak. */
+/** 495 → "8,25". Alman ondalik virgulu; negatif isaret korunuyor. */
 export function minutesToDecimalHours(minutes: number): string {
-  const hours = minutes / 60;
-  return hours.toFixed(2).replace('.', ',');
+  return (minutes / 60).toFixed(2).replace('.', ',');
 }
 
-function formatQuantity(row: NeutralCsvRow): string {
-  return row.unit === 'hours' ? minutesToDecimalHours(row.quantity) : String(row.quantity);
+/** 12345 cent → "123,45". */
+export function centsToAmount(cents: number): string {
+  return (cents / 100).toFixed(2).replace('.', ',');
 }
 
-/**
- * Bir kova ihracata girer mi.
- *
- * Sifir miktarli kalem YAZILMIYOR: DATEV tarafinda sifirlik bir Lohnart satiri
- * mevcut degeri sifirlayabiliyor ve "bu ay gece calismasi yok" ile "gece
- * kalemini gonderme" ayni sey degil.
- */
-export function hasQuantity(row: NeutralCsvRow): boolean {
-  return row.quantity > 0;
+export function formatQuantity(movement: NormalizedPayrollMovement): string {
+  if (movement.unit === 'minutes') return minutesToDecimalHours(movement.quantity);
+  if (movement.unit === 'euro_cents') return centsToAmount(movement.quantity);
+  return String(movement.quantity);
 }
 
-export function renderNeutralPayrollCsv(input: NeutralCsvInput): string {
-  const period = `${input.year}-${String(input.month).padStart(2, '0')}`;
-  const lines: string[] = [
-    // Ust bilgi: hangi Berater/Mandant ve hangi donem. Dosya tek basina
-    // gonderildiginde de nereye ait oldugu belli olmali.
-    [
-      'LOHN',
-      period,
-      sanitize(input.profile.consultantNumber ?? ''),
-      sanitize(input.profile.clientNumber ?? ''),
-    ].join(';'),
-    HEADER.join(';'),
-  ];
+function unitLabel(unit: NormalizedPayrollMovement['unit']): string {
+  if (unit === 'minutes') return 'Stunden';
+  if (unit === 'euro_cents') return 'EUR';
+  return 'Tage';
+}
 
-  for (const row of input.rows) {
-    if (!hasQuantity(row)) continue;
-    lines.push(
+export const neutralCsvWriter: PayrollFileWriter = {
+  id: 'neutral_csv',
+
+  fileName(context: DatevPayrollContext): string {
+    return `lohn-neutral-${context.year}${String(context.month).padStart(2, '0')}.csv`;
+  },
+
+  render(movements, context): string {
+    const lines: string[] = [
+      // Ust bilgi: dosya tek basina gonderildiginde de nereye ait oldugu belli
+      // olmali.
       [
-        sanitize(row.personnelNumber),
-        sanitize(row.lastName),
-        sanitize(row.firstName),
-        row.wageType,
-        sanitize(row.datevWageTypeNumber),
-        formatQuantity(row),
-        row.unit === 'hours' ? 'Stunden' : 'Tage',
-        String(input.year),
-        String(input.month),
-        sanitize(row.costCenter ?? ''),
-        sanitize(row.costUnit ?? ''),
-        sanitize(row.correctsPeriod ?? ''),
+        'LOHN',
+        `${context.year}-${String(context.month).padStart(2, '0')}`,
+        sanitize(context.consultantNumber),
+        sanitize(context.clientNumber),
+        context.payrollSystem,
       ].join(';'),
-    );
-  }
+      HEADER.join(';'),
+    ];
 
-  // Sonda satir sonu: bazi ice aktaricilar son satiri eksik okuyor.
-  return `${lines.join('\r\n')}\r\n`;
-}
+    for (const movement of movements) {
+      lines.push(
+        [
+          sanitize(movement.personnelNumber),
+          movement.type,
+          sanitize(movement.wageType ?? ''),
+          formatQuantity(movement),
+          unitLabel(movement.unit),
+          String(context.year),
+          String(context.month),
+          sanitize(movement.costCenter ?? ''),
+          sanitize(movement.costUnit ?? ''),
+          sanitize(movement.sourceId),
+        ].join(';'),
+      );
+    }
 
-/** Kalem alanlarindan hangi kovanin hangi miktari aldigi. */
-export const WAGE_TYPE_SOURCES: ReadonlyArray<{
-  wageType: PayrollWageType;
-  field:
-    | 'regularMinutes'
-    | 'overtimeMinutes'
-    | 'nightMinutes'
-    | 'nightCoreMinutes'
-    | 'sundayMinutes'
-    | 'holidayMinutes'
-    | 'vacationDays'
-    | 'sickDays'
-    | 'unpaidAbsenceDays';
-  unit: 'hours' | 'days';
-}> = [
-  { wageType: PayrollWageType.regular, field: 'regularMinutes', unit: 'hours' },
-  { wageType: PayrollWageType.overtime, field: 'overtimeMinutes', unit: 'hours' },
-  { wageType: PayrollWageType.night, field: 'nightMinutes', unit: 'hours' },
-  { wageType: PayrollWageType.night_core, field: 'nightCoreMinutes', unit: 'hours' },
-  { wageType: PayrollWageType.sunday, field: 'sundayMinutes', unit: 'hours' },
-  { wageType: PayrollWageType.holiday, field: 'holidayMinutes', unit: 'hours' },
-  { wageType: PayrollWageType.vacation, field: 'vacationDays', unit: 'days' },
-  { wageType: PayrollWageType.sick, field: 'sickDays', unit: 'days' },
-  { wageType: PayrollWageType.unpaid_absence, field: 'unpaidAbsenceDays', unit: 'days' },
-];
+    // Sonda satir sonu: bazi ice aktaricilar son satiri eksik okuyor.
+    return `${lines.join('\r\n')}\r\n`;
+  },
+};
