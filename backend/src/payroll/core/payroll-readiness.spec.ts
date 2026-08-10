@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { WageTypeRule } from '../../core/payroll-movement.mapper';
+import type { WageTypeRule } from './payroll-movement.mapper';
 import {
-  evaluateDatevReadiness,
+  evaluatePayrollReadiness,
   profileAt,
   type ReadinessInput,
   type ReadinessProfile,
-} from './datev-payroll-validation';
+} from './payroll-readiness';
 
 const ASOF = new Date('2026-08-31T00:00:00.000Z');
 
@@ -22,7 +22,7 @@ function profile(overrides: Partial<ReadinessProfile> = {}): ReadinessProfile {
 
 function wageRule(movementType: WageTypeRule['movementType']): WageTypeRule {
   return {
-    payrollSystem: 'lodas',
+    targetSystem: 'datev_lodas',
     movementType,
     externalWageType: '1000',
     enabled: true,
@@ -36,7 +36,7 @@ function wageRule(movementType: WageTypeRule['movementType']): WageTypeRule {
 function input(overrides: Partial<ReadinessInput> = {}): ReadinessInput {
   return {
     periodStatus: 'approved',
-    payrollSystem: 'lodas',
+    targetSystem: 'datev_lodas',
     consultantNumber: '12345',
     clientNumber: '54321',
     driverIds: ['driver-a'],
@@ -53,9 +53,9 @@ function codes(result: { issues: Array<{ code: string }> }): string[] {
   return [...new Set(result.issues.map((issue) => issue.code))].sort();
 }
 
-describe('evaluateDatevReadiness', () => {
+describe('evaluatePayrollReadiness', () => {
   it('her sey yerindeyse hazir', () => {
-    const result = evaluateDatevReadiness(input());
+    const result = evaluatePayrollReadiness(input());
 
     assert.equal(result.ready, true);
     assert.deepEqual(result.issues, []);
@@ -63,30 +63,62 @@ describe('evaluateDatevReadiness', () => {
 
   it('onaylanmamis donemi hazir saymaz', () => {
     // approved ile DATEV-bereit ayri seyler ama onay olmadan da olmuyor.
-    assert.deepEqual(codes(evaluateDatevReadiness(input({ periodStatus: 'draft' }))), [
+    assert.deepEqual(codes(evaluatePayrollReadiness(input({ periodStatus: 'draft' }))), [
       'period_not_approved',
     ]);
   });
 
   it('ihrac edilmis donemi hazir saymaya devam eder', () => {
     // Yeni surum uretilebilmeli; export durumu kapiyi kapatmamali.
-    assert.equal(evaluateDatevReadiness(input({ periodStatus: 'exported' })).ready, true);
+    assert.equal(evaluatePayrollReadiness(input({ periodStatus: 'exported' })).ready, true);
   });
 
-  it('Berater/Mandant ve sistem eksigini ayri ayri bildirir', () => {
-    const result = evaluateDatevReadiness(
-      input({ payrollSystem: null, consultantNumber: '  ', clientNumber: null }),
+  it('DATEV hedefinde eksik Berater/Mandant ayri ayri bildirilir', () => {
+    const result = evaluatePayrollReadiness(
+      input({ consultantNumber: '  ', clientNumber: null }),
     );
 
-    assert.deepEqual(codes(result), [
-      'client_number_missing',
-      'consultant_number_missing',
-      'payroll_system_not_configured',
-    ]);
+    assert.deepEqual(codes(result), ['client_number_missing', 'consultant_number_missing']);
+  });
+
+  it('hedef secilmemisken Berater/Mandant SORULMAZ', () => {
+    // Hangi saglayiciya gidildigi bilinmeden bu iki numarayi istemek, Lexware
+    // secmek uzere olan kullaniciya asla kapanmayacak bir hata gosterirdi.
+    const result = evaluatePayrollReadiness(
+      input({ targetSystem: null, consultantNumber: null, clientNumber: null }),
+    );
+
+    assert.deepEqual(codes(result), ['target_system_not_configured']);
+  });
+
+  it('Lexware hedefi Berater/Mandant olmadan hazir sayilir', () => {
+    // Lexware ASCII import'unda Berater-/Mandantennummer diye bir alan yok;
+    // DATEV'in kosulunu ona da uygulamak donemi kalici olarak bloklardi.
+    const result = evaluatePayrollReadiness(
+      input({
+        targetSystem: 'lexware_lohn_und_gehalt',
+        consultantNumber: null,
+        clientNumber: null,
+        wageTypeRules: [{ ...wageRule('regular_hours'), targetSystem: 'lexware_lohn_und_gehalt' }],
+      }),
+    );
+
+    assert.equal(result.ready, true);
+    assert.deepEqual(result.issues, []);
+  });
+
+  it('Lexware hedefinde DATEV Lohnart eslemesi gecerli sayilmaz', () => {
+    // Esleme urun bazinda: LODAS icin girilmis numara Lexware dosyasina
+    // konulsaydi sessizce yanlis Lohnart'a yazardi.
+    const result = evaluatePayrollReadiness(
+      input({ targetSystem: 'lexware_lohn_und_gehalt', consultantNumber: null, clientNumber: null }),
+    );
+
+    assert.deepEqual(codes(result), ['wage_type_unmapped']);
   });
 
   it('personel numarasi olmayan surucuyu bloklar', () => {
-    const result = evaluateDatevReadiness(input({ profiles: [] }));
+    const result = evaluatePayrollReadiness(input({ profiles: [] }));
 
     assert.equal(result.ready, false);
     assert.equal(result.issues[0].code, 'personnel_number_missing');
@@ -96,7 +128,7 @@ describe('evaluateDatevReadiness', () => {
   it('ayni numarayi ayni anda iki suruculye vermeyi bloklar', () => {
     // Veritabani kisidiyla zorlanamiyor cunku profil surumlu; izin verilseydi
     // DATEV'de iki kisinin saatleri tek satirda birlesirdi.
-    const result = evaluateDatevReadiness(
+    const result = evaluatePayrollReadiness(
       input({
         driverIds: ['driver-a', 'driver-b'],
         profiles: [profile(), profile({ driverId: 'driver-b' })],
@@ -111,7 +143,7 @@ describe('evaluateDatevReadiness', () => {
   });
 
   it('ayni surucunun ARDISIK surumlerini cakisma saymaz', () => {
-    const result = evaluateDatevReadiness(
+    const result = evaluatePayrollReadiness(
       input({
         profiles: [
           profile({ validFrom: new Date('2026-01-01T00:00:00.000Z'), validTo: new Date('2026-06-30T00:00:00.000Z') }),
@@ -124,7 +156,7 @@ describe('evaluateDatevReadiness', () => {
   });
 
   it('cakisan profil surumlerini bloklar', () => {
-    const result = evaluateDatevReadiness(
+    const result = evaluatePayrollReadiness(
       input({
         profiles: [
           profile({ validFrom: new Date('2026-01-01T00:00:00.000Z'), validTo: new Date('2026-08-31T00:00:00.000Z') }),
@@ -138,10 +170,10 @@ describe('evaluateDatevReadiness', () => {
 
   it('yalnizca KULLANILAN hareket turlerinin eslemesini arar', () => {
     // Donemde Pazar calismasi yoksa Pazar eslemesinin olmamasi engel degil.
-    const withoutSunday = evaluateDatevReadiness(input());
+    const withoutSunday = evaluatePayrollReadiness(input());
     assert.equal(withoutSunday.ready, true);
 
-    const withSunday = evaluateDatevReadiness(
+    const withSunday = evaluatePayrollReadiness(
       input({ usedMovementTypes: ['regular_hours', 'sunday_hours'] }),
     );
     assert.deepEqual(codes(withSunday), ['wage_type_unmapped']);
@@ -152,14 +184,14 @@ describe('evaluateDatevReadiness', () => {
   });
 
   it('bloklayan gun anomalisini durdurur, bloklamayani gecirir', () => {
-    const blocking = evaluateDatevReadiness(
+    const blocking = evaluatePayrollReadiness(
       input({ dayAnomalies: new Map([['driver-a', ['missing_clock_out']]]) }),
     );
     assert.deepEqual(codes(blocking), ['blocking_day_anomaly']);
 
     // Mola kisaligi ArbZG bulgusu; sureyi supheli yapmiyor. Takograf sapmasi
     // da dogrulama sinyali, hesap degil.
-    const informational = evaluateDatevReadiness(
+    const informational = evaluatePayrollReadiness(
       input({
         dayAnomalies: new Map([
           ['driver-a', ['break_shorter_than_required', 'tacho_break_mismatch']],

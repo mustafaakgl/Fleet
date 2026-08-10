@@ -1,4 +1,4 @@
-LOHN;2026-08;12345;54321;lodas
+LOHN;2026-08;12345;54321;datev_lodas
 Personalnummer;Bewegungsart;Lohnart;Menge;Einheit;Jahr;Monat;Kostenstelle;Kostentraeger;Quelle
 1001;regular_hours;1000;168,00;Stunden;2026;8;KST-1;;entry-1
 1001;overtime_hours;1100;6,00;Stunden;2026;8;KST-1;;entry-1

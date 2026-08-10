@@ -11,7 +11,7 @@ import {
 
 function rule(overrides: Partial<WageTypeRule> = {}): WageTypeRule {
   return {
-    payrollSystem: 'lodas',
+    targetSystem: 'datev_lodas',
     movementType: 'overtime_hours',
     externalWageType: '1100',
     enabled: true,
@@ -70,31 +70,31 @@ describe('resolveWageTypeRule', () => {
     ];
 
     assert.equal(
-      resolveWageTypeRule(rules, 'lodas', 'overtime_hours', new Date('2026-07-15T00:00:00.000Z'))
+      resolveWageTypeRule(rules, 'datev_lodas', 'overtime_hours', new Date('2026-07-15T00:00:00.000Z'))
         ?.externalWageType,
       'ESKI',
     );
     assert.equal(
-      resolveWageTypeRule(rules, 'lodas', 'overtime_hours', ASOF)?.externalWageType,
+      resolveWageTypeRule(rules, 'datev_lodas', 'overtime_hours', ASOF)?.externalWageType,
       'YENI',
     );
   });
 
   it('LODAS ile Lohn und Gehalt eslemesini karistirmaz', () => {
     const rules = [
-      rule({ payrollSystem: 'lodas', externalWageType: 'L' }),
-      rule({ payrollSystem: 'lohn_und_gehalt', externalWageType: 'G' }),
+      rule({ targetSystem: 'datev_lodas', externalWageType: 'L' }),
+      rule({ targetSystem: 'datev_lohn_und_gehalt', externalWageType: 'G' }),
     ];
 
-    assert.equal(resolveWageTypeRule(rules, 'lodas', 'overtime_hours', ASOF)?.externalWageType, 'L');
+    assert.equal(resolveWageTypeRule(rules, 'datev_lodas', 'overtime_hours', ASOF)?.externalWageType, 'L');
     assert.equal(
-      resolveWageTypeRule(rules, 'lohn_und_gehalt', 'overtime_hours', ASOF)?.externalWageType,
+      resolveWageTypeRule(rules, 'datev_lohn_und_gehalt', 'overtime_hours', ASOF)?.externalWageType,
       'G',
     );
   });
 
   it('kapali eslemeyi secmez', () => {
-    assert.equal(resolveWageTypeRule([rule({ enabled: false })], 'lodas', 'overtime_hours', ASOF), null);
+    assert.equal(resolveWageTypeRule([rule({ enabled: false })], 'datev_lodas', 'overtime_hours', ASOF), null);
   });
 });
 
@@ -104,7 +104,7 @@ describe('buildNormalizedMovements', () => {
       entries: [entry({ regularMinutes: 9_600, overtimeMinutes: 120, nightMinutes: 0 })],
       identities: identities(IDENTITY),
       rules: ALL_RULES,
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 8,
       asOf: ASOF,
@@ -127,7 +127,7 @@ describe('buildNormalizedMovements', () => {
       entries: [entry({ id: 'corr-1', kind: 'correction', overtimeMinutes: -120 })],
       identities: identities(IDENTITY),
       rules: ALL_RULES,
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 8,
       asOf: ASOF,
@@ -142,7 +142,7 @@ describe('buildNormalizedMovements', () => {
       entries: [entry({ overtimeMinutes: 60, vacationDays: 2 })],
       identities: identities(IDENTITY),
       rules: ALL_RULES,
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 8,
       asOf: ASOF,
@@ -165,7 +165,7 @@ describe('buildNormalizedMovements', () => {
         rule({ movementType: 'regular_hours', externalWageType: '1000' }),
         rule({ movementType: 'night_hours', externalWageType: '1200', costCenter: 'KST-NACHT' }),
       ],
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 8,
       asOf: ASOF,
@@ -180,7 +180,7 @@ describe('buildNormalizedMovements', () => {
       entries: [entry({ regularMinutes: 480, sundayMinutes: 300 })],
       identities: identities(IDENTITY),
       rules: [rule({ movementType: 'regular_hours', externalWageType: '1000' })],
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 8,
       asOf: ASOF,
@@ -197,7 +197,7 @@ describe('buildNormalizedMovements', () => {
       entries: [entry({ driverId: 'driver-x', regularMinutes: 480 })],
       identities: identities(IDENTITY),
       rules: ALL_RULES,
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 8,
       asOf: ASOF,
@@ -212,7 +212,7 @@ describe('buildNormalizedMovements', () => {
       entries: [entry({ regularMinutes: 480 })],
       identities: identities(IDENTITY),
       rules: ALL_RULES,
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 3,
       asOf: new Date('2026-03-31T00:00:00.000Z'),
@@ -236,7 +236,7 @@ describe('summarizeMovements', () => {
         costUnit: null,
       }),
       rules: ALL_RULES,
-      payrollSystem: 'lodas',
+      targetSystem: 'datev_lodas',
       year: 2026,
       month: 8,
       asOf: ASOF,

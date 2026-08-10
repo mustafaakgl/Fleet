@@ -1,11 +1,11 @@
-import { DatevPayrollSystem, PayrollMovementType } from '@prisma/client';
+import { PayrollMovementType, PayrollTargetSystem } from '@prisma/client';
 import { IsBoolean, IsEnum, IsISO8601, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpsertWageTypeMappingDto {
-  /** LODAS ile Lohn und Gehalt ayni Lohnart planini kullanmak zorunda degil. */
-  @IsEnum(DatevPayrollSystem) payrollSystem!: DatevPayrollSystem;
+  /** Hedef urunler ayni Lohnart planini kullanmak zorunda degil. */
+  @IsEnum(PayrollTargetSystem) targetSystem!: PayrollTargetSystem;
   @IsEnum(PayrollMovementType) movementType!: PayrollMovementType;
-  @IsString() @MaxLength(20) datevWageTypeNumber!: string;
+  @IsString() @MaxLength(20) externalWageType!: string;
   /** Kapali ise bu kova ihracata girmez. */
   @IsOptional() @IsBoolean() enabled?: boolean;
 

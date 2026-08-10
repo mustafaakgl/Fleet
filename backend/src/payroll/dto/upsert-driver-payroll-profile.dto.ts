@@ -1,8 +1,9 @@
-import { DatevPayrollSystem, PayrollEmploymentType } from '@prisma/client';
+import { PayrollEmploymentType, PayrollTargetSystem } from '@prisma/client';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class UpsertDriverPayrollProfileDto {
-  @IsString() @MaxLength(20) datevPersonnelNumber!: string;
+  /** Hedef sistemdeki personel numarasi (DATEV/Lexware Personalnummer). */
+  @IsString() @MaxLength(20) externalPersonnelNumber!: string;
 
   /** Bos birakilirsa tenant varsayilani gecerli olur. */
   @IsOptional() @IsInt() @Min(1) @Max(10_080) weeklyTargetMinutes?: number;
@@ -13,5 +14,5 @@ export class UpsertDriverPayrollProfileDto {
   @IsOptional() @IsString() @MaxLength(36) costUnit?: string;
   @IsOptional() @IsEnum(PayrollEmploymentType) employmentType?: PayrollEmploymentType;
   /** Bos ise tenant varsayilani gecerli. */
-  @IsOptional() @IsEnum(DatevPayrollSystem) datevPayrollSystem?: DatevPayrollSystem;
+  @IsOptional() @IsEnum(PayrollTargetSystem) payrollTargetSystem?: PayrollTargetSystem;
 }

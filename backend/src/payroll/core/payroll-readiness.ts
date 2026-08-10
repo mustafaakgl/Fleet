@@ -1,20 +1,25 @@
-import type { DatevPayrollSystem, PayrollMovementType, PayrollPeriodStatus } from '@prisma/client';
-import { resolveWageTypeRule, type WageTypeRule } from '../../core/payroll-movement.mapper';
+import type { PayrollMovementType, PayrollPeriodStatus, PayrollTargetSystem } from '@prisma/client';
+import { resolveWageTypeRule, type WageTypeRule } from './payroll-movement.mapper';
+import { requiresDatevMandant } from './payroll-target-system';
 
 /**
- * DATEV hazirlik dogrulamasi.
+ * Bordro ihracat hazirlik dogrulamasi. Saglayicidan bagimsiz.
  *
- * `approved` ile `DATEV-bereit` AYRI SEYLER ve ayri tutulmalarinin sebebi
- * somut: bordro hesabi Fleet'in kendi isi ve dogru olabilir; DATEV'e
+ * `approved` ile `ihracata hazir` AYRI SEYLER ve ayri tutulmalarinin sebebi
+ * somut: bordro hesabi Fleet'in kendi isi ve dogru olabilir; hedef sisteme
  * gonderilebilir olmak ise bambaska kosullar istiyor (personel numarasi,
- * Lohnart plani, Berater/Mandant, cakisan profil surumu olmamasi). Ikisini tek
- * bayrakta birlestirmek, muhasebecinin ayi onaylayip dosyayi uretemedigi ve
- * sebebini goremedigi bir durum yaratirdi.
+ * Lohnart plani, cakisan profil surumu olmamasi). Ikisini tek bayrakta
+ * birlestirmek, muhasebecinin ayi onaylayip dosyayi uretemedigi ve sebebini
+ * goremedigi bir durum yaratirdi.
+ *
+ * Kosullarin cogu her hedef icin ayni; SAGLAYICIYA OZGU olan tek grup DATEV'in
+ * Berater-/Mandantennummer'i ve o da hedeften turetilerek isteniyor. Bu ayrimi
+ * yapmasaydik Lexware kalici olarak "hazir degil" durumunda kalirdi.
  */
 
-export type DatevReadinessCode =
+export type PayrollReadinessCode =
   | 'period_not_approved'
-  | 'payroll_system_not_configured'
+  | 'target_system_not_configured'
   | 'consultant_number_missing'
   | 'client_number_missing'
   | 'personnel_number_missing'
@@ -24,18 +29,28 @@ export type DatevReadinessCode =
   | 'blocking_day_anomaly'
   | 'source_changed_since_export';
 
-export type DatevReadinessIssue = {
-  code: DatevReadinessCode;
+export type PayrollReadinessIssue = {
+  code: PayrollReadinessCode;
   /** Sorunun hangi kayda ait oldugu — ekran dogrudan oraya goturebilsin. */
   driverId?: string;
   movementType?: PayrollMovementType;
   detail?: string;
 };
 
-export type DatevReadinessResult = {
+export type PayrollReadinessResult = {
   ready: boolean;
-  issues: DatevReadinessIssue[];
+  issues: PayrollReadinessIssue[];
 };
+
+/**
+ * IHRACATI BLOKLAMAYAN bulgular.
+ *
+ * `source_changed_since_export` bir eksiklik degil, bir HABER: donem ihrac
+ * edildikten sonra kaynak veri degismis. Bunu bloklayici saymak yanlis olurdu
+ * — yapilacak sey tam tersine yeni bir surum uretmek ya da farki acik doneme
+ * Ruckrechnung olarak tasimak. Bloklasaydi ofis ikisini de yapamazdi.
+ */
+const NON_BLOCKING: ReadonlySet<PayrollReadinessCode> = new Set(['source_changed_since_export']);
 
 /**
  * Donem ihracati BLOKLAYAN gun anomalileri.
@@ -60,7 +75,8 @@ export type ReadinessProfile = {
 
 export type ReadinessInput = {
   periodStatus: PayrollPeriodStatus;
-  payrollSystem: DatevPayrollSystem | null;
+  targetSystem: PayrollTargetSystem | null;
+  /** Yalnizca DATEV hedeflerinde aranir; Lexware'de bos olmasi sorun degil. */
   consultantNumber: string | null;
   clientNumber: string | null;
   /** Donemde kalemi olan surucular. */
@@ -72,6 +88,15 @@ export type ReadinessInput = {
   wageTypeRules: readonly WageTypeRule[];
   /** Gun satirlarindaki anomaliler, surucu bazinda. */
   dayAnomalies: ReadonlyMap<string, readonly string[]>;
+  /**
+   * En son uretilen dosyanin kaynak ozeti ve verinin BUGUNKU ozeti.
+   *
+   * Ikisi ayrilirsa elde duran dosya bayatlamis demektir. Bu, takograftan gec
+   * onaylanan bir molanin ilk gorunur oldugu yer: WorkTimeEvent degisiyor,
+   * ozet degisiyor, ama ihrac edilmis dosya OLDUGU GIBI kaliyor.
+   */
+  exportedSourceHash?: string | null;
+  currentSourceHash?: string | null;
   asOf: Date;
 };
 
@@ -100,20 +125,26 @@ export function profileAt(
   );
 }
 
-export function evaluateDatevReadiness(input: ReadinessInput): DatevReadinessResult {
-  const issues: DatevReadinessIssue[] = [];
+export function evaluatePayrollReadiness(input: ReadinessInput): PayrollReadinessResult {
+  const issues: PayrollReadinessIssue[] = [];
 
   if (input.periodStatus !== 'approved' && input.periodStatus !== 'exported') {
     issues.push({ code: 'period_not_approved' });
   }
-  if (!input.payrollSystem) {
-    issues.push({ code: 'payroll_system_not_configured' });
+  if (!input.targetSystem) {
+    issues.push({ code: 'target_system_not_configured' });
   }
-  if (!input.consultantNumber?.trim()) {
-    issues.push({ code: 'consultant_number_missing' });
-  }
-  if (!input.clientNumber?.trim()) {
-    issues.push({ code: 'client_number_missing' });
+
+  // Hedef bilinmiyorken Berater/Mandant SORULMAZ: hangi saglayiciya gittigi
+  // belli olmadan "eksik" demek, Lexware secen kullaniciya asla kapanmayacak
+  // bir hata gosterirdi. Hedef yoksa zaten yukarida bloklandi.
+  if (input.targetSystem && requiresDatevMandant(input.targetSystem)) {
+    if (!input.consultantNumber?.trim()) {
+      issues.push({ code: 'consultant_number_missing' });
+    }
+    if (!input.clientNumber?.trim()) {
+      issues.push({ code: 'client_number_missing' });
+    }
   }
 
   // Ayni surucunun cakisan iki profil surumu → hangi personel numarasinin
@@ -145,7 +176,7 @@ export function evaluateDatevReadiness(input: ReadinessInput): DatevReadinessRes
 
   // Tekillik veritabani kisidiyla zorlanamiyor (profil surumlu), bu yuzden
   // burada kontrol ediliyor: ayni anda iki surucu ayni numarayi tasiyamaz,
-  // yoksa DATEV'de iki kisinin saatleri tek satirda birlesir.
+  // yoksa hedef sistemde iki kisinin saatleri tek satirda birlesir.
   for (const [personnelNumber, owners] of numberOwners) {
     if (owners.size > 1) {
       issues.push({
@@ -155,11 +186,11 @@ export function evaluateDatevReadiness(input: ReadinessInput): DatevReadinessRes
     }
   }
 
-  if (input.payrollSystem) {
+  if (input.targetSystem) {
     for (const movementType of new Set(input.usedMovementTypes)) {
       const rule = resolveWageTypeRule(
         input.wageTypeRules,
-        input.payrollSystem,
+        input.targetSystem,
         movementType,
         input.asOf,
       );
@@ -167,6 +198,17 @@ export function evaluateDatevReadiness(input: ReadinessInput): DatevReadinessRes
         issues.push({ code: 'wage_type_unmapped', movementType });
       }
     }
+  }
+
+  // Dosya uretildikten sonra kaynak degistiyse haber ver. Bloklamaz: gec gelen
+  // bir duzeltmeden sonra yapilacak sey ya yeni surum uretmek ya da farki acik
+  // doneme tasimaktir.
+  if (
+    input.exportedSourceHash &&
+    input.currentSourceHash &&
+    input.exportedSourceHash !== input.currentSourceHash
+  ) {
+    issues.push({ code: 'source_changed_since_export' });
   }
 
   for (const [driverId, anomalies] of input.dayAnomalies) {
@@ -180,5 +222,5 @@ export function evaluateDatevReadiness(input: ReadinessInput): DatevReadinessRes
     }
   }
 
-  return { ready: issues.length === 0, issues };
+  return { ready: !issues.some((issue) => !NON_BLOCKING.has(issue.code)), issues };
 }

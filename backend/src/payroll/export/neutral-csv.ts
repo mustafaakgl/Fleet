@@ -1,12 +1,12 @@
-import type { DatevPayrollContext, PayrollFileWriter } from '../datev/core/datev-payroll.types';
+import type { PayrollExportContext, PayrollFileWriter } from '../core/payroll-export.types';
 import type { NormalizedPayrollMovement } from '../core/payroll-movement';
 
 /**
  * Fleet'in kendi notr bordro dosyasi.
  *
- * DATEV'E VERILMEZ. Iki isi var: ihracatin ne urettigini insan gozuyle
- * dogrulamak ve Steuerberater'a "ham veri" gostermek. Gercek DATEV dosyalari
- * ayri yazicilardan cikiyor (bkz. payroll/datev/).
+ * BORDRO SISTEMINE VERILMEZ. Iki isi var: ihracatin ne urettigini insan
+ * gozuyle dogrulamak ve Steuerberater'a "ham veri" gostermek. Gercek DATEV ve
+ * Lexware dosyalari ayri yazicilardan cikacak.
  *
  * Bicim EXTF yazicisiyla ayni konvansiyonlari izliyor (noktali virgul ayirici,
  * Alman ondalik virgulu) ki iki dosyayi ayni araclarla acan muhasebeci
@@ -28,8 +28,8 @@ const HEADER = [
 
 /**
  * Alanlar noktali virgul iceremez; ayirici kacisi yerine temizleme tercih
- * edildi cunku DATEV tarafinda tirnakli alan destegi urunden urune degisiyor
- * ve bozuk bir satir tum aktarimi durduruyor.
+ * edildi cunku tirnakli alan destegi urunden urune degisiyor ve bozuk bir
+ * satir tum aktarimi durduruyor.
  */
 function sanitize(value: string): string {
   return value.replace(/[;\r\n]+/g, ' ').trim();
@@ -60,7 +60,7 @@ function unitLabel(unit: NormalizedPayrollMovement['unit']): string {
 export const neutralCsvWriter: PayrollFileWriter = {
   id: 'neutral_csv',
 
-  fileName(context: DatevPayrollContext): string {
+  fileName(context: PayrollExportContext): string {
     return `lohn-neutral-${context.year}${String(context.month).padStart(2, '0')}.csv`;
   },
 
@@ -71,9 +71,11 @@ export const neutralCsvWriter: PayrollFileWriter = {
       [
         'LOHN',
         `${context.year}-${String(context.month).padStart(2, '0')}`,
-        sanitize(context.consultantNumber),
-        sanitize(context.clientNumber),
-        context.payrollSystem,
+        // Lexware hedeflerinde bu iki numara YOK; bos hucre birakiliyor ki
+        // sutun duzeni her hedefte ayni kalsin.
+        sanitize(context.consultantNumber ?? ''),
+        sanitize(context.clientNumber ?? ''),
+        context.targetSystem,
       ].join(';'),
       HEADER.join(';'),
     ];

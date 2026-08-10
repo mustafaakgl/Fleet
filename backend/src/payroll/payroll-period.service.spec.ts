@@ -169,7 +169,7 @@ function createStore(overrides: Partial<Store> = {}): Store {
     driverProfiles: [
       {
         driverId: 'driver-a',
-        datevPersonnelNumber: '1001',
+        externalPersonnelNumber: '1001',
         weeklyTargetMinutes: 2_400,
         monthlyTargetMinutes: null,
         costCenter: 'KST-1',

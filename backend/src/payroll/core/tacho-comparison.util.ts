@@ -1,5 +1,7 @@
 import type { WorkInterval } from '../../work-time/core/work-time-fold.util';
 
+export { intersectIntervals } from '../../work-time/core/interval.util';
+
 /**
  * Surucunun bastigi mola ile takografin REST kaydinin karsilastirilmasi.
  *
@@ -29,29 +31,6 @@ export type TachoComparison = {
   /** Fark toleransi asiyor mu — ekranda uyari bu. */
   mismatch: boolean;
 };
-
-/**
- * Araliklarin kesisimi. Takograf REST bloklari vardiyadan once baslayip sonra
- * bitebiliyor; yalnizca ortak kisim mola sayilabilir.
- */
-export function intersectIntervals(
-  intervals: readonly WorkInterval[],
-  window: WorkInterval,
-): WorkInterval[] {
-  const windowStart = window.from.getTime();
-  const windowEnd = window.to.getTime();
-  if (!(windowEnd > windowStart)) return [];
-
-  const result: WorkInterval[] = [];
-  for (const interval of intervals) {
-    const from = Math.max(interval.from.getTime(), windowStart);
-    const to = Math.min(interval.to.getTime(), windowEnd);
-    if (to > from) {
-      result.push({ from: new Date(from), to: new Date(to) });
-    }
-  }
-  return result;
-}
 
 /**
  * Gun bazinda karsilastirma.

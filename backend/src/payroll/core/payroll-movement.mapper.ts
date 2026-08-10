@@ -1,12 +1,12 @@
-import type { DatevPayrollSystem, PayrollMovementType } from '@prisma/client';
+import type { PayrollMovementType, PayrollTargetSystem } from '@prisma/client';
 import { unitOf, type NormalizedPayrollMovement } from './payroll-movement';
 
 /**
  * PayrollEntry → NormalizedPayrollMovement.
  *
- * Saf: veritabani, saat ve dosya bicimi bilmiyor. DATEV'e de ozgu degil —
- * `externalWageType` yalnizca tasinan bir dize; onu Lohnart olarak yorumlayan
- * yer DATEV adaptorudur.
+ * Saf: veritabani, saat ve dosya bicimi bilmiyor. Hicbir saglayiciya ozgu
+ * degil — `externalWageType` yalnizca tasinan bir dize; onu Lohnart olarak
+ * yorumlayan yer adaptordur.
  */
 
 /** Kalemdeki hangi alanin hangi harekete karsilik geldigi. */
@@ -40,7 +40,7 @@ export type MappableEntry = Record<EntryField, number> & {
 };
 
 export type WageTypeRule = {
-  payrollSystem: DatevPayrollSystem;
+  targetSystem: PayrollTargetSystem;
   movementType: PayrollMovementType;
   externalWageType: string;
   enabled: boolean;
@@ -67,7 +67,7 @@ export type DriverPayrollIdentity = {
  */
 export function resolveWageTypeRule(
   rules: readonly WageTypeRule[],
-  payrollSystem: DatevPayrollSystem,
+  targetSystem: PayrollTargetSystem,
   movementType: PayrollMovementType,
   asOf: Date,
 ): WageTypeRule | null {
@@ -75,7 +75,7 @@ export function resolveWageTypeRule(
   const candidates = rules.filter(
     (rule) =>
       rule.enabled &&
-      rule.payrollSystem === payrollSystem &&
+      rule.targetSystem === targetSystem &&
       rule.movementType === movementType &&
       rule.validFrom.getTime() <= at &&
       (rule.validTo === null || rule.validTo.getTime() >= at),
@@ -90,7 +90,7 @@ export type BuildMovementsInput = {
   entries: readonly MappableEntry[];
   identities: ReadonlyMap<string, DriverPayrollIdentity>;
   rules: readonly WageTypeRule[];
-  payrollSystem: DatevPayrollSystem;
+  targetSystem: PayrollTargetSystem;
   year: number;
   month: number;
   /** Esleme hangi ana gore cozulecek — donemin son gunu. */
@@ -100,14 +100,14 @@ export type BuildMovementsInput = {
 /**
  * Hareketleri uretir.
  *
- * SIFIR MIKTAR ATLANIYOR: DATEV'de sifirlik bir Lohnart satiri mevcut degeri
+ * SIFIR MIKTAR ATLANIYOR: hedef sistemde sifirlik bir Lohnart satiri mevcut degeri
  * sifirlayabiliyor ve "bu ay gece calismasi yok" ile "gece kalemini gonderme"
  * ayni sey degil. NEGATIF miktar ATLANMIYOR: Ruckrechnung kalemleri fark
  * tasiyor ve fark eksi olabilir.
  *
  * Saat kovalarinin toplami calisilan sureyi VERMEZ — gece/Pazar/tatil ayni
- * dakikalarin zam nitelikleri. DATEV de Grundstunden ile Zuschlagsstunden'i
- * ayri bekliyor, yani bu ust uste binme dogru olan.
+ * dakikalarin zam nitelikleri. Bordro sistemleri de Grundstunden ile
+ * Zuschlagsstunden'i ayri bekliyor, yani bu ust uste binme dogru olan.
  */
 export function buildNormalizedMovements(input: BuildMovementsInput): {
   movements: NormalizedPayrollMovement[];
@@ -132,7 +132,7 @@ export function buildNormalizedMovements(input: BuildMovementsInput): {
       const quantity = entry[source.field];
       if (quantity === 0) continue;
 
-      const rule = resolveWageTypeRule(input.rules, input.payrollSystem, source.type, input.asOf);
+      const rule = resolveWageTypeRule(input.rules, input.targetSystem, source.type, input.asOf);
       if (!rule) {
         unmapped.push({ driverId: entry.driverId, type: source.type, quantity });
         continue;

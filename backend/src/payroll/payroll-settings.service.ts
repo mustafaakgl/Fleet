@@ -15,10 +15,10 @@ import { UpsertTenantPayrollProfileDto } from './dto/upsert-tenant-payroll-profi
 import { UpsertWageTypeMappingDto } from './dto/upsert-wage-type-mapping.dto';
 
 /**
- * DATEV Lohn yapilandirmasi (Faz 4a).
+ * Bordro yapilandirmasi (Faz 4a).
  *
  * Yalnizca zemin: hesap ve ihracat yok. Rechnungswesen tarafiyla (TenantBilling
- * Profile, DatevExport) hicbir alani paylasmiyor — DATEV'de iki ayri urun.
+ * Profile, DatevExport) hicbir alani paylasmiyor — ayri urunler, ayri muhatap.
  */
 
 /** Takvim taramasinin bakacagi gun sayisi. Bir yil, eslenmemis kodlari bulmaya yeter. */
@@ -95,7 +95,7 @@ export class PayrollSettingsService {
       datevConsultantNumber: dto.datevConsultantNumber?.trim() || null,
       datevClientNumber: dto.datevClientNumber?.trim() || null,
       bundesland: dto.bundesland ?? null,
-      datevPayrollSystem: dto.datevPayrollSystem ?? null,
+      payrollTargetSystem: dto.payrollTargetSystem ?? null,
       ...(dto.nightWindowStartMinute !== undefined && {
         nightWindowStartMinute: dto.nightWindowStartMinute,
       }),
@@ -167,8 +167,8 @@ export class PayrollSettingsService {
         lastName: driver.lastName,
         employeeNumber: driver.employeeNumber,
         profile,
-        /** DATEV'e girebilir mi — personel numarasi BLOKLAYICI kosul. */
-        ready: profile !== null && profile.datevPersonnelNumber.trim().length > 0,
+        /** Ihracata girebilir mi — personel numarasi BLOKLAYICI kosul. */
+        ready: profile !== null && profile.externalPersonnelNumber.trim().length > 0,
         versionCount: profiles.filter((row) => row.driverId === driver.id).length,
       };
     });
@@ -177,9 +177,9 @@ export class PayrollSettingsService {
   /**
    * Surucu profilini kaydeder.
    *
-   * DATEV'E GIDEN ALAN DEGISTIYSE yeni SURUM acilir, mevcut surum kapatilir.
+   * IHRACATA GIDEN ALAN DEGISTIYSE yeni SURUM acilir, mevcut surum kapatilir.
    * Ustune yazmak, gecmis bir donemi yeniden uretirken bugunun personel
-   * numarasini kullanmak demek olurdu. DATEV'e gitmeyen alanlar (hedef sure
+   * numarasini kullanmak demek olurdu. Dosyaya girmeyen alanlar (hedef sure
    * gibi) yerinde guncelleniyor — her hedef degisikligi icin surum acmak
    * gecmisi gereksiz kalabaliklastirirdi.
    */
@@ -190,9 +190,9 @@ export class PayrollSettingsService {
     actorUserId: string,
     asOf: Date = new Date(),
   ) {
-    const personnelNumber = dto.datevPersonnelNumber.trim();
+    const personnelNumber = dto.externalPersonnelNumber.trim();
     if (!personnelNumber) {
-      throw new BadRequestException('A DATEV personnel number is required');
+      throw new BadRequestException('A personnel number is required');
     }
 
     const driver = await this.prisma.driver.findUnique({
@@ -209,30 +209,32 @@ export class PayrollSettingsService {
       .filter((row) => isValidAt(row, asOf))
       .sort((a, b) => b.validFrom.getTime() - a.validFrom.getTime())[0];
 
-    // Ayni anda baska bir surucude ayni numara varsa DATEV'de iki kisinin
+    // Ayni anda baska bir surucude ayni numara varsa hedef sistemde iki kisinin
     // saatleri tek satirda birlesir. Hazirlik dogrulamasi da bunu tutuyor ama
     // hatayi kaydetme aninda vermek kullaniciya daha erken soyluyor.
     const clash = await this.prisma.driverPayrollProfile.findFirst({
-      where: { datevPersonnelNumber: personnelNumber, driverId: { not: driverId } },
+      where: { externalPersonnelNumber: personnelNumber, driverId: { not: driverId } },
     });
     if (clash && isValidAt(clash, asOf)) {
-      throw new ConflictException('This DATEV personnel number is already used by another driver');
+      throw new ConflictException('This personnel number is already used by another driver');
     }
 
-    const datevFieldsChanged =
+    const exportFieldsChanged =
       current !== undefined &&
-      (current.datevPersonnelNumber !== personnelNumber ||
+      (current.externalPersonnelNumber !== personnelNumber ||
         (current.costCenter ?? null) !== (dto.costCenter?.trim() || null) ||
         (current.costUnit ?? null) !== (dto.costUnit?.trim() || null));
 
     const data = {
-      datevPersonnelNumber: personnelNumber,
+      externalPersonnelNumber: personnelNumber,
       weeklyTargetMinutes: dto.weeklyTargetMinutes ?? null,
       monthlyTargetMinutes: dto.monthlyTargetMinutes ?? null,
       costCenter: dto.costCenter?.trim() || null,
       costUnit: dto.costUnit?.trim() || null,
       ...(dto.employmentType !== undefined && { employmentType: dto.employmentType }),
-      ...(dto.datevPayrollSystem !== undefined && { datevPayrollSystem: dto.datevPayrollSystem }),
+      ...(dto.payrollTargetSystem !== undefined && {
+        payrollTargetSystem: dto.payrollTargetSystem,
+      }),
     };
 
     let row;
@@ -240,7 +242,7 @@ export class PayrollSettingsService {
       row = await this.prisma.driverPayrollProfile.create({
         data: { ...data, driverId, tenantId, validFrom },
       });
-    } else if (!datevFieldsChanged) {
+    } else if (!exportFieldsChanged) {
       row = await this.prisma.driverPayrollProfile.update({ where: { id: current.id }, data });
     } else if (current.validFrom.getTime() === validFrom.getTime()) {
       // Ayni gun icinde ikinci duzeltme: yeni surum acmak yerine gunu duzelt,
@@ -265,8 +267,10 @@ export class PayrollSettingsService {
       action: 'payroll.driver_profile_saved',
       entityType: 'driver_payroll_profile',
       entityId: row.id,
-      summary: datevFieldsChanged ? 'Driver payroll profile versioned' : 'Driver payroll profile saved',
-      metadata: { driverId, versioned: datevFieldsChanged },
+      summary: exportFieldsChanged
+        ? 'Driver payroll profile versioned'
+        : 'Driver payroll profile saved',
+      metadata: { driverId, versioned: exportFieldsChanged },
     });
 
     return row;
@@ -369,13 +373,13 @@ export class PayrollSettingsService {
   // ------------------------------------------------------------ wage types
 
   /**
-   * Kova → DATEV Lohnart eslemesi. Varsayilan TOHUMLANMIYOR: Lohnart
+   * Kova → hedef sistemdeki Lohnart eslemesi. Varsayilan TOHUMLANMIYOR: Lohnart
    * numaralari Steuerberater'a ozel ve uydurulmus bir numara sessizce yanlis
    * hesaba yazar. Bos liste, ihracatin acikca reddetmesi demek.
    */
   async listWageTypeMappings(_tenantId: string) {
     return this.prisma.payrollWageTypeMapping.findMany({
-      orderBy: [{ payrollSystem: 'asc' }, { movementType: 'asc' }, { validFrom: 'desc' }],
+      orderBy: [{ targetSystem: 'asc' }, { movementType: 'asc' }, { validFrom: 'desc' }],
     });
   }
 
@@ -384,9 +388,9 @@ export class PayrollSettingsService {
     dto: UpsertWageTypeMappingDto,
     actorUserId: string,
   ) {
-    const number = dto.datevWageTypeNumber.trim();
+    const number = dto.externalWageType.trim();
     if (!number) {
-      throw new BadRequestException('A DATEV wage type number is required');
+      throw new BadRequestException('A wage type number is required');
     }
 
     // Ayni urun+tur+baslangic tekil: ayni tarihten gecerli ikinci bir numara
@@ -398,10 +402,10 @@ export class PayrollSettingsService {
     }
 
     const existing = await this.prisma.payrollWageTypeMapping.findFirst({
-      where: { payrollSystem: dto.payrollSystem, movementType: dto.movementType, validFrom },
+      where: { targetSystem: dto.targetSystem, movementType: dto.movementType, validFrom },
     });
     const data = {
-      datevWageTypeNumber: number,
+      externalWageType: number,
       enabled: dto.enabled ?? true,
       validTo,
       costCenter: dto.costCenter?.trim() || null,
@@ -413,7 +417,7 @@ export class PayrollSettingsService {
           data: {
             ...data,
             tenantId,
-            payrollSystem: dto.payrollSystem,
+            targetSystem: dto.targetSystem,
             movementType: dto.movementType,
             validFrom,
           },
@@ -424,7 +428,7 @@ export class PayrollSettingsService {
       action: 'payroll.wage_type_mapping_saved',
       entityType: 'payroll_wage_type_mapping',
       entityId: row.id,
-      summary: `${dto.payrollSystem} wage type ${dto.movementType} mapped to DATEV ${number}`,
+      summary: `${dto.targetSystem} wage type ${dto.movementType} mapped to ${number}`,
     });
 
     return row;

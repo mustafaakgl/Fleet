@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   payrollApi,
-  type DatevPayrollSystem,
+  type PayrollTargetSystem,
   type PayrollDayType,
   type PayrollDayTypeMappingRow,
   type PayrollMovementType,
@@ -51,7 +51,7 @@ const MOVEMENT_TYPES: PayrollMovementType[] = [
   'unpaid_absence',
 ];
 
-const PAYROLL_SYSTEMS: DatevPayrollSystem[] = ['lodas', 'lohn_und_gehalt'];
+const PAYROLL_SYSTEMS: PayrollTargetSystem[] = ['datev_lodas', 'datev_lohn_und_gehalt', 'lexware_lohn_und_gehalt'];
 
 export function PayrollSettingsPanel() {
   const { t } = useTranslation();
@@ -73,10 +73,10 @@ export function PayrollSettingsPanel() {
     coreEnd: '04:00',
     weeklyHours: '40',
     tachoTolerance: '15',
-    payrollSystem: '' as DatevPayrollSystem | '',
+    targetSystem: '' as PayrollTargetSystem | '',
   });
   /** Lohnart tablosu tek seferde tek urunu gosteriyor; planlar ayri. */
-  const [wageSystem, setWageSystem] = useState<DatevPayrollSystem>('lodas');
+  const [wageSystem, setWageSystem] = useState<PayrollTargetSystem>('datev_lodas');
   const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
 
   const load = useCallback(async () => {
@@ -103,9 +103,9 @@ export function PayrollSettingsPanel() {
           coreEnd: minutesToTime(tenant.nightCoreEndMinute),
           weeklyHours: String(Math.round(tenant.defaultWeeklyTargetMinutes / 60)),
           tachoTolerance: String(tenant.tachoBreakToleranceMinutes),
-          payrollSystem: tenant.datevPayrollSystem ?? '',
+          targetSystem: tenant.payrollTargetSystem ?? '',
         });
-        if (tenant.datevPayrollSystem) setWageSystem(tenant.datevPayrollSystem);
+        if (tenant.payrollTargetSystem) setWageSystem(tenant.payrollTargetSystem);
       }
     } catch {
       setError(t('payroll.loadError'));
@@ -152,7 +152,7 @@ export function PayrollSettingsPanel() {
         nightCoreEndMinute: coreEnd,
         defaultWeeklyTargetMinutes: Math.round(weeklyHours * 60),
         tachoBreakToleranceMinutes: tolerance,
-        datevPayrollSystem: form.payrollSystem || undefined,
+        payrollTargetSystem: form.targetSystem || undefined,
       });
       setSaved(true);
       await load();
@@ -172,9 +172,9 @@ export function PayrollSettingsPanel() {
     setError(null);
     try {
       await payrollApi.saveWageTypeMapping({
-        payrollSystem: wageSystem,
+        targetSystem: wageSystem,
         movementType,
-        datevWageTypeNumber: number,
+        externalWageType: number,
         enabled,
       });
       await load();
@@ -266,15 +266,15 @@ export function PayrollSettingsPanel() {
           <label className="text-sm">
             {/* Ihracat bunu bilmeden dosya uretemez; hazirlik dogrulamasi bos
                 birakilirsa donemi DATEV-hazir saymiyor. */}
-            <span className="mb-1 block text-slate-600">{t('payroll.settings.payrollSystem')}</span>
+            <span className="mb-1 block text-slate-600">{t('payroll.settings.targetSystem')}</span>
             <select
               className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
-              value={form.payrollSystem}
+              value={form.targetSystem}
               onChange={(event) =>
-                setForm((f) => ({ ...f, payrollSystem: event.target.value as DatevPayrollSystem | '' }))
+                setForm((f) => ({ ...f, targetSystem: event.target.value as PayrollTargetSystem | '' }))
               }
             >
-              <option value="">{t('payroll.settings.payrollSystemNone')}</option>
+              <option value="">{t('payroll.settings.targetSystemNone')}</option>
               {PAYROLL_SYSTEMS.map((system) => (
                 <option key={system} value={system}>
                   {t(`payroll.system.${system}`)}
@@ -309,11 +309,11 @@ export function PayrollSettingsPanel() {
           {/* LODAS ile Lohn und Gehalt ayni Lohnart planini kullanmak zorunda
               degil; tablo tek seferde tek urunu gosteriyor. */}
           <label className="mb-2 flex items-center gap-2 text-sm">
-            <span className="text-slate-600">{t('payroll.settings.payrollSystem')}</span>
+            <span className="text-slate-600">{t('payroll.settings.targetSystem')}</span>
             <select
               className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm"
               value={wageSystem}
-              onChange={(event) => setWageSystem(event.target.value as DatevPayrollSystem)}
+              onChange={(event) => setWageSystem(event.target.value as PayrollTargetSystem)}
             >
               {PAYROLL_SYSTEMS.map((system) => (
                 <option key={system} value={system}>
@@ -327,13 +327,13 @@ export function PayrollSettingsPanel() {
             // Ayni tur icin birden fazla surum olabilir; ekranda EN GUNCEL
             // olan duzenleniyor.
             const existing = wageTypes
-              .filter((row) => row.payrollSystem === wageSystem && row.movementType === movementType)
+              .filter((row) => row.targetSystem === wageSystem && row.movementType === movementType)
               .sort((a, b) => b.validFrom.localeCompare(a.validFrom))[0];
             return (
               <WageTypeRow
                 key={`${wageSystem}-${movementType}`}
                 movementType={movementType}
-                value={existing?.datevWageTypeNumber ?? ''}
+                value={existing?.externalWageType ?? ''}
                 enabled={existing?.enabled ?? true}
                 busy={busy}
                 onSave={(number, enabled) => void saveWageType(movementType, number, enabled)}

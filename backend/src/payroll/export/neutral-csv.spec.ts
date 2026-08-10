@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import type { NormalizedPayrollMovement } from '../core/payroll-movement';
-import type { DatevPayrollContext } from '../datev/core/datev-payroll.types';
+import type { PayrollExportContext } from '../core/payroll-export.types';
 import { centsToAmount, minutesToDecimalHours, neutralCsvWriter } from './neutral-csv';
 
-const CONTEXT: DatevPayrollContext = {
-  payrollSystem: 'lodas',
+const CONTEXT: PayrollExportContext = {
+  targetSystem: 'datev_lodas',
   consultantNumber: '12345',
   clientNumber: '54321',
   year: 2026,

@@ -1,19 +1,20 @@
-import { DatevPayrollSystem, GermanState } from '@prisma/client';
+import { GermanState, PayrollTargetSystem } from '@prisma/client';
 import { IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 /** Gun ici dakika (0–1439). Gece penceresi gece yarisini astigi icin saat degil dakika. */
 const MINUTE_OF_DAY_MAX = 1_439;
 
 export class UpsertTenantPayrollProfileDto {
+  /** Yalnizca DATEV hedeflerinde anlamli; Lexware bu numaralari kullanmiyor. */
   @IsOptional() @IsString() @MaxLength(20) datevConsultantNumber?: string;
   @IsOptional() @IsString() @MaxLength(20) datevClientNumber?: string;
   @IsOptional() @IsEnum(GermanState) bundesland?: GermanState;
 
   /**
-   * Hedef DATEV bordro urunu. Ihracat bunu bilmeden dosya uretemez; bos
-   * birakilirsa donem DATEV-hazir sayilmiyor.
+   * Hedef bordro urunu. Ihracat bunu bilmeden dosya uretemez; bos birakilirsa
+   * donem ihracata hazir sayilmiyor.
    */
-  @IsOptional() @IsEnum(DatevPayrollSystem) datevPayrollSystem?: DatevPayrollSystem;
+  @IsOptional() @IsEnum(PayrollTargetSystem) payrollTargetSystem?: PayrollTargetSystem;
 
   @IsOptional() @IsInt() @Min(0) @Max(MINUTE_OF_DAY_MAX) nightWindowStartMinute?: number;
   @IsOptional() @IsInt() @Min(0) @Max(MINUTE_OF_DAY_MAX) nightWindowEndMinute?: number;

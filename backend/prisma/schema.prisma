@@ -337,25 +337,30 @@ enum PayrollMovementType {
   expense
 }
 
-enum PayrollProvider {
-  datev
+/// Bordronun gonderildigi HEDEF URUN.
+///
+/// Saglayici (DATEV / Lexware) ayri bir alan olarak TUTULMUYOR, bu degerden
+/// turetiliyor (bkz. payroll/core/payroll-target-system.ts). Iki alan olsaydi
+/// "provider=lexware + system=lodas" gibi celiskili bir satir yazilabilirdi;
+/// tek alan bunu imkansiz kiliyor.
+///
+/// Urun bazinda ayri: dosya duzenleri ayni degil ve Lohnart planlari da urunden
+/// urune degisiyor, bu yuzden esleme de urun bazinda tutuluyor.
+enum PayrollTargetSystem {
+  datev_lodas
+  datev_lohn_und_gehalt
+  lexware_lohn_und_gehalt
 }
 
-/// DATEV'in iki bordro urunu. Dosya duzenleri AYNI DEGIL, bu yuzden Lohnart
-/// eslemesi de urun bazinda ayri tutuluyor.
-enum DatevPayrollSystem {
-  lodas
-  lohn_und_gehalt
-}
-
-/// Uretilen dosyanin TURU. Hedef DATEV urunu ayri bir alan
-/// (PayrollExport.payrollSystem): ayni ASCII bicimi iki urune de gidiyor ama
-/// alan duzeni farkli.
+/// Uretilen dosyanin TURU. Hedef urun ayri bir alan
+/// (PayrollExport.targetSystem): ayni ASCII bicimi birden fazla urune gidiyor
+/// ama alan duzeni farkli.
 enum PayrollExportFormat {
-  /// Fleet'in kendi notr dosyasi. DATEV'e verilmez; ic dogrulama ve
+  /// Fleet'in kendi notr dosyasi. Bordro sistemine verilmez; ic dogrulama ve
   /// Steuerberater'a "ham veri" gostermek icin.
   neutral_csv
   datev_ascii
+  lexware_ascii
 }
 
 enum PayrollExportStatus {
@@ -2127,16 +2132,19 @@ model TenantPayrollProfile {
   tenantId String @unique
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
+  /// YALNIZCA DATEV hedeflerinde anlamli ve yalnizca orada zorunlu. Lexware
+  /// Berater-/Mandantennummer kullanmiyor; hazirlik kontrolu bu iki alani
+  /// hedefin saglayicisina gore ariyor.
   datevConsultantNumber String?
   datevClientNumber     String?
 
   /// Tatil listesinin cekildigi eyalet. Bos ise tatil tablosu elle doldurulur.
   bundesland GermanState?
 
-  /// Bu tenant'in DATEV bordro urunu. Surucu profilinde ayrica belirtilmemisse
-  /// gecerli olan. Ihracat bunu bilmeden dosya uretemez — LODAS ile Lohn und
-  /// Gehalt farkli duzenler ve farkli Lohnart planlari kullaniyor.
-  datevPayrollSystem DatevPayrollSystem?
+  /// Bu tenant'in bordro hedefi. Surucu profilinde ayrica belirtilmemisse
+  /// gecerli olan. Ihracat bunu bilmeden dosya uretemez — her urun farkli duzen
+  /// ve farkli Lohnart plani kullaniyor.
+  payrollTargetSystem PayrollTargetSystem?
 
   /// Gece penceresi GUN ICI DAKIKA olarak (0–1439). Repo saatleri "HH:MM"
   /// string tutuyor ama bu pencere gece yarisini asiyor ve dakika aritmetigine
@@ -2176,19 +2184,18 @@ model DriverPayrollProfile {
   driverId String
   driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
-  /// Bordro hedefi. Bugun yalnizca DATEV var ama adaptorun disari cikan tek
-  /// kapi olmasi icin alan simdiden burada.
-  payrollProvider    PayrollProvider     @default(datev)
-  /// Bu surucunun hangi DATEV urunune gittigi. Bos ise tenant varsayilani.
-  datevPayrollSystem DatevPayrollSystem?
+  /// Bu surucunun hangi bordro urunune gittigi. Bos ise tenant varsayilani.
+  payrollTargetSystem PayrollTargetSystem?
 
-  /// DATEV personel numarasi. DATEV ihracatinin BLOKLAYICI kosulu: yoksa
-  /// donem DATEV-hazir sayilmiyor ve dosya uretilmiyor.
+  /// Hedef sistemdeki personel numarasi (DATEV Personalnummer, Lexware
+  /// Personalnummer). Ihracatin BLOKLAYICI kosulu: yoksa donem hazir sayilmiyor
+  /// ve dosya uretilmiyor. Saglayicidan bagimsiz adlandirildi cunku her hedef
+  /// sistem ayni alani istiyor ve surucu ayni anda ikisine birden gitmiyor.
   ///
   /// Tekillik artik veritabani kisidiyla ZORLANMIYOR cunku profil surumlu:
   /// ayni surucunun iki surumu ayni numarayi tasir. "Ayni anda iki surucude
   /// ayni numara" kontrolu hazirlik dogrulamasinda yapiliyor.
-  datevPersonnelNumber String
+  externalPersonnelNumber String
 
   /// Bos ise tenant varsayilani gecerli.
   weeklyTargetMinutes  Int?
@@ -2201,7 +2208,7 @@ model DriverPayrollProfile {
 
   /// Profil SURUMLU: personel numarasi veya Kostenstelle yil icinde
   /// degisebiliyor ve gecmis bir donem yeniden uretildiginde O TARIHTE
-  /// gecerli olan degerler kullanilmali. 4a'da bilerek yoktu; DATEV hattinda
+  /// gecerli olan degerler kullanilmali. 4a'da bilerek yoktu; bordro hattinda
   /// gerekli oldugu icin geri geldi.
   validFrom DateTime  @default(now())
   validTo   DateTime?
@@ -2211,7 +2218,7 @@ model DriverPayrollProfile {
 
   @@unique([driverId, validFrom])
   @@index([tenantId])
-  @@index([tenantId, datevPersonnelNumber])
+  @@index([tenantId, externalPersonnelNumber])
   @@index([driverId, validFrom])
 }
 
@@ -2419,7 +2426,7 @@ model PayrollEntry {
   @@index([correctsPeriodId])
 }
 
-/// Bordro kovasi → DATEV Lohnart numarasi.
+/// Bordro kovasi → hedef sistemdeki Lohnart numarasi.
 ///
 /// Numaralar koda gomulmuyor: her Steuerberater kendi Lohnart planini
 /// kullaniyor ve bunlar sirkete gore degisiyor.
@@ -2428,14 +2435,16 @@ model PayrollWageTypeMapping {
   tenantId String @default("default-tenant")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  /// LODAS ile Lohn und Gehalt AYNI Lohnart planini kullanmak zorunda degil;
-  /// ayni hareket turu iki urunde farkli numaraya gidebilir.
-  payrollSystem       DatevPayrollSystem
-  movementType        PayrollMovementType
-  datevWageTypeNumber String
+  /// Hedef urunler AYNI Lohnart planini kullanmak zorunda degil; ayni hareket
+  /// turu her urunde farkli numaraya gidebilir.
+  targetSystem     PayrollTargetSystem
+  movementType     PayrollMovementType
+  /// Hedef sistemdeki numara. Model bunu yorumlamiyor, yalnizca tasiyor —
+  /// Lohnart olarak okuyan yer adaptordur.
+  externalWageType String
   /// Kapali ise bu kova ihracata girmez — her sirket her kovayi ayri Lohnart
   /// olarak gondermiyor (ornegin gece cekirdegini ayirmayan var).
-  enabled             Boolean             @default(true)
+  enabled          Boolean             @default(true)
 
   /// Lohnart planlari yil icinde degisebiliyor; gecmis donem yeniden
   /// uretildiginde O TARIHTE gecerli olan numara kullanilmali.
@@ -2449,12 +2458,12 @@ model PayrollWageTypeMapping {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([tenantId, payrollSystem, movementType, validFrom])
+  @@unique([tenantId, targetSystem, movementType, validFrom])
   @@index([tenantId])
-  @@index([tenantId, payrollSystem, movementType])
+  @@index([tenantId, targetSystem, movementType])
 }
 
-/// Uretilmis DATEV Lohn dosyasi. DatevExport ile ayni sekil, AYRI tablo.
+/// Uretilmis bordro dosyasi. DatevExport ile ayni sekil, AYRI tablo.
 model PayrollExport {
   id       String @id @default(cuid())
   tenantId String @default("default-tenant")
@@ -2463,13 +2472,13 @@ model PayrollExport {
   periodId String
   period   PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
 
-  provider      PayrollProvider     @default(datev)
-  /// Notr dosyada BOS: o dosya bir DATEV urunune ait degil.
-  payrollSystem DatevPayrollSystem?
-  format        PayrollExportFormat @default(neutral_csv)
+  /// Notr dosyada BOS: o dosya bir bordro urunune ait degil. Saglayici ayri
+  /// alan olarak tutulmuyor, bu degerden turetiliyor.
+  targetSystem PayrollTargetSystem?
+  format       PayrollExportFormat  @default(neutral_csv)
   /// Ayni donem+urun icin kacinci uretim. Yanlis dosya DUZELTILMEZ, yerine
   /// yenisi uretilir ve eskisi superseded olur.
-  version       Int                 @default(1)
+  version      Int                  @default(1)
 
   payloadStoredPath String
   payloadSha256     String
@@ -2492,7 +2501,7 @@ model PayrollExport {
   createdBy   User     @relation("PayrollExportCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
 
-  @@unique([periodId, payrollSystem, format, version])
+  @@unique([periodId, targetSystem, format, version])
   @@index([tenantId])
   @@index([periodId, createdAt])
 }

@@ -41,7 +41,7 @@ export function PayrollDriversPanel() {
 
   async function save(
     driverId: string,
-    payload: { datevPersonnelNumber: string; weeklyTargetMinutes?: number; costCenter?: string },
+    payload: { externalPersonnelNumber: string; weeklyTargetMinutes?: number; costCenter?: string },
   ) {
     setBusy(true);
     setError(null);
@@ -99,11 +99,11 @@ function DriverRow({
   busy: boolean;
   onSave: (
     driverId: string,
-    payload: { datevPersonnelNumber: string; weeklyTargetMinutes?: number; costCenter?: string },
+    payload: { externalPersonnelNumber: string; weeklyTargetMinutes?: number; costCenter?: string },
   ) => void;
 }) {
   const { t } = useTranslation();
-  const [personnelNumber, setPersonnelNumber] = useState(row.profile?.datevPersonnelNumber ?? '');
+  const [personnelNumber, setPersonnelNumber] = useState(row.profile?.externalPersonnelNumber ?? '');
   const [weeklyHours, setWeeklyHours] = useState(
     row.profile?.weeklyTargetMinutes ? String(Math.round(row.profile.weeklyTargetMinutes / 60)) : '',
   );
@@ -113,7 +113,7 @@ function DriverRow({
     ? String(Math.round(row.profile.weeklyTargetMinutes / 60))
     : '';
   const dirty =
-    personnelNumber !== (row.profile?.datevPersonnelNumber ?? '') ||
+    personnelNumber !== (row.profile?.externalPersonnelNumber ?? '') ||
     weeklyHours !== originalHours ||
     costCenter !== (row.profile?.costCenter ?? '');
 
@@ -172,7 +172,7 @@ function DriverRow({
         disabled={busy || !dirty || !personnelNumber.trim() || !hoursValid}
         onClick={() =>
           onSave(row.driverId, {
-            datevPersonnelNumber: personnelNumber.trim(),
+            externalPersonnelNumber: personnelNumber.trim(),
             weeklyTargetMinutes: parsedHours ? Math.round(parsedHours * 60) : undefined,
             costCenter: costCenter.trim() || undefined,
           })
@@ -180,7 +180,7 @@ function DriverRow({
       >
         {t('payroll.settings.save')}
       </Button>
-      {dirty && personnelNumber !== (row.profile?.datevPersonnelNumber ?? '') && row.profile ? (
+      {dirty && personnelNumber !== (row.profile?.externalPersonnelNumber ?? '') && row.profile ? (
         // Kaydetmeden once soyluyoruz: numara degisimi surum acar, ustune yazmaz.
         <p className="w-full text-xs text-amber-700">{t('payroll.drivers.willVersion')}</p>
       ) : null}

@@ -972,7 +972,7 @@ export type PayrollDayType =
   | 'absence_unpaid';
 
 /** DATEV'in iki bordro urunu; Lohnart planlari ayri. */
-export type DatevPayrollSystem = 'lodas' | 'lohn_und_gehalt';
+export type PayrollTargetSystem = 'datev_lodas' | 'datev_lohn_und_gehalt' | 'lexware_lohn_und_gehalt';
 
 /**
  * Fleet'in kendi hareket dili. DATEV Lohnart'i DEGIL — disari cikan numara
@@ -1004,7 +1004,7 @@ export interface TenantPayrollProfile {
   defaultWeeklyTargetMinutes: number;
   tachoBreakToleranceMinutes: number;
   /** Hedef DATEV urunu. Bos ise ihracat DATEV-hazir sayilmaz. */
-  datevPayrollSystem: DatevPayrollSystem | null;
+  payrollTargetSystem: PayrollTargetSystem | null;
 }
 
 export interface DriverPayrollProfileRow {
@@ -1018,13 +1018,13 @@ export interface DriverPayrollProfileRow {
   versionCount: number;
   /** O ANDA gecerli surum. */
   profile: {
-    datevPersonnelNumber: string;
+    externalPersonnelNumber: string;
     weeklyTargetMinutes: number | null;
     monthlyTargetMinutes: number | null;
     costCenter: string | null;
     costUnit: string | null;
     employmentType: string;
-    datevPayrollSystem: DatevPayrollSystem | null;
+    payrollTargetSystem: PayrollTargetSystem | null;
     validFrom: string;
     validTo: string | null;
   } | null;
@@ -1039,9 +1039,9 @@ export interface PayrollDayTypeMappingRow {
 
 export interface PayrollWageTypeMappingRow {
   id: string;
-  payrollSystem: DatevPayrollSystem;
+  targetSystem: PayrollTargetSystem;
   movementType: PayrollMovementType;
-  datevWageTypeNumber: string;
+  externalWageType: string;
   enabled: boolean;
   /** Lohnart planlari yil icinde degisiyor; gecmis donem o tarihteki numarayla uretilir. */
   validFrom: string;
@@ -1060,7 +1060,7 @@ export interface PublicHolidayRow {
 export interface PayrollExportRow {
   id: string;
   periodId: string;
-  format: 'neutral_csv' | 'lodas' | 'lohn_und_gehalt';
+  format: 'neutral_csv' | 'datev_lodas' | 'datev_lohn_und_gehalt' | 'lexware_lohn_und_gehalt';
   fileSha256: string;
   status: 'generated' | 'downloaded';
   createdAt: string;
@@ -1107,7 +1107,7 @@ export const payrollApi = {
         sourcePeriodId,
       })
       .then((r) => r.data),
-  exportPeriod: (id: string, format: 'neutral_csv' | 'lodas' | 'lohn_und_gehalt' = 'neutral_csv') =>
+  exportPeriod: (id: string, format: 'neutral_csv' | 'datev_lodas' | 'datev_lohn_und_gehalt' | 'lexware_lohn_und_gehalt' = 'neutral_csv') =>
     api.post<PayrollExportRow>(`/payroll/periods/${id}/export`, { format }).then((r) => r.data),
   lockPeriod: (id: string) =>
     api.post<PayrollPeriodRow>(`/payroll/periods/${id}/lock`).then((r) => r.data),
@@ -1128,12 +1128,12 @@ export const payrollApi = {
   saveDriverProfile: (
     driverId: string,
     payload: {
-      datevPersonnelNumber: string;
+      externalPersonnelNumber: string;
       weeklyTargetMinutes?: number;
       monthlyTargetMinutes?: number;
       costCenter?: string;
       costUnit?: string;
-      datevPayrollSystem?: DatevPayrollSystem;
+      payrollTargetSystem?: PayrollTargetSystem;
     },
   ) => api.put(`/payroll/drivers/${driverId}/profile`, payload).then((r) => r.data),
   listDayTypeMappings: () =>
@@ -1147,9 +1147,9 @@ export const payrollApi = {
   listWageTypeMappings: () =>
     api.get<PayrollWageTypeMappingRow[]>('/payroll/wage-type-mappings').then((r) => r.data),
   saveWageTypeMapping: (payload: {
-    payrollSystem: DatevPayrollSystem;
+    targetSystem: PayrollTargetSystem;
     movementType: PayrollMovementType;
-    datevWageTypeNumber: string;
+    externalWageType: string;
     enabled?: boolean;
     validFrom?: string;
     validTo?: string;

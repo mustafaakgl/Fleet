@@ -37,9 +37,9 @@ type Store = {
   entries: EntryRow[];
   events: Array<{ id: string; driverId: string; occurredAt: Date; createdAt: Date }>;
   mappings: Array<{
-    payrollSystem: 'lodas' | 'lohn_und_gehalt';
+    targetSystem: 'datev_lodas' | 'datev_lohn_und_gehalt';
     movementType: PayrollMovementType;
-    datevWageTypeNumber: string;
+    externalWageType: string;
     enabled: boolean;
     validFrom: Date;
     validTo: Date | null;
@@ -48,8 +48,8 @@ type Store = {
   }>;
   profiles: Array<{
     driverId: string;
-    datevPersonnelNumber: string;
-    datevPayrollSystem: 'lodas' | 'lohn_und_gehalt' | null;
+    externalPersonnelNumber: string;
+    payrollTargetSystem: 'datev_lodas' | 'datev_lohn_und_gehalt' | null;
     costCenter: string | null;
     costUnit: string | null;
     validFrom: Date;
@@ -63,19 +63,19 @@ type Store = {
 };
 
 const PROFILE_SNAPSHOT = {
-  datevPersonnelNumber: '1001',
+  externalPersonnelNumber: '1001',
   costCenter: 'KST-1',
   costUnit: null,
 };
 
 function wageMapping(
   movementType: PayrollMovementType,
-  datevWageTypeNumber: string,
+  externalWageType: string,
 ): Store['mappings'][number] {
   return {
-    payrollSystem: 'lodas',
+    targetSystem: 'datev_lodas',
     movementType,
-    datevWageTypeNumber,
+    externalWageType,
     enabled: true,
     validFrom: new Date('2026-01-01T00:00:00.000Z'),
     validTo: null,
@@ -166,7 +166,7 @@ function createFakePrisma(store: Store) {
     payrollExport: {
       findFirst: async ({ where, orderBy }: { where?: Record<string, unknown>; orderBy?: unknown }) => {
         const rows = store.exports
-          .filter((row) => !where || Object.entries(where).every(([k, v]) => row[k] === v))
+          .filter((row) => matches(row, where))
           .sort((a, b) => Number(b.version ?? 0) - Number(a.version ?? 0));
         return rows[0] ?? null;
       },
@@ -202,8 +202,8 @@ function createStore(overrides: Partial<Store> = {}): Store {
     profiles: [
       {
         driverId: 'driver-a',
-        datevPersonnelNumber: '1001',
-        datevPayrollSystem: null,
+        externalPersonnelNumber: '1001',
+        payrollTargetSystem: null,
         costCenter: 'KST-1',
         costUnit: null,
         validFrom: new Date('2026-01-01T00:00:00.000Z'),
@@ -227,7 +227,7 @@ function createService(store: Store): PayrollExportService {
     getTenantProfile: async () => ({
       datevConsultantNumber: '12345',
       datevClientNumber: '54321',
-      datevPayrollSystem: 'lodas' as const,
+      payrollTargetSystem: 'datev_lodas' as const,
     }),
   } as unknown as PayrollSettingsService;
 
@@ -391,7 +391,7 @@ describe('PayrollExportService ihracat', () => {
 
     assert.equal(store.saved.length, 1);
     const csv = store.saved[0].contents;
-    assert.match(csv, /^LOHN;2026-07;12345;54321;lodas/);
+    assert.match(csv, /^LOHN;2026-07;12345;54321;datev_lodas/);
     assert.match(csv, /1001;regular_hours;1000;166,00;Stunden/);
     assert.match(csv, /1001;overtime_hours;1100;2,00;Stunden/);
     assert.equal(store.periods[0].status, PayrollPeriodStatus.exported);
@@ -454,7 +454,7 @@ describe('PayrollExportService ihracat', () => {
       service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a'),
       (error: unknown) =>
         (error as { getResponse(): { code: string } }).getResponse().code ===
-        'payroll_period_not_datev_ready',
+        'payroll_period_not_export_ready',
     );
   });
 
@@ -466,7 +466,7 @@ describe('PayrollExportService ihracat', () => {
       service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-a'),
       (error: unknown) =>
         (error as { getResponse(): { code: string } }).getResponse().code ===
-        'payroll_period_not_datev_ready',
+        'payroll_period_not_export_ready',
     );
   });
 
@@ -478,7 +478,7 @@ describe('PayrollExportService ihracat', () => {
       service.exportPeriod('period-aug', PayrollExportFormat.neutral_csv, 'user-a'),
       (error: unknown) =>
         (error as { getResponse(): { code: string } }).getResponse().code ===
-        'payroll_period_not_datev_ready',
+        'payroll_period_not_export_ready',
     );
   });
 
@@ -495,6 +495,159 @@ describe('PayrollExportService ihracat', () => {
         error instanceof BadRequestException &&
         (error.getResponse() as { code: string }).code === 'payroll_export_format_unsupported',
     );
+  });
+});
+
+/**
+ * Takograftan gec onaylanan mola ile bordronun kesisimi.
+ *
+ * Bu ozelligin en tehlikeli senaryosu: donem ONAYLANIP IHRAC EDILDIKTEN sonra
+ * DDD dosyasi geliyor, ofis molayi onayliyor ve gecmise BREAK_START/BREAK_END
+ * yaziliyor. O anda Agustos'un kalemi SESSIZCE degismemeli — degisirse
+ * muhasebeciye gonderilmis dosya ile sistemdeki veri ayrilir ve kimse fark
+ * etmez. Dogru davranis: dosya oldugu gibi kalir, fark Ruckrechnung olarak
+ * acik doneme tasinir.
+ */
+describe('PayrollExportService gec onaylanan mola', () => {
+  /** Onayin urettigi iki olay: ihracattan SONRA yazildilar. */
+  function lateBreakEvents() {
+    return [
+      {
+        id: 'late-break-start',
+        driverId: 'driver-a',
+        type: 'break_start',
+        occurredAt: new Date('2026-07-09T12:06:00.000Z'),
+        source: 'office',
+        createdAt: new Date('2026-08-10T10:00:00.000Z'),
+      },
+      {
+        id: 'late-break-end',
+        driverId: 'driver-a',
+        type: 'break_end',
+        occurredAt: new Date('2026-07-09T12:47:00.000Z'),
+        source: 'office',
+        createdAt: new Date('2026-08-10T10:00:01.000Z'),
+      },
+    ];
+  }
+
+  it('ihrac edilmis donemde kaynak degisikligini BILDIRIR ama bloklamaz', async () => {
+    const store = createStore({
+      periods: [
+        period({
+          status: PayrollPeriodStatus.exported,
+          approvedAt: new Date('2026-08-01T00:00:00.000Z'),
+        }),
+      ],
+      exports: [
+        {
+          id: 'export-1',
+          periodId: 'period-jul',
+          version: 1,
+          format: 'neutral_csv',
+          status: 'generated',
+          // Ihracat anindaki ozet; bugunku veriyle bilerek ayrisiyor.
+          sourceHash: 'ihracat-anindaki-ozet',
+        },
+      ],
+    });
+    const service = createService(store);
+
+    const readiness = await service.evaluateReadiness('period-jul');
+
+    assert.equal(readiness.exportStale, true);
+    assert.ok(
+      readiness.issues.some((issue) => issue.code === 'source_changed_since_export'),
+      'kaynak degisikligi bildirilmeli',
+    );
+    // Bloklamamali: yapilacak sey yeni surum uretmek ya da Ruckrechnung.
+    assert.equal(readiness.ready, true);
+  });
+
+  it('kaynak degismediyse bayat demez', async () => {
+    const store = createStore({
+      periods: [period({ status: PayrollPeriodStatus.exported })],
+    });
+    const service = createService(store);
+    // Once gercek bir dosya uret; ozeti bugunku veriyle ayni olur.
+    await service.exportPeriod('period-jul', PayrollExportFormat.neutral_csv, 'user-1');
+
+    const readiness = await service.evaluateReadiness('period-jul');
+
+    assert.equal(readiness.exportStale, false);
+    assert.ok(!readiness.issues.some((issue) => issue.code === 'source_changed_since_export'));
+  });
+
+  it('gec onaylanan molayi "onaydan sonra gelen degisiklik" olarak listeler', async () => {
+    const store = createStore({
+      periods: [
+        period({
+          status: PayrollPeriodStatus.exported,
+          approvedAt: new Date('2026-08-01T00:00:00.000Z'),
+        }),
+      ],
+      events: lateBreakEvents(),
+    });
+    const service = createService(store);
+
+    const late = await service.listLateChanges('period-jul');
+
+    assert.deepEqual(
+      late.events.map((event) => event.type),
+      ['break_start', 'break_end'],
+    );
+  });
+
+  it('IHRAC EDILMIS donemi degistirmez, farki acik doneme tasir', async () => {
+    // Kaynak donem donmus: kalem 480 dk mola 0. Bugunku hesap molayi
+    // goruyor (41 dk) ve calisilan sure o kadar dusuyor.
+    const store = createStore({
+      periods: [
+        period({
+          status: PayrollPeriodStatus.exported,
+          approvedAt: new Date('2026-08-01T00:00:00.000Z'),
+        }),
+        period({ id: 'period-aug', month: 8, status: PayrollPeriodStatus.draft, approvedAt: null }),
+      ],
+      // PayrollEntry mola alani TASIMIYOR; molanin bordroya etkisi tamamen
+      // calisilan sureden dusmesi. 480 -> 439, yani tam 41 dakika.
+      entries: [entry({ workedMinutes: 480, regularMinutes: 480 })],
+      freshEntries: [{ driverId: 'driver-a', workedMinutes: 439, regularMinutes: 439 }],
+      exports: [
+        {
+          id: 'export-1',
+          periodId: 'period-jul',
+          version: 1,
+          format: 'neutral_csv',
+          status: 'generated',
+          sourceHash: 'ihracat-anindaki-ozet',
+        },
+      ],
+      events: lateBreakEvents(),
+    });
+    const service = createService(store);
+
+    const result = await service.createCorrections('period-jul', 'period-aug', 'user-1');
+
+    assert.equal(result.created, 1);
+
+    const correction = store.entries.find((row) => row.kind === PayrollEntryKind.correction);
+    assert.equal(correction?.periodId, 'period-aug', 'duzeltme ACIK doneme yazilmali');
+    assert.equal(correction?.correctsPeriodId, 'period-jul');
+    assert.equal(correction?.workedMinutes, -41, 'molanin dusurdugu sure tasinmali');
+    assert.equal(correction?.regularMinutes, -41);
+
+    // Kaynak donemin KENDI kalemi dokunulmadan duruyor.
+    const original = store.entries.find(
+      (row) => row.periodId === 'period-jul' && row.kind === PayrollEntryKind.regular,
+    );
+    assert.equal(original?.workedMinutes, 480);
+    assert.equal(original?.regularMinutes, 480);
+
+    // Gonderilmis dosya da oldugu gibi: silinmedi, superseded yapilmadi.
+    assert.equal(store.exports.length, 1);
+    assert.equal(store.exports[0].status, 'generated');
+    assert.equal(store.exports[0].sourceHash, 'ihracat-anindaki-ozet');
   });
 });
 

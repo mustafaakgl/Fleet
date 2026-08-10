@@ -389,7 +389,7 @@ export class PayrollPeriodService {
         ...entryTotals,
         driverProfileSnapshot: driverProfile
           ? {
-              datevPersonnelNumber: driverProfile.datevPersonnelNumber,
+              externalPersonnelNumber: driverProfile.externalPersonnelNumber,
               costCenter: driverProfile.costCenter,
               costUnit: driverProfile.costUnit,
               employmentType: driverProfile.employmentType,

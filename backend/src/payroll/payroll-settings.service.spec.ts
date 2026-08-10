@@ -12,7 +12,7 @@ type ProfileRow = {
   id: string;
   tenantId: string;
   driverId: string;
-  datevPersonnelNumber: string;
+  externalPersonnelNumber: string;
   validFrom: Date;
   validTo: Date | null;
   costCenter: string | null;
@@ -56,12 +56,12 @@ function createFakePrisma(store: Store) {
       findMany: async ({ where }: { where?: { driverId?: string } } = {}) =>
         store.driverProfiles.filter((row) => !where?.driverId || row.driverId === where.driverId),
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
-        const number = where.datevPersonnelNumber as string | undefined;
+        const number = where.externalPersonnelNumber as string | undefined;
         const notDriver = (where.driverId as { not?: string } | undefined)?.not;
         return (
           store.driverProfiles.find(
             (row) =>
-              (number === undefined || row.datevPersonnelNumber === number) &&
+              (number === undefined || row.externalPersonnelNumber === number) &&
               (notDriver === undefined || row.driverId !== notDriver),
           ) ?? null
         );
@@ -189,7 +189,7 @@ describe('PayrollSettingsService tenant profile', () => {
   });
 
   it("DATEV alanlarini KAYDEDER — DTO'da eksik kalirsa sessizce yutulurdu", async () => {
-    // Bu testin sebebi somut: tachoBreakToleranceMinutes ve datevPayrollSystem
+    // Bu testin sebebi somut: tachoBreakToleranceMinutes ve payrollTargetSystem
     // bir sure DTO'da yoktu; ekran gonderiyordu, sunucu sessizce atiyordu ve ne
     // tsc ne de baska bir test bunu yakaliyordu.
     const store = createStore();
@@ -197,11 +197,11 @@ describe('PayrollSettingsService tenant profile', () => {
 
     await service.upsertTenantProfile(
       'tenant-a',
-      { datevPayrollSystem: 'lodas', tachoBreakToleranceMinutes: 25 },
+      { payrollTargetSystem: 'datev_lodas', tachoBreakToleranceMinutes: 25 },
       'user-a',
     );
 
-    assert.equal(store.tenantProfiles[0].datevPayrollSystem, 'lodas');
+    assert.equal(store.tenantProfiles[0].payrollTargetSystem, 'datev_lodas');
     assert.equal(store.tenantProfiles[0].tachoBreakToleranceMinutes, 25);
   });
 
@@ -223,7 +223,7 @@ describe('PayrollSettingsService driver profiles', () => {
   it('profili olmayan surucuyu de listeler ve hazir degil isaretler', async () => {
     const store = createStore();
     const service = createService(store);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a');
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1001' }, 'user-a');
 
     const rows = await service.listDriverProfiles();
 
@@ -236,10 +236,10 @@ describe('PayrollSettingsService driver profiles', () => {
     // Izin verilseydi iki kisinin saatleri DATEV'de tek satirda birlesirdi.
     const store = createStore();
     const service = createService(store);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a');
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1001' }, 'user-a');
 
     await assert.rejects(
-      service.upsertDriverProfile('tenant-a', 'driver-b', { datevPersonnelNumber: '1001' }, 'user-a'),
+      service.upsertDriverProfile('tenant-a', 'driver-b', { externalPersonnelNumber: '1001' }, 'user-a'),
       (error: unknown) => error instanceof ConflictException,
     );
 
@@ -249,12 +249,12 @@ describe('PayrollSettingsService driver profiles', () => {
   it('kendi numarasini korurken profilini guncelleyebilir', async () => {
     const store = createStore();
     const service = createService(store);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a');
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1001' }, 'user-a');
 
     const updated = await service.upsertDriverProfile(
       'tenant-a',
       'driver-a',
-      { datevPersonnelNumber: '1001', costCenter: 'KST-100' },
+      { externalPersonnelNumber: '1001', costCenter: 'KST-100' },
       'user-a',
     );
 
@@ -266,7 +266,7 @@ describe('PayrollSettingsService driver profiles', () => {
     const service = createService(createStore());
 
     await assert.rejects(
-      service.upsertDriverProfile('tenant-a', 'driver-x', { datevPersonnelNumber: '1001' }, 'user-a'),
+      service.upsertDriverProfile('tenant-a', 'driver-x', { externalPersonnelNumber: '1001' }, 'user-a'),
       (error: unknown) => error instanceof NotFoundException,
     );
   });
@@ -281,14 +281,14 @@ describe('PayrollSettingsService profil surumleme', () => {
     // kullanmak demek olurdu.
     const store = createStore();
     const service = createService(store);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '2002' }, 'user-a', JUL);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '2002' }, 'user-a', JUL);
 
     assert.equal(store.driverProfiles.length, 2);
     const [first, second] = store.driverProfiles;
-    assert.equal(first.datevPersonnelNumber, '1001');
+    assert.equal(first.externalPersonnelNumber, '1001');
     assert.equal(first.validTo?.toISOString().slice(0, 10), '2026-07-14');
-    assert.equal(second.datevPersonnelNumber, '2002');
+    assert.equal(second.externalPersonnelNumber, '2002');
     assert.equal(second.validTo, null);
   });
 
@@ -296,11 +296,11 @@ describe('PayrollSettingsService profil surumleme', () => {
     // Her hedef sure degisikligi icin surum acmak gecmisi kalabaliklastirirdi.
     const store = createStore();
     const service = createService(store);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1001' }, 'user-a', JAN);
     await service.upsertDriverProfile(
       'tenant-a',
       'driver-a',
-      { datevPersonnelNumber: '1001', weeklyTargetMinutes: 1_800 },
+      { externalPersonnelNumber: '1001', weeklyTargetMinutes: 1_800 },
       'user-a',
       JUL,
     );
@@ -312,24 +312,24 @@ describe('PayrollSettingsService profil surumleme', () => {
   it('ayni gun ikinci duzeltmede aralik cakistirmaz', async () => {
     const store = createStore();
     const service = createService(store);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1009' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1009' }, 'user-a', JAN);
 
     assert.equal(store.driverProfiles.length, 1);
-    assert.equal(store.driverProfiles[0].datevPersonnelNumber, '1009');
+    assert.equal(store.driverProfiles[0].externalPersonnelNumber, '1009');
   });
 
   it('listede O ANDA gecerli surumu verir', async () => {
     const store = createStore();
     const service = createService(store);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '1001' }, 'user-a', JAN);
-    await service.upsertDriverProfile('tenant-a', 'driver-a', { datevPersonnelNumber: '2002' }, 'user-a', JUL);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '1001' }, 'user-a', JAN);
+    await service.upsertDriverProfile('tenant-a', 'driver-a', { externalPersonnelNumber: '2002' }, 'user-a', JUL);
 
     const inMarch = await service.listDriverProfiles(new Date('2026-03-01T00:00:00.000Z'));
     const inAugust = await service.listDriverProfiles(new Date('2026-08-01T00:00:00.000Z'));
 
-    assert.equal(inMarch.find((r) => r.driverId === 'driver-a')?.profile?.datevPersonnelNumber, '1001');
-    assert.equal(inAugust.find((r) => r.driverId === 'driver-a')?.profile?.datevPersonnelNumber, '2002');
+    assert.equal(inMarch.find((r) => r.driverId === 'driver-a')?.profile?.externalPersonnelNumber, '1001');
+    assert.equal(inAugust.find((r) => r.driverId === 'driver-a')?.profile?.externalPersonnelNumber, '2002');
     assert.equal(inAugust.find((r) => r.driverId === 'driver-a')?.versionCount, 2);
   });
 });

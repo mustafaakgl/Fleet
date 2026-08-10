@@ -1,11 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
-  DatevPayrollSystem,
   PayrollEntryKind,
   PayrollExportFormat,
   PayrollExportStatus,
   PayrollMovementType,
   PayrollPeriodStatus,
+  PayrollTargetSystem,
   Prisma,
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
@@ -20,8 +20,9 @@ import {
   type WageTypeRule,
 } from './core/payroll-movement.mapper';
 import type { NormalizedPayrollMovement } from './core/payroll-movement';
-import { evaluateDatevReadiness } from './datev/core/datev-payroll-validation';
-import type { DatevPayrollContext, PayrollFileWriter } from './datev/core/datev-payroll.types';
+import type { PayrollExportContext, PayrollFileWriter } from './core/payroll-export.types';
+import { evaluatePayrollReadiness } from './core/payroll-readiness';
+import { requiresDatevMandant } from './core/payroll-target-system';
 import { neutralCsvWriter } from './export/neutral-csv';
 import { PayrollPeriodService } from './payroll-period.service';
 import { PayrollSettingsService } from './payroll-settings.service';
@@ -29,9 +30,11 @@ import { PayrollSettingsService } from './payroll-settings.service';
 /**
  * Bicim → yazici.
  *
- * `datev_ascii` HENUZ YOK: LODAS ve Lohn und Gehalt duzenleri resmi spec'e
- * gore yazilacak ve gercek DATEV uygulamasinda test-import edilmeden dogru
- * sayilmayacak. Tahmine dayali bir dosya uretmektense ihracat acikca
+ * `datev_ascii` ve `lexware_ascii` HENUZ YOK. Ikisi de gercek bir ornek dosya
+ * gorulmeden yazilmayacak: DATEV duzenleri resmi spec'e tabi, Lexware'in ASCII
+ * import semasi ise musteri tarafinda YAPILANDIRILABILIR — yani "resmi tek
+ * bicim" diye bir sey yok, hedef sirketin kendi semasi lazim. Tahmine dayali
+ * bir dosya ilk olarak muhasebecide patlar; ihracat bu yuzden acikca
  * reddediyor.
  */
 const WRITERS: Partial<Record<PayrollExportFormat, PayrollFileWriter>> = {
@@ -78,7 +81,10 @@ function hashExportSource(movements: readonly NormalizedPayrollMovement[]): stri
 }
 
 /**
- * DATEV Lohn ihracati ve Ruckrechnung (Faz 4c).
+ * Bordro ihracati ve Ruckrechnung (Faz 4c).
+ *
+ * Saglayicidan bagimsiz: hedef urunu `PayrollTargetSystem` belirliyor, dosyayi
+ * o urunun yazicisi uretiyor ve bu servis hangi bicimi urettigini bilmiyor.
  *
  * GEC GELEN OLAY: donem onaylandiktan sonra yazilan olaylar AYRI BIR TABLODA
  * TUTULMUYOR, turetiliyor — `createdAt > approvedAt` olan her olay tanim geregi
@@ -279,14 +285,14 @@ export class PayrollExportService {
   }
 
   // ---------------------------------------------------------------- ihracat
-  // ------------------------------------------------------- DATEV hazirligi
+  // ---------------------------------------------------- ihracat hazirligi
 
   /**
-   * Donemi hem hesaba hem DATEV kosullarina karsi degerlendirir.
+   * Donemi hem hesaba hem hedef sistemin kosullarina karsi degerlendirir.
    *
-   * `approved` ile `DATEV-bereit` ayri seyler: hesap dogru olabilir ama
-   * personel numarasi, Lohnart plani veya Berater/Mandant eksikse dosya
-   * uretilemez. Ekran ikisini ayri gosterdigi icin bu ucun ciktisi da ayri.
+   * `approved` ile `ihracata hazir` ayri seyler: hesap dogru olabilir ama
+   * personel numarasi veya Lohnart plani eksikse dosya uretilemez. Ekran
+   * ikisini ayri gosterdigi icin bu ucun ciktisi da ayri.
    */
   async evaluateReadiness(periodId: string, asOf: Date = new Date()) {
     const period = await this.requirePeriod(periodId);
@@ -295,13 +301,17 @@ export class PayrollExportService {
     return {
       periodId,
       periodStatus: period.status,
-      payrollSystem: source.payrollSystem,
+      targetSystem: source.targetSystem,
+      /** Ihrac edilmis dosya bayat mi — ekran bunu ayri gostermeli. */
+      exportStale:
+        source.exportedSourceHash !== null &&
+        source.exportedSourceHash !== source.currentSourceHash,
       driverCount: new Set(source.entries.map((entry) => entry.driverId)).size,
       movementCount: source.movements.length,
       summary: summarizeMovements(source.movements),
-      ...evaluateDatevReadiness({
+      ...evaluatePayrollReadiness({
         periodStatus: period.status,
-        payrollSystem: source.payrollSystem,
+        targetSystem: source.targetSystem,
         consultantNumber: source.tenantProfile?.datevConsultantNumber ?? null,
         clientNumber: source.tenantProfile?.datevClientNumber ?? null,
         driverIds: [...new Set(source.entries.map((entry) => entry.driverId))],
@@ -309,6 +319,8 @@ export class PayrollExportService {
         usedMovementTypes: source.usedMovementTypes,
         wageTypeRules: source.rules,
         dayAnomalies: source.dayAnomalies,
+        exportedSourceHash: source.exportedSourceHash,
+        currentSourceHash: source.currentSourceHash,
         asOf: source.asOf,
       }),
     };
@@ -349,22 +361,22 @@ export class PayrollExportService {
 
     const profiles = profileRows.map((row) => ({
       driverId: row.driverId,
-      personnelNumber: row.datevPersonnelNumber,
+      personnelNumber: row.externalPersonnelNumber,
       validFrom: row.validFrom,
       validTo: row.validTo,
     }));
 
     // Surucu profili tenant varsayilanini ezebiliyor; farkli suruculer farkli
-    // DATEV urunune gidiyorsa tek dosya uretilemez ve bu hazirlikta cikar.
-    const payrollSystem =
-      profileRows.find((row) => row.datevPayrollSystem)?.datevPayrollSystem ??
-      tenantProfile?.datevPayrollSystem ??
+    // urune gidiyorsa tek dosya uretilemez ve bu hazirlikta cikar.
+    const targetSystem =
+      profileRows.find((row) => row.payrollTargetSystem)?.payrollTargetSystem ??
+      tenantProfile?.payrollTargetSystem ??
       null;
 
     const rules: WageTypeRule[] = ruleRows.map((row) => ({
-      payrollSystem: row.payrollSystem,
+      targetSystem: row.targetSystem,
       movementType: row.movementType,
-      externalWageType: row.datevWageTypeNumber,
+      externalWageType: row.externalWageType,
       enabled: row.enabled,
       validFrom: row.validFrom,
       validTo: row.validTo,
@@ -383,7 +395,7 @@ export class PayrollExportService {
           row.driverId,
           {
             driverId: row.driverId,
-            personnelNumber: row.datevPersonnelNumber,
+            personnelNumber: row.externalPersonnelNumber,
             costCenter: row.costCenter,
             costUnit: row.costUnit,
           },
@@ -399,28 +411,38 @@ export class PayrollExportService {
       dayAnomalies.set(row.driverId, [...(dayAnomalies.get(row.driverId) ?? []), ...anomalies]);
     }
 
-    const built = payrollSystem
+    const built = targetSystem
       ? buildNormalizedMovements({
           entries,
           identities,
           rules,
-          payrollSystem,
+          targetSystem,
           year: period.year,
           month: period.month,
           asOf: periodEnd,
         })
       : { movements: [], unmapped: [], missingIdentity: [] };
 
+    // Elde duran dosyanin kaynak ozeti: bugunku veriyle karsilastirilinca
+    // "ihracattan sonra bir sey degisti mi" sorusunun cevabi cikiyor.
+    const lastExport = await this.prisma.payrollExport.findFirst({
+      where: { periodId: period.id, status: { not: PayrollExportStatus.superseded } },
+      orderBy: { version: 'desc' },
+      select: { id: true, sourceHash: true },
+    });
+
     return {
       entries,
       profiles,
       rules,
       tenantProfile,
-      payrollSystem,
+      targetSystem,
       identities,
       usedMovementTypes,
       dayAnomalies,
       movements: built.movements,
+      exportedSourceHash: lastExport?.sourceHash ?? null,
+      currentSourceHash: hashExportSource(built.movements),
       asOf: periodEnd,
     };
   }
@@ -443,9 +465,9 @@ export class PayrollExportService {
     const period = await this.requirePeriod(periodId);
     const source = await this.loadExportSource(period, asOf);
 
-    const readiness = evaluateDatevReadiness({
+    const readiness = evaluatePayrollReadiness({
       periodStatus: period.status,
-      payrollSystem: source.payrollSystem,
+      targetSystem: source.targetSystem,
       consultantNumber: source.tenantProfile?.datevConsultantNumber ?? null,
       clientNumber: source.tenantProfile?.datevClientNumber ?? null,
       driverIds: [...new Set(source.entries.map((entry) => entry.driverId))],
@@ -453,26 +475,36 @@ export class PayrollExportService {
       usedMovementTypes: source.usedMovementTypes,
       wageTypeRules: source.rules,
       dayAnomalies: source.dayAnomalies,
+      exportedSourceHash: source.exportedSourceHash,
+      currentSourceHash: source.currentSourceHash,
       asOf: source.asOf,
     });
     if (!readiness.ready) {
       throw new ConflictException({
-        code: 'payroll_period_not_datev_ready',
+        code: 'payroll_period_not_export_ready',
         issues: readiness.issues,
       });
     }
 
     const writer = WRITERS[format];
     if (!writer) {
-      // LODAS ve Lohn und Gehalt ASCII yazicilari resmi bicim dogrulanana
-      // kadar eklenmiyor; sessizce bos dosya uretmektense acikca reddediliyor.
+      // DATEV ve Lexware ASCII yazicilari gercek bir ornek dosya gorulene kadar
+      // eklenmiyor; sessizce bos dosya uretmektense acikca reddediliyor.
       throw new BadRequestException({ code: 'payroll_export_format_unsupported' });
     }
 
-    const context: DatevPayrollContext = {
-      payrollSystem: source.payrollSystem!,
-      consultantNumber: source.tenantProfile!.datevConsultantNumber!,
-      clientNumber: source.tenantProfile!.datevClientNumber!,
+    // Hazirlik gecti, yani hedef sistem dolu. Berater/Mandant yalnizca DATEV
+    // hedeflerinde zorunluydu; Lexware'de null gecip yazicinin bos birakmasi
+    // dogru davranis.
+    const targetSystem = source.targetSystem!;
+    const context: PayrollExportContext = {
+      targetSystem,
+      consultantNumber: requiresDatevMandant(targetSystem)
+        ? source.tenantProfile!.datevConsultantNumber!
+        : null,
+      clientNumber: requiresDatevMandant(targetSystem)
+        ? source.tenantProfile!.datevClientNumber!
+        : null,
       year: period.year,
       month: period.month,
       generatedAt: asOf,
@@ -480,13 +512,13 @@ export class PayrollExportService {
 
     const payload = writer.render(source.movements, context);
     const stored = await this.storage.save(
-      `${period.id}-v${await this.nextVersion(period.id, context.payrollSystem, format)}-${writer.fileName(context)}`,
+      `${period.id}-v${await this.nextVersion(period.id, targetSystem, format)}-${writer.fileName(context)}`,
       Buffer.from(payload, 'utf8'),
     );
 
-    const version = await this.nextVersion(period.id, context.payrollSystem, format);
+    const version = await this.nextVersion(period.id, targetSystem, format);
     const previous = await this.prisma.payrollExport.findFirst({
-      where: { periodId: period.id, payrollSystem: context.payrollSystem, format },
+      where: { periodId: period.id, targetSystem, format },
       orderBy: { version: 'desc' },
     });
 
@@ -502,7 +534,7 @@ export class PayrollExportService {
         data: {
           tenantId: period.tenantId,
           periodId: period.id,
-          payrollSystem: context.payrollSystem,
+          targetSystem,
           format,
           version,
           payloadStoredPath: stored.storedPath,
@@ -530,7 +562,7 @@ export class PayrollExportService {
       metadata: {
         exportId: exportRow.id,
         format,
-        payrollSystem: context.payrollSystem,
+        targetSystem,
         recordCount: source.movements.length,
         supersedes: previous?.id ?? null,
       },
@@ -541,11 +573,11 @@ export class PayrollExportService {
 
   private async nextVersion(
     periodId: string,
-    payrollSystem: DatevPayrollSystem,
+    targetSystem: PayrollTargetSystem,
     format: PayrollExportFormat,
   ): Promise<number> {
     const latest = await this.prisma.payrollExport.findFirst({
-      where: { periodId, payrollSystem, format },
+      where: { periodId, targetSystem, format },
       orderBy: { version: 'desc' },
       select: { version: true },
     });
