@@ -170,18 +170,43 @@ export function Sidebar() {
     });
   }, [pathname, navGroups]);
 
+  /**
+   * Aktif ogeyi gorunure kaydirmak SADECE gezinti icin.
+   *
+   * Efekt `expandedSections`/`expandedGroups` degistiginde de kosmak ZORUNDA:
+   * kapali bir bolume gezinildiginde oge ancak bolum acildiktan sonra DOM'a
+   * geliyor. Ama o bagimlilik tek basina birakilinca bir bolumu ELLE acmak da
+   * efekti tetikliyordu ve menu aktif ogeye geri firliyordu — aktif oge
+   * yukarıdaysa sidebar yukari kayiyordu. Kullanici bir bolumu acarken ORAYA
+   * bakmak istiyor; kaydirmayi calmak dogrudan onun niyetine ters.
+   *
+   * Ayirt edici olan ROTA: her rota icin en fazla bir kez kaydiriliyor.
+   * Kaydirma bayragi efekt sirasina DEGIL, kaydirmanin kendisine bagli —
+   * "bu rota icin kaydirdim mi" sorusunun cevabi tek bir ref'te duruyor.
+   */
+  const scrolledForPathRef = useRef<string | null>(null);
+
   useEffect(() => {
+    if (scrolledForPathRef.current === pathname) return;
     const nav = navScrollRef.current;
     if (!nav) return;
 
     const frame = window.requestAnimationFrame(() => {
       const active = nav.querySelector<HTMLElement>('[data-nav-active="true"]');
+      // Oge henuz yoksa isaretleme: bolum acildiktan sonraki turda tekrar
+      // denenecek. Isaretlenseydi o gezintide hic kaydirma olmazdi.
       if (!active) return;
+      scrolledForPathRef.current = pathname;
       active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [pathname, expandedSections, tabletCollapsed, mobileOpen, navGroups]);
+  }, [pathname, expandedSections, expandedGroups, tabletCollapsed, mobileOpen, navGroups]);
+
+  /** Sidebar yeniden gorunur oldugunda aktif oge yine one alinmali. */
+  function allowActiveScrollAgain() {
+    scrolledForPathRef.current = null;
+  }
 
   function toggleGroup(groupId: string, groupActive: boolean, collapsible?: boolean) {
     if (collapsible === false) return;
@@ -358,7 +383,10 @@ export function Sidebar() {
         <div className={cn('relative overflow-hidden border-b px-2 py-2', SIDEBAR_BG, SIDEBAR_BORDER)}>
           <button
             type="button"
-            onClick={() => setTabletCollapsed((current) => !current)}
+            onClick={() => {
+              allowActiveScrollAgain();
+              setTabletCollapsed((current) => !current);
+            }}
             className={cn(
               'absolute right-1 z-10 hidden rounded-md border p-1.5 text-slate-100 hover:bg-slate-700 md:inline-flex lg:hidden',
               SIDEBAR_BORDER,
@@ -482,7 +510,10 @@ export function Sidebar() {
           SIDEBAR_BORDER,
           'text-slate-100',
         )}
-        onClick={() => setMobileOpen(true)}
+        onClick={() => {
+          allowActiveScrollAgain();
+          setMobileOpen(true);
+        }}
         aria-label={t('nav.openMenu')}
       >
         <Menu className="h-5 w-5 text-current" />
