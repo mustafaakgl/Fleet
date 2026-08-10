@@ -5,7 +5,7 @@ import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
-import { FINANCIAL_ROLES } from '../common/utils/permissions';
+import { FINANCIAL_ROLES, INVOICING_ROLES } from '../common/utils/permissions';
 import { CreateInvoicePaymentDto } from './dto/create-invoice-payment.dto';
 import { CreateInvoiceDraftDto, ManualInvoiceLineDto } from './dto/create-invoice-draft.dto';
 import { SendInvoiceDto } from './dto/send-invoice.dto';
@@ -24,20 +24,25 @@ interface AuthenticatedRequest extends Request {
  * Okuma FINANCIAL_ROLES (admin, patron, muhasebe). Yazma icin
  * `RequiresWrite('accounting')` gerekiyor: global yazma listesi (admin, patron,
  * office) muhasebeyi DISLIYOR, yani muhasebeci fatura kesemiyordu. Genisletme
- * uc bazinda — muhasebeye baska modullerde yazma hakki vermiyor. Office ise
- * controller seviyesindeki @Roles ile zaten disarida.
+ * uc bazinda — muhasebeye baska modullerde yazma hakki vermiyor. Office artik giden
+ * faturalari gorup kesebiliyor (INVOICING_ROLES); sirketin kendi banka/vergi
+ * bilgileri, DATEV ihracati ve odeme silme uc bazinda FINANCIAL_ROLES'te
+ * kaldi — office'in fatura kesmesi gerekiyor, sirketin IBAN'ini degistirmesi
+ * gerekmiyor.
  */
 @Controller('invoicing')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(...FINANCIAL_ROLES)
+@Roles(...INVOICING_ROLES)
 export class InvoicingController {
   constructor(private readonly invoicing: InvoicingService) {}
 
+  @Roles(...FINANCIAL_ROLES)
   @Get('billing-profile')
   getBillingProfile() {
     return this.invoicing.getBillingProfile();
   }
 
+  @Roles(...FINANCIAL_ROLES)
   @Put('billing-profile')
   @RequiresWrite('accounting')
   upsertBillingProfile(
@@ -158,12 +163,14 @@ export class InvoicingController {
     return this.invoicing.recordPayment(id, request.user.tenantId, request.user.id, dto);
   }
 
+  @Roles(...FINANCIAL_ROLES)
   @Delete('payments/:id')
   @RequiresWrite('accounting')
   deletePayment(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.invoicing.deletePayment(id, request.user.tenantId, request.user.id);
   }
 
+  @Roles(...FINANCIAL_ROLES)
   @Get('datev/export')
   @RequiresWrite('accounting')
   exportDatev(
@@ -174,6 +181,7 @@ export class InvoicingController {
     return this.invoicing.exportDatev(from, to, request.user.tenantId, request.user.id);
   }
 
+  @Roles(...FINANCIAL_ROLES)
   @Get('datev/exports/:id/download')
   async downloadDatevExport(
     @Param('id') id: string,

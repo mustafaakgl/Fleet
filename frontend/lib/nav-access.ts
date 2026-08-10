@@ -64,7 +64,9 @@ export const NAV_ACCESS: NavAccessRule[] = [
   { href: '/privacy', roles: ['admin'] },
   { href: '/import', roles: ['admin'] },
   { href: '/billing', roles: ['admin'] },
-  { href: '/invoicing', roles: ['admin', 'boss', 'accounting'] },
+  // Office giden faturalari kesiyor ama Lohnvorbereitung'u gormuyor:
+  // /payroll bilerek finans rolleriyle sinirli.
+  { href: '/invoicing', roles: ['admin', 'boss', 'accounting', 'office'] },
   { href: '/payroll', roles: ['admin', 'boss', 'accounting'] },
   { href: '/audit', roles: ['admin', 'boss'] },
 ];

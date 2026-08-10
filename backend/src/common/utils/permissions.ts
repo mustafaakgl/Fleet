@@ -3,6 +3,20 @@ export type UserRole = 'admin' | 'boss' | 'accounting' | 'office' | 'driver' | '
 export const OPERATIONAL_ROLES: UserRole[] = ['admin', 'boss', 'accounting', 'office'];
 export const OPERATIONAL_WRITE_ROLES: UserRole[] = ['admin', 'boss', 'office'];
 export const FINANCIAL_ROLES: UserRole[] = ['admin', 'boss', 'accounting'];
+/**
+ * Giden faturalari gorup duzenleyebilenler.
+ *
+ * FINANCIAL_ROLES'ten AYRI tutuluyor, ona office EKLENMIYOR: o grup ayni
+ * zamanda Lohnvorbereitung'u (maas verisi) ve Stripe aboneligini koruyor.
+ * Office'in fatura kesmesi gerekiyor, calisanlarin ucretini gormesi
+ * gerekmiyor — iki yetkiyi tek listede birlestirmek maas verisini sessizce
+ * acardi.
+ *
+ * Bu grup fatura controller'inin VARSAYILANI; sirketin kendi banka/vergi
+ * bilgileri (billing-profile), DATEV ihracati ve odeme silme uc bazinda
+ * FINANCIAL_ROLES'te kaliyor.
+ */
+export const INVOICING_ROLES: UserRole[] = [...FINANCIAL_ROLES, 'office'];
 export const ADMIN_ONLY_ROLES: UserRole[] = ['admin'];
 export const CSV_IMPORT_ROLES: UserRole[] = ['admin', 'office'];
 

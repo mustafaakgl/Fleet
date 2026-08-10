@@ -380,9 +380,14 @@ export function getNavigationForRole(role: Role): NavGroup[] {
       ? OFFICE_NAV.map((group) => ({ ...group, items: [...group.items] }))
       : DEFAULT_NAV.map((group) => ({ ...group, items: [...group.items] }));
 
-  if (role === 'admin' || role === 'boss' || role === 'accounting') {
-    const verwaltungGroup = groups.find((g) => g.id === 'verwaltung');
-    if (verwaltungGroup) {
+  if (role === 'admin' || role === 'boss' || role === 'accounting' || role === 'office') {
+    // Abrechnung "Heute" grubunda: fatura ve Lohnvorbereitung gunluk isler,
+    // ayda bir acilan bir ayar sayfasi degil. Verwaltung altinda kapali bir
+    // bolumun icinde duruyordu ve her seferinde iki tik uzaktaydi.
+    //
+    // Grup collapsible: false — yani bu bolum her zaman gorunur durumda aciliyor.
+    const heuteGroup = groups.find((g) => g.id === 'heute');
+    if (heuteGroup) {
       // Accounting reaches outgoing invoices through here. The Stripe subscription
       // page is admin-only and shares the section rather than sitting loose in the group.
       const billingSection: NavSection = {
@@ -392,9 +397,13 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         items:
           role === 'admin'
             ? [BILLING_ITEM, INVOICING_ITEM, PAYROLL_ITEM]
-            : [INVOICING_ITEM, PAYROLL_ITEM],
+            : role === 'office'
+              // Office yalnizca giden faturalari goruyor; Lohnvorbereitung
+              // maas verisi tasidigi icin finans rollerinde kaliyor.
+              ? [INVOICING_ITEM]
+              : [INVOICING_ITEM, PAYROLL_ITEM],
       };
-      verwaltungGroup.items.push(billingSection);
+      heuteGroup.items.push(billingSection);
     }
   }
 
