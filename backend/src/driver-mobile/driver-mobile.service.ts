@@ -27,6 +27,7 @@ import { TrackingService } from '../tracking/tracking.service';
 import { WorkSessionsService } from '../work-sessions/work-sessions.service';
 import { CorrectWorkSessionDto } from '../work-sessions/dto/correct-work-session.dto';
 import { DepartureCheckService } from '../departure-check/departure-check.service';
+import { BreakCandidateService } from '../work-time/break-candidate.service';
 import { WorkTimeService } from '../work-time/work-time.service';
 import { WorkTimeBreakDto } from './dto/work-time-break.dto';
 import type { SubmitLocationDto } from '../tracking/dto/submit-location.dto';
@@ -138,6 +139,7 @@ export class DriverMobileService {
     private readonly workSessions: WorkSessionsService,
     private readonly departureCheck: DepartureCheckService,
     private readonly workTime: WorkTimeService,
+    private readonly breakCandidates: BreakCandidateService,
   ) {}
 
   private async safeAuditLog(params: {
@@ -963,6 +965,67 @@ export class DriverMobileService {
       return { active: false, shift: null };
     }
     return { active: true, shift: await this.workTime.getShift(session.id) };
+  }
+
+  /**
+   * Takografin gordugu, henuz kaydedilmemis dinlenmeler.
+   *
+   * Liste her cagrıda yeniden turetiliyor: DDD dosyasi gunler sonra inebiliyor
+   * ve o an bir tetik yok. Yalnizca BEKLEYENLER donuyor — karara baglanmis
+   * aday surucuye tekrar sorulmaz.
+   */
+  async listBreakCandidates(userId: string) {
+    const { driver } = await this.resolveDriver(userId);
+    const session = await this.workSessions.getActiveSessionForDriver(driver.id);
+    if (!session) {
+      return { active: false, candidates: [] };
+    }
+
+    const candidates = await this.breakCandidates.syncSession(session.id);
+    return {
+      active: true,
+      candidates: candidates.filter((candidate) => candidate.status === 'pending'),
+    };
+  }
+
+  /** "Als Pause übernehmen" — onaylanan aday BREAK_START/BREAK_END'e donusur. */
+  confirmBreakCandidate(userId: string, candidateId: string) {
+    return this.decideBreakCandidate(userId, candidateId, 'confirm');
+  }
+
+  /** "Keine Pause" — Zeiterfassung degismez, yalnizca soru kapanir. */
+  dismissBreakCandidate(userId: string, candidateId: string) {
+    return this.decideBreakCandidate(userId, candidateId, 'dismiss');
+  }
+
+  private async decideBreakCandidate(
+    userId: string,
+    candidateId: string,
+    decision: 'confirm' | 'dismiss',
+  ) {
+    const { driver } = await this.resolveDriver(userId);
+
+    // Aday kimligi disaridan geliyor: sahiplik dogrulanmazsa surucu baskasinin
+    // gunune mola yazabilirdi.
+    const owned = await this.prisma.breakCandidate.findFirst({
+      where: { id: candidateId, driverId: driver.id },
+      select: { id: true },
+    });
+    if (!owned) {
+      throw new BadRequestException({ code: 'break_candidate_not_yours' });
+    }
+
+    const actor = { userId, source: WorkTimeEventSource.driver_mobile };
+    const candidate =
+      decision === 'confirm'
+        ? await this.breakCandidates.confirm(candidateId, actor)
+        : await this.breakCandidates.dismiss(candidateId, actor);
+
+    const session = await this.workSessions.getActiveSessionForDriver(driver.id);
+    return {
+      candidate,
+      shift: session ? await this.workTime.getShift(session.id) : null,
+    };
   }
 
   startWorkTimeBreak(userId: string, dto: WorkTimeBreakDto) {

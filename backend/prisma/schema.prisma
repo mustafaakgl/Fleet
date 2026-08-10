@@ -423,6 +423,24 @@ enum WorkTimeEventSource {
   auto
 }
 
+/// Mola adayinin akibeti. `pending` bir IDDIA, kayit degil.
+enum BreakCandidateStatus {
+  pending
+  /// Onaylandi ve karsiliginda BREAK_START/BREAK_END olaylari yazildi.
+  confirmed
+  /// Insan "bu mola degildi" dedi. Aday KALIYOR: silinirse bir sonraki
+  /// takograf taramasi ayni oneriyi tekrar uretir ve surucu ayni soruyu her
+  /// gun yeniden gorurdu.
+  dismissed
+}
+
+/// Adayin nereden turedigi. Bugun tek kaynak var; alan simdiden burada cunku
+/// telematik durus verisi de ayni akisa girebilir ve o zaman "hangi delil"
+/// sorusunun cevabi kaybolmamali.
+enum BreakCandidateSource {
+  tachograph
+}
+
 enum MessengerDepartment {
   dispatch
   hr
@@ -812,6 +830,7 @@ model Tenant {
   tours                      Tour[]
   tourStops                  TourStop[]
   workTimeEvents             WorkTimeEvent[]
+  breakCandidates            BreakCandidate[]
   payrollProfile             TenantPayrollProfile?
   driverPayrollProfiles      DriverPayrollProfile[]
   publicHolidays             PublicHoliday[]
@@ -948,6 +967,7 @@ model User {
   finalizedInvoices               Invoice[]                   @relation("InvoiceFinalizedBy")
   approvedPayrollPeriods          PayrollPeriod[]             @relation("PayrollPeriodApprovedBy")
   createdPayrollExports           PayrollExport[]             @relation("PayrollExportCreatedBy")
+  decidedBreakCandidates          BreakCandidate[]            @relation("BreakCandidateDecidedBy")
   recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
   createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
 
@@ -1079,6 +1099,7 @@ model Driver {
   equipmentIssuances      EquipmentIssuance[]
   tours                   Tour[]
   workTimeEvents          WorkTimeEvent[]
+  breakCandidates         BreakCandidate[]
   payrollProfiles         DriverPayrollProfile[]
   payrollDays             PayrollDay[]
   payrollEntries          PayrollEntry[]
@@ -2112,16 +2133,17 @@ model WorkSession {
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
 
-  matchedFines Fine[]
-  fleetTrips   FleetTrip[]
-  timeEvents   WorkTimeEvent[]
+  matchedFines    Fine[]
+  fleetTrips      FleetTrip[]
+  timeEvents      WorkTimeEvent[]
+  breakCandidates BreakCandidate[]
 
   @@index([tenantId])
   @@index([driverId, status])
   @@index([driverId, startedAt])
 }
 
-/// DATEV Lohn tarafinin tenant ayari.
+/// Bordro tarafinin tenant ayari.
 ///
 /// TenantBillingProfile'in aynadaki esi: orasi Rechnungswesen (AR/EXTF), burasi
 /// Lohn. AYRI tutuluyorlar cunku DATEV'de iki farkli urun ve Mandantennummer
@@ -2157,6 +2179,10 @@ model TenantPayrollProfile {
 
   /// Gunluk sureler bu adima yuvarlanir. 1 = yuvarlama yok.
   roundingMinutes            Int @default(1)
+  /// Takograf dinlenmesinin mola ADAYI sayilmasi icin gereken en kisa sure.
+  /// Uc-bes dakikalik REST bloklari mola degil (trafik, rampa, bekleme) ve
+  /// aday yapilirsa surucu her gun onlarca gereksiz soru gorur.
+  breakCandidateMinMinutes   Int @default(15)
   /// Surucunun bastigi mola ile takografin REST kaydi arasindaki kabul edilen
   /// fark. Ikisi dakikasi dakikasina tutmaz: surucu dugmeye basmayi geciktirir,
   /// takograf aracin duruşundan sayar. Bu esigin USTU incelenmeli.
@@ -2558,12 +2584,105 @@ model WorkTimeEvent {
 
   createdAt DateTime @default(now())
 
+  /// Bu olayi doguran mola adayi (varsa). Onaylanan aday ile uretilen olay
+  /// arasindaki bag iki yonlu tutuluyor ki denetimde "bu mola nereden geldi"
+  /// sorusu tek sorguyla cevaplansin.
+  breakCandidateStart BreakCandidate? @relation("BreakCandidateStartEvent")
+  breakCandidateEnd   BreakCandidate? @relation("BreakCandidateEndEvent")
+
   @@unique([tenantId, clientEventId])
   @@index([tenantId])
   @@index([workSessionId, occurredAt])
   @@index([tenantId, driverId, occurredAt])
   @@index([assignmentId])
   @@index([tourId])
+}
+
+/// Takografin gordugu, HENUZ KAYIT OLMAYAN dinlenme.
+///
+/// Bu tablo Zeiterfassung'un parcasi DEGIL; onun yanindaki delil defteri.
+/// Bordro yalnizca WorkTimeEvent okuyor ve buraya hic bakmiyor — takograf
+/// kaydi dogrudan degistirseydi, dogrulanmamis bir olcum maasi degistirirdi.
+/// Zincir: TachoActivity -> BreakCandidate -> (insan onayi) -> WorkTimeEvent.
+///
+/// Aday SILINMIYOR, durum degistiriyor. Reddedilen bir aday silinseydi bir
+/// sonraki takograf taramasi ayni oneriyi yeniden uretir ve surucu ayni soruyu
+/// her gun tekrar gorurdu; `dismissed` satiri o sorunun sorulmus ve
+/// cevaplanmis oldugunun kaydi.
+model BreakCandidate {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  driverId String
+  driver   Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  /// Aday her zaman bir vardiyaya ait: vardiya penceresi olmadan takograf
+  /// dinlenmesi mola degil gunluk istirahattir.
+  workSessionId String
+  workSession   WorkSession @relation(fields: [workSessionId], references: [id], onDelete: Cascade)
+
+  startedAt       DateTime
+  endedAt         DateTime
+  /// Tam dakika. Sunucuda bir kez hesaplanip yaziliyor ki liste ekrani ve
+  /// karar ani ayni sayiyi gorsun.
+  durationMinutes Int
+
+  source BreakCandidateSource @default(tachograph)
+  status BreakCandidateStatus @default(pending)
+
+  /// ONERININ GEREKCESI. Alti ay sonra "bu 17 dakikayi neden onerdiniz?"
+  /// sorusuna cevap verebilmek icin, adayin turedigi delil oldugu gibi
+  /// saklaniyor. Takograf kayitlari sonradan yeniden islenebiliyor; o zaman
+  /// bugunku oneriyi yeniden uretmek mumkun olmayabilir, bu yuzden hesabin
+  /// girdileri sonucla birlikte donduruluyor.
+  ///
+  /// evidenceRestMinutes - evidenceRecordedBreakMinutes farki, adayin kendisi
+  /// esigi gecen tek parca oldugunda durationMinutes'a esittir; delil blogu
+  /// ikiye bolunduyse fark daha buyuk olur.
+  evidenceStartedAt            DateTime
+  evidenceEndedAt              DateTime
+  /// Delil blogunun vardiya penceresi icindeki toplam suresi.
+  evidenceRestMinutes          Int
+  /// Ayni blogun surucunun kendi kaydettigi molayla ortusen kismi.
+  evidenceRecordedBreakMinutes Int
+  /// Blogu olusturan TachoActivity kimlikleri. FK DEGIL: takograf kayitlari
+  /// yeniden islenirken silinip yeniden yazilabiliyor ve o zaman adayin
+  /// gerekcesi de silinirdi.
+  evidenceActivityIds          Json
+  /// Delilin geldigi DDD dosyalari. Ayni sebeple FK degil.
+  evidenceDddFileIds           Json
+  /// Turetmenin kosuldugu an. `createdAt` ile ayni degil: aday guncellenirse
+  /// (gec gelen daha eksiksiz DDD) bu tazelenir, createdAt tazelenmez.
+  derivedAt                    DateTime
+
+  decidedAt      DateTime?
+  /// Karari veren kisi. Surucu kendi telefonundan onayladiysa da dolu —
+  /// "kim onayladi" sorusu denetimde sorulacak sorulardan biri.
+  decidedById    String?
+  decidedBy      User?                @relation("BreakCandidateDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  /// Kararin hangi kanaldan geldigi; WorkTimeEvent.source ile ayni dil.
+  decisionSource WorkTimeEventSource?
+
+  /// Onay sonucu yazilan olaylar — dosyadan veriye geri yol. SetNull degil
+  /// Restrict de degil: olay silinmiyor zaten (append-only), ama iliskinin
+  /// kendisi zorunlu degil cunku reddedilen adayda olay yok.
+  breakStartEventId String?        @unique
+  breakStartEvent   WorkTimeEvent? @relation("BreakCandidateStartEvent", fields: [breakStartEventId], references: [id], onDelete: SetNull)
+  breakEndEventId   String?        @unique
+  breakEndEvent     WorkTimeEvent? @relation("BreakCandidateEndEvent", fields: [breakEndEventId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Uretim TEKRARLANABILIR olmali: her DDD indirmesinde ve her ekran acilista
+  /// yeniden taraniyor. Baslangic ani capa: ayni dinlenme ikinci kez aday
+  /// olmuyor, verilmis karar da geri gelmiyor.
+  @@unique([tenantId, workSessionId, startedAt])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, driverId, startedAt])
+  @@index([workSessionId, status])
 }
 
 model VehicleEquipment {

@@ -14,6 +14,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../prisma/prisma.service';
+import { BreakCandidateService } from '../work-time/break-candidate.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { parseDddBuffer, type DddGeneration, type ParsedDddEvent } from './ddd/ddd-parser';
 import type { DddParserPort } from './ddd/parser-port';
@@ -51,6 +52,12 @@ export class TachographService {
     @Optional() private readonly dddParser?: DddParserPort,
     @Optional()
     private readonly infringementNotifications?: TachographInfringementNotificationService,
+    /**
+     * Opsiyonel: mevcut testler ve gateway baglamlari bu servisi enjekte
+     * etmeden TachographService kuruyor. Yoksa aday uretimi ofis taramasina
+     * kalir — islev kaybolmaz, yalnizca gecikir.
+     */
+    @Optional() private readonly breakCandidates?: BreakCandidateService,
   ) {}
 
   /**
@@ -108,6 +115,35 @@ export class TachographService {
    * Marks the row processed on success, failed (with a short summary) on error.
    * Idempotent: an already-processed file is a no-op.
    */
+  /**
+   * Dosyanin kapsadigi zaman araligindaki vardiyalarin mola adaylarini tazeler.
+   *
+   * Surucu bazinda DEGIL aralik bazinda calisiyor: DDD kayitlarinin surucusu
+   * bos olabiliyor (kartsiz surus) ve o durumda hangi vardiyanin etkilendigi
+   * ancak zamandan bulunur.
+   */
+  private async syncBreakCandidatesForActivities(
+    activities: ReadonlyArray<{ startedAt: string; durationS: number }>,
+  ): Promise<void> {
+    if (!this.breakCandidates || activities.length === 0) return;
+
+    let from = Number.POSITIVE_INFINITY;
+    let to = Number.NEGATIVE_INFINITY;
+    for (const activity of activities) {
+      const startedAt = new Date(activity.startedAt).getTime();
+      if (!Number.isFinite(startedAt)) continue;
+      const endedAt = startedAt + Math.max(0, activity.durationS) * 1000;
+      if (startedAt < from) from = startedAt;
+      if (endedAt > to) to = endedAt;
+    }
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return;
+
+    // Vardiya, dinlenmeden once baslamis olabilir; pencere bir gun geriden
+    // aciliyor ki o vardiya da taramaya girsin.
+    const windowFrom = new Date(from - 24 * 60 * 60 * 1000);
+    await this.breakCandidates.syncRange({ from: windowFrom, to: new Date(to) });
+  }
+
   async processDddFile(tenantId: string, dddFileId: string): Promise<void> {
     const file = await this.prisma.dddFile.findFirst({
       where: { id: dddFileId, tenantId },
@@ -249,6 +285,24 @@ export class TachographService {
       if (signatureBlocksRuleEngine) {
         await this.notifySignatureInvalid(meta, file.id, parsed.warnings);
       }
+
+      // Yeni dinlenme kayitlari geldi: mola adaylarini HEMEN tazele.
+      //
+      // Ofis listesindeki `syncRange` guvenlik agi olarak duruyor ama tek
+      // tetikleyici olmamali — 500 surucu ve aylarca veriyle her liste
+      // acilisinda genis tarama yapmak pahali. Asil tetik veri girisi: dosya
+      // islendigi anda hangi vardiyalarin etkilendigi zaten belli.
+      //
+      // Basarisizligi YUTULUYOR: aday uretimi DDD islemeyi bozmamali. Kacan
+      // aday bir sonraki ofis taramasinda yakalanir; islenmemis bir DDD
+      // dosyasi ise ihlal hesabini da durdururdu.
+      await this.syncBreakCandidatesForActivities(parsed.activities).catch((error) => {
+        this.logger.warn(
+          `Break candidate sync after DDD ${file.id} failed: ${
+            error instanceof Error ? error.message : 'unknown'
+          }`,
+        );
+      });
 
       this.logger.log(
         `DDD file ${file.id} processed: ${parsed.activities.length} activities, ${infringementsCreated.created} infringements.`,

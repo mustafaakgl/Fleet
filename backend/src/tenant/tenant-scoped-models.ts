@@ -68,6 +68,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'Tour',
   'TourStop',
   'WorkTimeEvent',
+  'BreakCandidate',
   'TenantPayrollProfile',
   'DriverPayrollProfile',
   'PublicHoliday',

@@ -260,6 +260,89 @@ export class WorkTimeService {
   }
 
   /**
+   * Gecmise ait bir mola araligini TEK PARCADA yazar.
+   *
+   * `appendEvent`i iki kez cagirmak yeterli DEGIL: ikisinin arasinda bir hata
+   * olursa geriye acik kalmis bir `break_start` kalirdi ve o vardiya "molada
+   * takilmis" gorunurdu. Bu yuzden iki olay once BIRLIKTE dogrulaniyor, sonra
+   * tek transaction'da yaziliyor.
+   *
+   * Gecmise yazmak kural disi degil: gecis kontrolu zaten olayin KENDI anindaki
+   * duruma bakiyor, "su anki duruma" degil. 12:06'daki bir mola, vardiya
+   * 17:19'da kapanmis olsa bile 12:06'da calisiliyor oldugu icin gecerli.
+   */
+  async appendBreakInterval(input: {
+    workSessionId: string;
+    driverId: string;
+    startedAt: Date;
+    endedAt: Date;
+    source: WorkTimeEventSource;
+  }): Promise<{ breakStartEventId: string; breakEndEventId: string }> {
+    if (!(input.endedAt.getTime() > input.startedAt.getTime())) {
+      throw new BadRequestException({ code: 'break_interval_empty' });
+    }
+
+    const session = await this.prisma.workSession.findUnique({
+      where: { id: input.workSessionId },
+      select: { id: true, driverId: true, startedAt: true },
+    });
+    if (!session) {
+      throw new NotFoundException({ code: 'work_session_not_found' });
+    }
+
+    await this.ensureOpeningEvent(session, WorkTimeEventType.break_start);
+
+    const existing = await this.loadEvents(input.workSessionId);
+    const start: FoldableWorkTimeEvent = {
+      id: 'candidate-break-start',
+      type: 'break_start',
+      occurredAt: input.startedAt,
+      sequence: Number.MAX_SAFE_INTEGER - 1,
+      supersedesEventId: null,
+    };
+    const startDecision = canAppendWorkTimeEvent(toFoldable(existing), start);
+    if (!startDecision.apply) {
+      throw new ConflictException({ code: startDecision.reason });
+    }
+    // Bitis, baslangic YAZILMIS SAYILARAK dogrulaniyor; yoksa "molada degil"
+    // diye reddedilirdi.
+    const endDecision = canAppendWorkTimeEvent([...toFoldable(existing), start], {
+      id: 'candidate-break-end',
+      type: 'break_end',
+      occurredAt: input.endedAt,
+      sequence: Number.MAX_SAFE_INTEGER,
+      supersedesEventId: null,
+    });
+    if (!endDecision.apply) {
+      throw new ConflictException({ code: endDecision.reason });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const breakStart = await tx.workTimeEvent.create({
+        data: {
+          workSessionId: input.workSessionId,
+          driverId: input.driverId,
+          type: WorkTimeEventType.break_start,
+          occurredAt: input.startedAt,
+          source: input.source,
+        },
+        select: { id: true },
+      });
+      const breakEnd = await tx.workTimeEvent.create({
+        data: {
+          workSessionId: input.workSessionId,
+          driverId: input.driverId,
+          type: WorkTimeEventType.break_end,
+          occurredAt: input.endedAt,
+          source: input.source,
+        },
+        select: { id: true },
+      });
+      return { breakStartEventId: breakStart.id, breakEndEventId: breakEnd.id };
+    });
+  }
+
+  /**
    * Vardiyanin son gecerli cikis olayi. Ofis duzeltmesi bunun ustunu cizer.
    * Ustu zaten cizilmis olan dondurulmez, yoksa duzeltme zinciri dallanirdi.
    */

@@ -4376,5 +4376,17 @@
   "payroll.settings.targetSystemNone": "Nicht festgelegt",
   "payroll.drivers.versions": "{{count}} Versionen",
   "payroll.drivers.validFrom": "gültig ab {{date}}",
-  "payroll.drivers.willVersion": "Die Personalnummer ändert sich: es wird eine neue Version angelegt, die bisherige bleibt für vergangene Monate gültig."
+  "payroll.drivers.willVersion": "Die Personalnummer ändert sich: es wird eine neue Version angelegt, die bisherige bleibt für vergangene Monate gültig.",
+  "driverPortal.breakCandidate.question": "Der Tachograf hat zwischen {{from}} und {{to}} eine Ruhezeit von {{minutes}} Minuten erkannt. Als Pause übernehmen?",
+  "driverPortal.breakCandidate.confirm": "Als Pause übernehmen",
+  "driverPortal.breakCandidate.dismiss": "Keine Pause",
+  "driverPortal.breakCandidate.error": "Die Entscheidung konnte nicht gespeichert werden.",
+  "breakCandidates.title": "Mögliche nicht erfasste Pausen ({{count}})",
+  "breakCandidates.hint": "Der Tachograf hat Ruhezeiten erkannt, die nicht in der Zeiterfassung stehen. Erst mit „Übernehmen“ entsteht ein Pauseneintrag.",
+  "breakCandidates.minutes": "{{minutes}} Min.",
+  "breakCandidates.confirm": "Übernehmen",
+  "breakCandidates.dismiss": "Ablehnen",
+  "breakCandidates.loading": "Tachograf-Abgleich läuft …",
+  "breakCandidates.loadError": "Die möglichen Pausen konnten nicht geladen werden.",
+  "breakCandidates.decideError": "Die Entscheidung konnte nicht gespeichert werden."
 }

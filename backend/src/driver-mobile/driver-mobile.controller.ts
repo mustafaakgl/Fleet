@@ -201,6 +201,23 @@ export class DriverMobileController {
     return this.driverMobile.endWorkTimeBreak(userId, dto ?? {});
   }
 
+  @Get('work-sessions/break-candidates')
+  listBreakCandidates(@CurrentUser('id') userId: string) {
+    return this.driverMobile.listBreakCandidates(userId);
+  }
+
+  @Post('work-sessions/break-candidates/:id/confirm')
+  @HttpCode(HttpStatus.OK)
+  confirmBreakCandidate(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.driverMobile.confirmBreakCandidate(userId, id);
+  }
+
+  @Post('work-sessions/break-candidates/:id/dismiss')
+  @HttpCode(HttpStatus.OK)
+  dismissBreakCandidate(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.driverMobile.dismissBreakCandidate(userId, id);
+  }
+
   @Post('work-sessions/heartbeat')
   @HttpCode(HttpStatus.OK)
   heartbeatWorkSession(@CurrentUser('id') userId: string) {

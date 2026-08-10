@@ -551,6 +551,16 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.payrollExport.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.payrollExport.count()),
       }),
+      // Takograf mola adayi. Zeiterfassung kaydi degil ama SURUCU CALISMA
+      // ARALIKLARINI tasiyor — sizmasi, bir kiracinin surucusunun ne zaman
+      // dinlendigini digerine gostermek olurdu.
+      verifyTenantScopedModel({
+        label: 'BreakCandidate', tenantA, tenantB,
+        unscopedCountA: () => base.breakCandidate.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.breakCandidate.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.breakCandidate.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.breakCandidate.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

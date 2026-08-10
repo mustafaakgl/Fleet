@@ -4376,5 +4376,17 @@
   "payroll.settings.targetSystemNone": "Belirlenmedi",
   "payroll.drivers.versions": "{{count}} sürüm",
   "payroll.drivers.validFrom": "{{date}} tarihinden geçerli",
-  "payroll.drivers.willVersion": "Personel numarası değişiyor: yeni bir sürüm açılacak, mevcut sürüm geçmiş aylar için geçerli kalacak."
+  "payroll.drivers.willVersion": "Personel numarası değişiyor: yeni bir sürüm açılacak, mevcut sürüm geçmiş aylar için geçerli kalacak.",
+  "driverPortal.breakCandidate.question": "Takograf {{from}}–{{to}} arasında {{minutes}} dakikalık dinlenme tespit etti. Mola olarak kaydedilsin mi?",
+  "driverPortal.breakCandidate.confirm": "Mola olarak kaydet",
+  "driverPortal.breakCandidate.dismiss": "Mola değildi",
+  "driverPortal.breakCandidate.error": "Karar kaydedilemedi.",
+  "breakCandidates.title": "Kaydedilmemiş olabilecek molalar ({{count}})",
+  "breakCandidates.hint": "Takograf, zaman kaydında görünmeyen dinlenmeler buldu. Mola kaydı ancak onaylandığında oluşur.",
+  "breakCandidates.minutes": "{{minutes}} dk",
+  "breakCandidates.confirm": "Onayla",
+  "breakCandidates.dismiss": "Reddet",
+  "breakCandidates.loading": "Takograf karşılaştırması yapılıyor …",
+  "breakCandidates.loadError": "Olası molalar yüklenemedi.",
+  "breakCandidates.decideError": "Karar kaydedilemedi."
 }

@@ -4376,5 +4376,17 @@
   "payroll.settings.targetSystemNone": "Not set",
   "payroll.drivers.versions": "{{count}} versions",
   "payroll.drivers.validFrom": "valid from {{date}}",
-  "payroll.drivers.willVersion": "The personnel number changes: a new version is created, the previous one stays valid for past months."
+  "payroll.drivers.willVersion": "The personnel number changes: a new version is created, the previous one stays valid for past months.",
+  "driverPortal.breakCandidate.question": "The tachograph recorded {{minutes}} minutes of rest between {{from}} and {{to}}. Record this as a break?",
+  "driverPortal.breakCandidate.confirm": "Record as break",
+  "driverPortal.breakCandidate.dismiss": "Not a break",
+  "driverPortal.breakCandidate.error": "The decision could not be saved.",
+  "breakCandidates.title": "Possible unrecorded breaks ({{count}})",
+  "breakCandidates.hint": "The tachograph found rest periods that are missing from the time record. A break entry is only created once you accept.",
+  "breakCandidates.minutes": "{{minutes}} min",
+  "breakCandidates.confirm": "Accept",
+  "breakCandidates.dismiss": "Reject",
+  "breakCandidates.loading": "Comparing with the tachograph …",
+  "breakCandidates.loadError": "The possible breaks could not be loaded.",
+  "breakCandidates.decideError": "The decision could not be saved."
 }

@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { WorkTimeModule } from '../work-time/work-time.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AuditModule } from '../audit/audit.module';
 import { MetricsModule } from '../metrics/metrics.module';
@@ -17,7 +18,14 @@ import { DDD_REMOTE_DOWNLOAD_PORT } from './remote-download/ddd-remote-download.
 import { TisWebAdapter } from './remote-download/tis-web.adapter';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule, AuditModule, MetricsModule, forwardRef(() => TachographQueueModule)],
+  imports: [
+    PrismaModule,
+    NotificationsModule,
+    AuditModule,
+    MetricsModule,
+    WorkTimeModule,
+    forwardRef(() => TachographQueueModule),
+  ],
   controllers: [TachographController],
   providers: [
     TachographService,

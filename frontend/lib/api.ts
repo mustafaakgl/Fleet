@@ -895,6 +895,25 @@ export interface WorkTimeShift {
   }>;
 }
 
+/**
+ * Takografin gordugu, HENUZ KAYIT OLMAYAN dinlenme.
+ *
+ * Zeiterfassung kaydi DEGIL: bordro yalnizca onaylanmis WorkTimeEvent'i okuyor.
+ * Bu satir bir iddia — onaylanmadigi surece hicbir sayiyi degistirmez.
+ */
+export interface BreakCandidate {
+  id: string;
+  driverId: string;
+  workSessionId: string;
+  startedAt: string;
+  endedAt: string;
+  durationMinutes: number;
+  status: 'pending' | 'confirmed' | 'dismissed';
+  source: string;
+  decidedAt: string | null;
+  decisionSource: 'driver_web' | 'driver_mobile' | 'office' | 'auto' | null;
+}
+
 export interface DriverWorkSessionCurrentResponse {
   active: boolean;
   needsReconciliation?: boolean;
@@ -2897,8 +2916,40 @@ export const driverPortalApi = {
       )
       .then((r) => r.data),
 
+  /** Bekleyen mola adaylari. Sunucu her cagrida takografi yeniden tariyor. */
+  listBreakCandidates: () =>
+    api
+      .get<{ active: boolean; candidates: BreakCandidate[] }>(
+        '/driver/work-sessions/break-candidates',
+      )
+      .then((r) => r.data),
+
+  /** `confirm` molayi yazar, `dismiss` yalnizca soruyu kapatir. */
+  decideBreakCandidate: (id: string, decision: 'confirm' | 'dismiss') =>
+    api
+      .post<{ candidate: BreakCandidate; shift: WorkTimeShift | null }>(
+        `/driver/work-sessions/break-candidates/${id}/${decision}`,
+      )
+      .then((r) => r.data),
+
   reconcileWorkSession: (payload: { ended_at: string; reason: string; note?: string }) =>
     api.post<{ session: DriverWorkSessionState }>('/driver/work-sessions/reconcile', payload).then((r) => r.data),
+};
+
+/** Ofis tarafi: baskasinin gunundeki mola adaylari. Karar denetime yazilir. */
+export const breakCandidatesApi = {
+  list: (params: {
+    driver_id?: string;
+    date_from?: string;
+    date_to?: string;
+    status?: 'pending' | 'confirmed' | 'dismissed';
+  }) =>
+    api
+      .get<{ candidates: BreakCandidate[] }>('/break-candidates', { params })
+      .then((r) => r.data.candidates),
+
+  decide: (id: string, decision: 'confirm' | 'dismiss') =>
+    api.post<BreakCandidate>(`/break-candidates/${id}/${decision}`).then((r) => r.data),
 };
 
 export const fleetFuelAnalyticsApi = {

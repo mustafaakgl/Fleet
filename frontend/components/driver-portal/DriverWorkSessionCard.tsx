@@ -6,7 +6,7 @@ import { Clock, Coffee, Loader2, Play, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { driverPortalApi, type WorkTimeShift } from '@/lib/api';
+import { driverPortalApi, type BreakCandidate, type WorkTimeShift } from '@/lib/api';
 import { enqueueWorkTimeEventQueueItem } from '@/lib/driver-offline-queue';
 import {
   clearFeierabendPause,
@@ -76,19 +76,25 @@ export function DriverWorkSessionCard() {
   const [feierabendToday, setFeierabendToday] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<number>(() => Date.now());
   const [now, setNow] = useState<number>(() => Date.now());
+  const [candidates, setCandidates] = useState<BreakCandidate[]>([]);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [current, time] = await Promise.all([
+      const [current, time, breakCandidates] = await Promise.all([
         driverPortalApi.getCurrentWorkSession(),
         driverPortalApi.getWorkTimeShift().catch(() => ({ active: false, shift: null })),
+        // Aday listesi COKERSE kart yine calismali: bu bir oneri, vardiya
+        // ekraninin calismasinin sarti degil.
+        driverPortalApi.listBreakCandidates().catch(() => ({ active: false, candidates: [] })),
       ]);
       setActive(current.active);
       setNeedsReconciliation(Boolean(current.needsReconciliation));
       setSession(current.session);
       setShift(time.shift);
+      setCandidates(breakCandidates.candidates);
       setFetchedAt(Date.now());
       setNow(Date.now());
       setFeierabendToday(isFeierabendPausedToday());
@@ -201,6 +207,28 @@ export function DriverWorkSessionCard() {
     }
   }
 
+  /**
+   * Aday karari. Onay molayi yazdigi icin vardiya ozeti de yenileniyor —
+   * sayaç ekranda aninda dogru degeri gostermeli.
+   */
+  async function decideCandidate(id: string, decision: 'confirm' | 'dismiss') {
+    setDecidingId(id);
+    setError(null);
+    try {
+      const result = await driverPortalApi.decideBreakCandidate(id, decision);
+      setCandidates((current) => current.filter((candidate) => candidate.id !== id));
+      if (result.shift) {
+        setShift(result.shift);
+        setFetchedAt(Date.now());
+        setNow(Date.now());
+      }
+    } catch {
+      setError(t('driverPortal.breakCandidate.error'));
+    } finally {
+      setDecidingId(null);
+    }
+  }
+
   const onBreak = shift?.state === 'on_break';
 
   return (
@@ -272,6 +300,46 @@ export function DriverWorkSessionCard() {
                 ) : null}
               </div>
             ) : null}
+
+            {/* Takograf DELIL uretir, kayit degil: bu kutu bir soru soruyor,
+                onaylanana kadar hicbir sayi degismiyor. */}
+            {candidates.map((candidate) => (
+              <div
+                key={candidate.id}
+                className="rounded-lg border border-sky-200 bg-sky-50 p-3"
+                data-testid="break-candidate"
+              >
+                <p className="text-sm text-sky-900">
+                  {t('driverPortal.breakCandidate.question', {
+                    from: formatClock(candidate.startedAt, i18n.language),
+                    to: formatClock(candidate.endedAt, i18n.language),
+                    minutes: candidate.durationMinutes,
+                  })}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    disabled={decidingId !== null}
+                    onClick={() => void decideCandidate(candidate.id, 'confirm')}
+                  >
+                    {decidingId === candidate.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Coffee className="mr-2 h-4 w-4" />
+                    )}
+                    {t('driverPortal.breakCandidate.confirm')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={decidingId !== null}
+                    onClick={() => void decideCandidate(candidate.id, 'dismiss')}
+                  >
+                    {t('driverPortal.breakCandidate.dismiss')}
+                  </Button>
+                </div>
+              </div>
+            ))}
 
             {!active && shift && shift.state === 'off' && shift.startedAt && feierabendToday ? (
               <div className="rounded-lg border border-slate-200 bg-white p-3">

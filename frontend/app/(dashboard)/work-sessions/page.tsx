@@ -7,6 +7,7 @@ import { driversApi, workSessionsApi, type WorkSessionRow } from '@/lib/api';
 import { downloadBlob } from '@/lib/download-blob';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BreakCandidatePanel } from '@/components/work-sessions/BreakCandidatePanel';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -124,6 +125,11 @@ export default function WorkSessionsPage() {
     void load();
   }, [load]);
 
+  const driverNameById = useMemo(
+    () => new Map(driverOptions.map((option) => [option.id, option.label])),
+    [driverOptions],
+  );
+
   const summary = useMemo(() => {
     let totalMinutes = 0;
     let endedCount = 0;
@@ -197,6 +203,15 @@ export default function WorkSessionsPage() {
       {/* Aylik Zeiterfassung: Soll/Ist/Pause/Uberstunden. Asagidaki vardiya
           listesi ham kayit olarak duruyor, silinmedi. */}
       <ZeiterfassungMonth />
+
+      {/* Takografin gordugu ama kaydedilmemis dinlenmeler. Ayni filtreleri
+          kullaniyor; aday yoksa kart hic cizilmiyor. */}
+      <BreakCandidatePanel
+        driverId={driverId}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        driverNames={driverNameById}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
