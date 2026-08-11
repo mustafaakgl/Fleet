@@ -1951,10 +1951,12 @@ export const companyEmailsApi = {
   markFailed: (id: string) =>
     api.post<CompanyEmail>(`/company-emails/${id}/mark-failed`).then((r) => r.data),
 
-  send: (id: string) =>
+  /** allowResend yalnizca kullanici tekrar gonderimi bilerek onayladiginda gider. */
+  send: (id: string, options?: { allowResend?: boolean }) =>
     api
       .post<{ email: CompanyEmail; mail_sent: boolean; mail_mode: 'smtp' | 'log' }>(
         `/company-emails/${id}/send`,
+        { allowResend: options?.allowResend ?? false },
       )
       .then((r) => r.data),
 };

@@ -12,6 +12,7 @@ import {
   GenerateCompanyEmailsForDateDto,
   SendCompanyEmailsDto,
 } from './dto/generate-company-email.dto';
+import { SendCompanyEmailDto } from './dto/send-company-email.dto';
 import { UpdateCompanyEmailDto } from './dto/update-company-email.dto';
 
 @Controller('company-emails')
@@ -84,8 +85,14 @@ export class CompanyEmailsController {
 
   @Post(':id/send')
   @RequiresWrite()
-  sendEmail(@Param('id') id: string, @CurrentUser('id') currentUserId?: string) {
-    return this.companyEmailsService.sendEmail(id, currentUserId);
+  sendEmail(
+    @Param('id') id: string,
+    @Body() dto: SendCompanyEmailDto,
+    @CurrentUser('id') currentUserId?: string,
+  ) {
+    return this.companyEmailsService.sendEmail(id, currentUserId, {
+      allowResend: dto?.allowResend,
+    });
   }
 
   @Post(':id/mark-sent')

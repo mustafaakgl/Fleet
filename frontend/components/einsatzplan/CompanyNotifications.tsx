@@ -56,7 +56,10 @@ interface CompanyNotificationRecord {
   status: EmailStatus;
   subject: string;
   body: string;
+  /** Ekranda gosterilen bicimlendirilmis zaman; bicimlendirilemezse null olur. */
   lastSent: string | null;
+  /** Ham deger: "zaten gonderildi mi" karari buna bakar, ekran metnine degil. */
+  sentAt: string | null;
 }
 
 interface CompanyNotificationsProps {
@@ -244,6 +247,7 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
           subject: email?.subject ?? '',
           body: email?.body ?? formatRowsForBody(items),
           lastSent: formatLastSent(email?.lastSentAt),
+          sentAt: email?.lastSentAt ?? null,
         });
       });
     });
@@ -336,9 +340,17 @@ export function CompanyNotifications({ onAttentionCountChange }: CompanyNotifica
       return;
     }
 
+    // Bu satir daha once gonderilmisse sunucu ikinci gonderimi reddediyor.
+    // Tekrar gondermek gecerli bir istek olabilir (metin duzeltildi), ama
+    // musteriye ikinci posta gidecegi icin acikca onaylanmali.
+    const alreadySent = Boolean(row.sentAt);
+    if (alreadySent && !window.confirm(t('compNotif.resendConfirm', { company: row.company }))) {
+      return;
+    }
+
     setBusyKey(row.key);
     try {
-      const result = await companyEmailsApi.send(row.emailId);
+      const result = await companyEmailsApi.send(row.emailId, { allowResend: alreadySent });
       await refreshEmails();
       if (result.mail_sent || result.mail_mode === 'log') {
         showToast(t('compNotif.sendSuccess'));

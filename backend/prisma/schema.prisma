@@ -2748,6 +2748,10 @@ model CompanyEmail {
   body           String
   status         CompanyEmailStatus @default(draft)
   lastSentAt     DateTime?
+  /// Bir insan konuyu ya da govdeyi elle degistirdiginde damgalanir. Yeniden
+  /// uretim bu damgayi tasiyan kaydin metnini EZMEZ, yalnizca gozden gecirme
+  /// isareti birakir.
+  manuallyEditedAt DateTime?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

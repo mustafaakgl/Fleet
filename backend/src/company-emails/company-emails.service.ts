@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AssignmentStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { companyEmailMail } from '../mail/mail-templates';
@@ -180,11 +180,16 @@ export class CompanyEmailsService {
       });
 
       if (existing) {
+        // Elle duzenlenmis metin korunur. Gorevler degismis olabilir, bu yuzden
+        // durum yine needs_review olur — ama ofisin yazdigini silmek yerine
+        // karari insana birakiyoruz. Alici adresi firma kartindan tazelenir:
+        // o metin degil, adres duzeltmesidir.
+        const keepText = Boolean(existing.manuallyEditedAt);
+
         return db.companyEmail.update({
           where: { id: existing.id },
           data: {
-            subject,
-            body,
+            ...(keepText ? {} : { subject, body }),
             recipientEmail,
             status: 'needs_review',
           },
@@ -314,6 +319,13 @@ export class CompanyEmailsService {
     if (input.body !== undefined) payload.body = input.body;
     if (input.status !== undefined) payload.status = this.ensureStatus(input.status);
 
+    // Metne insan eli degdiyse damgala; yeniden uretim bundan sonra bu kaydin
+    // konusunu ve govdesini ezmez. Yalnizca durum degistiren cagrilar
+    // (ornegin "gonderildi isaretle") damga birakmaz.
+    if (input.subject !== undefined || input.body !== undefined) {
+      payload.manuallyEditedAt = new Date();
+    }
+
     const db = this.prisma as any;
     const updated = await db.companyEmail.update({
       where: { id },
@@ -384,6 +396,9 @@ export class CompanyEmailsService {
       where: {
         OR: ranges.map((range) => ({ date: { gte: range.start, lt: range.end } })),
         status: { not: 'sent' },
+        // Durum tek basina yetmiyor: yeniden uretim gonderilmis bir kaydi
+        // needs_review'a cekiyor, o satir da bu filtreden geciyordu.
+        lastSentAt: null,
       },
       select: { id: true, recipientEmail: true, company: { select: { name: true } } },
       orderBy: { date: 'asc' },
@@ -441,8 +456,20 @@ export class CompanyEmailsService {
     };
   }
 
-  async sendEmail(emailId: string, actorUserId?: string) {
+  /**
+   * Tek bir firma e-postasini gonderir.
+   *
+   * Zaten gonderilmis bir kaydi ikinci kez gondermez: musteriye ayni postanin
+   * iki kez gitmesi geri alinamaz. Bilerek tekrarlamak isteyen cagirici
+   * `allowResend` vermek zorunda — otomatik yollar bunu asla vermez.
+   */
+  async sendEmail(emailId: string, actorUserId?: string, options?: { allowResend?: boolean }) {
     const row = await this.getCompanyEmailById(emailId);
+
+    if (row.lastSentAt && !options?.allowResend) {
+      throw new ConflictException('Company email was already sent');
+    }
+
     const recipient = row.recipientEmail?.trim();
     if (!recipient) {
       throw new BadRequestException('Recipient email is required before sending');
@@ -551,9 +578,11 @@ export class CompanyEmailsService {
     dateInput: string | Date,
     options?: { autoSend?: boolean; actorUserId?: string },
   ) {
+    // Varsayilan KAPALI: cron yalnizca taslak hazirlar, gonderme karari insanda
+    // kalir. Acmak icin COMPANY_EMAIL_AUTO_SEND=true.
     const autoSend =
       options?.autoSend ??
-      (process.env.COMPANY_EMAIL_AUTO_SEND ?? 'true').toLowerCase() === 'true';
+      (process.env.COMPANY_EMAIL_AUTO_SEND ?? 'false').toLowerCase() === 'true';
     const date = this.normalizeDate(dateInput);
     const drafts = await this.generateDraftsForDate(date, options?.actorUserId);
 
@@ -561,8 +590,16 @@ export class CompanyEmailsService {
     let failed = 0;
     let skipped = 0;
 
-    for (const draft of drafts as Array<{ id: string; status: CompanyEmailStatus; recipientEmail?: string | null }>) {
-      if (draft.status === 'sent') {
+    for (const draft of drafts as Array<{
+      id: string;
+      status: CompanyEmailStatus;
+      recipientEmail?: string | null;
+      lastSentAt?: Date | null;
+    }>) {
+      // Duruma degil, lastSentAt'e bakiyoruz: yeniden uretim durumu
+      // needs_review'a cekiyor, yani "sent" damgasi bu noktada zaten silinmis
+      // oluyordu ve ayni posta ikinci kez gidiyordu.
+      if (draft.lastSentAt) {
         skipped += 1;
         continue;
       }

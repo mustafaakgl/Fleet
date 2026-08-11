@@ -4269,6 +4269,7 @@
   "compNotif.sendAllBusy": "Wird gesendet …",
   "compNotif.sendAllHint": "Bereits gesendete Mails werden übersprungen.",
   "compNotif.sendAllConfirm": "{{count}} E-Mail(s) jetzt an die Firmen senden? Das lässt sich nicht rückgängig machen.",
+  "compNotif.resendConfirm": "{{company}} hat diese E-Mail bereits erhalten. Erneut senden? Die Firma bekommt dann eine zweite E-Mail.",
   "compNotif.sendAllDone": "{{sent}} E-Mail(s) gesendet.",
   "compNotif.sendAllPartial": "{{sent}} gesendet, {{failed}} fehlgeschlagen: {{companies}}",
   "compNotif.sendAllFailed": "Sammelversand fehlgeschlagen.",

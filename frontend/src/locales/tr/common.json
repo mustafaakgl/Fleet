@@ -4269,6 +4269,7 @@
   "compNotif.sendAllBusy": "Gönderiliyor …",
   "compNotif.sendAllHint": "Daha önce gönderilmiş e-postalar atlanır.",
   "compNotif.sendAllConfirm": "{{count}} e-posta şimdi firmalara gönderilsin mi? Bu işlem geri alınamaz.",
+  "compNotif.resendConfirm": "{{company}} bu e-postayı zaten aldı. Tekrar gönderilsin mi? Firmaya ikinci bir e-posta gider.",
   "compNotif.sendAllDone": "{{sent}} e-posta gönderildi.",
   "compNotif.sendAllPartial": "{{sent}} gönderildi, {{failed}} başarısız: {{companies}}",
   "compNotif.sendAllFailed": "Toplu gönderim başarısız.",
