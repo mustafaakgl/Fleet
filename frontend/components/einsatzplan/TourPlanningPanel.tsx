@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Route, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Loader2, Route, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import {
   type TourListItem,
 } from '@/lib/api';
 import type { Assignment } from '@/lib/types';
+import { TourResultPanel } from './tour/TourResultPanel';
 
 /**
  * Ofis tur planlama paneli.
@@ -32,7 +33,7 @@ export function TourPlanningPanel({ date }: { date: string }) {
   const [tourName, setTourName] = useState('');
   const [activeTour, setActiveTour] = useState<TourDetail | null>(null);
   const [lastResult, setLastResult] = useState<OptimizeTourResult | null>(null);
-  const [busy, setBusy] = useState<'create' | 'optimize' | 'release' | null>(null);
+  const [busy, setBusy] = useState<'create' | 'optimize' | null>(null);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
@@ -111,30 +112,7 @@ export function TourPlanningPanel({ date }: { date: string }) {
     }
   }
 
-  async function release(tourId: string) {
-    setBusy('release');
-    try {
-      const tour = await toursApi.release(tourId);
-      setActiveTour(tour);
-      await reload();
-      showToast({ message: t('tours.released'), type: 'success' });
-    } catch (error) {
-      showToast({ message: getApiErrorMessage(error, t('tours.releaseFailed')), type: 'error' });
-    } finally {
-      setBusy(null);
-    }
-  }
 
-  const comparison = useMemo(() => {
-    if (!activeTour?.baselineDistanceKm || !activeTour.plannedDistanceKm) return null;
-    const saved = activeTour.baselineDistanceKm - activeTour.plannedDistanceKm;
-    return {
-      before: activeTour.baselineDistanceKm,
-      after: activeTour.plannedDistanceKm,
-      saved,
-      percent: (saved / activeTour.baselineDistanceKm) * 100,
-    };
-  }, [activeTour]);
 
   return (
     <div className="space-y-4">
@@ -245,18 +223,7 @@ export function TourPlanningPanel({ date }: { date: string }) {
             <CardTitle>{activeTour.name ?? t('tours.untitled')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {comparison ? (
-              <div className="rounded-md border bg-emerald-50 p-3 text-sm dark:bg-emerald-950/30">
-                <p className="font-medium text-emerald-700 dark:text-emerald-400">
-                  {t('tours.comparison', {
-                    before: comparison.before.toFixed(0),
-                    after: comparison.after.toFixed(0),
-                    saved: comparison.saved.toFixed(0),
-                    percent: comparison.percent.toFixed(0),
-                  })}
-                </p>
-              </div>
-            ) : lastResult && !lastResult.optimized ? (
+            {lastResult && !lastResult.optimized ? (
               <p className="flex items-start gap-1 text-sm text-amber-600">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 {lastResult.reasonCode
@@ -265,43 +232,18 @@ export function TourPlanningPanel({ date }: { date: string }) {
               </p>
             ) : null}
 
-            <ol className="space-y-1">
-              {activeTour.stops.map((stop) => (
-                <li key={stop.id} className="flex items-start gap-2 rounded border p-2 text-sm">
-                  <span className="font-semibold text-primary">{stop.sequence}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="mr-1 text-xs uppercase text-muted-foreground">
-                      {t(`tours.kind.${stop.kind}`)}
-                    </span>
-                    <span className="truncate">{stop.address}</span>
-                    {stop.plannedSequence !== null && stop.plannedSequence !== stop.sequence ? (
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        {t('tours.wasPosition', { position: stop.plannedSequence })}
-                      </span>
-                    ) : null}
-                    {stop.truckAccess === 'unreachable' ? (
-                      <span className="ml-1 text-xs text-red-600">{t('tours.stopUnreachable')}</span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ol>
-
-            {activeTour.status !== 'released' ? (
-              <Button onClick={() => void release(activeTour.id)} disabled={busy !== null}>
-                {busy === 'release' ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                )}
-                {t('tours.release')}
-              </Button>
-            ) : (
-              <p className="flex items-center gap-1 text-sm text-emerald-600">
-                <CheckCircle2 className="h-4 w-4" />
-                {t('tours.releasedNote')}
-              </p>
-            )}
+            {/*
+              Sonuc gorunumu ve yayin onayi TourResultPanel'de: serbest duraklu
+              TourBuilder ile ayni kod. Iki kopya kacinilmaz sekilde birbirinden
+              ayrisirdi — biri ETA gosterirken digeri gostermezdi.
+            */}
+            <TourResultPanel
+              tour={activeTour}
+              onTourChange={(tour) => {
+                setActiveTour(tour);
+                void reload();
+              }}
+            />
           </CardContent>
         </Card>
       ) : null}

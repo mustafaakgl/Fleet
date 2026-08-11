@@ -62,6 +62,8 @@
   "planning.colAssignment": "Assignment",
   "planning.colTime": "Time",
   "planning.noAssignment": "No assignment – click to assign",
+  "planning.taskModeSingle": "Single job",
+  "planning.taskModeMulti": "Multi-stop route",
   "planning.editAssignment": "Edit",
   "planning.editorSave": "Save",
   "planning.groupOpen": "Open ({{count}})",

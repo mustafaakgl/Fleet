@@ -62,6 +62,8 @@
   "planning.colAssignment": "Einsatz",
   "planning.colTime": "Zeit",
   "planning.noAssignment": "Kein Einsatz – zum Zuweisen klicken",
+  "planning.taskModeSingle": "Einzelauftrag",
+  "planning.taskModeMulti": "Mehrstopp-Route",
   "planning.editAssignment": "Bearbeiten",
   "planning.editorSave": "Speichern",
   "planning.groupOpen": "Offen ({{count}})",

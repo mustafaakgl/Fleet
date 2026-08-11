@@ -62,6 +62,8 @@
   "planning.colAssignment": "Görev",
   "planning.colTime": "Saat",
   "planning.noAssignment": "Görev yok – atamak için tıklayın",
+  "planning.taskModeSingle": "Tek görev",
+  "planning.taskModeMulti": "Çok duraklı rota",
   "planning.editAssignment": "Düzenle",
   "planning.editorSave": "Kaydet",
   "planning.groupOpen": "Açık ({{count}})",

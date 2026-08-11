@@ -8,7 +8,7 @@ import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Mail, Search,
 import { getTodayDate, useFleetData } from '@/context/FleetDataContext';
 import { createPlanningPlaceholder } from '@/lib/planning-assignment';
 import { vehicleAssignmentsHref } from '@/lib/office-deep-links';
-import { companiesApi, vehiclesApi } from '@/lib/api';
+import { companiesApi, vehiclesApi, type TourDetail } from '@/lib/api';
 import { MorningCheckins } from './MorningCheckins';
 import { CompanyNotifications } from './CompanyNotifications';
 import { VehicleHandovers } from './VehicleHandovers';
@@ -29,6 +29,8 @@ import { BRAND_BTN_OUTLINE, BRAND_FOCUS, BRAND_KPI } from '@/lib/brand-colors';
 import { StructuredAddressCell } from '@/components/shared/StructuredAddressCell';
 import { buildAssignmentRouteName, parseFormattedAddress } from '@/lib/address-format';
 import { cn } from '@/lib/utils';
+import { TourBuilder } from '@/components/einsatzplan/tour/TourBuilder';
+import { buildTourSummary } from '@/lib/tour-builder';
 
 const COMPANY_REVENUE_MAP: Record<string, number> = {
   DHL: 850,
@@ -61,6 +63,9 @@ type QuickAssignState = {
   deliveryLocationId: string | null;
   expectedRevenue: number;
 };
+
+/** Gorev hucresindeki secim: mevcut tek gorev akisi ya da cok duraklu rota. */
+type TaskMode = 'single' | 'multi';
 
 type RowKind = 'open' | 'planned' | 'unavailable';
 
@@ -151,6 +156,12 @@ export function Tagesplanung({
   const [driverSearch, setDriverSearch] = useState('');
   const [quickAssignAssignmentId, setQuickAssignAssignmentId] = useState<string | null>(null);
   const [quickAssign, setQuickAssign] = useState<QuickAssignState | null>(null);
+  /**
+   * Satir basina gorev tipi. Varsayilan tek gorev — mevcut akis bozulmasin;
+   * cok duraklu rota bilincli bir secim olsun.
+   */
+  const [taskModes, setTaskModes] = useState<Record<string, TaskMode>>({});
+  const [toursByAssignment, setToursByAssignment] = useState<Record<string, TourDetail>>({});
   const [vehicleOptions, setVehicleOptions] = useState<VehicleOption[]>([]);
   const [companyOptions, setCompanyOptions] = useState<string[]>([]);
   const [internalDate, setInternalDate] = useState<string>(() => planningDateProp ?? getTodayDate());
@@ -370,6 +381,79 @@ export function Tagesplanung({
     }
     return groups.filter((group) => group.rows.length > 0);
   }, [rowKindOf, visibleRows]);
+
+  const taskModeOf = useCallback(
+    (assignmentId: string): TaskMode => taskModes[assignmentId] ?? 'single',
+    [taskModes],
+  );
+
+  // TourBuilder'in secim listeleri hizli atama formuyla ayni kaynaklardan
+  // turetiliyor: iki formun farkli arac/firma listesi gostermesi kafa karistirir.
+  const driverSelectOptions = useMemo(
+    () => drivers.map((driver) => ({ value: driver.id, label: driver.name })),
+    [drivers],
+  );
+
+  const companySelectOptions = useMemo(
+    () => companyOptions.map((company) => ({ value: company, label: company })),
+    [companyOptions],
+  );
+
+  const vehicleSelectOptions = useMemo(
+    () =>
+      vehicleOptions.map((vehicle) => ({
+        value: vehicle.plate,
+        label: vehicle.plate,
+        disabled: vehicle.status !== 'active',
+      })),
+    [vehicleOptions],
+  );
+
+  const selectTaskMode = useCallback((assignmentId: string, mode: TaskMode) => {
+    setTaskModes((current) => ({ ...current, [assignmentId]: mode }));
+    if (mode === 'multi') {
+      // Iki form ayni anda acik kalmasin: cok duraklu rotaya gecince hizli
+      // atama kapanir, aksi halde hangisinin kaydedildigi belirsizlesir.
+      setQuickAssignAssignmentId(null);
+      setQuickAssign(null);
+    }
+  }, []);
+
+  const rememberTour = useCallback((assignmentId: string, tour: TourDetail | null) => {
+    setToursByAssignment((current) => {
+      if (!tour) {
+        const next = { ...current };
+        delete next[assignmentId];
+        return next;
+      }
+      return { ...current, [assignmentId]: tour };
+    });
+  }, []);
+
+  /** Gorev hucresindeki tek satirlik ozet; tur henuz hesaplanmadiysa yalnizca baslik. */
+  const tourSummaryFor = useCallback(
+    (assignmentId: string): string => {
+      const tour = toursByAssignment[assignmentId];
+      const labels = {
+        title: tCommon('tourBuilder.summaryTitle'),
+        stops: tCommon('tourBuilder.summaryStops'),
+        hour: tCommon('tourBuilder.hourShort'),
+        minute: tCommon('tourBuilder.minuteShort'),
+      };
+      if (!tour) {
+        return labels.title;
+      }
+      return buildTourSummary(
+        {
+          stopCount: tour.stops.length,
+          distanceKm: tour.plannedDistanceKm,
+          durationMinutes: tour.plannedDurationMin,
+        },
+        labels,
+      );
+    },
+    [tCommon, toursByAssignment],
+  );
 
   const openQuickAssign = useCallback((assignmentId: string) => {
     const row = planningRows.find((item) => item.assignment.id === assignmentId);
@@ -778,7 +862,15 @@ export function Tagesplanung({
                       </select>
                     </td>
                     <td className={FLEET_RAW_TD}>
-                      {kind === 'planned' ? (
+                      {/*
+                        Hucre KONTROL tasimiyor, yalnizca durumu soyluyor.
+                        Satir zaten tiklanabilir; icine ikinci bir tiklama
+                        hedefi koymak kullaniciya nereye bastigini kaybettirir.
+                        Cok duraklu rotayi baslatma eylemi islemler sutununda.
+                      */}
+                      {taskModeOf(row.assignment.id) === 'multi' ? (
+                        <p className="text-sm text-slate-700">{tourSummaryFor(row.assignment.id)}</p>
+                      ) : kind === 'planned' ? (
                         <div className="min-w-[200px]">
                           <p className="text-sm font-medium text-slate-900">
                             {row.assignment.vehicle} · {row.assignment.company}
@@ -830,6 +922,23 @@ export function Tagesplanung({
                             {kind === 'open' ? t('planning.quickAssignOpen') : t('planning.editAssignment')}
                           </button>
                         ) : null}
+                        {/*
+                          Cok duraklu rota ikincil bir EYLEM, iki durumlu bir
+                          anahtar degil: satirlarin cogu tek gorev ve moda
+                          gecip geri donmek girilen duraklari cope atar.
+                        */}
+                        {editable && taskModeOf(row.assignment.id) === 'single' ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              selectTaskMode(row.assignment.id, 'multi');
+                            }}
+                            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            + {t('planning.taskModeMulti')}
+                          </button>
+                        ) : null}
                         {kind !== 'open' ? (
                           <button
                             type="button"
@@ -850,7 +959,25 @@ export function Tagesplanung({
                       </div>
                     </td>
                   </tr>,
-                  isQuickRow && quickAssign ? (
+                  taskModeOf(row.assignment.id) === 'multi' ? (
+                    // Cok duraklu rota surucu satirinin ALTINDA acilir: hangi
+                    // surucuye ait oldugu gorunur kalsin diye ayri bir panele
+                    // veya modala tasinmadi.
+                    <tr key={`${row.assignment.id}-tour`} className="border-b border-blue-100 bg-blue-50/40">
+                      <td colSpan={7} className="px-4 py-3">
+                        <TourBuilder
+                          date={planningDate}
+                          driverId={row.assignment.driverId}
+                          driverOptions={driverSelectOptions}
+                          companyOptions={companySelectOptions}
+                          vehicleOptions={vehicleSelectOptions}
+                          onTourChange={(tour) => rememberTour(row.assignment.id, tour)}
+                          onCancel={() => selectTaskMode(row.assignment.id, 'single')}
+                        />
+                      </td>
+                    </tr>
+                  ) : null,
+                  isQuickRow && quickAssign && taskModeOf(row.assignment.id) === 'single' ? (
                     <tr key={`${row.assignment.id}-quick`} className="border-b border-blue-100 bg-blue-50/50">
                       <td colSpan={7} className="px-4 py-3">
                         <div className="grid gap-3 lg:grid-cols-6">
