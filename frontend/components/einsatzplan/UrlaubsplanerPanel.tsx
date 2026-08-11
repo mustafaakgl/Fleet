@@ -24,7 +24,7 @@ export function UrlaubsplanerPanel({
   initialSubtab?: PlannerSubtab;
   initialAbsenceFocus?: AbsenceFocus;
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation('einsatzplan');
   const [activeSubtab, setActiveSubtab] = useState<PlannerSubtab>(initialSubtab ?? 'jahreskalender');
 
   return (

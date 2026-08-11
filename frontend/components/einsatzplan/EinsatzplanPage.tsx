@@ -138,12 +138,12 @@ function EinsatzplanFullView() {
 
   const summaryCards = useMemo(
     () => [
-      { label: t('einsatzplan.kpi.activeDrivers'), value: kpis?.activeDrivers },
-      { label: t('einsatzplan.kpi.vehiclesInUse'), value: kpis?.vehiclesInUse },
-      { label: t('einsatzplan.kpi.driversOnVacation'), value: kpis?.driversOnVacation },
-      { label: t('einsatzplan.kpi.sickDrivers'), value: kpis?.sickDrivers },
+      { label: tCommon('einsatzplan.kpi.activeDrivers'), value: kpis?.activeDrivers },
+      { label: tCommon('einsatzplan.kpi.vehiclesInUse'), value: kpis?.vehiclesInUse },
+      { label: tCommon('einsatzplan.kpi.driversOnVacation'), value: kpis?.driversOnVacation },
+      { label: tCommon('einsatzplan.kpi.sickDrivers'), value: kpis?.sickDrivers },
     ],
-    [kpis, t],
+    [kpis, tCommon],
   );
 
   const tomorrowCompanyGroups = useMemo(() => {
@@ -215,15 +215,15 @@ function EinsatzplanFullView() {
               <div className={cn('flex flex-col gap-3 rounded-lg border border-slate-200 p-5 text-white shadow-sm lg:flex-row lg:items-center lg:justify-between', BRAND_HERO)}>
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-blue-100">Fleet ERP</p>
-                  <h1 className="mt-2 text-2xl font-bold">{t('einsatzplan.title')}</h1>
-                  <p className="mt-1 text-sm text-blue-100">{t('einsatzplan.subtitle')}</p>
+                  <h1 className="mt-2 text-2xl font-bold">{tCommon('einsatzplan.title')}</h1>
+                  <p className="mt-1 text-sm text-blue-100">{tCommon('einsatzplan.subtitle')}</p>
                 </div>
                 <Link
                   href="/assignments/new"
                   className="inline-flex items-center justify-center gap-2 rounded-md border border-white/30 bg-white px-4 py-2 text-sm font-semibold text-brand-primary hover:bg-surface"
                 >
                   <Plus className="h-4 w-4" />
-                  {t('assignmentForm.title')}
+                  {tCommon('assignmentForm.title')}
                 </Link>
               </div>
 
@@ -240,9 +240,9 @@ function EinsatzplanFullView() {
 
               <div className={cn(FLEET_LIST_CARD, 'bg-white')}>
                 <div className="border-b border-slate-200 px-3 py-2">
-                  <h2 className="text-sm font-semibold text-slate-900">{t('einsatzplan.tomorrowTitle')}</h2>
+                  <h2 className="text-sm font-semibold text-slate-900">{tCommon('einsatzplan.tomorrowTitle')}</h2>
                   <p className="mt-1 text-xs text-slate-500">
-                    {t('einsatzplan.tomorrowHint')}
+                    {tCommon('einsatzplan.tomorrowHint')}
                   </p>
                 </div>
                 <div className="p-3">
