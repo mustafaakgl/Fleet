@@ -68,15 +68,15 @@ function FleetTripRouteMapCanvas({ locationPoints, drivingEvents }: FleetTripRou
   const eventLabel = (type: FleetDrivingEvent['type']) => {
     switch (type) {
       case 'speeding':
-        return t('fleetTrips.eventSpeeding', 'Hız ihlali');
+        return t('fleetTrips.eventSpeeding');
       case 'harsh_accel':
-        return t('fleetTrips.eventHarshAccel', 'Sert hızlanma');
+        return t('fleetTrips.eventHarshAccel');
       case 'harsh_brake':
-        return t('fleetTrips.eventHarshBrake', 'Sert fren');
+        return t('fleetTrips.eventHarshBrake');
       case 'harsh_corner':
-        return t('fleetTrips.eventHarshCorner', 'Sert viraj');
+        return t('fleetTrips.eventHarshCorner');
       case 'crash':
-        return t('fleetTrips.eventCrash', 'Kaza');
+        return t('fleetTrips.eventCrash');
       default:
         return type;
     }
@@ -85,7 +85,7 @@ function FleetTripRouteMapCanvas({ locationPoints, drivingEvents }: FleetTripRou
   if (coordinates.length === 0) {
     return (
       <div className="flex h-full min-h-[420px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-500">
-        {t('fleetTrips.detail.noRoute', 'Bu sefer için GPS rotası yok.')}
+        {t('fleetTrips.detail.noRoute')}
       </div>
     );
   }
@@ -111,7 +111,7 @@ function FleetTripRouteMapCanvas({ locationPoints, drivingEvents }: FleetTripRou
           >
             <Popup>
               <p className="text-xs font-semibold text-slate-900">
-                {t('fleetTrips.detail.routeStart', 'Başlangıç')}
+                {t('fleetTrips.detail.routeStart')}
               </p>
               <p className="text-xs text-slate-600">{formatFleetDateTime(startPoint.recordedAt)}</p>
             </Popup>
@@ -125,7 +125,7 @@ function FleetTripRouteMapCanvas({ locationPoints, drivingEvents }: FleetTripRou
           >
             <Popup>
               <p className="text-xs font-semibold text-slate-900">
-                {t('fleetTrips.detail.routeEnd', 'Bitiş')}
+                {t('fleetTrips.detail.routeEnd')}
               </p>
               <p className="text-xs text-slate-600">{formatFleetDateTime(endPoint.recordedAt)}</p>
             </Popup>
@@ -169,7 +169,7 @@ export function FleetTripRouteMap(props: FleetTripRouteMapProps) {
   if (!mounted) {
     return (
       <div className="flex h-full min-h-[420px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-500">
-        {t('common.loading', 'Laden…')}
+        {t('common.loading')}
       </div>
     );
   }

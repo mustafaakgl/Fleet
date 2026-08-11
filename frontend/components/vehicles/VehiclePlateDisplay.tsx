@@ -114,7 +114,7 @@ export function VehiclePlateDisplay({
       onPhotoUploaded?.(nextUrl);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : t('vehicles.photoUploadFailed', 'Photo upload failed');
+        error instanceof Error ? error.message : t('vehicles.photoUploadFailed');
       setUploadError(message);
     } finally {
       setUploading(false);
@@ -165,8 +165,8 @@ export function VehiclePlateDisplay({
               inputRef.current?.click();
             }}
             disabled={uploading}
-            aria-label={t('vehicles.uploadPhoto', 'Upload vehicle photo')}
-            title={t('vehicles.uploadPhoto', 'Upload vehicle photo')}
+            aria-label={t('vehicles.uploadPhoto')}
+            title={t('vehicles.uploadPhoto')}
           >
             {uploading ? (
               <Loader2 className="h-6 w-6 animate-spin text-white" />

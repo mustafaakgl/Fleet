@@ -223,7 +223,7 @@ export default function FleetTripsPage() {
       setTimeline(result);
     } catch (e) {
       setTimeline(null);
-      setError(getApiErrorMessage(e, t('fleetTrips.loadError', 'Sefer geçmişi yüklenemedi.')));
+      setError(getApiErrorMessage(e, t('fleetTrips.loadError')));
     } finally {
       setLoading(false);
     }
@@ -271,7 +271,7 @@ export default function FleetTripsPage() {
       .catch((e) => {
         if (cancelled) return;
         setSelectedTrip(null);
-        setSelectedTripError(getApiErrorMessage(e, t('fleetTrips.loadError', 'Sefer geçmişi yüklenemedi.')));
+        setSelectedTripError(getApiErrorMessage(e, t('fleetTrips.loadError')));
       })
       .finally(() => {
         if (!cancelled) {
@@ -318,7 +318,7 @@ export default function FleetTripsPage() {
       setSelectedTripRefreshToken((current) => current + 1);
       await load();
     } catch (error) {
-      setPurposeError(getApiErrorMessage(error, t('fleetTrips.classifyError', 'Sefer sınıflandırılamadı.')));
+      setPurposeError(getApiErrorMessage(error, t('fleetTrips.classifyError')));
     } finally {
       setPurposeSaving(false);
     }
@@ -348,18 +348,18 @@ export default function FleetTripsPage() {
   }, []);
 
   const emptyStateTitle = vehicles.length === 0
-    ? t('fleetTrips.emptyNoDevicesTitle', 'Cihazsız filo')
-    : t('fleetTrips.noData', 'Seçilen dönemde sefer yok.');
+    ? t('fleetTrips.emptyNoDevicesTitle')
+    : t('fleetTrips.noData');
   const emptyStateSubtitle = vehicles.length === 0
-    ? t('fleetTrips.emptyNoDevicesSubtitle', 'Cihaz bağlayın → Cihazlar')
-    : t('fleetTrips.emptySubtitle', 'Bu dönemde sürüş yok.');
+    ? t('fleetTrips.emptyNoDevicesSubtitle')
+    : t('fleetTrips.emptySubtitle');
 
   return (
     <div className={FLEET_PAGE}>
       <div className={`${FLEET_PAGE_HEADER} flex flex-wrap items-center justify-between gap-3`}>
         <div className="flex items-center gap-3">
           <Route className="h-6 w-6 text-primary" />
-          <h1 className={FLEET_PAGE_TITLE}>{t('fleetTrips.title', 'Sefer geçmişi')}</h1>
+          <h1 className={FLEET_PAGE_TITLE}>{t('fleetTrips.title')}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -368,17 +368,17 @@ export default function FleetTripsPage() {
             disabled={activeTrips.length === 0}
           >
             <Download className="mr-2 h-4 w-4" />
-            {t('common.exportCsv', 'CSV exportieren')}
+            {t('common.exportCsv')}
           </Button>
           <Button variant="outline" onClick={() => void load()}>
-            {t('common.retry', 'Erneut versuchen')}
+            {t('common.retry')}
           </Button>
         </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3">
         <Select className={FLEET_FILTER_SELECT} value={vehicleId} onChange={(event) => setVehicleId(event.target.value)}>
-          <option value="">{t('fleetTrips.filterAllVehicles', 'Tüm araçlar')}</option>
+          <option value="">{t('fleetTrips.filterAllVehicles')}</option>
           {vehicles.map((vehicle) => (
             <option key={vehicle.id} value={vehicle.id}>
               {vehicle.plate_number}
@@ -386,7 +386,7 @@ export default function FleetTripsPage() {
           ))}
         </Select>
         <Select className={FLEET_FILTER_SELECT} value={driverId} onChange={(event) => setDriverId(event.target.value)}>
-          <option value="">{t('fleetTrips.filterAllDrivers', 'Tüm sürücüler')}</option>
+          <option value="">{t('fleetTrips.filterAllDrivers')}</option>
           {drivers.map((driver) => (
             <option key={driver.id} value={driver.id}>
               {driverLabels.get(driver.id)}
@@ -395,7 +395,7 @@ export default function FleetTripsPage() {
         </Select>
         <div className="min-w-[10rem]">
           <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            {t('fleetTrips.filterMonth', 'Ay')}
+            {t('fleetTrips.filterMonth')}
           </label>
           <Input
             type="month"
@@ -405,24 +405,24 @@ export default function FleetTripsPage() {
           />
         </div>
         <div className="ml-auto flex items-center gap-2 text-xs text-slate-500">
-          <Badge variant="outline">{t('fleetTrips.source.phone', 'Telefon')}</Badge>
-          <Badge variant="outline">{t('fleetTrips.source.device', 'Cihaz')}</Badge>
-          <Badge variant="outline">{t('fleetTrips.source.api', 'API')}</Badge>
+          <Badge variant="outline">{t('fleetTrips.source.phone')}</Badge>
+          <Badge variant="outline">{t('fleetTrips.source.device')}</Badge>
+          <Badge variant="outline">{t('fleetTrips.source.api')}</Badge>
         </div>
       </div>
 
       {error ? (
         <EmptyState
           icon={WifiOff}
-          title={t('common.error', 'Fehler')}
+          title={t('common.error')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Erneut versuchen')}
+          actionLabel={t('common.retry')}
           onAction={() => void load()}
         />
       ) : null}
 
       {!error && loading ? (
-        <p className="text-sm text-muted-foreground">{t('common.loading', 'Laden…')}</p>
+        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       ) : null}
 
       {!error && !loading ? (
@@ -431,7 +431,7 @@ export default function FleetTripsPage() {
             <Card className={FLEET_LIST_CARD}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {t('fleetTrips.summary.totalTrips', 'Toplam sefer')}
+                  {t('fleetTrips.summary.totalTrips')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -445,12 +445,12 @@ export default function FleetTripsPage() {
             <Card className={FLEET_LIST_CARD}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {t('fleetTrips.summary.classificationSoon', 'Sınıflandırma yakında')}
+                  {t('fleetTrips.summary.classificationSoon')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 opacity-60">
                 <div className="flex items-center justify-between text-sm text-slate-500">
-                  <span>{t('fleetTrips.summary.classificationSoonLabel', 'İş / Özel / İşe gidiş')}</span>
+                  <span>{t('fleetTrips.summary.classificationSoonLabel')}</span>
                   <span>—</span>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100">
@@ -462,7 +462,7 @@ export default function FleetTripsPage() {
             <Card className={`${FLEET_LIST_CARD} hidden xl:block`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {t('fleetTrips.summary.unclassified', 'Sınıflandırılmamış')}
+                  {t('fleetTrips.summary.unclassified')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -478,15 +478,15 @@ export default function FleetTripsPage() {
             >
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-amber-900">
-                  {t('fleetTrips.summary.dataGaps', 'Veri boşluğu')}
+                  {t('fleetTrips.summary.dataGaps')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-2xl font-semibold text-amber-950">{summary.dataGapCount}</p>
                 <p className="text-sm text-amber-800">
                   {firstGapTripId
-                    ? t('fleetTrips.summary.dataGapJump', 'İlgili güne git')
-                    : t('fleetTrips.summary.noDataGaps', 'Boşluk yok')}
+                    ? t('fleetTrips.summary.dataGapJump')
+                    : t('fleetTrips.summary.noDataGaps')}
                 </p>
               </CardContent>
             </Card>
@@ -511,7 +511,7 @@ export default function FleetTripsPage() {
               icon={MapPinned}
               title={emptyStateTitle}
               subtitle={emptyStateSubtitle}
-              actionLabel={vehicles.length === 0 ? t('fleetTrips.goToVehicles', 'Cihazlar') : t('common.retry', 'Erneut versuchen')}
+              actionLabel={vehicles.length === 0 ? t('fleetTrips.goToVehicles') : t('common.retry')}
               onAction={() => {
                 if (vehicles.length === 0) {
                   window.location.href = '/vehicles';
@@ -527,21 +527,21 @@ export default function FleetTripsPage() {
               <div>
                 <CardTitle>
                   {selectedTripSummary
-                    ? t('fleetTrips.detail.titlePlate', 'Sefer — {{plate}}', {
+                    ? t('fleetTrips.detail.titlePlate', {
                         plate: vehicleLabels.get(selectedTripSummary.vehicleId) ?? selectedTripSummary.vehicleId,
                       })
-                    : t('fleetTrips.detail.title', 'Sefer detayı')}
+                    : t('fleetTrips.detail.title')}
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {selectedTripSummary
                     ? `${driverLabels.get(selectedTripSummary.driverId) ?? selectedTripSummary.driverId} · ${formatTimeRange(selectedTripSummary.startedAt, selectedTripSummary.endedAt)}`
-                    : t('fleetTrips.detail.selectHint', 'Kart seçerek rota haritasını açın.')}
+                    : t('fleetTrips.detail.selectHint')}
                 </p>
               </div>
               {selectedTripSummary ? (
                 <Button variant="ghost" size="sm" asChild>
                   <Link href={`/fleet-analytics/trips/${selectedTripSummary.id}`}>
-                    {t('fleetTrips.openDetail', 'Harita')}
+                    {t('fleetTrips.openDetail')}
                   </Link>
                 </Button>
               ) : null}
@@ -549,14 +549,14 @@ export default function FleetTripsPage() {
             <CardContent>
               {selectedTripLoading ? (
                 <div className="flex min-h-[420px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-500">
-                  {t('common.loading', 'Laden…')}
+                  {t('common.loading')}
                 </div>
               ) : selectedTripError ? (
                 <EmptyState
                   icon={WifiOff}
-                  title={t('common.error', 'Fehler')}
+                  title={t('common.error')}
                   subtitle={selectedTripError}
-                  actionLabel={t('common.retry', 'Erneut versuchen')}
+                  actionLabel={t('common.retry')}
                   onAction={() => {
                     if (selectedTripId) {
                       setSelectedTripRefreshToken((current) => current + 1);
@@ -568,25 +568,25 @@ export default function FleetTripsPage() {
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <Card className="border-slate-200 bg-slate-50">
                       <CardContent className="space-y-1 p-4">
-                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colDistance', 'Mesafe')}</p>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colDistance')}</p>
                         <p className="text-2xl font-semibold">{formatFleetTripDistance(selectedTrip.distanceKm)}</p>
                       </CardContent>
                     </Card>
                     <Card className="border-slate-200 bg-slate-50">
                       <CardContent className="space-y-1 p-4">
-                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colDuration', 'Süre')}</p>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colDuration')}</p>
                         <p className="text-2xl font-semibold">{formatFleetTripDurationSeconds(selectedTrip.durationS, t)}</p>
                       </CardContent>
                     </Card>
                     <Card className="border-slate-200 bg-slate-50">
                       <CardContent className="space-y-1 p-4">
-                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colAvgSpeed', 'Ort. hız')}</p>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colAvgSpeed')}</p>
                         <p className="text-2xl font-semibold">{formatFleetTripSpeed(selectedTrip.avgSpeedKmh)}</p>
                       </CardContent>
                     </Card>
                     <Card className="border-slate-200 bg-slate-50">
                       <CardContent className="space-y-1 p-4">
-                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colScore', 'Skor')}</p>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">{t('fleetTrips.colScore')}</p>
                         <p className="text-2xl font-semibold">{formatFleetTripScore(selectedTrip.score)}</p>
                       </CardContent>
                     </Card>
@@ -601,7 +601,7 @@ export default function FleetTripsPage() {
                         />
                       </Card>
                       <p className="mt-3 text-xs text-muted-foreground">
-                        {t('fleetTrips.detail.routePoints', '{{count}} GPS noktası', {
+                        {t('fleetTrips.detail.routePoints', {
                           count: selectedTrip.locationPoints.length,
                         })}
                       </p>
@@ -610,7 +610,7 @@ export default function FleetTripsPage() {
                       <Card className="border-slate-200 bg-slate-50">
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm font-medium text-muted-foreground">
-                            {t('fleetTrips.detail.eventCount', 'Olay sayısı')}
+                            {t('fleetTrips.detail.eventCount')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -620,13 +620,13 @@ export default function FleetTripsPage() {
                       <Card className="border-slate-200 bg-slate-50">
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm font-medium text-muted-foreground">
-                            {t('fleetTrips.detail.classifyTitle', 'Fahrtenbuch sınıflandırması')}
+                            {t('fleetTrips.detail.classifyTitle')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
                           <div className="grid gap-2">
                             <label className="text-xs uppercase tracking-wide text-slate-500">
-                              {t('fleetTrips.detail.purpose', 'Amaç')}
+                              {t('fleetTrips.detail.purpose')}
                             </label>
                             <Select value={selectedPurpose} onChange={(event) => setSelectedPurpose(event.target.value as TripPurpose)} disabled={selectedTripPurposeLocked || purposeSaving}>
                               {TRIP_PURPOSE_OPTIONS.map((option) => (
@@ -638,34 +638,34 @@ export default function FleetTripsPage() {
                           </div>
                           <div className="grid gap-2">
                             <label className="text-xs uppercase tracking-wide text-slate-500">
-                              {t('fleetTrips.detail.note', 'Not')}
+                              {t('fleetTrips.detail.note')}
                             </label>
                             <Input
                               value={selectedPurposeNote}
                               onChange={(event) => setSelectedPurposeNote(event.target.value)}
-                              placeholder={t('fleetTrips.detail.notePlaceholder', 'İş nedeni veya açıklama')}
+                              placeholder={t('fleetTrips.detail.notePlaceholder')}
                               disabled={selectedTripPurposeLocked || purposeSaving}
                             />
                           </div>
                           <div className="grid gap-2">
                             <label className="text-xs uppercase tracking-wide text-slate-500">
-                              {t('fleetTrips.detail.businessContact', 'İş kişisi')}
+                              {t('fleetTrips.detail.businessContact')}
                             </label>
                             <Input
                               value={selectedPurposeContact}
                               onChange={(event) => setSelectedPurposeContact(event.target.value)}
-                              placeholder={t('fleetTrips.detail.businessContactPlaceholder', 'Müşteri / irtibat')}
+                              placeholder={t('fleetTrips.detail.businessContactPlaceholder')}
                               disabled={selectedTripPurposeLocked || purposeSaving}
                             />
                           </div>
                           <div className="grid gap-2">
                             <label className="text-xs uppercase tracking-wide text-slate-500">
-                              {t('fleetTrips.detail.reason', 'Sebep')}
+                              {t('fleetTrips.detail.reason')}
                             </label>
                             <Input
                               value={selectedPurposeReason}
                               onChange={(event) => setSelectedPurposeReason(event.target.value)}
-                              placeholder={t('fleetTrips.detail.reasonPlaceholder', 'İç denetim notu')}
+                              placeholder={t('fleetTrips.detail.reasonPlaceholder')}
                               disabled={selectedTripPurposeLocked || purposeSaving}
                             />
                           </div>
@@ -673,11 +673,11 @@ export default function FleetTripsPage() {
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs text-slate-500">
                               {selectedTripPurposeLocked
-                                ? t('fleetTrips.detail.locked', '7 gün sonra kilitlenir')
-                                : t('fleetTrips.detail.editable', 'Düzenlenebilir')}
+                                ? t('fleetTrips.detail.locked')
+                                : t('fleetTrips.detail.editable')}
                             </p>
                             <Button onClick={() => void saveTripPurpose()} disabled={selectedTripPurposeLocked || purposeSaving || !selectedTrip}>
-                              {purposeSaving ? t('common.loading', 'Laden…') : t('fleetTrips.detail.savePurpose', 'Kaydet')}
+                              {purposeSaving ? t('common.loading') : t('fleetTrips.detail.savePurpose')}
                             </Button>
                           </div>
                         </CardContent>
@@ -686,7 +686,7 @@ export default function FleetTripsPage() {
                         <Card className="border-red-200 bg-red-50">
                           <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-red-800">
-                              {t('fleetTrips.summary.dataGapTitle', 'Veri boşluğu')}
+                              {t('fleetTrips.summary.dataGapTitle')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="space-y-1 text-sm text-red-800">
@@ -696,7 +696,7 @@ export default function FleetTripsPage() {
                                 : '—'}
                             </p>
                             <p>
-                              {t('fleetTrips.summary.dataGapDetail', '{{minutes}} dk kayıt yok — cihaz kontrol edilmeli', {
+                              {t('fleetTrips.summary.dataGapDetail', {
                                 minutes: Math.round((selectedTrip.dataGapDurationS ?? 0) / 60),
                               })}
                             </p>
@@ -708,7 +708,7 @@ export default function FleetTripsPage() {
                 </>
               ) : (
                 <div className="flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
-                  {t('fleetTrips.detail.selectHint', 'Kart seçerek rota haritasını açın.')}
+                  {t('fleetTrips.detail.selectHint')}
                 </div>
               )}
             </CardContent>

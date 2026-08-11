@@ -93,7 +93,7 @@ export default function NewFinePage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!form.vehicle_id || !form.violation_location.trim() || !form.violation_type.trim()) {
-      setError(t('fines.requiredFields', 'Bitte Pflichtfelder ausfüllen.'));
+      setError(t('fines.requiredFields'));
       return;
     }
 
@@ -126,7 +126,7 @@ export default function NewFinePage() {
       showToast({ message: t('fines.createSuccess'), type: 'success' });
       router.push(`/fines/${created.id}`);
     } catch (e) {
-      setError(getApiErrorMessage(e, t('fines.createError', 'Bußgeld konnte nicht gespeichert werden.')));
+      setError(getApiErrorMessage(e, t('fines.createError')));
     } finally {
       setSaving(false);
     }
@@ -142,18 +142,18 @@ export default function NewFinePage() {
             </Link>
           </Button>
           <Scale className="h-7 w-7 text-blue-700" />
-          <h1 className={FLEET_PAGE_TITLE}>{t('fines.createTitle', 'Bußgeld erfassen')}</h1>
+          <h1 className={FLEET_PAGE_TITLE}>{t('fines.createTitle')}</h1>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Card>
           <CardHeader>
-            <CardTitle>{t('fines.form.details', 'Angaben')}</CardTitle>
+            <CardTitle>{t('fines.form.details')}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="vehicle_id">{t('fines.form.vehicle', 'Fahrzeug')}</Label>
+              <Label htmlFor="vehicle_id">{t('fines.form.vehicle')}</Label>
               <select
                 id="vehicle_id"
                 required
@@ -161,7 +161,7 @@ export default function NewFinePage() {
                 onChange={(e) => setForm((prev) => ({ ...prev, vehicle_id: e.target.value }))}
                 className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
               >
-                <option value="">{t('fines.form.selectVehicle', 'Fahrzeug wählen')}</option>
+                <option value="">{t('fines.form.selectVehicle')}</option>
                 {vehicles.map((vehicle) => (
                   <option key={vehicle.id} value={vehicle.id}>
                     {vehicle.plate_number}
@@ -172,7 +172,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="violation_at">{t('fines.form.violationAt', 'Zeitpunkt')}</Label>
+              <Label htmlFor="violation_at">{t('fines.form.violationAt')}</Label>
               <Input
                 id="violation_at"
                 type="datetime-local"
@@ -183,7 +183,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="tolerance_minutes">{t('fines.form.tolerance', 'Toleranz (Min.)')}</Label>
+              <Label htmlFor="tolerance_minutes">{t('fines.form.tolerance')}</Label>
               <Input
                 id="tolerance_minutes"
                 type="number"
@@ -194,7 +194,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="violation_location">{t('fines.form.location', 'Ort')}</Label>
+              <Label htmlFor="violation_location">{t('fines.form.location')}</Label>
               <Input
                 id="violation_location"
                 required
@@ -204,7 +204,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="violation_type">{t('fines.form.violationType', 'Verstoß')}</Label>
+              <Label htmlFor="violation_type">{t('fines.form.violationType')}</Label>
               <Input
                 id="violation_type"
                 required
@@ -214,7 +214,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="violation_category">{t('fines.form.category', 'Kategorie')}</Label>
+              <Label htmlFor="violation_category">{t('fines.form.category')}</Label>
               <select
                 id="violation_category"
                 value={form.violation_category}
@@ -235,7 +235,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amount">{t('fines.form.amount', 'Betrag (€)')}</Label>
+              <Label htmlFor="amount">{t('fines.form.amount')}</Label>
               <Input
                 id="amount"
                 type="number"
@@ -247,7 +247,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="payment_due_date">{t('fines.form.paymentDue', 'Zahlungsfrist')}</Label>
+              <Label htmlFor="payment_due_date">{t('fines.form.paymentDue')}</Label>
               <Input
                 id="payment_due_date"
                 type="date"
@@ -257,7 +257,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notice_date">{t('fines.form.noticeDate', 'Bescheiddatum')}</Label>
+              <Label htmlFor="notice_date">{t('fines.form.noticeDate')}</Label>
               <Input
                 id="notice_date"
                 type="date"
@@ -267,14 +267,14 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="driver_id">{t('fines.form.driverOverride', 'Fahrer (manuell)')}</Label>
+              <Label htmlFor="driver_id">{t('fines.form.driverOverride')}</Label>
               <select
                 id="driver_id"
                 value={form.driver_id}
                 onChange={(e) => setForm((prev) => ({ ...prev, driver_id: e.target.value }))}
                 className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
               >
-                <option value="">{t('fines.form.autoMatch', 'Automatisch zuordnen')}</option>
+                <option value="">{t('fines.form.autoMatch')}</option>
                 {drivers.map((driver) => (
                   <option key={driver.id} value={driver.id}>
                     {driver.first_name} {driver.last_name} ({driver.employee_number})
@@ -284,7 +284,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="notes">{t('fines.form.notes', 'Notizen')}</Label>
+              <Label htmlFor="notes">{t('fines.form.notes')}</Label>
               <Input
                 id="notes"
                 value={form.notes}
@@ -293,7 +293,7 @@ export default function NewFinePage() {
             </div>
 
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="document">{t('fines.form.document', 'Bescheid (PDF/Bild)')}</Label>
+              <Label htmlFor="document">{t('fines.form.document')}</Label>
               <Input
                 id="document"
                 type="file"
@@ -307,22 +307,22 @@ export default function NewFinePage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{t('fines.matchPreview', 'Fahrer-Zuordnung')}</CardTitle>
+              <CardTitle>{t('fines.matchPreview')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               {previewLoading ? (
                 <div className="flex items-center gap-2 text-slate-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {t('fines.matchLoading', 'Zuordnung wird geprüft…')}
+                  {t('fines.matchLoading')}
                 </div>
               ) : !preview ? (
-                <p className="text-slate-500">{t('fines.matchHint', 'Fahrzeug und Zeitpunkt wählen.')}</p>
+                <p className="text-slate-500">{t('fines.matchHint')}</p>
               ) : preview.candidates.length === 0 ? (
-                <p className="text-amber-700">{t('fines.matchNone', 'Kein passender Fahrer gefunden.')}</p>
+                <p className="text-amber-700">{t('fines.matchNone')}</p>
               ) : (
                 <>
                   <p className="text-slate-600">
-                    {t('fines.matchType', 'Typ')}:{' '}
+                    {t('fines.matchType')}:{' '}
                     <span className="font-medium">{t(`fines.match.${preview.match_type}`, preview.match_type)}</span>
                   </p>
                   {preview.candidates.map((candidate) => (
@@ -368,10 +368,10 @@ export default function NewFinePage() {
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('fines.saving', 'Speichern…')}
+                {t('fines.saving')}
               </>
             ) : (
-              t('fines.save', 'Bußgeld speichern')
+              t('fines.save')
             )}
           </Button>
         </div>

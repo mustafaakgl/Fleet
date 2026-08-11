@@ -73,7 +73,7 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
       );
     } catch (e) {
       setTrip(null);
-      setError(getApiErrorMessage(e, t('fleetTrips.loadError', 'Sefer geçmişi yüklenemedi.')));
+      setError(getApiErrorMessage(e, t('fleetTrips.loadError')));
     } finally {
       setLoading(false);
     }
@@ -88,40 +88,40 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
     return [
       {
         key: 'distance',
-        label: t('fleetTrips.colDistance', 'Mesafe'),
+        label: t('fleetTrips.colDistance'),
         value: formatFleetTripDistance(trip.distanceKm),
       },
       {
         key: 'duration',
-        label: t('fleetTrips.colDuration', 'Süre'),
+        label: t('fleetTrips.colDuration'),
         value: formatFleetTripDurationSeconds(trip.durationS, t),
       },
       {
         key: 'avgSpeed',
-        label: t('fleetTrips.colAvgSpeed', 'Ort. hız'),
+        label: t('fleetTrips.colAvgSpeed'),
         value: formatFleetTripSpeed(trip.avgSpeedKmh),
       },
       {
         key: 'maxSpeed',
-        label: t('fleetTrips.detail.maxSpeed', 'Maks. hız'),
+        label: t('fleetTrips.detail.maxSpeed'),
         value: formatFleetTripSpeed(trip.maxSpeedKmh),
       },
       {
         key: 'score',
-        label: t('fleetTrips.colScore', 'Skor'),
+        label: t('fleetTrips.colScore'),
         value: formatFleetTripScore(trip.score),
       },
       {
         key: 'events',
-        label: t('fleetTrips.detail.eventCount', 'Olay sayısı'),
+        label: t('fleetTrips.detail.eventCount'),
         value: String(trip.drivingEvents.length),
       },
     ];
   }, [t, trip]);
 
   const title = plateNumber
-    ? t('fleetTrips.detail.titlePlate', 'Sefer — {{plate}}', { plate: plateNumber })
-    : t('fleetTrips.detail.title', 'Sefer detayı');
+    ? t('fleetTrips.detail.titlePlate', { plate: plateNumber })
+    : t('fleetTrips.detail.title');
 
   return (
     <div className={FLEET_PAGE}>
@@ -131,7 +131,7 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />
-          {t('fleetTrips.backToList', 'Sefer listesi')}
+          {t('fleetTrips.backToList')}
         </Link>
       </div>
 
@@ -147,27 +147,27 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
         {trip ? (
           <Badge variant={trip.status === 'active' ? 'default' : 'secondary'}>
             {trip.status === 'active'
-              ? t('fleetTrips.statusActive', 'Aktif')
-              : t('fleetTrips.statusClosed', 'Kapalı')}
+              ? t('fleetTrips.statusActive')
+              : t('fleetTrips.statusClosed')}
           </Badge>
         ) : null}
         {trip?.hasDataGap ? (
-          <Badge variant="outline">{t('fleetTrips.dataGap', 'GPS boşluk')}</Badge>
+          <Badge variant="outline">{t('fleetTrips.dataGap')}</Badge>
         ) : null}
       </div>
 
       {error ? (
         <EmptyState
           icon={WifiOff}
-          title={t('common.error', 'Fehler')}
+          title={t('common.error')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Erneut versuchen')}
+          actionLabel={t('common.retry')}
           onAction={() => void load()}
         />
       ) : null}
 
       {!error && loading ? (
-        <p className="text-sm text-muted-foreground">{t('common.loading', 'Laden…')}</p>
+        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       ) : null}
 
       {!error && !loading && trip ? (
@@ -187,7 +187,7 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
 
           <Card className={`${FLEET_LIST_CARD} mt-6`}>
             <CardHeader>
-              <CardTitle>{t('fleetTrips.detail.routeMap', 'GPS rotası')}</CardTitle>
+              <CardTitle>{t('fleetTrips.detail.routeMap')}</CardTitle>
             </CardHeader>
             <CardContent>
               <FleetTripRouteMap
@@ -195,7 +195,7 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
                 drivingEvents={trip.drivingEvents}
               />
               <p className="mt-3 text-xs text-muted-foreground">
-                {t('fleetTrips.detail.routePoints', '{{count}} GPS noktası', {
+                {t('fleetTrips.detail.routePoints', {
                   count: trip.locationPoints.length,
                 })}
               </p>
@@ -204,28 +204,28 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
 
           <Card className={`${FLEET_LIST_CARD} mt-6`}>
             <CardHeader>
-              <CardTitle>{t('fleetTrips.detail.events', 'Sürüş olayları')}</CardTitle>
+              <CardTitle>{t('fleetTrips.detail.events')}</CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {trip.drivingEvents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  {t('fleetTrips.detail.noEvents', 'Bu seferde olay kaydı yok.')}
+                  {t('fleetTrips.detail.noEvents')}
                 </p>
               ) : (
                 <Table className={FLEET_TABLE}>
                   <TableHeader>
                     <TableRow className={FLEET_TABLE_HEADER_ROW}>
                       <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetTrips.detail.eventTime', 'Zaman')}
+                        {t('fleetTrips.detail.eventTime')}
                       </TableHead>
                       <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetTrips.detail.eventType', 'Olay')}
+                        {t('fleetTrips.detail.eventType')}
                       </TableHead>
                       <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetTrips.detail.eventValue', 'Değer')}
+                        {t('fleetTrips.detail.eventValue')}
                       </TableHead>
                       <TableHead className={FLEET_TABLE_HEAD}>
-                        {t('fleetTrips.detail.eventThreshold', 'Eşik')}
+                        {t('fleetTrips.detail.eventThreshold')}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -237,10 +237,10 @@ export default function FleetTripDetailPage({ params }: { params: Promise<{ id: 
                         </TableCell>
                         <TableCell className={FLEET_TABLE_CELL}>
                           {event.type === 'speeding'
-                            ? t('fleetTrips.eventSpeeding', 'Hız ihlali')
+                            ? t('fleetTrips.eventSpeeding')
                             : event.type === 'harsh_accel'
-                              ? t('fleetTrips.eventHarshAccel', 'Sert hızlanma')
-                              : t('fleetTrips.eventHarshBrake', 'Sert fren')}
+                              ? t('fleetTrips.eventHarshAccel')
+                              : t('fleetTrips.eventHarshBrake')}
                         </TableCell>
                         <TableCell className={FLEET_TABLE_CELL}>
                           {formatFleetTripSpeed(event.value)}

@@ -337,7 +337,7 @@ export function MessengerChatPanel({
         <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#1a4d7a]/15 bg-white/80 px-4 py-2 text-[13px] font-medium text-[#1a4d7a] shadow-sm">
           <Globe className="h-4 w-4 shrink-0" aria-hidden />
           <span>
-            {MESSENGER_LANGUAGES.length} {t('messenger.languagesAutoTranslate', 'Sprachen · automatische Übersetzung')}
+            {MESSENGER_LANGUAGES.length} {t('messenger.languagesAutoTranslate')}
           </span>
         </div>
       </div>

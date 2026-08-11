@@ -356,7 +356,7 @@ export default function WorkSessionsPage() {
                         <TableCell colSpan={7} className={cn(FLEET_TABLE_CELL_MUTED, 'py-10 text-center')}>
                           <EmptyState
                             icon={Loader2}
-                            title={t('workSessions.emptyTitle', 'Keine Schichtdaten')}
+                            title={t('workSessions.emptyTitle')}
                             subtitle={t('workSessions.empty')}
                           />
                         </TableCell>

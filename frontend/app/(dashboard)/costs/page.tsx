@@ -88,7 +88,7 @@ export default function CostsPage() {
       setData(result);
     } catch (e) {
       setData(null);
-      setError(getApiErrorMessage(e, t('costs.loadError', 'Kostendaten konnten nicht geladen werden.')));
+      setError(getApiErrorMessage(e, t('costs.loadError')));
     } finally {
       setLoading(false);
     }
@@ -101,14 +101,14 @@ export default function CostsPage() {
   const summaryCards = useMemo(() => {
     if (!data) return [];
     return [
-      { key: 'total', label: t('costs.summary.totalCost', 'Gesamtkosten'), value: data.fleet.total_cost },
-      { key: 'service', label: t('costs.summary.serviceCost', 'Werkstatt & Service'), value: data.fleet.service_cost },
-      { key: 'fines', label: t('costs.summary.fineCost', 'Bußgelder'), value: data.fleet.fine_cost },
-      { key: 'revenue', label: t('costs.summary.revenue', 'Umsatz'), value: data.fleet.revenue },
-      { key: 'margin', label: t('costs.summary.margin', 'Marge'), value: data.fleet.margin },
+      { key: 'total', label: t('costs.summary.totalCost'), value: data.fleet.total_cost },
+      { key: 'service', label: t('costs.summary.serviceCost'), value: data.fleet.service_cost },
+      { key: 'fines', label: t('costs.summary.fineCost'), value: data.fleet.fine_cost },
+      { key: 'revenue', label: t('costs.summary.revenue'), value: data.fleet.revenue },
+      { key: 'margin', label: t('costs.summary.margin'), value: data.fleet.margin },
       {
         key: 'avg',
-        label: t('costs.summary.avgPerVehicle', 'Ø Kosten je Fahrzeug'),
+        label: t('costs.summary.avgPerVehicle'),
         value: data.fleet.avg_cost_per_vehicle,
       },
     ];
@@ -119,7 +119,7 @@ export default function CostsPage() {
       <div className={`${FLEET_PAGE_HEADER} flex flex-wrap items-center justify-between gap-3`}>
         <div className="flex items-center gap-3">
           <Euro className="h-8 w-8 text-blue-700" />
-          <h1 className={FLEET_PAGE_TITLE}>{t('costs.title', 'Fahrzeugkosten (TCO)')}</h1>
+          <h1 className={FLEET_PAGE_TITLE}>{t('costs.title')}</h1>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -129,7 +129,7 @@ export default function CostsPage() {
           >
             {PERIOD_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {t('costs.period', '{{count}} Monate', { count: option })}
+                {t('costs.period', { count: option })}
               </option>
             ))}
           </select>
@@ -139,7 +139,7 @@ export default function CostsPage() {
             onClick={() => data && downloadCostsCsv(data)}
           >
             <Download className="mr-2 h-4 w-4" />
-            {t('common.exportCsv', 'CSV exportieren')}
+            {t('common.exportCsv')}
           </Button>
         </div>
       </div>
@@ -147,9 +147,9 @@ export default function CostsPage() {
       {!loading && error ? (
         <EmptyState
           icon={WifiOff}
-          title={t('costs.loadErrorTitle', 'Daten konnten nicht geladen werden')}
+          title={t('costs.loadErrorTitle')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Erneut versuchen')}
+          actionLabel={t('common.retry')}
           onAction={() => {
             void load();
           }}
@@ -159,7 +159,7 @@ export default function CostsPage() {
       {!loading && !error && data ? (
         <>
           <p className="text-sm text-slate-500">
-            {t('costs.periodInfo', 'Zeitraum: {{from}} bis {{to}}', { from: data.from, to: data.to })}
+            {t('costs.periodInfo', { from: data.from, to: data.to })}
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -190,12 +190,12 @@ export default function CostsPage() {
               <Table className={FLEET_TABLE}>
                 <TableHeader>
                   <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.vehicle', 'Fahrzeug')}</TableHead>
-                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.service', 'Service')}</TableHead>
-                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.fines', 'Bußgelder')}</TableHead>
-                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.totalCost', 'Gesamtkosten')}</TableHead>
-                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.revenue', 'Umsatz')}</TableHead>
-                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.margin', 'Marge')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.vehicle')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.service')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.fines')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.totalCost')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.revenue')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.margin')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className={FLEET_TABLE_BODY}>
@@ -238,7 +238,7 @@ export default function CostsPage() {
               </Table>
               {data.vehicles.length === 0 ? (
                 <div className="p-6 text-center text-sm text-slate-500">
-                  {t('costs.empty', 'Keine Fahrzeuge vorhanden.')}
+                  {t('costs.empty')}
                 </div>
               ) : null}
             </CardContent>
@@ -247,7 +247,7 @@ export default function CostsPage() {
       ) : null}
 
       {loading ? (
-        <div className="p-6 text-center text-sm text-slate-500">{t('common.loading', 'Wird geladen …')}</div>
+        <div className="p-6 text-center text-sm text-slate-500">{t('common.loading')}</div>
       ) : null}
     </div>
   );

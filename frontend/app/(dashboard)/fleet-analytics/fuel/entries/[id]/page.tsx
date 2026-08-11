@@ -36,7 +36,7 @@ export default function FleetFuelEntryDetailPage() {
       setEntry(result);
     } catch (e) {
       setEntry(null);
-      setError(getApiErrorMessage(e, t('fuelHistory.detail.loadError', 'Yakıt girişi yüklenemedi.')));
+      setError(getApiErrorMessage(e, t('fuelHistory.detail.loadError')));
     } finally {
       setLoading(false);
     }
@@ -67,12 +67,12 @@ export default function FleetFuelEntryDetailPage() {
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
-          {t('fuelHistory.title', 'Yakıt Geçmişi')}
+          {t('fuelHistory.title')}
         </Link>
         <div className="mt-2 flex items-center gap-3">
           <Droplets className="h-6 w-6 text-primary" />
           <h1 className={FLEET_PAGE_TITLE}>
-            {t('fuelHistory.detail.title', 'Yakıt Girişi')}
+            {t('fuelHistory.detail.title')}
             {entry?.vehiclePlate ? (
               <span className="ml-2 text-base font-medium text-slate-500">{entry.vehiclePlate}</span>
             ) : null}
@@ -83,9 +83,9 @@ export default function FleetFuelEntryDetailPage() {
       {error ? (
         <EmptyState
           icon={WifiOff}
-          title={t('common.error', 'Hata')}
+          title={t('common.error')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Tekrar dene')}
+          actionLabel={t('common.retry')}
           onAction={() => void load()}
         />
       ) : null}
@@ -103,7 +103,7 @@ export default function FleetFuelEntryDetailPage() {
           <Card className={`${FLEET_LIST_CARD} lg:col-span-2`}>
             <CardHeader>
               <CardTitle className="text-base">
-                {t('fuelHistory.detail.details', 'Detaylar')}
+                {t('fuelHistory.detail.details')}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -111,7 +111,7 @@ export default function FleetFuelEntryDetailPage() {
                 {[
                   {
                     key: 'vehicle',
-                    label: t('fuelHistory.col.vehicle', 'Araç'),
+                    label: t('fuelHistory.col.vehicle'),
                     value: (
                       <Link
                         href={`/fleet-analytics/fuel/${entry.vehicleId}`}
@@ -123,17 +123,17 @@ export default function FleetFuelEntryDetailPage() {
                   },
                   {
                     key: 'driver',
-                    label: t('fuelHistory.col.driver', 'Sürücü'),
+                    label: t('fuelHistory.col.driver'),
                     value: entry.driverName || '—',
                   },
                   {
                     key: 'date',
-                    label: t('fuelHistory.col.date', 'Tarih'),
+                    label: t('fuelHistory.col.date'),
                     value: formatFleetDateTime(entry.enteredAt),
                   },
                   {
                     key: 'odometer',
-                    label: t('fuelHistory.col.meter', 'Km Sayacı'),
+                    label: t('fuelHistory.col.meter'),
                     value:
                       entry.odometerKm != null
                         ? `${entry.odometerKm.toLocaleString(locale, { maximumFractionDigits: 0 })} km`
@@ -141,7 +141,7 @@ export default function FleetFuelEntryDetailPage() {
                   },
                   {
                     key: 'previous',
-                    label: t('fuelHistory.detail.previousEntry', 'Önceki Giriş'),
+                    label: t('fuelHistory.detail.previousEntry'),
                     value: entry.previousEntryAt
                       ? `${formatFleetDateTime(entry.previousEntryAt)}${
                           entry.previousOdometerKm != null
@@ -152,21 +152,21 @@ export default function FleetFuelEntryDetailPage() {
                   },
                   {
                     key: 'fullTank',
-                    label: t('fuelHistory.detail.fullTank', 'Depo Dolumu'),
+                    label: t('fuelHistory.detail.fullTank'),
                     value: entry.isFullTank
-                      ? t('common.yes', 'Evet')
-                      : t('common.no', 'Hayır'),
+                      ? t('common.yes')
+                      : t('common.no'),
                   },
                   {
                     key: 'receipt',
-                    label: t('fuelHistory.col.receipt', 'Fiş'),
+                    label: t('fuelHistory.col.receipt'),
                     value: entry.hasReceipt
-                      ? t('fuelHistory.detail.receiptAvailable', 'Mevcut')
+                      ? t('fuelHistory.detail.receiptAvailable')
                       : '—',
                   },
                   {
                     key: 'created',
-                    label: t('fuelHistory.detail.createdAt', 'Kayıt Tarihi'),
+                    label: t('fuelHistory.detail.createdAt'),
                     value: formatFleetDateTime(entry.createdAt),
                   },
                 ].map((row) => (
@@ -183,7 +183,7 @@ export default function FleetFuelEntryDetailPage() {
             <Card className={FLEET_LIST_CARD}>
               <CardContent className="divide-y divide-slate-100 p-0">
                 <div className="px-4 py-3">
-                  <p className="text-xs text-slate-500">{t('fuelHistory.col.volume', 'Hacim')}</p>
+                  <p className="text-xs text-slate-500">{t('fuelHistory.col.volume')}</p>
                   <p className="mt-1 text-xl font-semibold text-slate-900">
                     {entry.liters.toLocaleString(locale, { maximumFractionDigits: 3 })}
                     <span className="ml-1 text-xs font-normal text-slate-500">L</span>
@@ -191,7 +191,7 @@ export default function FleetFuelEntryDetailPage() {
                 </div>
                 <div className="px-4 py-3">
                   <p className="text-xs text-slate-500">
-                    {t('fuelHistory.detail.pricePerLiter', 'Litre Fiyatı')}
+                    {t('fuelHistory.detail.pricePerLiter')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-slate-900">
                     {pricePerLiter != null ? currency.format(pricePerLiter) : '—'}
@@ -199,14 +199,14 @@ export default function FleetFuelEntryDetailPage() {
                   </p>
                 </div>
                 <div className="px-4 py-3">
-                  <p className="text-xs text-slate-500">{t('fuelHistory.col.total', 'Toplam')}</p>
+                  <p className="text-xs text-slate-500">{t('fuelHistory.col.total')}</p>
                   <p className="mt-1 text-xl font-semibold text-slate-900">
                     {currency.format(entry.totalCost)}
                   </p>
                 </div>
                 <div className="px-4 py-3">
                   <p className="text-xs text-slate-500">
-                    {t('fuelHistory.detail.usage', 'Kullanım (önceki girişten)')}
+                    {t('fuelHistory.detail.usage')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-slate-900">
                     {usageKm != null
@@ -216,7 +216,7 @@ export default function FleetFuelEntryDetailPage() {
                 </div>
                 <div className="px-4 py-3">
                   <p className="text-xs text-slate-500">
-                    {t('fuelHistory.detail.consumption', 'Tüketim')}
+                    {t('fuelHistory.detail.consumption')}
                   </p>
                   <p className="mt-1 text-xl font-semibold text-slate-900">
                     {consumptionPer100 != null ? consumptionPer100.toFixed(1) : '—'}

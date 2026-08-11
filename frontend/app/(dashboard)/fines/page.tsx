@@ -68,7 +68,7 @@ export default function FinesPage() {
       setFines([]);
       setDueSoon([]);
       setStats(null);
-      setError(getApiErrorMessage(e, t('fines.loadError', 'Bußgelder konnten nicht geladen werden.')));
+      setError(getApiErrorMessage(e, t('fines.loadError')));
     } finally {
       setLoading(false);
     }
@@ -92,7 +92,7 @@ export default function FinesPage() {
       <div className={`${FLEET_PAGE_HEADER} flex flex-wrap items-center justify-between gap-3`}>
         <div className="flex items-center gap-3">
           <Scale className="h-8 w-8 text-blue-700" />
-          <h1 className={FLEET_PAGE_TITLE}>{t('fines.title', 'Bußgeldverwaltung')}</h1>
+          <h1 className={FLEET_PAGE_TITLE}>{t('fines.title')}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -101,12 +101,12 @@ export default function FinesPage() {
             onClick={() => downloadFinesCsv(fines)}
           >
             <Download className="mr-2 h-4 w-4" />
-            {t('common.exportCsv', 'CSV exportieren')}
+            {t('common.exportCsv')}
           </Button>
           <Button asChild>
             <Link href="/fines/new">
               <Plus className="mr-2 h-4 w-4" />
-              {t('fines.create', 'Bußgeld erfassen')}
+              {t('fines.create')}
             </Link>
           </Button>
         </div>
@@ -115,9 +115,9 @@ export default function FinesPage() {
       {!loading && error ? (
         <EmptyState
           icon={WifiOff}
-          title={t('fines.loadErrorTitle', 'Daten konnten nicht geladen werden')}
+          title={t('fines.loadErrorTitle')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Erneut versuchen')}
+          actionLabel={t('common.retry')}
           onAction={() => {
             void load();
           }}
@@ -129,7 +129,7 @@ export default function FinesPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">
-                {t('fines.stats.open', 'Offen')}
+                {t('fines.stats.open')}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-bold">{openCount}</CardContent>
@@ -137,7 +137,7 @@ export default function FinesPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">
-                {t('fines.stats.dueSoon', 'Zahlung fällig (7 Tage)')}
+                {t('fines.stats.dueSoon')}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-bold text-amber-700">{dueSoon.length}</CardContent>
@@ -145,7 +145,7 @@ export default function FinesPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">
-                {t('fines.stats.pendingAck', 'Bestätigung ausstehend')}
+                {t('fines.stats.pendingAck')}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-bold">
@@ -155,7 +155,7 @@ export default function FinesPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">
-                {t('fines.stats.total', 'Gesamt')}
+                {t('fines.stats.total')}
               </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-bold">
@@ -169,7 +169,7 @@ export default function FinesPage() {
         <Card className="border-amber-200 bg-amber-50/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-amber-900">
-              {t('fines.dueSoonTitle', 'Bald fällige Zahlungen')}
+              {t('fines.dueSoonTitle')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
@@ -179,7 +179,7 @@ export default function FinesPage() {
                   {fine.vehicle.plate_number} — {fine.violation_type}
                 </Link>
                 <span className="text-amber-800">
-                  {t('fines.dueInDays', '{{days}} Tage', { days: fine.days_until_due ?? '?' })}
+                  {t('fines.dueInDays', { days: fine.days_until_due ?? '?' })}
                   {fine.payment_due_date ? ` (${formatDate(fine.payment_due_date)})` : ''}
                 </span>
               </div>
@@ -194,7 +194,7 @@ export default function FinesPage() {
           onChange={(event) => setStatusFilter(event.target.value)}
           className={FLEET_FILTER_SELECT}
         >
-          <option value="">{t('fines.allStatuses', 'Alle Status')}</option>
+          <option value="">{t('fines.allStatuses')}</option>
           {STATUS_VALUES.map((status) => (
             <option key={status} value={status}>
               {statusLabel(status)}
@@ -205,13 +205,13 @@ export default function FinesPage() {
 
       <Card className={FLEET_LIST_CARD}>
         {loading ? (
-          <div className="p-6 text-center text-sm text-slate-500">{t('fines.loading', 'Laden…')}</div>
+          <div className="p-6 text-center text-sm text-slate-500">{t('fines.loading')}</div>
         ) : !error && fines.length === 0 ? (
           <EmptyState
             icon={Scale}
-            title={t('fines.emptyTitle', 'Keine Bußgelder')}
-            subtitle={t('fines.emptyMessage', 'Erfassen Sie das erste Bußgeld über «Bußgeld erfassen».')}
-            actionLabel={t('fines.create', 'Bußgeld erfassen')}
+            title={t('fines.emptyTitle')}
+            subtitle={t('fines.emptyMessage')}
+            actionLabel={t('fines.create')}
             onAction={() => {
               window.location.href = '/fines/new';
             }}
@@ -220,12 +220,12 @@ export default function FinesPage() {
           <Table className={FLEET_TABLE}>
             <TableHeader>
               <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colDate', 'Datum')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colVehicle', 'Fahrzeug')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colDriver', 'Fahrer')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colType', 'Verstoß')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colAmount', 'Betrag')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colStatus', 'Status')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colDate')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colVehicle')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colDriver')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colType')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colAmount')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('fines.colStatus')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className={FLEET_TABLE_BODY}>

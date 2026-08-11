@@ -48,7 +48,7 @@ export default function DefectsPage() {
       setDefects(rows);
     } catch (e) {
       setDefects([]);
-      setError(getApiErrorMessage(e, t('defects.loadError', 'Mängel konnten nicht geladen werden.')));
+      setError(getApiErrorMessage(e, t('defects.loadError')));
     } finally {
       setLoading(false);
     }
@@ -63,7 +63,7 @@ export default function DefectsPage() {
       <div className={FLEET_PAGE_HEADER}>
         <div className="flex items-center gap-3">
           <AlertTriangle className="h-8 w-8 text-amber-600" />
-          <h1 className={FLEET_PAGE_TITLE}>{t('defects.title', 'Mängelmanagement')}</h1>
+          <h1 className={FLEET_PAGE_TITLE}>{t('defects.title')}</h1>
         </div>
       </div>
 
@@ -73,7 +73,7 @@ export default function DefectsPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           className={FLEET_FILTER_SELECT}
         >
-          <option value="">{t('defects.allStatuses', 'Alle Status')}</option>
+          <option value="">{t('defects.allStatuses')}</option>
           {STATUS_VALUES.map((status) => (
             <option key={status} value={status}>
               {t(`defects.status.${status}`, status)}
@@ -85,7 +85,7 @@ export default function DefectsPage() {
           onChange={(e) => setSeverityFilter(e.target.value)}
           className={FLEET_FILTER_SELECT}
         >
-          <option value="">{t('defects.allSeverities', 'Alle Schweregrade')}</option>
+          <option value="">{t('defects.allSeverities')}</option>
           {SEVERITY_VALUES.map((severity) => (
             <option key={severity} value={severity}>
               {t(`defects.severity.${severity}`, severity)}
@@ -97,9 +97,9 @@ export default function DefectsPage() {
       {!loading && error ? (
         <EmptyState
           icon={WifiOff}
-          title={t('defects.loadErrorTitle', 'Daten konnten nicht geladen werden')}
+          title={t('defects.loadErrorTitle')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Erneut versuchen')}
+          actionLabel={t('common.retry')}
           onAction={() => {
             void load();
           }}
@@ -108,22 +108,22 @@ export default function DefectsPage() {
 
       <Card className={FLEET_LIST_CARD}>
         {loading ? (
-          <div className="p-6 text-center text-sm text-slate-500">{t('defects.loading', 'Laden…')}</div>
+          <div className="p-6 text-center text-sm text-slate-500">{t('defects.loading')}</div>
         ) : !error && defects.length === 0 ? (
           <EmptyState
             icon={AlertTriangle}
-            title={t('defects.emptyTitle', 'Keine Mängel')}
-            subtitle={t('defects.emptyMessage', 'Offene Mängel erscheinen hier.')}
+            title={t('defects.emptyTitle')}
+            subtitle={t('defects.emptyMessage')}
           />
         ) : !error ? (
           <Table className={FLEET_TABLE}>
             <TableHeader>
               <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colDate', 'Datum')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colVehicle', 'Fahrzeug')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colTitle', 'Mangel')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colSeverity', 'Schwere')}</TableHead>
-                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colStatus', 'Status')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colDate')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colVehicle')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colTitle')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colSeverity')}</TableHead>
+                <TableHead className={FLEET_TABLE_HEAD}>{t('defects.colStatus')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className={FLEET_TABLE_BODY}>

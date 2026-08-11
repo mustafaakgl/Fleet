@@ -147,7 +147,7 @@ export default function AuditPage() {
             <div className="p-4">
               <EmptyState
                 icon={History}
-                title={t('audit.emptyTitle', 'Keine Audit-Einträge')}
+                title={t('audit.emptyTitle')}
                 subtitle={t('audit.empty')}
               />
             </div>

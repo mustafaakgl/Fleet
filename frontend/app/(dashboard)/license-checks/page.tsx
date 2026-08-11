@@ -41,7 +41,7 @@ export default function LicenseChecksPage() {
       setError(
         getApiErrorMessage(
           e,
-          t('licenseChecks.loadError', 'Führerscheinkontrollen konnten nicht geladen werden.'),
+          t('licenseChecks.loadError'),
         ),
       );
     } finally {
@@ -61,7 +61,7 @@ export default function LicenseChecksPage() {
       setRejectReason('');
       await fetchPending();
     } catch (e) {
-      setError(getApiErrorMessage(e, t('licenseChecks.approveError', 'Bestätigung fehlgeschlagen.')));
+      setError(getApiErrorMessage(e, t('licenseChecks.approveError')));
     } finally {
       setActing(false);
     }
@@ -75,7 +75,7 @@ export default function LicenseChecksPage() {
       setRejectReason('');
       await fetchPending();
     } catch (e) {
-      setError(getApiErrorMessage(e, t('licenseChecks.rejectError', 'Ablehnung fehlgeschlagen.')));
+      setError(getApiErrorMessage(e, t('licenseChecks.rejectError')));
     } finally {
       setActing(false);
     }
@@ -87,7 +87,7 @@ export default function LicenseChecksPage() {
         <div className="flex items-center gap-3">
           <IdCard className="h-8 w-8 text-blue-600" />
           <h1 className={FLEET_PAGE_TITLE}>
-            {t('licenseChecks.title', 'Digitale Führerscheinkontrolle')}
+            {t('licenseChecks.title')}
           </h1>
         </div>
       </div>
@@ -102,9 +102,9 @@ export default function LicenseChecksPage() {
       {!loading && error ? (
         <EmptyState
           icon={WifiOff}
-          title={t('licenseChecks.loadErrorTitle', 'Daten konnten nicht geladen werden')}
+          title={t('licenseChecks.loadErrorTitle')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Erneut versuchen')}
+          actionLabel={t('common.retry')}
           onAction={() => {
             void fetchPending();
           }}
@@ -114,11 +114,8 @@ export default function LicenseChecksPage() {
       {!loading && !error && checks.length === 0 ? (
         <EmptyState
           icon={IdCard}
-          title={t('licenseChecks.emptyTitle', 'Keine offenen Kontrollen')}
-          subtitle={t(
-            'licenseChecks.emptyMessage',
-            'Alle eingereichten Führerscheinkontrollen wurden bearbeitet.',
-          )}
+          title={t('licenseChecks.emptyTitle')}
+          subtitle={t('licenseChecks.emptyMessage')}
         />
       ) : null}
 
@@ -127,7 +124,7 @@ export default function LicenseChecksPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                {t('licenseChecks.queue', 'Warteschlange')} ({checks.length})
+                {t('licenseChecks.queue')} ({checks.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -161,7 +158,7 @@ export default function LicenseChecksPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <h3 className="mb-2 text-sm font-semibold text-gray-700">
-                    {t('licenseChecks.reference', 'Referenz (Akte)')}
+                    {t('licenseChecks.reference')}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -183,7 +180,7 @@ export default function LicenseChecksPage() {
 
                 <div>
                   <h3 className="mb-2 text-sm font-semibold text-gray-700">
-                    {t('licenseChecks.submission', 'Neue Einreichung')}
+                    {t('licenseChecks.submission')}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -211,20 +208,20 @@ export default function LicenseChecksPage() {
               <div className="flex flex-wrap items-end gap-3 border-t pt-4">
                 <Button onClick={() => void handleApprove()} disabled={acting}>
                   <Check className="mr-2 h-4 w-4" />
-                  {t('licenseChecks.approve', 'Bestätigen')}
+                  {t('licenseChecks.approve')}
                 </Button>
                 <div className="min-w-[220px] flex-1 space-y-1">
-                  <Label htmlFor="reject-reason">{t('licenseChecks.rejectReason', 'Ablehnungsgrund')}</Label>
+                  <Label htmlFor="reject-reason">{t('licenseChecks.rejectReason')}</Label>
                   <Input
                     id="reject-reason"
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder={t('licenseChecks.rejectPlaceholder', 'z. B. Foto unscharf')}
+                    placeholder={t('licenseChecks.rejectPlaceholder')}
                   />
                 </div>
                 <Button variant="destructive" onClick={() => void handleReject()} disabled={acting || rejectReason.trim().length < 3}>
                   <X className="mr-2 h-4 w-4" />
-                  {t('licenseChecks.reject', 'Ablehnen')}
+                  {t('licenseChecks.reject')}
                 </Button>
               </div>
             </CardContent>

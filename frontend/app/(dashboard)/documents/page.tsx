@@ -353,7 +353,7 @@ export default function DocumentsPage() {
       console.error('documents:save_failed', e);
       setToast({
         type: 'error',
-        message: t('documents.saveError', 'Doküman kaydedilemedi. Lütfen alanları kontrol edip tekrar deneyin.'),
+        message: t('documents.saveError'),
       });
     } finally {
       setSaving(false);
@@ -455,9 +455,9 @@ export default function DocumentsPage() {
           <div className="p-4">
             <EmptyState
               icon={FileText}
-              title={t('documents.loadErrorTitle', 'Dokumente konnten nicht geladen werden')}
+              title={t('documents.loadErrorTitle')}
               subtitle={error}
-              actionLabel={t('common.retry', 'Erneut versuchen')}
+              actionLabel={t('common.retry')}
               onAction={reload}
             />
           </div>
@@ -465,9 +465,9 @@ export default function DocumentsPage() {
           <div className="p-4">
             <EmptyState
               icon={FileText}
-              title={t('documents.emptyTitle', 'Keine Dokumente gefunden')}
-              subtitle={t('documents.emptySubtitle', 'Für die aktuellen Filter wurden keine Dokumente gefunden.')}
-              actionLabel={t('documents.uploadDocument', 'Dokument hochladen')}
+              title={t('documents.emptyTitle')}
+              subtitle={t('documents.emptySubtitle')}
+              actionLabel={t('documents.uploadDocument')}
               onAction={() => openForm('add')}
             />
           </div>
@@ -877,9 +877,9 @@ function AddDocumentDrawer({
             {isSaving ? (
               <span className="inline-flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {t('common.saving', 'Kaydediliyor...')}
+                {t('common.saving')}
               </span>
-            ) : mode === 'add' ? t('common.add') : t('common.save', 'Kaydet')}
+            ) : mode === 'add' ? t('common.add') : t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -83,7 +83,7 @@ export default function FuelCardReconciliationPage() {
       setBatches(batchData);
       setTransactions(transactionData);
     } catch (e) {
-      setError(getApiErrorMessage(e, t('fuelCardReconciliation.loadError', 'Reconciliation data could not be loaded.')));
+      setError(getApiErrorMessage(e, t('fuelCardReconciliation.loadError')));
       setBatches([]);
       setTransactions([]);
     } finally {
@@ -109,12 +109,12 @@ export default function FuelCardReconciliationPage() {
         <div className="flex min-w-0 items-center gap-3">
           <CreditCard className="h-6 w-6 text-primary" />
           <div className="min-w-0">
-            <h1 className={FLEET_PAGE_TITLE}>{t('fuelCardReconciliation.title', 'Fuel card reconciliation')}</h1>
+            <h1 className={FLEET_PAGE_TITLE}>{t('fuelCardReconciliation.title')}</h1>
             <p className="text-sm text-muted-foreground">
-              {t('fuelCardReconciliation.subtitle', 'Imported card statements matched against fuel receipts.')}
+              {t('fuelCardReconciliation.subtitle')}
             </p>
             <p className="text-xs text-amber-700">
-              {t('fuelCardReconciliation.seededDemo', 'Demo data is loaded so you can inspect the layout.')}
+              {t('fuelCardReconciliation.seededDemo')}
             </p>
           </div>
         </div>
@@ -122,24 +122,24 @@ export default function FuelCardReconciliationPage() {
           <Button asChild variant="secondary" size="sm">
             <Link href="/fleet-analytics/fuel">
               <ArrowLeft className="mr-1.5 h-4 w-4" />
-              {t('fuelCardReconciliation.back', 'Back to fuel analytics')}
+              {t('fuelCardReconciliation.back')}
             </Link>
           </Button>
           <Button size="sm" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            {t('fuelCardReconciliation.refresh', 'Refresh')}
+            {t('fuelCardReconciliation.refresh')}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         {[
-          [t('fuelCardReconciliation.summary.batches', 'Import batches'), batches.length],
-          [t('fuelCardReconciliation.summary.transactions', 'Transactions'), transactions.length],
-          [t('fuelCardReconciliation.summary.matched', 'Matched'), summary.matched],
-          [t('fuelCardReconciliation.summary.disputed', 'Disputed'), summary.disputed],
-          [t('fuelCardReconciliation.summary.unmatched', 'Unmatched'), summary.unmatched],
-          [t('fuelCardReconciliation.summary.ignored', 'Ignored'), summary.ignored],
+          [t('fuelCardReconciliation.summary.batches'), batches.length],
+          [t('fuelCardReconciliation.summary.transactions'), transactions.length],
+          [t('fuelCardReconciliation.summary.matched'), summary.matched],
+          [t('fuelCardReconciliation.summary.disputed'), summary.disputed],
+          [t('fuelCardReconciliation.summary.unmatched'), summary.unmatched],
+          [t('fuelCardReconciliation.summary.ignored'), summary.ignored],
         ].map(([label, value]) => (
           <Card key={String(label)} className={FLEET_LIST_CARD}>
             <CardHeader className="pb-2">
@@ -155,26 +155,26 @@ export default function FuelCardReconciliationPage() {
       {error ? (
         <EmptyState
           icon={CircleAlert}
-          title={t('common.error', 'Fehler')}
+          title={t('common.error')}
           subtitle={error}
-          actionLabel={t('common.retry', 'Erneut versuchen')}
+          actionLabel={t('common.retry')}
           onAction={() => void load()}
         />
       ) : null}
 
-      {!error && loading ? <p className="text-sm text-muted-foreground">{t('common.loading', 'Laden…')}</p> : null}
+      {!error && loading ? <p className="text-sm text-muted-foreground">{t('common.loading')}</p> : null}
 
       {!error && !loading ? (
         <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <Card className={FLEET_LIST_CARD}>
             <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-              <CardTitle>{t('fuelCardReconciliation.batchTable', 'Import batches')}</CardTitle>
+              <CardTitle>{t('fuelCardReconciliation.batchTable')}</CardTitle>
               <select
                 className="h-9 rounded-md border border-border bg-background px-3 text-[13px]"
                 value={batchId}
                 onChange={(event) => setBatchId(event.target.value)}
               >
-                <option value="all">{t('fuelCardReconciliation.allBatches', 'All batches')}</option>
+                <option value="all">{t('fuelCardReconciliation.allBatches')}</option>
                 {batches.map((batch) => (
                   <option key={batch.id} value={batch.id}>
                     {batch.sourceFileName}
@@ -185,16 +185,16 @@ export default function FuelCardReconciliationPage() {
             <CardContent className="overflow-x-auto p-0">
               {batches.length === 0 ? (
                 <div className="p-6 text-sm text-muted-foreground">
-                  {t('fuelCardReconciliation.noBatches', 'No card import batches yet.')}
+                  {t('fuelCardReconciliation.noBatches')}
                 </div>
               ) : (
                 <Table className={FLEET_TABLE}>
                   <TableHeader>
                     <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.file', 'File')}</TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.importedAt', 'Imported at')}</TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.rows', 'Rows')}</TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.matchRate', 'Match rate')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.file')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.importedAt')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.rows')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.matchRate')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className={FLEET_TABLE_BODY}>
@@ -217,32 +217,32 @@ export default function FuelCardReconciliationPage() {
 
           <Card className={FLEET_LIST_CARD}>
             <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-              <CardTitle>{t('fuelCardReconciliation.transactionTable', 'Transactions')}</CardTitle>
+              <CardTitle>{t('fuelCardReconciliation.transactionTable')}</CardTitle>
               <select
                 className="h-9 rounded-md border border-border bg-background px-3 text-[13px]"
                 value={status}
                 onChange={(event) => setStatus(event.target.value as FuelCardTransactionStatus | 'all')}
               >
-                <option value="all">{t('fuelCardReconciliation.allStatuses', 'All statuses')}</option>
-                <option value="imported">{t('fuelCardReconciliation.status.imported', 'Imported')}</option>
-                <option value="matched">{t('fuelCardReconciliation.status.matched', 'Matched')}</option>
-                <option value="disputed">{t('fuelCardReconciliation.status.disputed', 'Disputed')}</option>
-                <option value="ignored">{t('fuelCardReconciliation.status.ignored', 'Ignored')}</option>
+                <option value="all">{t('fuelCardReconciliation.allStatuses')}</option>
+                <option value="imported">{t('fuelCardReconciliation.status.imported')}</option>
+                <option value="matched">{t('fuelCardReconciliation.status.matched')}</option>
+                <option value="disputed">{t('fuelCardReconciliation.status.disputed')}</option>
+                <option value="ignored">{t('fuelCardReconciliation.status.ignored')}</option>
               </select>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
               {transactions.length === 0 ? (
                 <div className="p-6 text-sm text-muted-foreground">
-                  {t('fuelCardReconciliation.noTransactions', 'No transactions match the selected filters.')}
+                  {t('fuelCardReconciliation.noTransactions')}
                 </div>
               ) : (
                 <Table className={FLEET_TABLE}>
                   <TableHeader>
                     <TableRow className={FLEET_TABLE_HEADER_ROW}>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.merchant', 'Merchant')}</TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.vehicle', 'Vehicle')}</TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.amount', 'Amount')}</TableHead>
-                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.status', 'Status')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.merchant')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.vehicle')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.amount')}</TableHead>
+                      <TableHead className={FLEET_TABLE_HEAD}>{t('fuelCardReconciliation.col.status')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className={FLEET_TABLE_BODY}>

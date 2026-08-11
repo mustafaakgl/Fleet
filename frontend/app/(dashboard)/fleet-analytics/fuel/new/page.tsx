@@ -92,23 +92,20 @@ export default function AddFuelEntryPage() {
     const litersNum = Number(liters);
     const totalNum = Number(totalCost);
     if (!vehicleId) {
-      setError(t('fuelHistory.form.vehicleRequired', 'Lütfen bir araç seçin.'));
+      setError(t('fuelHistory.form.vehicleRequired'));
       return;
     }
     if (!(litersNum > 0)) {
-      setError(t('fuelHistory.form.litersRequired', 'Lütfen geçerli bir litre değeri girin.'));
+      setError(t('fuelHistory.form.litersRequired'));
       return;
     }
     if (!(totalNum > 0)) {
-      setError(t('fuelHistory.form.totalRequired', 'Lütfen geçerli bir toplam tutar girin.'));
+      setError(t('fuelHistory.form.totalRequired'));
       return;
     }
     if (!selectedVehicle?.current_driver && !driverId) {
       setError(
-        t(
-          'fuelHistory.form.driverRequired',
-          'Bu aracın atanmış sürücüsü yok; lütfen bir sürücü seçin.',
-        ),
+        t('fuelHistory.form.driverRequired'),
       );
       return;
     }
@@ -127,7 +124,7 @@ export default function AddFuelEntryPage() {
       showToast({ message: t('fuelHistory.form.saveSuccess'), type: 'success' });
       router.push('/fleet-analytics/fuel');
     } catch (e) {
-      setError(getApiErrorMessage(e, t('fuelHistory.form.saveError', 'Yakıt girişi kaydedilemedi.')));
+      setError(getApiErrorMessage(e, t('fuelHistory.form.saveError')));
       setSaving(false);
     }
   };
@@ -140,11 +137,11 @@ export default function AddFuelEntryPage() {
           className="inline-flex items-center gap-1.5 text-[13px] font-medium text-blue-600 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
-          {t('fuelHistory.title', 'Yakıt Geçmişi')}
+          {t('fuelHistory.title')}
         </Link>
         <div className="mt-2 flex items-center gap-3">
           <Droplets className="h-6 w-6 text-primary" />
-          <h1 className={FLEET_PAGE_TITLE}>{t('fuelHistory.addEntry', 'Yakıt Girişi Ekle')}</h1>
+          <h1 className={FLEET_PAGE_TITLE}>{t('fuelHistory.addEntry')}</h1>
         </div>
       </div>
 
@@ -153,7 +150,7 @@ export default function AddFuelEntryPage() {
           <CardContent className="space-y-4 p-4 sm:p-6">
             <div className="space-y-1.5">
               <Label htmlFor="fuel-vehicle">
-                {t('fuelHistory.col.vehicle', 'Araç')} <span className="text-red-500">*</span>
+                {t('fuelHistory.col.vehicle')} <span className="text-red-500">*</span>
               </Label>
               <select
                 id="fuel-vehicle"
@@ -163,7 +160,7 @@ export default function AddFuelEntryPage() {
                 required
               >
                 <option value="">
-                  {t('fuelHistory.form.selectVehicle', 'Araç seçin…')}
+                  {t('fuelHistory.form.selectVehicle')}
                 </option>
                 {vehicles.map((vehicle) => (
                   <option key={vehicle.id} value={vehicle.id}>
@@ -174,7 +171,7 @@ export default function AddFuelEntryPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="fuel-driver">{t('fuelHistory.col.driver', 'Sürücü')}</Label>
+              <Label htmlFor="fuel-driver">{t('fuelHistory.col.driver')}</Label>
               <select
                 id="fuel-driver"
                 className={SELECT_CLASS}
@@ -183,10 +180,10 @@ export default function AddFuelEntryPage() {
               >
                 <option value="">
                   {selectedVehicle?.current_driver
-                    ? t('fuelHistory.form.assignedDriver', 'Atanmış sürücü: {{name}}', {
+                    ? t('fuelHistory.form.assignedDriver', {
                         name: `${selectedVehicle.current_driver.first_name} ${selectedVehicle.current_driver.last_name}`,
                       })
-                    : t('fuelHistory.form.selectDriver', 'Sürücü seçin…')}
+                    : t('fuelHistory.form.selectDriver')}
                 </option>
                 {drivers.map((driver) => (
                   <option key={driver.id} value={driver.id}>
@@ -199,7 +196,7 @@ export default function AddFuelEntryPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="fuel-date">
-                  {t('fuelHistory.form.date', 'Tarih')} <span className="text-red-500">*</span>
+                  {t('fuelHistory.form.date')} <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="fuel-date"
@@ -210,7 +207,7 @@ export default function AddFuelEntryPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="fuel-time">{t('fuelHistory.form.time', 'Saat')}</Label>
+                <Label htmlFor="fuel-time">{t('fuelHistory.form.time')}</Label>
                 <Input
                   id="fuel-time"
                   type="time"
@@ -222,7 +219,7 @@ export default function AddFuelEntryPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="fuel-odometer">
-                {t('fuelHistory.form.odometer', 'Km Sayacı (km)')}
+                {t('fuelHistory.form.odometer')}
               </Label>
               <Input
                 id="fuel-odometer"
@@ -239,7 +236,7 @@ export default function AddFuelEntryPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="fuel-liters">
-                  {t('fuelHistory.form.liters', 'Litre')} <span className="text-red-500">*</span>
+                  {t('fuelHistory.form.liters')} <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="fuel-liters"
@@ -255,7 +252,7 @@ export default function AddFuelEntryPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="fuel-price">
-                  {t('fuelHistory.form.pricePerLiter', 'Litre Fiyatı (€)')}
+                  {t('fuelHistory.form.pricePerLiter')}
                 </Label>
                 <Input
                   id="fuel-price"
@@ -270,7 +267,7 @@ export default function AddFuelEntryPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="fuel-total">
-                  {t('fuelHistory.form.total', 'Toplam (€)')} <span className="text-red-500">*</span>
+                  {t('fuelHistory.form.total')} <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="fuel-total"
@@ -296,19 +293,19 @@ export default function AddFuelEntryPage() {
                 checked={isFullTank}
                 onChange={(event) => setIsFullTank(event.target.checked)}
               />
-              {t('fuelHistory.detail.fullTank', 'Depo Dolumu')}
+              {t('fuelHistory.detail.fullTank')}
             </label>
 
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
               <Button asChild type="button" variant="outline" size="sm">
-                <Link href="/fleet-analytics/fuel">{t('common.cancel', 'İptal')}</Link>
+                <Link href="/fleet-analytics/fuel">{t('common.cancel')}</Link>
               </Button>
               <Button type="submit" size="sm" disabled={saving}>
                 {saving
-                  ? t('common.saving', 'Kaydediliyor…')
-                  : t('fuelHistory.form.save', 'Yakıt Girişini Kaydet')}
+                  ? t('common.saving')
+                  : t('fuelHistory.form.save')}
               </Button>
             </div>
           </CardContent>

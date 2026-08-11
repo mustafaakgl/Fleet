@@ -54,7 +54,7 @@ export default function FineDetailPage() {
       setNextStatus('');
     } catch (e) {
       setFine(null);
-      setError(getApiErrorMessage(e, t('fines.loadError', 'Bußgeld konnte nicht geladen werden.')));
+      setError(getApiErrorMessage(e, t('fines.loadError')));
     } finally {
       setLoading(false);
     }
@@ -78,7 +78,7 @@ export default function FineDetailPage() {
       await finesApi.assignDriver(fineId, { driver_id: assignDriverId });
       await load();
     } catch (e) {
-      setError(getApiErrorMessage(e, t('fines.assignError', 'Zuordnung fehlgeschlagen.')));
+      setError(getApiErrorMessage(e, t('fines.assignError')));
     } finally {
       setActing(false);
     }
@@ -91,7 +91,7 @@ export default function FineDetailPage() {
       await finesApi.notifyDriver(fineId);
       await load();
     } catch (e) {
-      setError(getApiErrorMessage(e, t('fines.notifyError', 'Benachrichtigung fehlgeschlagen.')));
+      setError(getApiErrorMessage(e, t('fines.notifyError')));
     } finally {
       setActing(false);
     }
@@ -110,7 +110,7 @@ export default function FineDetailPage() {
       setNextStatus('');
       await load();
     } catch (e) {
-      setError(getApiErrorMessage(e, t('fines.statusError', 'Status konnte nicht geändert werden.')));
+      setError(getApiErrorMessage(e, t('fines.statusError')));
     } finally {
       setActing(false);
     }
@@ -127,9 +127,9 @@ export default function FineDetailPage() {
   if (!fine) {
     return (
       <div className={FLEET_PAGE}>
-        <p className="text-rose-600">{error ?? t('fines.notFound', 'Bußgeld nicht gefunden.')}</p>
+        <p className="text-rose-600">{error ?? t('fines.notFound')}</p>
         <Button asChild variant="outline" className="mt-4">
-          <Link href="/fines">{t('fines.backToList', 'Zurück zur Liste')}</Link>
+          <Link href="/fines">{t('fines.backToList')}</Link>
         </Button>
       </div>
     );
@@ -162,7 +162,7 @@ export default function FineDetailPage() {
             }}
           >
             <FileText className="mr-2 h-4 w-4" />
-            {t('fines.openDocument', 'Bescheid öffnen')}
+            {t('fines.openDocument')}
           </Button>
         ) : null}
       </div>
@@ -173,61 +173,61 @@ export default function FineDetailPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{t('fines.detail.overview', 'Übersicht')}</CardTitle>
+              <CardTitle>{t('fines.detail.overview')}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
               <div>
-                <div className="text-slate-500">{t('fines.colDate', 'Datum')}</div>
+                <div className="text-slate-500">{t('fines.colDate')}</div>
                 <div className="font-medium">{formatDate(fine.violation_at)}</div>
               </div>
               <div>
-                <div className="text-slate-500">{t('fines.form.location', 'Ort')}</div>
+                <div className="text-slate-500">{t('fines.form.location')}</div>
                 <div className="font-medium">{fine.violation_location}</div>
               </div>
               <div>
-                <div className="text-slate-500">{t('fines.form.category', 'Kategorie')}</div>
+                <div className="text-slate-500">{t('fines.form.category')}</div>
                 <div className="font-medium">{t(`fines.category.${fine.violation_category}`, fine.violation_category)}</div>
               </div>
               <div>
-                <div className="text-slate-500">{t('fines.colAmount', 'Betrag')}</div>
+                <div className="text-slate-500">{t('fines.colAmount')}</div>
                 <div className="font-medium">{formatFleetCurrency(fine.amount ?? 0)}</div>
               </div>
               <div>
-                <div className="text-slate-500">{t('fines.colDriver', 'Fahrer')}</div>
+                <div className="text-slate-500">{t('fines.colDriver')}</div>
                 <div className="font-medium">{fine.driver?.name ?? '—'}</div>
               </div>
               <div>
-                <div className="text-slate-500">{t('fines.matchType', 'Zuordnung')}</div>
+                <div className="text-slate-500">{t('fines.matchType')}</div>
                 <div className="font-medium">{t(`fines.match.${fine.match_type}`, fine.match_type)}</div>
               </div>
               {fine.payment_due_date ? (
                 <div>
-                  <div className="text-slate-500">{t('fines.form.paymentDue', 'Zahlungsfrist')}</div>
+                  <div className="text-slate-500">{t('fines.form.paymentDue')}</div>
                   <div className="font-medium">
                     {formatDate(fine.payment_due_date)}
                     {fine.days_until_due != null
-                      ? ` (${t('fines.dueInDays', '{{days}} Tage', { days: fine.days_until_due })})`
+                      ? ` (${t('fines.dueInDays', { days: fine.days_until_due })})`
                       : ''}
                   </div>
                 </div>
               ) : null}
               {fine.driver_notified_at ? (
                 <div>
-                  <div className="text-slate-500">{t('fines.driverNotified', 'Fahrer benachrichtigt')}</div>
+                  <div className="text-slate-500">{t('fines.driverNotified')}</div>
                   <div className="font-medium">{formatDate(fine.driver_notified_at)}</div>
                 </div>
               ) : null}
               {fine.driver_acknowledged_at ? (
                 <div>
-                  <div className="text-slate-500">{t('fines.driverAck', 'Fahrer bestätigt')}</div>
+                  <div className="text-slate-500">{t('fines.driverAck')}</div>
                   <div className="font-medium text-emerald-700">{formatDate(fine.driver_acknowledged_at)}</div>
                 </div>
               ) : fine.pending_ack ? (
-                <div className="text-amber-700">{t('fines.pendingAck', 'Bestätigung ausstehend')}</div>
+                <div className="text-amber-700">{t('fines.pendingAck')}</div>
               ) : null}
               {fine.notes ? (
                 <div className="sm:col-span-2">
-                  <div className="text-slate-500">{t('fines.form.notes', 'Notizen')}</div>
+                  <div className="text-slate-500">{t('fines.form.notes')}</div>
                   <div>{fine.notes}</div>
                 </div>
               ) : null}
@@ -236,7 +236,7 @@ export default function FineDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>{t('fines.detail.history', 'Statusverlauf')}</CardTitle>
+              <CardTitle>{t('fines.detail.history')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {fine.status_logs.map((log) => (
@@ -255,17 +255,17 @@ export default function FineDetailPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>{t('fines.actions', 'Aktionen')}</CardTitle>
+              <CardTitle>{t('fines.actions')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>{t('fines.assignDriver', 'Fahrer zuordnen')}</Label>
+                <Label>{t('fines.assignDriver')}</Label>
                 <select
                   value={assignDriverId}
                   onChange={(e) => setAssignDriverId(e.target.value)}
                   className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
                 >
-                  <option value="">{t('fines.form.selectDriver', 'Fahrer wählen')}</option>
+                  <option value="">{t('fines.form.selectDriver')}</option>
                   {drivers.map((driver) => (
                     <option key={driver.id} value={driver.id}>
                       {driver.first_name} {driver.last_name}
@@ -281,7 +281,7 @@ export default function FineDetailPage() {
                     void handleAssign();
                   }}
                 >
-                  {t('fines.assign', 'Zuordnen')}
+                  {t('fines.assign')}
                 </Button>
               </div>
 
@@ -294,18 +294,18 @@ export default function FineDetailPage() {
                 }}
               >
                 <Bell className="mr-2 h-4 w-4" />
-                {t('fines.notifyDriver', 'Fahrer benachrichtigen')}
+                {t('fines.notifyDriver')}
               </Button>
 
               {allowedStatuses.length > 0 ? (
                 <div className="space-y-2 border-t border-slate-100 pt-4">
-                  <Label>{t('fines.updateStatus', 'Status ändern')}</Label>
+                  <Label>{t('fines.updateStatus')}</Label>
                   <select
                     value={nextStatus}
                     onChange={(e) => setNextStatus(e.target.value)}
                     className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
                   >
-                    <option value="">{t('fines.selectStatus', 'Status wählen')}</option>
+                    <option value="">{t('fines.selectStatus')}</option>
                     {allowedStatuses.map((status) => (
                       <option key={status} value={status}>
                         {statusLabel(status)}
@@ -313,7 +313,7 @@ export default function FineDetailPage() {
                     ))}
                   </select>
                   <Input
-                    placeholder={t('fines.statusNote', 'Notiz (optional)')}
+                    placeholder={t('fines.statusNote')}
                     value={statusNote}
                     onChange={(e) => setStatusNote(e.target.value)}
                   />
@@ -326,7 +326,7 @@ export default function FineDetailPage() {
                       void handleStatusUpdate();
                     }}
                   >
-                    {t('fines.applyStatus', 'Status speichern')}
+                    {t('fines.applyStatus')}
                   </Button>
                 </div>
               ) : null}
