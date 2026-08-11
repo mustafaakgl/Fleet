@@ -41,7 +41,27 @@ function parseNodeTestSummary(output) {
   };
 }
 
+async function runI18nCheck() {
+  const child = spawn(process.execPath, [path.join(repoRoot, 'scripts', 'check-i18n-keys.mjs')], {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: 'inherit',
+  });
+
+  const exitCode = await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', resolve);
+  });
+
+  if (exitCode !== 0) {
+    console.error('[run-tests] i18n key check failed');
+    process.exit(typeof exitCode === 'number' ? exitCode : 1);
+  }
+}
+
 async function main() {
+  await runI18nCheck();
+
   const specFiles = await collectSpecFiles(backendSrcRoot);
   if (specFiles.length === 0) {
     console.error('[run-tests] no backend spec files found under backend/src');

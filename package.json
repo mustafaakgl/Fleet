@@ -12,6 +12,7 @@
     "dev:backend": "node scripts/dev-backend.mjs",
     "dev:mobile": "npm --prefix mobile-driver run start",
     "test": "node scripts/run-tests.mjs",
+    "check:i18n": "node scripts/check-i18n-keys.mjs",
     "build": "npm --prefix frontend run build",
     "start": "node scripts/dev-next.mjs start",
     "lint": "npm --prefix frontend run lint",
