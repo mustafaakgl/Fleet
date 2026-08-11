@@ -718,7 +718,9 @@
       "depot_start": "Başlangıç",
       "pickup": "Alış",
       "delivery": "Teslim",
-      "depot_end": "Dönüş"
+      "depot_end": "Dönüş",
+      "waypoint": "Durak",
+      "service": "Servis durağı"
     },
     "status": {
       "draft": "Taslak",
@@ -732,6 +734,23 @@
     "truckWarning": {
       "unreachable": "Kamyonla erişilemiyor – lütfen sevkiyatla görüşün.",
       "unverified": "Kamyon erişimi doğrulanmadı."
-    }
+    },
+    "eta": "Varış ~{{time}}",
+    "etaUnknown": "Varış saati bilinmiyor",
+    "openFullRoute": "Tüm rotayı Google Maps’te aç",
+    "tooManyStopsForLink": "Tek bağlantı için çok fazla durak — durak durak ilerleyin.",
+    "mapUnavailable": "Harita kullanılamıyor",
+    "navigationApp": "Navigasyon uygulaması",
+    "fullRouteGoogleOnly": "Tüm rota Google Maps’te açılır.",
+    "navApp": {
+      "default": "Varsayılan",
+      "google": "Google Maps",
+      "apple": "Apple Haritalar",
+      "waze": "Waze"
+    },
+    "markArrived": "Vardım",
+    "markCompleted": "Tamamladım",
+    "undo": "Geri al",
+    "progress": "{{total}} durağın {{done}} tanesi tamam"
   }
 }

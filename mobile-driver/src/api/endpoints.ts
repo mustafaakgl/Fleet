@@ -113,6 +113,36 @@ export const driverApi = {
     });
     return data;
   },
+  /**
+   * Durak isaretleme. `client_event_id` tekrar korumasi: ayni dokunus tekrar
+   * gonderilirse sunucu ikinci kez uygulamiyor. `occurred_at` dokunus ani —
+   * sunucu saati degil, cunku istek gecikmeli gidebilir.
+   */
+  async markTourStop(
+    stopId: string,
+    payload: {
+      status: 'arrived' | 'completed' | 'skipped';
+      client_event_id: string;
+      occurred_at: string;
+      latitude?: number;
+      longitude?: number;
+    },
+  ) {
+    const { data } = await apiClient.post<DriverTourResponse>(
+      `/driver/tours/stops/${stopId}/mark`,
+      payload,
+    );
+    return data;
+  },
+
+  /** Yanlis isaretlemeyi geri alir; ileri gecisler mark ile yapilir. */
+  async resetTourStop(stopId: string) {
+    const { data } = await apiClient.post<DriverTourResponse>(
+      `/driver/tours/stops/${stopId}/reset`,
+    );
+    return data;
+  },
+
   async listMorningCheckins(date?: string) {
     const { data } = await apiClient.get<DriverMorningCheckin[]>('/driver/morning-checkins', { params: { date } });
     return data;

@@ -122,6 +122,11 @@ export class TourDriverController {
         serviceMinutes: stop.serviceMinutes,
         plannedArrivalAt: stop.plannedArrivalAt?.toISOString() ?? null,
         legDistanceKm: stop.legDistanceKm === null ? null : Number(stop.legDistanceKm),
+        legDurationMin: stop.legDurationMin,
+        /// Bacagin cizim govdesi. Surucu haritasi rotayi bununla ciziyor:
+        /// duraklari duz cizgiyle baglamak 40 km'lik bir sapmayi gizler ve
+        /// surucu gercekte nereden gececegini goremez.
+        legShape: stop.legShape,
         status: stop.status,
         arrivedAt: stop.arrivedAt?.toISOString() ?? null,
         completedAt: stop.completedAt?.toISOString() ?? null,

@@ -581,7 +581,9 @@
       "depot_start": "Start",
       "pickup": "Odbiór",
       "delivery": "Dostawa",
-      "depot_end": "Powrót"
+      "depot_end": "Powrót",
+      "waypoint": "Przystanek",
+      "service": "Przystanek serwisowy"
     },
     "status": {
       "draft": "Szkic",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Niedostępne dla ciężarówki – skontaktuj się z dyspozytorem.",
       "unverified": "Dostęp dla ciężarówki niezweryfikowany."
-    }
+    },
+    "eta": "Przyjazd ok. {{time}}",
+    "etaUnknown": "Godzina przyjazdu nieznana",
+    "openFullRoute": "Cała trasa w Google Maps",
+    "tooManyStopsForLink": "Za dużo przystanków na jeden link — nawiguj po kolei.",
+    "mapUnavailable": "Mapa niedostępna",
+    "navigationApp": "Aplikacja nawigacji",
+    "fullRouteGoogleOnly": "Cała trasa otworzy się w Google Maps.",
+    "navApp": {
+      "default": "Domyślna",
+      "google": "Google Maps",
+      "apple": "Apple Maps",
+      "waze": "Waze"
+    },
+    "markArrived": "Dojechałem",
+    "markCompleted": "Gotowe",
+    "undo": "Cofnij",
+    "progress": "{{done}} z {{total}} przystanków gotowe"
   }
 }

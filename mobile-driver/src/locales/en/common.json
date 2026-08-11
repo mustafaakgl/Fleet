@@ -718,7 +718,9 @@
       "depot_start": "Start",
       "pickup": "Pickup",
       "delivery": "Delivery",
-      "depot_end": "Return"
+      "depot_end": "Return",
+      "waypoint": "Stop",
+      "service": "Service stop"
     },
     "status": {
       "draft": "Draft",
@@ -732,6 +734,23 @@
     "truckWarning": {
       "unreachable": "Not reachable by truck – please contact dispatch.",
       "unverified": "Truck access not verified."
-    }
+    },
+    "eta": "Arrival approx. {{time}}",
+    "etaUnknown": "Arrival time unknown",
+    "openFullRoute": "Whole route in Google Maps",
+    "tooManyStopsForLink": "Too many stops for one link — navigate stop by stop.",
+    "mapUnavailable": "Map unavailable",
+    "navigationApp": "Navigation app",
+    "fullRouteGoogleOnly": "The whole route opens in Google Maps.",
+    "navApp": {
+      "default": "Default",
+      "google": "Google Maps",
+      "apple": "Apple Maps",
+      "waze": "Waze"
+    },
+    "markArrived": "Arrived",
+    "markCompleted": "Done",
+    "undo": "Undo",
+    "progress": "{{done}} of {{total}} stops done"
   }
 }

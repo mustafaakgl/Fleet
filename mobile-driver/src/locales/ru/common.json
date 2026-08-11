@@ -581,7 +581,9 @@
       "depot_start": "Старт",
       "pickup": "Погрузка",
       "delivery": "Доставка",
-      "depot_end": "Возврат"
+      "depot_end": "Возврат",
+      "waypoint": "Остановка",
+      "service": "Сервисная остановка"
     },
     "status": {
       "draft": "Черновик",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Недоступно для грузовика – свяжитесь с диспетчером.",
       "unverified": "Доступ для грузовика не проверен."
-    }
+    },
+    "eta": "Прибытие ок. {{time}}",
+    "etaUnknown": "Время прибытия неизвестно",
+    "openFullRoute": "Весь маршрут в Google Maps",
+    "tooManyStopsForLink": "Слишком много остановок для одной ссылки — навигируйте по одной.",
+    "mapUnavailable": "Карта недоступна",
+    "navigationApp": "Приложение навигации",
+    "fullRouteGoogleOnly": "Весь маршрут откроется в Google Maps.",
+    "navApp": {
+      "default": "По умолчанию",
+      "google": "Google Maps",
+      "apple": "Apple Maps",
+      "waze": "Waze"
+    },
+    "markArrived": "Прибыл",
+    "markCompleted": "Готово",
+    "undo": "Отменить",
+    "progress": "{{done}} из {{total}} остановок готово"
   }
 }

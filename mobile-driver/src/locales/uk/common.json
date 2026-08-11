@@ -581,7 +581,9 @@
       "depot_start": "Старт",
       "pickup": "Завантаження",
       "delivery": "Доставка",
-      "depot_end": "Повернення"
+      "depot_end": "Повернення",
+      "waypoint": "Зупинка",
+      "service": "Сервісна зупинка"
     },
     "status": {
       "draft": "Чернетка",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Недоступно для вантажівки – зверніться до диспетчера.",
       "unverified": "Доступ для вантажівки не перевірено."
-    }
+    },
+    "eta": "Прибуття бл. {{time}}",
+    "etaUnknown": "Час прибуття невідомий",
+    "openFullRoute": "Увесь маршрут у Google Maps",
+    "tooManyStopsForLink": "Забагато зупинок для одного посилання — навігуйте по черзі.",
+    "mapUnavailable": "Карта недоступна",
+    "navigationApp": "Застосунок навігації",
+    "fullRouteGoogleOnly": "Увесь маршрут відкриється в Google Maps.",
+    "navApp": {
+      "default": "За замовчуванням",
+      "google": "Google Maps",
+      "apple": "Apple Maps",
+      "waze": "Waze"
+    },
+    "markArrived": "Прибув",
+    "markCompleted": "Готово",
+    "undo": "Скасувати",
+    "progress": "{{done}} із {{total}} зупинок готово"
   }
 }

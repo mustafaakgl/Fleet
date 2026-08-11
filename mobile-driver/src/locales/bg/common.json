@@ -581,7 +581,9 @@
       "depot_start": "Начало",
       "pickup": "Товарене",
       "delivery": "Доставка",
-      "depot_end": "Връщане"
+      "depot_end": "Връщане",
+      "waypoint": "Спирка",
+      "service": "Сервизна спирка"
     },
     "status": {
       "draft": "Чернова",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Недостъпно за камион – свържете се с диспечера.",
       "unverified": "Достъпът за камион не е проверен."
-    }
+    },
+    "eta": "Пристигане ок. {{time}}",
+    "etaUnknown": "Часът на пристигане е неизвестен",
+    "openFullRoute": "Целият маршрут в Google Maps",
+    "tooManyStopsForLink": "Твърде много спирки за един линк — навигирайте спирка по спирка.",
+    "mapUnavailable": "Картата не е налична",
+    "navigationApp": "Навигационно приложение",
+    "fullRouteGoogleOnly": "Целият маршрут се отваря в Google Maps.",
+    "navApp": {
+      "default": "По подразбиране",
+      "google": "Google Maps",
+      "apple": "Apple Maps",
+      "waze": "Waze"
+    },
+    "markArrived": "Пристигнах",
+    "markCompleted": "Готово",
+    "undo": "Отмени",
+    "progress": "{{done}} от {{total}} спирки готови"
   }
 }

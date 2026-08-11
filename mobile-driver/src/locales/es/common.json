@@ -581,7 +581,9 @@
       "depot_start": "Inicio",
       "pickup": "Recogida",
       "delivery": "Entrega",
-      "depot_end": "Regreso"
+      "depot_end": "Regreso",
+      "waypoint": "Parada",
+      "service": "Parada de servicio"
     },
     "status": {
       "draft": "Borrador",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "No accesible para camión – contacte con tráfico.",
       "unverified": "Acceso de camión no verificado."
-    }
+    },
+    "eta": "Llegada aprox. {{time}}",
+    "etaUnknown": "Hora de llegada desconocida",
+    "openFullRoute": "Ruta completa en Google Maps",
+    "tooManyStopsForLink": "Demasiadas paradas para un enlace — navega parada por parada.",
+    "mapUnavailable": "Mapa no disponible",
+    "navigationApp": "App de navegación",
+    "fullRouteGoogleOnly": "La ruta completa se abre en Google Maps.",
+    "navApp": {
+      "default": "Predeterminada",
+      "google": "Google Maps",
+      "apple": "Apple Mapas",
+      "waze": "Waze"
+    },
+    "markArrived": "He llegado",
+    "markCompleted": "Hecho",
+    "undo": "Deshacer",
+    "progress": "{{done}} de {{total}} paradas hechas"
   }
 }

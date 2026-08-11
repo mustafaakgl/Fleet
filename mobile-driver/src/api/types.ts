@@ -535,7 +535,7 @@ export type DriverDefect = {
 export type DriverTourStop = {
   id: string;
   sequence: number;
-  kind: 'depot_start' | 'pickup' | 'delivery' | 'depot_end';
+  kind: 'depot_start' | 'pickup' | 'delivery' | 'depot_end' | 'waypoint' | 'service';
   assignmentId: string | null;
   address: string;
   street: string | null;
@@ -550,7 +550,16 @@ export type DriverTourStop = {
   serviceMinutes: number;
   plannedArrivalAt: string | null;
   legDistanceKm: number | null;
+  legDurationMin: number | null;
+  /** Onceki duraktan bu duraga olan bacagin polyline'i (precision 6) */
+  legShape: string | null;
+  /** Yurutme kaydi; plan alanlarindan ayri tutulur */
+  status: DriverTourStopStatus;
+  arrivedAt: string | null;
+  completedAt: string | null;
 };
+
+export type DriverTourStopStatus = 'pending' | 'arrived' | 'completed' | 'skipped';
 
 export type DriverTour = {
   id: string;

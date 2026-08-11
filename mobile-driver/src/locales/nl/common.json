@@ -581,7 +581,9 @@
       "depot_start": "Start",
       "pickup": "Ophalen",
       "delivery": "Levering",
-      "depot_end": "Terug"
+      "depot_end": "Terug",
+      "waypoint": "Stop",
+      "service": "Servicestop"
     },
     "status": {
       "draft": "Concept",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Niet bereikbaar voor vrachtwagen – neem contact op met planning.",
       "unverified": "Vrachtwagentoegang niet geverifieerd."
-    }
+    },
+    "eta": "Aankomst ca. {{time}}",
+    "etaUnknown": "Aankomsttijd onbekend",
+    "openFullRoute": "Hele route in Google Maps",
+    "tooManyStopsForLink": "Te veel stops voor één link — navigeer stop voor stop.",
+    "mapUnavailable": "Kaart niet beschikbaar",
+    "navigationApp": "Navigatie-app",
+    "fullRouteGoogleOnly": "De hele route opent in Google Maps.",
+    "navApp": {
+      "default": "Standaard",
+      "google": "Google Maps",
+      "apple": "Apple Kaarten",
+      "waze": "Waze"
+    },
+    "markArrived": "Aangekomen",
+    "markCompleted": "Klaar",
+    "undo": "Ongedaan maken",
+    "progress": "{{done}} van {{total}} stops klaar"
   }
 }

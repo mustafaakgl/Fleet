@@ -581,7 +581,9 @@
       "depot_start": "البداية",
       "pickup": "التحميل",
       "delivery": "التسليم",
-      "depot_end": "العودة"
+      "depot_end": "العودة",
+      "waypoint": "محطة",
+      "service": "محطة صيانة"
     },
     "status": {
       "draft": "مسودة",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "غير قابل للوصول بالشاحنة – يرجى الاتصال بالإرسال.",
       "unverified": "لم يتم التحقق من وصول الشاحنة."
-    }
+    },
+    "eta": "الوصول حوالي {{time}}",
+    "etaUnknown": "وقت الوصول غير معروف",
+    "openFullRoute": "المسار كامل في خرائط جوجل",
+    "tooManyStopsForLink": "عدد المحطات كبير على رابط واحد — تنقّل محطة بمحطة.",
+    "mapUnavailable": "الخريطة غير متاحة",
+    "navigationApp": "تطبيق الملاحة",
+    "fullRouteGoogleOnly": "يفتح المسار كاملاً في خرائط جوجل.",
+    "navApp": {
+      "default": "الافتراضي",
+      "google": "خرائط جوجل",
+      "apple": "خرائط آبل",
+      "waze": "Waze"
+    },
+    "markArrived": "وصلت",
+    "markCompleted": "تم",
+    "undo": "تراجع",
+    "progress": "{{done}} من {{total}} محطات مكتملة"
   }
 }

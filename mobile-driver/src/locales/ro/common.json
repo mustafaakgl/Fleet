@@ -581,7 +581,9 @@
       "depot_start": "Start",
       "pickup": "Preluare",
       "delivery": "Livrare",
-      "depot_end": "Retur"
+      "depot_end": "Retur",
+      "waypoint": "Oprire",
+      "service": "Oprire de service"
     },
     "status": {
       "draft": "Ciornă",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Inaccesibil pentru camion – contactați dispecerul.",
       "unverified": "Accesul camionului nu a fost verificat."
-    }
+    },
+    "eta": "Sosire aprox. {{time}}",
+    "etaUnknown": "Ora sosirii necunoscută",
+    "openFullRoute": "Toată ruta în Google Maps",
+    "tooManyStopsForLink": "Prea multe opriri pentru un link — navighează pe rând.",
+    "mapUnavailable": "Harta indisponibilă",
+    "navigationApp": "Aplicație de navigație",
+    "fullRouteGoogleOnly": "Ruta completă se deschide în Google Maps.",
+    "navApp": {
+      "default": "Implicit",
+      "google": "Google Maps",
+      "apple": "Apple Maps",
+      "waze": "Waze"
+    },
+    "markArrived": "Am ajuns",
+    "markCompleted": "Gata",
+    "undo": "Anulează",
+    "progress": "{{done}} din {{total}} opriri gata"
   }
 }

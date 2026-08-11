@@ -581,7 +581,9 @@
       "depot_start": "Départ",
       "pickup": "Enlèvement",
       "delivery": "Livraison",
-      "depot_end": "Retour"
+      "depot_end": "Retour",
+      "waypoint": "Arrêt",
+      "service": "Arrêt de service"
     },
     "status": {
       "draft": "Brouillon",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Inaccessible en camion – contactez la régulation.",
       "unverified": "Accès camion non vérifié."
-    }
+    },
+    "eta": "Arrivée vers {{time}}",
+    "etaUnknown": "Heure d’arrivée inconnue",
+    "openFullRoute": "Itinéraire complet dans Google Maps",
+    "tooManyStopsForLink": "Trop d’arrêts pour un seul lien — naviguez arrêt par arrêt.",
+    "mapUnavailable": "Carte indisponible",
+    "navigationApp": "Application de navigation",
+    "fullRouteGoogleOnly": "L'itinéraire complet s'ouvre dans Google Maps.",
+    "navApp": {
+      "default": "Par défaut",
+      "google": "Google Maps",
+      "apple": "Plans (Apple)",
+      "waze": "Waze"
+    },
+    "markArrived": "Arrivé",
+    "markCompleted": "Terminé",
+    "undo": "Annuler",
+    "progress": "{{done}} sur {{total}} arrêts terminés"
   }
 }

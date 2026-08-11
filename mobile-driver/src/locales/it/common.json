@@ -581,7 +581,9 @@
       "depot_start": "Partenza",
       "pickup": "Ritiro",
       "delivery": "Consegna",
-      "depot_end": "Rientro"
+      "depot_end": "Rientro",
+      "waypoint": "Fermata",
+      "service": "Fermata di servizio"
     },
     "status": {
       "draft": "Bozza",
@@ -595,6 +597,23 @@
     "truckWarning": {
       "unreachable": "Non raggiungibile con camion – contattare la logistica.",
       "unverified": "Accesso camion non verificato."
-    }
+    },
+    "eta": "Arrivo circa {{time}}",
+    "etaUnknown": "Orario di arrivo sconosciuto",
+    "openFullRoute": "Intero percorso in Google Maps",
+    "tooManyStopsForLink": "Troppe fermate per un solo link — naviga fermata per fermata.",
+    "mapUnavailable": "Mappa non disponibile",
+    "navigationApp": "App di navigazione",
+    "fullRouteGoogleOnly": "L'intero percorso si apre in Google Maps.",
+    "navApp": {
+      "default": "Predefinita",
+      "google": "Google Maps",
+      "apple": "Apple Mappe",
+      "waze": "Waze"
+    },
+    "markArrived": "Arrivato",
+    "markCompleted": "Fatto",
+    "undo": "Annulla",
+    "progress": "{{done}} di {{total}} fermate fatte"
   }
 }
