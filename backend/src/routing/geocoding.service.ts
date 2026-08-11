@@ -3,6 +3,7 @@ import { DEFAULT_GEOCODING_BBOX, readGeocodingBbox } from './core/geocode-bbox.u
 import { isGeocodeFallbackConsistent } from './core/geocode-consistency.util';
 import { haversineMeters } from './core/geo-distance.util';
 import { queryHasHouseNumber } from './core/house-number.util';
+import { classifySuggestionKind, type SuggestionKind } from './core/suggestion-kind.util';
 import type { RoutingResult } from './core/routing.types';
 
 /** Photon (Komoot) GeoJSON yaniti — kullandigimiz alanlar. */
@@ -39,7 +40,7 @@ export interface GeocodeHit {
   confidence: number;
 }
 
-export type SuggestionKind = 'city' | 'street' | 'address' | 'poi';
+export type { SuggestionKind };
 
 export interface AddressSuggestion {
   /** Listede React anahtari ve secim kimligi olarak kullanilir */
@@ -62,18 +63,6 @@ export interface AddressSuggestion {
   source?: 'history' | 'geocoder';
 }
 
-function classifyKind(osmKey?: string, osmValue?: string): SuggestionKind {
-  if (osmKey === 'place' && ['city', 'town', 'village', 'suburb'].includes(osmValue ?? '')) {
-    return 'city';
-  }
-  if (osmKey === 'highway') {
-    return 'street';
-  }
-  if (osmKey === 'building' || osmKey === 'address') {
-    return 'address';
-  }
-  return 'poi';
-}
 
 /** Tek satirlik oneri etiketi. Gecmis kayitlari da ayni bicimi kullanmali. */
 export function buildLabel(parts: {
@@ -330,7 +319,7 @@ export class GeocodingService {
         // osm_tag Photon'da KATI filtre degil, yumusak tercih: `place` istenince
         // de POI donebiliyor ("Duisb" -> Trier'deki "Duisburger Hof"). Istenen
         // turle eslesmeyenler burada elenir.
-        const kind = classifyKind(p.osm_key, p.osm_value);
+        const kind = classifySuggestionKind(p.osm_key, p.osm_value);
         const kindMatches =
           params.kind === 'city' ? kind === 'city' : kind === 'street' || kind === 'address';
         if (!kindMatches) {
