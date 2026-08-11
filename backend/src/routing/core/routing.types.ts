@@ -53,14 +53,33 @@ export type RoutingErrorCode =
   /** Girdi gecersiz (bos adres, hatali koordinat) */
   | 'invalid_input';
 
+/**
+ * Iki ardisik durak arasindaki tek bacak.
+ *
+ * Cok duraklu turda toplam yetmiyor: her duragin varis saati bir onceki
+ * bacagin suresinden cikiyor ve harita rotayi bacak bacak ciziyor. Valhalla
+ * bu dokumu zaten donduruyordu, istemci atiyordu.
+ */
+export interface RouteLeg {
+  distanceKm: number;
+  durationMinutes: number;
+  /** Valhalla encoded polyline (precision 6) */
+  shape: string | null;
+}
+
 export interface RouteSummary {
   distanceKm: number;
   durationMinutes: number;
   hasToll: boolean;
   hasFerry: boolean;
   hasHighway: boolean;
-  /** Valhalla encoded polyline (precision 6) — harita ciziminde kullanilir */
+  /**
+   * Ilk bacagin govdesi. Iki noktali rotada tum rota demektir; cok duraklu
+   * rotada YALNIZCA ilk bacaktir — bu durumda `legs` kullanilmali.
+   */
   shape: string | null;
+  /** Ziyaret sirasina gore bacaklar; n durak icin n-1 eleman. */
+  legs: RouteLeg[];
 }
 
 export interface MatrixCell {

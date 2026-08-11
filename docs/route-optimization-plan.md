@@ -1,7 +1,9 @@
 # Rota Optimizasyonu — Fizibilite Raporu ve Uygulama Planı
 
-**Tarih:** 2026-07-31
-**Durum:** Faz 1 başladı (adım 1 tamamlandı)
+**Tarih:** 2026-07-31 (durum güncellemesi: 2026-08-11)
+**Durum:** Faz 1 adım 1-4 tamam (adım 5 sapma raporu bekliyor) · **Faz 2 kısmen**: çok duraklı
+tur MVP'si backend'de çalışıyor — serbest duraklardan tur kurma, bacak dökümü ve ETA. Bekleyen:
+OR-Tools çözücü, BullMQ job'a taşıma, frontend.
 **Amaç:** Lojistik müşterilerinin girdiği adreslere göre rota optimizasyonu; hedef, fazladan
 yakıt harcamasını ölçmek ve azaltmak.
 
@@ -206,8 +208,16 @@ Geocoder olarak **Photon** (Komoot, Almanya extract ~3 GB) önerilir; Nominatim 
 public Nominatim prod'da kullanılamaz.
 
 ### Faz 2 — Tur + optimizer
-- `Tour` / `TourStop` modelleri (sıra, zaman penceresi, servis süresi, ağırlık/hacim)
-- OR-Tools mikroservisi, BullMQ job olarak
+- ✅ `Tour` / `TourStop` modelleri (sıra, zaman penceresi, servis süresi, ağırlık/hacim)
+- ✅ **Serbest duraklu tur** (`POST /routing/tours/from-stops`): başlangıç noktası serbest,
+  aradaki duraklar adres ya da kayıtlı `Location`. Koordinatı olmayan veya kamyona kapalı durak
+  tur kurulurken reddedilir — optimizasyona bırakılırsa Valhalla tüm turu opak bir 400 ile
+  çökertiyor ve suçlu durak anlaşılmıyor.
+- ✅ **Bacak dökümü ve ETA**: Valhalla'nın leg mesafe/süre/shape değerleri optimizasyondan sonra
+  durak başına yazılıyor (`legDistanceKm`, `legDurationMin`, `legShape`, `plannedArrivalAt`,
+  `plannedDepartureAt`, tur düzeyinde `plannedEndAt`). Alanlar şemada duruyordu ama hiçbir yer
+  yazmıyordu; sürücü ucu boş dönüyordu.
+- ⬜ OR-Tools mikroservisi, BullMQ job olarak
 - Kısıtlar: kapasite, zaman penceresi, **takografdan kalan sürüş süresi**, araç kategorisi
 - Einsatzplan'da "Tour optimieren" + öncesi/sonrası karşılaştırma (km, süre, yakıt, toll)
 

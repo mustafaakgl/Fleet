@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { type Tour, TourStatus, TourStopKind } from '@prisma/client';
+import { type Location, type Tour, TourStatus, TourStopKind, TruckAccessStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   applyOptimizedOrder,
@@ -9,7 +9,9 @@ import {
   violatesPickupBeforeDelivery,
   type SequenceableStop,
 } from './core/tour-sequence.util';
-import { DEFAULT_TRUCK_PROFILE, type GeoPoint } from './core/routing.types';
+import { computeTourSchedule, type EtaStopInput } from './core/tour-eta.util';
+import { DEFAULT_TRUCK_PROFILE, type GeoPoint, type RouteLeg } from './core/routing.types';
+import { RoutingService } from './routing.service';
 import { ValhallaClient } from './valhalla.client';
 
 export interface CreateTourFromAssignmentsParams {
@@ -19,6 +21,36 @@ export interface CreateTourFromAssignmentsParams {
   vehicleId?: string | null;
   driverId?: string | null;
   depotLocationId?: string | null;
+  createdById: string;
+}
+
+/** Serbest tur kurulumunda tek bir durak girdisi. */
+export interface TourStopInput {
+  /** Mevcut bir Location; tenant kapsamli istemciyle DOGRULANIR */
+  locationId?: string | null;
+  /** Ya da ham adres metni — Location'a cozumlenir, ayni adres tekrar geocode edilmez */
+  address?: string | null;
+  label?: string | null;
+  serviceMinutes?: number | null;
+  windowStart?: string | null;
+  windowEnd?: string | null;
+}
+
+export interface CreateTourFromStopsParams {
+  workDate: Date;
+  /** ETA'nin dayanagi; verilmezse bacak sureleri hesaplanir, saat uretilmez */
+  plannedStartAt?: Date | null;
+  name?: string | null;
+  vehicleId?: string | null;
+  driverId?: string | null;
+  /** Turun basladigi nokta. Serbest: depo olmak zorunda degil. */
+  start: TourStopInput;
+  /** Baslangica geri donulsun mu; `end` verilmisse yok sayilir */
+  returnToStart?: boolean;
+  /** Baslangictan farkli bir bitis noktasi */
+  end?: TourStopInput | null;
+  /** Aradaki duraklar; sira kullanicinin girdigi siradir, optimizasyon ayri adim */
+  stops: TourStopInput[];
   createdById: string;
 }
 
@@ -52,7 +84,169 @@ export class TourService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly valhalla: ValhallaClient,
+    private readonly routing: RoutingService,
   ) {}
+
+  /**
+   * Bir durak girdisini Location'a cevirir.
+   *
+   * `locationId` verildiyse TENANT KAPSAMLI istemciyle dogrulanir. Dogrulama
+   * sart: kapsamsiz yazsaydik baska bir kiracinin Location'ina isaret eden
+   * TourStop uretmek mumkun olurdu ve bu sessizce basarili olurdu.
+   */
+  private async resolveStopLocation(input: TourStopInput, position: string): Promise<Location> {
+    if (input.locationId) {
+      const existing = await this.prisma.location.findFirst({ where: { id: input.locationId } });
+      if (!existing) {
+        throw new NotFoundException({
+          code: 'location_not_found',
+          position,
+          locationId: input.locationId,
+        });
+      }
+      return existing;
+    }
+
+    const address = input.address?.trim();
+    if (!address) {
+      throw new BadRequestException({ code: 'stop_without_location', position });
+    }
+
+    const resolved = await this.routing.resolveLocation({
+      rawAddress: address,
+      label: input.label ?? null,
+    });
+    if (!resolved) {
+      throw new BadRequestException({ code: 'address_not_resolvable', position, address });
+    }
+    return resolved;
+  }
+
+  /**
+   * Serbest duraklardan tur kurar — gorev gerekmez.
+   *
+   * Adres cozumleme TRANSACTION DISINDA yapilir: geocoding ag cagrisi ve
+   * kamyon erisim probu iceriyor, transaction icinde saniyelerce kilit tutar
+   * (bkz. docs/route-optimization-plan.md, Faz 1 adim 4).
+   *
+   * Koordinati olmayan veya kamyona kapali durak BURADA reddedilir,
+   * optimizasyonda degil: Valhalla tek bir kapali durak yuzunden tum turu
+   * opak bir 400 ile cokertiyor ve hangi duragin suclu oldugu anlasilmiyor.
+   */
+  async createFromStops(params: CreateTourFromStopsParams): Promise<Tour> {
+    if (params.stops.length === 0) {
+      throw new BadRequestException({ code: 'no_stops' });
+    }
+
+    const startLocation = await this.resolveStopLocation(params.start, 'start');
+    const middleLocations: Location[] = [];
+    for (const [index, stop] of params.stops.entries()) {
+      middleLocations.push(await this.resolveStopLocation(stop, `stop_${index}`));
+    }
+
+    let endLocation: Location | null = null;
+    if (params.end) {
+      endLocation = await this.resolveStopLocation(params.end, 'end');
+    } else if (params.returnToStart) {
+      endLocation = startLocation;
+    }
+
+    const involved = [startLocation, ...middleLocations, ...(endLocation ? [endLocation] : [])];
+
+    const withoutCoordinates = involved.filter(
+      (location) => location.latitude === null || location.longitude === null,
+    );
+    if (withoutCoordinates.length > 0) {
+      throw new BadRequestException({
+        code: 'stops_without_coordinates',
+        addresses: [...new Set(withoutCoordinates.map((location) => location.rawAddress))],
+      });
+    }
+
+    const unreachable = involved.filter(
+      (location) => location.truckAccess === TruckAccessStatus.unreachable,
+    );
+    if (unreachable.length > 0) {
+      throw new BadRequestException({
+        code: 'stops_not_reachable',
+        addresses: [...new Set(unreachable.map((location) => location.rawAddress))],
+      });
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const tour = await tx.tour.create({
+        data: {
+          name: params.name ?? null,
+          workDate: params.workDate,
+          plannedStartAt: params.plannedStartAt ?? null,
+          status: TourStatus.draft,
+          vehicleId: params.vehicleId ?? null,
+          driverId: params.driverId ?? null,
+          // Baslangic noktasi depo olmak zorunda degil, ama turun sabit ucu
+          // odur; rapor ve harita bu alani kullaniyor.
+          depotLocationId: startLocation.id,
+          createdById: params.createdById,
+        },
+      });
+
+      const rows: Array<{
+        sequence: number;
+        kind: TourStopKind;
+        locationId: string;
+        serviceMinutes: number;
+        windowStart: string | null;
+        windowEnd: string | null;
+      }> = [];
+
+      rows.push({
+        sequence: 1,
+        kind: TourStopKind.depot_start,
+        locationId: startLocation.id,
+        serviceMinutes: Math.max(0, params.start.serviceMinutes ?? 0),
+        windowStart: params.start.windowStart ?? null,
+        windowEnd: params.start.windowEnd ?? null,
+      });
+
+      middleLocations.forEach((location, index) => {
+        const input = params.stops[index];
+        rows.push({
+          sequence: rows.length + 1,
+          kind: TourStopKind.waypoint,
+          locationId: location.id,
+          serviceMinutes: Math.max(0, input.serviceMinutes ?? 0),
+          windowStart: input.windowStart ?? null,
+          windowEnd: input.windowEnd ?? null,
+        });
+      });
+
+      if (endLocation) {
+        const input = params.end ?? params.start;
+        rows.push({
+          sequence: rows.length + 1,
+          kind: TourStopKind.depot_end,
+          locationId: endLocation.id,
+          serviceMinutes: Math.max(0, input.serviceMinutes ?? 0),
+          windowStart: input.windowStart ?? null,
+          windowEnd: input.windowEnd ?? null,
+        });
+      }
+
+      await tx.tourStop.createMany({
+        data: rows.map((row) => ({
+          tourId: tour.id,
+          sequence: row.sequence,
+          plannedSequence: row.sequence,
+          kind: row.kind,
+          locationId: row.locationId,
+          serviceMinutes: row.serviceMinutes,
+          windowStart: row.windowStart,
+          windowEnd: row.windowEnd,
+        })),
+      });
+
+      return tour;
+    });
+  }
 
   /**
    * Secilen gorevlerden bir tur olusturur.
@@ -279,6 +473,37 @@ export class TourService {
 
     const before = { distanceKm: baselineDistanceKm, durationMinutes: baselineDurationMin };
 
+    // Bacaklar ziyaret sirasinda gelir: legs[i], reordered[i] -> reordered[i+1]
+    // bacagidir. Ilk duragin gelis bacagi yoktur.
+    const legs = result.value.summary.legs;
+    const legsUsable = legs.length === reordered.length - 1;
+    if (!legsUsable && legs.length > 0) {
+      this.logger.warn(
+        `Tour ${tour.id}: leg count ${legs.length} does not match ${reordered.length} stops — leg detail skipped`,
+      );
+    }
+
+    const serviceMinutesByStop = new Map(
+      tour.stops.map((stop) => [stop.id, stop.serviceMinutes ?? 0]),
+    );
+
+    const legForStop = (index: number): RouteLeg | null =>
+      legsUsable && index > 0 ? (legs[index - 1] ?? null) : null;
+
+    const etaInput: EtaStopInput[] = reordered.map((stop, index) => {
+      const leg = legForStop(index);
+      return {
+        id: stop.id,
+        serviceMinutes: serviceMinutesByStop.get(stop.id) ?? 0,
+        // Kaydedilen tamsayi degerle ayni sureyi kullaniyoruz; aksi halde
+        // ekranda gosterilen bacak suresi ile varis saati birbirini tutmaz.
+        legDurationMin: leg ? Math.round(leg.durationMinutes) : null,
+      };
+    });
+
+    const schedule = computeTourSchedule(tour.plannedStartAt, etaInput);
+    const scheduleByStop = new Map(schedule.stops.map((entry) => [entry.id, entry]));
+
     await this.prisma.$transaction(async (tx) => {
       // Iki asamali yazim: @@unique([tourId, sequence]) yuzunden dogrudan
       // yeniden numaralandirma ara adimda cakisir. Once negatif gecici
@@ -286,8 +511,21 @@ export class TourService {
       for (const { id, sequence } of toSequenceNumbers(reordered)) {
         await tx.tourStop.update({ where: { id }, data: { sequence: -sequence } });
       }
-      for (const { id, sequence } of toSequenceNumbers(reordered)) {
-        await tx.tourStop.update({ where: { id }, data: { sequence } });
+
+      for (const [index, { id, sequence }] of toSequenceNumbers(reordered).entries()) {
+        const leg = legForStop(index);
+        const timing = scheduleByStop.get(id);
+        await tx.tourStop.update({
+          where: { id },
+          data: {
+            sequence,
+            legDistanceKm: leg ? leg.distanceKm : null,
+            legDurationMin: leg ? Math.round(leg.durationMinutes) : null,
+            legShape: leg ? leg.shape : null,
+            plannedArrivalAt: timing?.plannedArrivalAt ?? null,
+            plannedDepartureAt: timing?.plannedDepartureAt ?? null,
+          },
+        });
       }
 
       await tx.tour.update({
@@ -302,6 +540,7 @@ export class TourService {
           baselineDurationMin: tour.baselineDurationMin ?? baselineDurationMin,
           plannedDistanceKm: result.value.summary.distanceKm,
           plannedDurationMin: Math.round(result.value.summary.durationMinutes),
+          plannedEndAt: schedule.endAt,
         },
       });
     });

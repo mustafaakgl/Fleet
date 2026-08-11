@@ -7,12 +7,24 @@
  * olarak ortaya cikar ve geriye donuk teshisi zordur.
  */
 
+/**
+ * Durak turleri. `waypoint` ve `service` gorevden turemez; alis-teslim
+ * kisitina tabi degildirler ve serbestce siralanirlar.
+ */
+export type SequenceableStopKind =
+  | 'depot_start'
+  | 'pickup'
+  | 'delivery'
+  | 'depot_end'
+  | 'waypoint'
+  | 'service';
+
 export interface SequenceableStop {
   id: string;
   latitude: number | null;
   longitude: number | null;
   /** depot_start her zaman basta, depot_end her zaman sonda kalir */
-  kind: 'depot_start' | 'pickup' | 'delivery' | 'depot_end';
+  kind: SequenceableStopKind;
   /** Ayni goreve ait alis, teslimden ONCE gelmek zorunda */
   assignmentId?: string | null;
 }

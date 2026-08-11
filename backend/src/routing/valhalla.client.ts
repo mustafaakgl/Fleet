@@ -4,6 +4,7 @@ import {
   type ElevationProfile,
   type GeoPoint,
   type MatrixCell,
+  type RouteLeg,
   type RouteSummary,
   type RoutingResult,
   type TruckAccessCheck,
@@ -20,7 +21,10 @@ interface ValhallaRouteResponse {
       has_ferry?: boolean;
       has_highway?: boolean;
     };
-    legs?: Array<{ shape?: string }>;
+    legs?: Array<{
+      shape?: string;
+      summary?: { length?: number; time?: number };
+    }>;
   };
   error_code?: number;
   error?: string;
@@ -75,6 +79,36 @@ export class ValhallaClient {
       axle_load: profile.axleLoad,
       hazmat: profile.hazmat,
     };
+  }
+
+  /**
+   * Yanittaki bacaklari cikarir.
+   *
+   * Uzunlugu ya da suresi olmayan bacak ATLANMAZ, listeyi bos birakir: eksik
+   * bir bacakla devam etmek durak varis saatlerini sessizce kaydirir. Cagiran
+   * "bacak dokumu yok" durumunu gorup toplamla yetinmeli.
+   */
+  private toRouteLegs(response: ValhallaRouteResponse): RouteLeg[] {
+    const legs = response.trip?.legs;
+    if (!Array.isArray(legs) || legs.length === 0) {
+      return [];
+    }
+
+    const parsed: RouteLeg[] = [];
+    for (const leg of legs) {
+      const length = leg.summary?.length;
+      const time = leg.summary?.time;
+      if (typeof length !== 'number' || typeof time !== 'number') {
+        return [];
+      }
+      parsed.push({
+        distanceKm: length,
+        durationMinutes: time / 60,
+        shape: leg.shape ?? null,
+      });
+    }
+
+    return parsed;
   }
 
   private async post<T>(path: string, body: unknown): Promise<RoutingResult<T>> {
@@ -168,6 +202,7 @@ export class ValhallaClient {
         hasFerry: Boolean(summary.has_ferry),
         hasHighway: Boolean(summary.has_highway),
         shape: result.value.trip?.legs?.[0]?.shape ?? null,
+        legs: this.toRouteLegs(result.value),
       },
     };
   }
@@ -390,6 +425,9 @@ export class ValhallaClient {
           hasFerry: Boolean(summary.has_ferry),
           hasHighway: Boolean(summary.has_highway),
           shape: result.value.trip?.legs?.[0]?.shape ?? null,
+          // Bacaklar ZIYARET sirasindadir, girdi sirasinda degil: cagiran
+          // once `order`'i uygulayip sonra bacaklari eslestirmeli.
+          legs: this.toRouteLegs(result.value),
         },
       },
     };

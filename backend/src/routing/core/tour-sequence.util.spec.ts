@@ -86,6 +86,48 @@ describe('tour-sequence.util', () => {
     });
   });
 
+  describe('free stops keep the ends pinned', () => {
+    it('sends waypoint and service stops to the reorderable middle', () => {
+      // Cok duraklu turda duraklarin cogu gorevden turemez; bunlarin uclara
+      // civilenmemesi, aradaki her seyin siralanabilmesi gerekiyor.
+      const { start, middle, end } = splitDepotStops([
+        stop('depot', 'depot_start'),
+        stop('kunde', 'waypoint'),
+        stop('werkstatt', 'service'),
+        stop('back', 'depot_end'),
+      ]);
+
+      assert.equal(start?.id, 'depot');
+      assert.equal(end?.id, 'back');
+      assert.deepEqual(
+        middle.map((entry) => entry.id),
+        ['kunde', 'werkstatt'],
+      );
+    });
+
+    it('accepts a tour built only from free stops', () => {
+      const issues = validateSequenceInput([
+        stop('depot', 'depot_start'),
+        stop('a', 'waypoint'),
+        stop('b', 'waypoint'),
+      ]);
+
+      assert.deepEqual(issues, []);
+    });
+
+    it('does not apply the pickup rule to free stops', () => {
+      // waypoint/service bir goreve bagli degildir; alis-teslim kisiti onlara
+      // uygulanirsa serbest duraklar gereksiz yere reddedilir.
+      assert.equal(
+        violatesPickupBeforeDelivery([
+          stop('a', 'waypoint', 'job-1'),
+          stop('b', 'service', 'job-1'),
+        ]),
+        false,
+      );
+    });
+  });
+
   describe('violatesPickupBeforeDelivery', () => {
     it('accepts pickup before delivery', () => {
       const ordered = [stop('p', 'pickup', 'job1'), stop('d', 'delivery', 'job1')];

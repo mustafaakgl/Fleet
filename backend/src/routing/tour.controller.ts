@@ -16,7 +16,8 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { OPERATIONAL_ROLES, OPERATIONAL_WRITE_ROLES } from '../common/utils/permissions';
 import { CreateTourDto } from './dto/create-tour.dto';
-import { TourService } from './tour.service';
+import { CreateTourFromStopsDto, TourStopInputDto } from './dto/create-tour-from-stops.dto';
+import { TourService, type TourStopInput } from './tour.service';
 
 /**
  * Ofis tarafinin tur uclari: tur kur, sirayi optimize et, sonucu onayla.
@@ -111,6 +112,49 @@ export class TourController {
   }
 
   /**
+   * Serbest duraklardan tur kurar — gorev secmeye gerek yok.
+   *
+   * `POST /routing/tours` ile ayni turu uretir, girdisi farklidir: orada
+   * gorevler, burada adresler. Iki uc bilincli olarak ayri; gorev akisi
+   * alis-teslim ciftleri uretir ve Assignment -> Invoice zincirine baglidir,
+   * serbest duraklar ise hicbir goreve bagli degildir.
+   */
+  @Post('from-stops')
+  @Roles(...OPERATIONAL_WRITE_ROLES)
+  async createFromStops(
+    @Body() dto: CreateTourFromStopsDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    const workDate = new Date(dto.work_date);
+    if (Number.isNaN(workDate.getTime())) {
+      throw new BadRequestException({ code: 'invalid_work_date' });
+    }
+
+    let plannedStartAt: Date | null = null;
+    if (dto.planned_start_at) {
+      plannedStartAt = new Date(dto.planned_start_at);
+      if (Number.isNaN(plannedStartAt.getTime())) {
+        throw new BadRequestException({ code: 'invalid_planned_start_at' });
+      }
+    }
+
+    const tour = await this.tours.createFromStops({
+      workDate,
+      plannedStartAt,
+      name: dto.name ?? null,
+      vehicleId: dto.vehicle_id ?? null,
+      driverId: dto.driver_id ?? null,
+      start: toStopInput(dto.start),
+      stops: dto.stops.map(toStopInput),
+      returnToStart: dto.return_to_start ?? false,
+      end: dto.end ? toStopInput(dto.end) : null,
+      createdById: userId,
+    });
+
+    return this.toClientTour(await this.tours.findById(tour.id));
+  }
+
+  /**
    * Sirayi optimize eder. `optimized: false` bir HATA DEGIL — cikti alis-teslim
    * kuralini ihlal ediyorsa veya bir durak kamyona kapaliysa mevcut sira
    * korunur ve sebep donulur. Arayuz bunu uyari olarak gostermeli.
@@ -157,6 +201,8 @@ export class TourController {
       id: tour.id,
       name: tour.name,
       workDate: tour.workDate.toISOString(),
+      plannedStartAt: tour.plannedStartAt?.toISOString() ?? null,
+      plannedEndAt: tour.plannedEndAt?.toISOString() ?? null,
       status: tour.status,
       plannedDistanceKm: numberOrNull(tour.plannedDistanceKm),
       plannedDurationMin: tour.plannedDurationMin,
@@ -171,15 +217,35 @@ export class TourController {
         kind: stop.kind,
         assignmentId: stop.assignmentId,
         address: stop.location.rawAddress,
+        label: stop.location.label,
         city: stop.location.city,
         postalCode: stop.location.postalCode,
         latitude: numberOrNull(stop.location.latitude),
         longitude: numberOrNull(stop.location.longitude),
         truckAccess: stop.location.truckAccess,
+        serviceMinutes: stop.serviceMinutes,
+        windowStart: stop.windowStart,
+        windowEnd: stop.windowEnd,
         legDistanceKm: numberOrNull(stop.legDistanceKm),
+        legDurationMin: stop.legDurationMin,
+        legShape: stop.legShape,
+        plannedArrivalAt: stop.plannedArrivalAt?.toISOString() ?? null,
+        plannedDepartureAt: stop.plannedDepartureAt?.toISOString() ?? null,
       })),
     };
   }
+}
+
+/** DTO'nun snake_case alanlarini servisin camelCase girdisine cevirir. */
+function toStopInput(dto: TourStopInputDto): TourStopInput {
+  return {
+    locationId: dto.location_id ?? null,
+    address: dto.address ?? null,
+    label: dto.label ?? null,
+    serviceMinutes: dto.service_minutes ?? null,
+    windowStart: dto.window_start ?? null,
+    windowEnd: dto.window_end ?? null,
+  };
 }
 
 function numberOrNull(value: unknown): number | null {

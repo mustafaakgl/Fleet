@@ -643,6 +643,12 @@ enum TourStopKind {
   pickup
   delivery
   depot_end
+  /// Gorevden turemeyen serbest durak. Cok duraklu dagitimda dispatcher'in
+  /// elle girdigi adresler bu turdedir; alis-teslim kisitina tabi degildir.
+  waypoint
+  /// Yuk tasima disi is: atolye, muayene, yikama. Sirasi optimize edilir ama
+  /// serviceMinutes'i genelde buyuktur ve plani o belirler.
+  service
 }
 
 /// Bir Location'in koordinatlarinin nereden geldigi.
@@ -1443,6 +1449,11 @@ model Tour {
 
   name      String?
   workDate  DateTime
+  /// Aracin ilk duraktan kalkis ani. ETA'nin dayanagi budur: verilmezse
+  /// bacak sureleri yine hesaplanir ama mutlak varis saati uretilemez.
+  plannedStartAt DateTime?
+  /// Son duraktaki isin bitis ani; optimizasyon sonrasi hesaplanir.
+  plannedEndAt   DateTime?
   status    TourStatus @default(draft)
   vehicleId String?
   vehicle   Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
@@ -1530,6 +1541,10 @@ model TourStop {
   /// Bir onceki duraktan bu duraga olan bacak
   legDistanceKm      Decimal?  @db.Decimal(12, 3)
   legDurationMin     Int?
+  /// Bir onceki duraktan bu duraga olan bacagin cizim govdesi (Valhalla
+  /// encoded polyline, precision 6). Haritada rotayi bacak bacak cizmek icin;
+  /// tur duzeyinde tek govde tutulsaydi durak vurgulanamazdi.
+  legShape           String?
 
   /// Yurutme kaydi. Planlama alanlarindan ayri: plan optimizasyonla yeniden
   /// yazilabilir, gerceklesen ise degismez.
