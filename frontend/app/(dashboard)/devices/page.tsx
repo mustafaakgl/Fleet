@@ -27,7 +27,7 @@ function statusBadgeClass(status: DeviceRow['status']): string {
 }
 
 function modelOptions(): DeviceModel[] {
-  return ['FMC130', 'FMC650'];
+  return ['FMC130', 'FMC650', 'FMC003'];
 }
 
 export default function DevicesPage() {

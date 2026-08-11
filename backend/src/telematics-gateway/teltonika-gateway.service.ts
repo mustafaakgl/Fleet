@@ -1,7 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { DeviceModel } from '@prisma/client';
 import { createServer, type Server, type Socket } from 'node:net';
-import { TELEMATICS_IO_MAP, normalizeIoToTelemetry, type ParsedAvlIo } from './avl-io-map';
+import {
+  collectUnmappedIoIds,
+  normalizeIoToTelemetry,
+  resolveIoMap,
+  type ParsedAvlIo,
+} from './avl-io-map';
 import { parseCodec8Frame } from './codec8-parser';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../metrics/metrics.service';
@@ -18,7 +23,54 @@ type SessionState = {
   imei?: string;
   device?: DeviceBinding;
   buffer: Buffer;
+  /** Devreye alma kaydinda bu oturumda kac satir basildi. */
+  captured?: number;
 };
+
+/**
+ * Devreye alma kaydi: cihazin gercekte hangi IO elemanlarini gonderdigini
+ * log'a doker.
+ *
+ * Yeni bir model takildiginda AVL ID'leri veri sayfasindan tahmin etmek yerine
+ * cihazin kendisinden okumak icin var. Varsayilan KAPALI — acikken her kayit
+ * icin bir satir yazar, filoda surekli acik birakilacak bir sey degil.
+ *
+ * TELEMATICS_IO_CAPTURE=true          — kaydi ac
+ * TELEMATICS_IO_CAPTURE_IMEI=35...    — yalnizca bu cihaz (bos: hepsi)
+ * TELEMATICS_IO_CAPTURE_LIMIT=50      — oturum basina satir siniri
+ */
+const IO_CAPTURE_DEFAULT_LIMIT = 50;
+
+function ioCaptureLimit(): number {
+  const raw = Number(process.env.TELEMATICS_IO_CAPTURE_LIMIT);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : IO_CAPTURE_DEFAULT_LIMIT;
+}
+
+function ioCaptureEnabledFor(imei?: string): boolean {
+  if ((process.env.TELEMATICS_IO_CAPTURE ?? 'false').toLowerCase() !== 'true') {
+    return false;
+  }
+
+  const only = process.env.TELEMATICS_IO_CAPTURE_IMEI?.trim();
+  return !only || only === imei;
+}
+
+function formatIoValues(io: ParsedAvlIo): string {
+  return [...io.values.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([id, value]) => {
+      const raw = io.rawValues?.get(id);
+      // Degisken uzunluklu elemanin sayiya cevrilmis hali anlamsiz; okunabilir
+      // metin varsa onu goster, yoksa ham hex.
+      if (raw) {
+        const ascii = raw.toString('ascii');
+        const printable = /^[\x20-\x7e]+$/.test(ascii);
+        return `${id}="${printable ? ascii : raw.toString('hex')}"`;
+      }
+      return `${id}=${value}`;
+    })
+    .join(' ');
+}
 
 export class TeltonikaGatewayService {
   private readonly logger = new Logger(TeltonikaGatewayService.name);
@@ -125,7 +177,7 @@ export class TeltonikaGatewayService {
           continue;
         }
 
-        const records = this.mapRecords(parsed.packet.records);
+        const records = this.mapRecords(state, parsed.packet.records);
         const accepted = await this.enqueuePacket(state, records);
         if (accepted === null) {
           this.logger.warn(`queue enqueue failed — withholding ACK imei=${state.imei}`);
@@ -147,6 +199,7 @@ export class TeltonikaGatewayService {
   }
 
   private mapRecords(
+    state: SessionState,
     records: Array<{
       timestampMs: number;
       priority: number;
@@ -157,9 +210,23 @@ export class TeltonikaGatewayService {
       io: ParsedAvlIo;
     }>,
   ): TelemetryRecordPayload[] {
+    // Harita cihaz modeline gore secilir: ayni AVL ID farkli modellerde farkli
+    // anlama geliyor (ornegin 32 ana unitede devir, FMC003'te sogutucu).
+    const map = resolveIoMap(state.device?.model);
+    const capture = ioCaptureEnabledFor(state.imei);
+
     return records.map((record) => {
-      const normalized = normalizeIoToTelemetry(record.io, record.speedKph);
-      const dtcPresent = TELEMATICS_IO_MAP.dtc.ids.some((id) => record.io.values.has(id));
+      const normalized = normalizeIoToTelemetry(record.io, record.speedKph, map);
+
+      if (capture) {
+        this.captureIo(state, record.io, map);
+      }
+
+      if (normalized.dtcUnreadable) {
+        this.logger.warn(
+          `device reports fault codes but none could be decoded imei=${state.imei ?? '-'} model=${state.device?.model ?? '-'} — existing DTC records left untouched`,
+        );
+      }
 
       return {
         timestampMs: record.timestampMs,
@@ -174,11 +241,34 @@ export class TeltonikaGatewayService {
         coolantTemp: normalized.coolantTemp,
         voltage: normalized.voltage,
         odometerKm: normalized.odometerKm,
-        dtcPresent,
+        dtcPresent: normalized.dtcPresent,
         dtc: normalized.dtc,
         events: normalized.events,
       };
     });
+  }
+
+  /** Cihazin gonderdigi ham IO elemanlarini log'a yazar (bkz. TELEMATICS_IO_CAPTURE). */
+  private captureIo(state: SessionState, io: ParsedAvlIo, map: ReturnType<typeof resolveIoMap>): void {
+    const limit = ioCaptureLimit();
+    const seen = state.captured ?? 0;
+
+    if (seen >= limit) {
+      return;
+    }
+
+    state.captured = seen + 1;
+
+    const unmapped = collectUnmappedIoIds(io, map);
+    this.logger.log(
+      `io-capture imei=${state.imei ?? '-'} model=${state.device?.model ?? '-'} event=${io.eventId} total=${io.totalCount} unmapped=[${unmapped.join(',')}] ${formatIoValues(io)}`,
+    );
+
+    if (state.captured === limit) {
+      this.logger.log(
+        `io-capture limit reached (${limit}) imei=${state.imei ?? '-'} — reconnect or raise TELEMATICS_IO_CAPTURE_LIMIT for more`,
+      );
+    }
   }
 
   private async enqueuePacket(

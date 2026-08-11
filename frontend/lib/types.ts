@@ -250,7 +250,7 @@ export interface PaginatedVehicles {
 
 // ─── Devices ────────────────────────────────────────────────────────────────
 
-export type DeviceModel = 'FMC130' | 'FMC650';
+export type DeviceModel = 'FMC130' | 'FMC650' | 'FMC003';
 export type DeviceStatus = 'online' | 'offline' | 'never';
 
 export interface DeviceRow {

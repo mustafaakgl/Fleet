@@ -66,6 +66,11 @@ class Cursor {
     return Number(value);
   }
 
+  /** Imleci ilerletmeden onumuzdeki `size` bayti dondurur. */
+  peek(size: number): Buffer {
+    return Buffer.from(this.buffer.subarray(this.offset, this.offset + size));
+  }
+
   readValue(size: number): ParsedIoValue {
     if (size === 1) {
       return this.readUInt8();
@@ -121,11 +126,17 @@ function parseIoElements(cursor: Cursor, codecId: number): ParsedAvlIo {
     values.set(readId(), cursor.readValue(8));
   }
 
+  // Codec 8 Extended'in degisken uzunluklu grubu. Buradaki degerler cogu zaman
+  // sayi degil metin (ornegin AVL 281 ariza kodlari, AVL 256 VIN). Sayiya
+  // cevrilmis hali anlamsiz oldugu icin ham baytlar da saklaniyor.
+  const rawValues = new Map<number, Buffer>();
+
   if (isExtended) {
     const nx = readCount();
     for (let i = 0; i < nx; i += 1) {
       const id = readId();
       const len = cursor.readUInt16BE();
+      rawValues.set(id, cursor.peek(len));
       values.set(id, cursor.readValue(len));
     }
   }
@@ -134,6 +145,7 @@ function parseIoElements(cursor: Cursor, codecId: number): ParsedAvlIo {
     eventId,
     totalCount,
     values,
+    rawValues,
   };
 }
 

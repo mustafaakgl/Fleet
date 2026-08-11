@@ -692,6 +692,9 @@ enum FleetDrivingEventType {
 enum DeviceModel {
   FMC130
   FMC650
+  /// OBD-II soketine takilan dongle. IO eslemesi digerlerinden AYRI —
+  /// bkz. FMC003_IO_MAP (src/telematics-gateway/avl-io-map.ts).
+  FMC003
 }
 
 enum DtcSeverity {
