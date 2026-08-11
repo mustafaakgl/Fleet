@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "node ../scripts/dev-next.mjs start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "verify": "node scripts/i18n-check.mjs && tsc --noEmit && NEXT_DIST_DIR=.next-verify next build",
     "verify:invoicing-i18n": "node scripts/i18n-check.mjs"
   },
@@ -48,13 +50,18 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.3",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^9",
     "eslint-config-next": "15.5.18",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

@@ -3168,25 +3168,47 @@ export const routingApi = {
 export type TourStatus =
   | 'draft' | 'optimizing' | 'optimized' | 'released' | 'in_progress' | 'completed' | 'cancelled';
 
+export type TourStopKind =
+  | 'depot_start'
+  | 'pickup'
+  | 'delivery'
+  | 'depot_end'
+  /** Gorevden turemeyen serbest durak */
+  | 'waypoint'
+  /** Yuk disi is: atolye, muayene */
+  | 'service';
+
 export interface TourStop {
   id: string;
   sequence: number;
   plannedSequence: number | null;
-  kind: 'depot_start' | 'pickup' | 'delivery' | 'depot_end';
+  kind: TourStopKind;
   assignmentId: string | null;
   address: string;
+  label: string | null;
   city: string | null;
   postalCode: string | null;
   latitude: number | null;
   longitude: number | null;
   truckAccess: TruckAccessStatus;
+  serviceMinutes: number;
+  windowStart: string | null;
+  windowEnd: string | null;
   legDistanceKm: number | null;
+  legDurationMin: number | null;
+  /** Onceki duraktan bu duraga olan bacagin polyline'i (precision 6) */
+  legShape: string | null;
+  /** Optimizasyon sonrasi dolar; tur kalkis saati bilinmiyorsa null kalir */
+  plannedArrivalAt: string | null;
+  plannedDepartureAt: string | null;
 }
 
 export interface TourDetail {
   id: string;
   name: string | null;
   workDate: string;
+  plannedStartAt: string | null;
+  plannedEndAt: string | null;
   status: TourStatus;
   plannedDistanceKm: number | null;
   plannedDurationMin: number | null;
@@ -3195,6 +3217,16 @@ export interface TourDetail {
   optimizedAt: string | null;
   optimizationError: string | null;
   stops: TourStop[];
+}
+
+/** `POST /routing/tours/from-stops` govdesindeki tek durak. */
+export interface TourStopPayload {
+  /** Photon akisindan gelen dogrulanmis Location; ham adres GONDERILMEZ */
+  location_id?: string;
+  label?: string;
+  service_minutes?: number;
+  window_start?: string;
+  window_end?: string;
 }
 
 export interface TourListItem {
@@ -3244,6 +3276,25 @@ export const toursApi = {
     driver_id?: string;
     depot_location_id?: string;
   }) => api.post<TourDetail>('/routing/tours', payload).then((r) => r.data),
+
+  /**
+   * Serbest duraklardan tur kurar — gorev secmeye gerek yok.
+   *
+   * Duraklar yalnizca `location_id` ile gonderilir: adres Photon akisinda
+   * zaten cozumlendi, ham metin gondermek sunucuyu ikinci kez geocode etmeye
+   * zorlar ve koordinatsiz durak uretme riski dogurur.
+   */
+  createFromStops: (payload: {
+    work_date: string;
+    planned_start_at?: string;
+    name?: string;
+    vehicle_id?: string;
+    driver_id?: string;
+    start: TourStopPayload;
+    stops: TourStopPayload[];
+    return_to_start?: boolean;
+    end?: TourStopPayload;
+  }) => api.post<TourDetail>('/routing/tours/from-stops', payload).then((r) => r.data),
 
   /** `optimized: false` hata degil — sira korunmus demektir, `reason` sebebi tasir. */
   optimize: (id: string) =>
