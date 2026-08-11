@@ -10,3 +10,4 @@ backend/uploads/
 **/.env.local
 **/tsconfig.tsbuildinfo
 .git-history-backups/
+.claude/launch.json
