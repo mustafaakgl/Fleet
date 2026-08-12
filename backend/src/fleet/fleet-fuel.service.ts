@@ -5,13 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  AssignmentStatus,
   FleetTripStatus,
   NotificationType,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocalStorageService } from '../storage/local-storage.service';
+import { DriverVehicleService } from './driver-vehicle.service';
 import {
   computeFuelConsumptionIntervals,
   computeWeightedAverageLitersPer100Km,
@@ -33,12 +33,6 @@ import type { CreateFuelEntryOfficeDto } from './dto/create-fuel-entry-office.dt
 import type { FleetFuelOverviewQueryDto } from './dto/fleet-fuel-overview.query';
 import type { FuelAnalyticsQueryDto } from './dto/fuel-analytics.query';
 import type { ListFuelEntriesQueryDto } from './dto/list-fuel-entries.query';
-
-const TRACKABLE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
-  AssignmentStatus.planned,
-  AssignmentStatus.confirmed,
-  AssignmentStatus.in_progress,
-];
 
 /** A refuel is flagged as expensive once it exceeds the period average by this margin. */
 const FUEL_PRICE_TOLERANCE_PERCENT = 5;
@@ -204,6 +198,7 @@ export class FleetFuelService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: LocalStorageService,
+    private readonly driverVehicle: DriverVehicleService,
   ) {}
 
   async createFuelEntryForDriver(
@@ -1060,42 +1055,13 @@ export class FleetFuelService {
     return driver;
   }
 
+  /** Ortak servise devrediliyor — bkz. DriverVehicleService. */
   private async assertDriverAssignedToVehicle(driverId: string, vehicleId: string) {
-    const vehicle = await this.prisma.vehicle.findFirst({
-      where: { id: vehicleId },
-      select: { id: true, currentDriverId: true },
-    });
-    if (!vehicle) {
-      throw new NotFoundException('Vehicle not found');
-    }
-
-    if (vehicle.currentDriverId === driverId) {
-      return;
-    }
-
-    const { start, end } = this.todayRange();
-    const assignments = await this.prisma.assignment.findMany({
-      where: {
-        driverId,
-        vehicleId,
-        workDate: { gte: start, lt: end },
-        status: { in: TRACKABLE_ASSIGNMENT_STATUSES },
-      },
-      select: { id: true },
-      take: 1,
-    });
-
-    if (assignments.length === 0) {
-      throw new ForbiddenException('Driver is not assigned to this vehicle today');
-    }
+    await this.driverVehicle.assertDriverAssignedToVehicle(driverId, vehicleId);
   }
 
   private todayRange(): { start: Date; end: Date } {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-    return { start, end };
+    return this.driverVehicle.todayRange();
   }
 
   private serializeFuelEntry(entry: {

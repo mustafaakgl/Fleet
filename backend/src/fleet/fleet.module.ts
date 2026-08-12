@@ -4,6 +4,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { WorkSessionsModule } from '../work-sessions/work-sessions.module';
+import { DriverVehicleService } from './driver-vehicle.service';
 import { FleetDriverScoreController, FleetDriverScoreDriverController } from './fleet-driver-score.controller';
 import { FleetDriverScoreService } from './fleet-driver-score.service';
 import {
@@ -53,6 +54,7 @@ import { FleetTripsService } from './fleet-trips.service';
     FleetVehicleMaintenanceController,
   ],
   providers: [
+    DriverVehicleService,
     FleetTripsService,
     FleetTripProcessingService,
     FleetTripsScheduler,
@@ -64,6 +66,9 @@ import { FleetTripsService } from './fleet-trips.service';
     FleetMaintenanceScheduler,
   ],
   exports: [
+    // "Surucunun bugunku araci" mantigi: FuelStationsModule bunu tekrar
+    // yazmasin diye disari veriliyor.
+    DriverVehicleService,
     FleetTripsService,
     FleetTripProcessingService,
     FleetDriverScoreService,

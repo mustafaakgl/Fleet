@@ -758,6 +758,89 @@ enum LocationTrackingStatus {
   denied
 }
 
+/// Bir istasyonda satilan ya da bir aracin kabul ettigi tek bir urun.
+///
+/// Degerler BUYUK HARF: bunlar bizim ic durum adlarimiz degil, pompadaki urun
+/// kodlari (CalendarStatus'un AT/UT/KT'si gibi). SUPER_E5 ile SUPER_E10 AYRI
+/// iki deger — birini kabul eden aracin digerini de kabul ettigi VARSAYILAMAZ,
+/// E10 eski benzinli motorlarda hasara yol acar. Ayni sekilde HVO100 dizel
+/// motorda "dizelin bir turu" degil, ayri bir onay isidir.
+enum FuelProductType {
+  DIESEL
+  SUPER_E5
+  SUPER_E10
+  SUPER_PLUS
+  HVO100
+  CNG
+  LNG
+  ELECTRICITY
+  HYDROGEN
+  /// Katki maddesi (SCR sivisi). ASLA ana yakit degil — bkz. FuelProductUsage.
+  ADBLUE
+}
+
+/// Aracin bir urunle iliskisi.
+///
+/// ADDITIVE ayrimi kritik: AdBlue arac icin gerekli olabilir ama istasyon
+/// ONERISINI belirlemez. AdBlue'yu PRIMARY saymak, sadece AdBlue satan bir
+/// noktayi "yakit istasyonu" diye surucuye gostermek olurdu.
+enum FuelProductUsage {
+  PRIMARY
+  ALTERNATIVE
+  ADDITIVE
+}
+
+/// Uyumluluk bilgisinin nereden geldigi. Denetim izi icin tutuluyor: bir
+/// aracin HVO100 onayi ureticiden mi geldi yoksa ofis elle mi isaretledi,
+/// yanlis yakit hasarinda sorulacak ilk sorudur.
+enum FuelCompatibilitySource {
+  MANUFACTURER
+  VIN
+  ADMIN
+  IMPORTED
+}
+
+/// Aracin ACIKCA onaylanmis yakit urunleri.
+///
+/// Neden Vehicle uzerinde tek bir alan degil: bir arac birden fazla urun kabul
+/// edebilir (E5 + E10) ve her kaydin kendi kaynagi/dogrulama zamani olmali.
+/// Tek enum alani bunu tasiyamaz.
+///
+/// CIKARIM YOK: burada satiri olmayan urun o arac icin onaysizdir. Sistem
+/// "dizel varsa HVO100 da olur" ya da "E10 varsa E5 de olur" gibi bir tahmin
+/// YURUTMEZ; uyumluluk hic tanimli degilse cagiran uc 409 ile durur.
+model VehicleFuelCompatibility {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  vehicleId String
+  /// Arac kaydiyla birlikte gider: bu tablo aracin teknik ozelligidir, bagimsiz
+  /// bir is kaydi degil. (Silme ucu yok, arac deactivate ediliyor — bkz.
+  /// VehiclesService.deactivate; Cascade yalnizca gercek bir silmede devreye girer.)
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  productType FuelProductType
+  usageType   FuelProductUsage
+  /// false, "bu urun acikca ONAYLANMADI" demektir — kaydin yoklugundan farkli
+  /// bir bilgi (ureticinin acik reddi). Filtreleme her iki durumda da urunu
+  /// disarida birakir.
+  approved    Boolean                 @default(true)
+  source      FuelCompatibilitySource
+  /// Bilginin son dogrulandigi an. null ise kayit var ama teyit edilmemis.
+  verifiedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Ayni arac/urun/kullanim ucusu iki kez yazilamaz — PUT tum seti
+  /// degistirirken cift kayit uretmesin.
+  @@unique([tenantId, vehicleId, productType, usageType])
+  @@index([tenantId])
+  @@index([vehicleId])
+  @@map("vehicle_fuel_compatibility")
+}
+
 model Tenant {
   id           String       @id @default(cuid())
   name         String
@@ -812,6 +895,7 @@ model Tenant {
   fleetFuelEntries           FleetFuelEntry[]
   fuelCardImportBatches      FuelCardImportBatch[]
   fuelCardTransactions       FuelCardTransaction[]
+  vehicleFuelCompatibilities VehicleFuelCompatibility[]
   fleetMaintenanceRules      FleetMaintenanceRule[]
   devices                    Device[]
   vehicleTelemetryLatest     VehicleTelemetryLatest[]
@@ -1222,6 +1306,7 @@ model Vehicle {
   fleetTrips              FleetTrip[]
   fleetFuelEntries        FleetFuelEntry[]
   fuelCardTransactions    FuelCardTransaction[]
+  fuelCompatibilities     VehicleFuelCompatibility[]
   fleetMaintenanceRules   FleetMaintenanceRule[]
   devices                 Device[]
   telemetryLatest         VehicleTelemetryLatest?
@@ -1447,18 +1532,18 @@ model Tour {
   tenantId String @default("default-tenant")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  name      String?
-  workDate  DateTime
+  name           String?
+  workDate       DateTime
   /// Aracin ilk duraktan kalkis ani. ETA'nin dayanagi budur: verilmezse
   /// bacak sureleri yine hesaplanir ama mutlak varis saati uretilemez.
   plannedStartAt DateTime?
   /// Son duraktaki isin bitis ani; optimizasyon sonrasi hesaplanir.
   plannedEndAt   DateTime?
-  status    TourStatus @default(draft)
-  vehicleId String?
-  vehicle   Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  driverId  String?
-  driver    Driver?    @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  status         TourStatus @default(draft)
+  vehicleId      String?
+  vehicle        Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId       String?
+  driver         Driver?    @relation(fields: [driverId], references: [id], onDelete: SetNull)
 
   /// Turun baslangic/bitis noktasi. Bos ise ilk/son durak esas alinir.
   depotLocationId String?
@@ -2756,22 +2841,22 @@ model Accident {
 }
 
 model CompanyEmail {
-  id             String             @id @default(uuid())
-  tenantId       String             @default("default-tenant")
-  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  companyId      String
-  date           DateTime
-  subject        String
-  recipientEmail String
-  body           String
-  status         CompanyEmailStatus @default(draft)
-  lastSentAt     DateTime?
+  id               String             @id @default(uuid())
+  tenantId         String             @default("default-tenant")
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  companyId        String
+  date             DateTime
+  subject          String
+  recipientEmail   String
+  body             String
+  status           CompanyEmailStatus @default(draft)
+  lastSentAt       DateTime?
   /// Bir insan konuyu ya da govdeyi elle degistirdiginde damgalanir. Yeniden
   /// uretim bu damgayi tasiyan kaydin metnini EZMEZ, yalnizca gozden gecirme
   /// isareti birakir.
   manuallyEditedAt DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 

@@ -9,6 +9,7 @@ import {
   ParseFilePipeBuilder,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UploadedFile,
@@ -33,6 +34,8 @@ import {
   CreateVehicleEquipmentDto,
   UpdateVehicleEquipmentDto,
 } from './dto/vehicle-equipment.dto';
+import { ReplaceFuelCompatibilityDto } from '../fleet/fuel-stations/dto/replace-fuel-compatibility.dto';
+import { VehicleFuelCompatibilityService } from '../fleet/fuel-stations/vehicle-fuel-compatibility.service';
 import { VehicleEquipmentService } from './vehicle-equipment.service';
 import { VehiclesService } from './vehicles.service';
 import {
@@ -48,6 +51,7 @@ export class VehiclesController {
   constructor(
     private readonly vehiclesService: VehiclesService,
     private readonly vehicleEquipmentService: VehicleEquipmentService,
+    private readonly fuelCompatibilityService: VehicleFuelCompatibilityService,
   ) {}
 
   @Get()
@@ -147,6 +151,27 @@ export class VehiclesController {
   @Get(':id/incidents')
   getIncidents(@Param('id') id: string) {
     return this.vehiclesService.getIncidents(id);
+  }
+
+  /**
+   * Aracin onayli yakit urunleri. Surucu ucunun istasyon filtresi bu kayda
+   * dayaniyor (bkz. FuelStationService), bu yuzden okuma tum operasyonel
+   * rollere acik, yazma RequiresWrite ile korunuyor.
+   */
+  @Get(':id/fuel-compatibility')
+  getFuelCompatibility(@Param('id') id: string) {
+    return this.fuelCompatibilityService.getForVehicle(id);
+  }
+
+  /** Tum uyumluluk setini transaction icinde degistirir. */
+  @Put(':id/fuel-compatibility')
+  @RequiresWrite()
+  replaceFuelCompatibility(
+    @Param('id') id: string,
+    @Body() dto: ReplaceFuelCompatibilityDto,
+    @CurrentUser('id') actorUserId: string,
+  ) {
+    return this.fuelCompatibilityService.replaceForVehicle(id, dto.entries, actorUserId);
   }
 
   @Get(':id/equipment')

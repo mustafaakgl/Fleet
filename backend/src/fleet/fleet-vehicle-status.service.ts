@@ -3,24 +3,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AssignmentStatus,
-  FleetTripStatus,
-  Prisma,
-} from '@prisma/client';
+import { FleetTripStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   computeMaintenanceRuleStatus,
   type MaintenanceRuleStatusView,
 } from './core/fleet-maintenance.util';
 import { computeCurrentOdometerKm } from './core/fleet-odometer.util';
+import { DriverVehicleService } from './driver-vehicle.service';
 import type { OdometerCorrectionDto } from './dto/odometer-correction.dto';
-
-const TRACKABLE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
-  AssignmentStatus.planned,
-  AssignmentStatus.confirmed,
-  AssignmentStatus.in_progress,
-];
 
 export type FleetVehicleStatusResponse = {
   vehicleId: string;
@@ -35,7 +26,10 @@ export type FleetVehicleStatusResponse = {
 
 @Injectable()
 export class FleetVehicleStatusService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly driverVehicle: DriverVehicleService,
+  ) {}
 
   async getVehicleStatus(vehicleId: string): Promise<FleetVehicleStatusResponse> {
     await this.assertVehicleExists(vehicleId);
@@ -188,41 +182,8 @@ export class FleetVehicleStatusService {
     return driver;
   }
 
+  /** Ortak servise devrediliyor — bkz. DriverVehicleService. */
   private async assertDriverAssignedToVehicle(driverId: string, vehicleId: string) {
-    const vehicle = await this.prisma.vehicle.findFirst({
-      where: { id: vehicleId },
-      select: { id: true, currentDriverId: true },
-    });
-    if (!vehicle) {
-      throw new NotFoundException('Vehicle not found');
-    }
-
-    if (vehicle.currentDriverId === driverId) {
-      return;
-    }
-
-    const { start, end } = this.todayRange();
-    const assignments = await this.prisma.assignment.findMany({
-      where: {
-        driverId,
-        vehicleId,
-        workDate: { gte: start, lt: end },
-        status: { in: TRACKABLE_ASSIGNMENT_STATUSES },
-      },
-      select: { id: true },
-      take: 1,
-    });
-
-    if (assignments.length === 0) {
-      throw new ForbiddenException('Driver is not assigned to this vehicle today');
-    }
-  }
-
-  private todayRange(): { start: Date; end: Date } {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-    return { start, end };
+    await this.driverVehicle.assertDriverAssignedToVehicle(driverId, vehicleId);
   }
 }

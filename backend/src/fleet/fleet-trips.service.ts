@@ -35,6 +35,7 @@ import type {
   FleetTripTimelineTrip,
 } from './core/fleet-trips.types';
 import type { ListFleetTripsQueryDto } from './dto/list-fleet-trips.query';
+import { DriverVehicleService } from './driver-vehicle.service';
 import { FleetTripProcessingService } from './fleet-trip-processing.service';
 
 const TRACKABLE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
@@ -55,6 +56,7 @@ export class FleetTripsService {
     private readonly prisma: PrismaService,
     private readonly workSessions: WorkSessionsService,
     private readonly processing: FleetTripProcessingService,
+    private readonly driverVehicle: DriverVehicleService,
     @Optional() private readonly auditService?: AuditService,
   ) {}
 
@@ -452,34 +454,9 @@ export class FleetTripsService {
     return driver;
   }
 
+  /** Ortak servise devrediliyor — bkz. DriverVehicleService. */
   private async assertDriverAssignedToVehicle(driverId: string, vehicleId: string) {
-    const vehicle = await this.prisma.vehicle.findFirst({
-      where: { id: vehicleId },
-      select: { id: true, currentDriverId: true },
-    });
-    if (!vehicle) {
-      throw new NotFoundException('Vehicle not found');
-    }
-
-    if (vehicle.currentDriverId === driverId) {
-      return;
-    }
-
-    const { start, end } = this.todayRange();
-    const assignments = await this.prisma.assignment.findMany({
-      where: {
-        driverId,
-        vehicleId,
-        workDate: { gte: start, lt: end },
-        status: { in: TRACKABLE_ASSIGNMENT_STATUSES },
-      },
-      select: { id: true },
-      take: 1,
-    });
-
-    if (assignments.length === 0) {
-      throw new ForbiddenException('Driver is not assigned to this vehicle today');
-    }
+    await this.driverVehicle.assertDriverAssignedToVehicle(driverId, vehicleId);
   }
 
   private async resolveTripContext(driverId: string, vehicleId: string) {

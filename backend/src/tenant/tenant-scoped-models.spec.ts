@@ -26,6 +26,12 @@ describe('TENANT_SCOPED_MODELS', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('FleetMaintenanceRule'), true);
   });
 
+  it('includes vehicle fuel compatibility for tenant isolation', () => {
+    // Surucu ucu istasyon filtresini bu tabloya gore kuruyor: kapsam disi
+    // kalirsa baska kiracinin araci icin fiyat filtrelenebilir hale gelir.
+    assert.equal(TENANT_SCOPED_MODELS.has('VehicleFuelCompatibility'), true);
+  });
+
   it('includes telematics device models for tenant isolation', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('Device'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('VehicleTelemetryLatest'), true);

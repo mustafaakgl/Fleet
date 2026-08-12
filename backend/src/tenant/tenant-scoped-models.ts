@@ -39,6 +39,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'FleetFuelEntry',
   'FuelCardImportBatch',
   'FuelCardTransaction',
+  'VehicleFuelCompatibility',
   'FleetMaintenanceRule',
   'Device',
   'VehicleTelemetryLatest',

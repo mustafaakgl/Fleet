@@ -305,6 +305,28 @@ async function main() {
       }
     }
 
+    // Arac yakit uyumlulugu. Sizmasi, baska bir kiracinin filosunun teknik
+    // donanimini (hangi araci HVO100 ile calisiyor) aciga vurmak olurdu; ayrica
+    // surucu ucu istasyon filtresini BU tabloya gore kuruyor.
+    const totalFuelCompatibilities = await base.vehicleFuelCompatibility.count();
+    const scopedFuelCompatibilitiesA = await TenantContext.run(tenantA, () =>
+      scoped.vehicleFuelCompatibility.count(),
+    );
+    console.log(
+      `VehicleFuelCompatibility total: ${totalFuelCompatibilities}, tenant A scoped: ${scopedFuelCompatibilitiesA}`,
+    );
+
+    if (tenantA !== tenantB) {
+      const crossFuelCompatibility = await TenantContext.run(tenantA, () =>
+        scoped.vehicleFuelCompatibility.findFirst({
+          where: { tenantId: tenantB },
+        }),
+      );
+      if (crossFuelCompatibility) {
+        throw new Error('Isolation failure: tenant A context read tenant B fuel compatibility');
+      }
+    }
+
     const totalEquipmentIssuances = await base.equipmentIssuance.count();
     const tenantAEquipmentIssuanceCount = await base.equipmentIssuance.count({ where: { tenantId: tenantA } });
     const tenantBEquipmentIssuanceCount = await base.equipmentIssuance.count({ where: { tenantId: tenantB } });
@@ -376,6 +398,13 @@ async function main() {
     }
 
     await Promise.all([
+      verifyTenantScopedModel({
+        label: 'VehicleFuelCompatibility', tenantA, tenantB,
+        unscopedCountA: () => base.vehicleFuelCompatibility.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.vehicleFuelCompatibility.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.vehicleFuelCompatibility.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.vehicleFuelCompatibility.count()),
+      }),
       verifyTenantScopedModel({
         label: 'TenantBillingProfile', tenantA, tenantB,
         unscopedCountA: () => base.tenantBillingProfile.count({ where: { tenantId: tenantA } }),
