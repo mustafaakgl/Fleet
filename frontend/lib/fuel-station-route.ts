@@ -166,19 +166,54 @@ export function formatDriveTime(minutes: number | null, locale: string): string 
 }
 
 /**
+ * Gosterim esikleri.
+ *
+ * SORUN: gosterim hassasiyetinin altindaki GERCEK POZITIF bir sapma
+ * yuvarlanarak "+0" cikiyordu — surucu "bu istasyon rotamdan hic saptirmiyor"
+ * diye okuyordu. Olculen ornek: 0,6 dk'lik bir sapma "+0 min" olarak
+ * gorunuyordu.
+ *
+ * Cozum yalnizca SUNUM: hesap tam hassasiyetle yapiliyor, esigin altindaki
+ * pozitif deger "<esik" olarak yaziliyor. TAM SIFIR ise "+0" kaliyor —
+ * "sapma yok" ile "cok kucuk sapma" ayri bilgiler.
+ */
+export const EXTRA_DISTANCE_DISPLAY_THRESHOLD_KM = 0.1;
+export const EXTRA_DURATION_DISPLAY_THRESHOLD_MIN = 1;
+
+/**
  * Rotaya etki: her zaman isaretli (+) yaziliyor.
  *
  * Sifir sapma "+0" olarak gosteriliyor — bos birakmak, hesaplanmadigi
- * izlenimi verirdi.
+ * izlenimi verirdi. Esigin ALTINDAKI pozitif deger "<0,1 km" olur.
  */
 export function formatExtraDistance(km: number | null, locale: string): string | null {
   if (!usable(km)) return null;
-  return `+${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(km)} km`;
+
+  const format = (value: number) =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value);
+
+  if (km === 0) {
+    return `+${format(0)} km`;
+  }
+  if (km < EXTRA_DISTANCE_DISPLAY_THRESHOLD_KM) {
+    return `<${format(EXTRA_DISTANCE_DISPLAY_THRESHOLD_KM)} km`;
+  }
+  return `+${format(km)} km`;
 }
 
 export function formatExtraDuration(minutes: number | null, locale: string): string | null {
   if (!usable(minutes)) return null;
-  return `+${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Math.round(minutes))} min`;
+
+  const format = (value: number) =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+
+  if (minutes === 0) {
+    return `+${format(0)} min`;
+  }
+  if (minutes < EXTRA_DURATION_DISPLAY_THRESHOLD_MIN) {
+    return `<${format(EXTRA_DURATION_DISPLAY_THRESHOLD_MIN)} min`;
+  }
+  return `+${format(Math.round(minutes))} min`;
 }
 
 /** Istasyona tahmini SURUS varisi (saat:dakika). */

@@ -3,7 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RoutingCacheService } from '../../routing/routing-cache.service';
 import { RoutingService } from '../../routing/routing.service';
 import { DEFAULT_TRUCK_PROFILE, type GeoPoint, type MatrixCell } from '../../routing/core/routing.types';
-import { DriverVehicleService } from '../driver-vehicle.service';
+import { DriverVehicleService, isAmbiguousActiveTour } from '../driver-vehicle.service';
 import {
   MAX_ROUTE_CANDIDATES,
   UNAVAILABLE_ROUTE_METRICS,
@@ -21,6 +21,10 @@ const ROUTE_METRICS_TTL_SECONDS = 120;
 export type RouteCalculationStatus =
   | 'calculated'
   | 'no_active_tour'
+  /** Ayni gunde birden fazla surulmekte olan tur — rastgele secim yapilmadi. */
+  | 'ambiguous_active_tour'
+  /** Ilk tamamlanmamis durak `arrived`: surucu zaten orada, hedef degil. */
+  | 'current_stop_in_service'
   | 'next_stop_location_missing'
   | 'routing_unavailable';
 
@@ -34,6 +38,11 @@ export interface RouteContext {
     latitude: number;
     longitude: number;
   } | null;
+  /**
+   * Surucunun ustunde durdugu (`arrived`) durak — YALNIZCA gosterim icin.
+   * Koordinat tasimaz: rota hedefi degil.
+   */
+  currentStop: { id: string; sequence: number; label: string } | null;
   baseline: { distanceKm: number; durationMin: number } | null;
   calculationStatus: RouteCalculationStatus;
 }
@@ -145,7 +154,10 @@ export class RouteRecommendationService {
       avgConsumptionLPer100Km: meta.avgConsumptionLPer100Km,
     };
 
-    const withoutMetrics = (status: RouteCalculationStatus): RouteRecommendationsResponse => ({
+    const withoutMetrics = (
+      status: RouteCalculationStatus,
+      currentStop: RouteContext['currentStop'] = null,
+    ): RouteRecommendationsResponse => ({
       ...nearby,
       vehicle,
       search: { ...nearby.search, retrievedAt },
@@ -153,6 +165,7 @@ export class RouteRecommendationService {
         mode: status === 'calculated' ? 'active_tour' : 'nearby_only',
         calculatedAt,
         nextStop: null,
+        currentStop,
         baseline: null,
         calculationStatus: status,
       },
@@ -171,6 +184,22 @@ export class RouteRecommendationService {
     if (!active) {
       return withoutMetrics('no_active_tour');
     }
+
+    // Birden fazla surulmekte olan tur: rastgele secim YAPILMADI.
+    if (isAmbiguousActiveTour(active)) {
+      this.logger.warn(
+        `Ambiguous active tour for driver ${driver.id}: ${active.tourIds.join(', ')} — ` +
+          'falling back to proximity only',
+      );
+      return withoutMetrics('ambiguous_active_tour');
+    }
+
+    // Surucu mevcut duragin USTUNDE (arrived): o durak rota hedefi degil ve
+    // atlanmiyor. Durak tamamlandiktan sonraki sorguda normal cozumlenecek.
+    if (active.currentStopInService) {
+      return withoutMetrics('current_stop_in_service', active.currentStopInService);
+    }
+
     if (!active.nextStop) {
       return withoutMetrics(
         active.nextStopLocationMissing ? 'next_stop_location_missing' : 'no_active_tour',
@@ -192,6 +221,7 @@ export class RouteRecommendationService {
           mode: 'active_tour',
           calculatedAt,
           nextStop,
+          currentStop: null,
           baseline: null,
           calculationStatus: 'calculated',
         },
@@ -257,6 +287,7 @@ export class RouteRecommendationService {
           mode: 'active_tour',
           calculatedAt,
           nextStop,
+          currentStop: null,
           baseline: null,
           calculationStatus: 'routing_unavailable',
         },
@@ -279,6 +310,7 @@ export class RouteRecommendationService {
           mode: 'active_tour',
           calculatedAt,
           nextStop,
+          currentStop: null,
           baseline: null,
           calculationStatus: 'routing_unavailable',
         },
@@ -364,6 +396,7 @@ export class RouteRecommendationService {
         mode: 'active_tour',
         calculatedAt,
         nextStop,
+        currentStop: null,
         baseline,
         // Baseline hesaplanabildiyse baglam 'calculated'. Tek tek istasyonlarin
         // basarisizligi kendi routeMetrics.calculationStatus'unda kaliyor.

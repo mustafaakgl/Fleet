@@ -2799,6 +2799,10 @@ export interface StationRouteMetrics {
 export type RouteCalculationStatus =
   | 'calculated'
   | 'no_active_tour'
+  /** Ayni gunde birden fazla surulmekte olan tur — rastgele secim yapilmadi. */
+  | 'ambiguous_active_tour'
+  /** Ilk tamamlanmamis durak `arrived`: surucu zaten orada. */
+  | 'current_stop_in_service'
   | 'next_stop_location_missing'
   | 'routing_unavailable';
 
@@ -2812,6 +2816,8 @@ export interface FuelRouteContext {
     latitude: number;
     longitude: number;
   } | null;
+  /** `arrived` durumundaki mevcut durak — yalnizca gosterim, rota hedefi degil. */
+  currentStop: { id: string; sequence: number; label: string } | null;
   baseline: { distanceKm: number; durationMin: number } | null;
   calculationStatus: RouteCalculationStatus;
 }

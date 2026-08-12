@@ -3,6 +3,8 @@ import de from '@/src/locales/de/common.json';
 import en from '@/src/locales/en/common.json';
 import tr from '@/src/locales/tr/common.json';
 import {
+  EXTRA_DISTANCE_DISPLAY_THRESHOLD_KM,
+  EXTRA_DURATION_DISPLAY_THRESHOLD_MIN,
   MAX_PLANNED_LITRES,
   MIN_PLANNED_LITRES,
   ROUTE_SORT_MODES,
@@ -417,5 +419,109 @@ describe('translation completeness across de/en/tr', () => {
     expect(bundle[`${P}sort.detour`]).toBe('Geringster Umweg');
     expect(bundle[`${P}recommended`]).toBe('Empfohlen');
     expect(bundle[`${P}nextStop`]).toBe('Nächster Halt: {{stop}}');
+  });
+});
+
+/* ===========================================================================
+ * Faz 4.1 — gosterim esikleri
+ * ========================================================================= */
+
+describe('rounding display never turns a real positive into zero', () => {
+  it('shows a sub-minute positive deviation as a less-than value', () => {
+    // OLCULEN HATA: 0,6 dk'lik gercek sapma "+0 min" olarak gorunuyordu ve
+    // surucu "hic saptirmiyor" diye okuyordu.
+    expect(formatExtraDuration(0.6, 'de')).toBe('<1 min');
+    expect(formatExtraDuration(0.04, 'de')).toBe('<1 min');
+    expect(formatExtraDuration(0.999, 'de')).toBe('<1 min');
+  });
+
+  it('shows a sub-100-metre positive deviation as a less-than value', () => {
+    expect(formatExtraDistance(0.04, 'de')).toBe('<0,1 km');
+    expect(formatExtraDistance(0.099, 'de')).toBe('<0,1 km');
+  });
+
+  it('keeps a true zero as an explicit zero, without a less-than sign', () => {
+    // "Sapma yok" ile "cok kucuk sapma" AYRI bilgiler.
+    expect(formatExtraDuration(0, 'de')).toBe('+0 min');
+    expect(formatExtraDistance(0, 'de')).toBe('+0 km');
+    expect(formatExtraDuration(0, 'de')).not.toContain('<');
+    expect(formatExtraDistance(0, 'de')).not.toContain('<');
+  });
+
+  it('leaves values at or above the threshold unchanged', () => {
+    expect(formatExtraDuration(1, 'de')).toBe('+1 min');
+    expect(formatExtraDuration(3, 'de')).toBe('+3 min');
+    expect(formatExtraDistance(0.1, 'de')).toBe('+0,1 km');
+    expect(formatExtraDistance(1.6, 'de')).toBe('+1,6 km');
+  });
+
+  it('keeps locale number formatting for the threshold value', () => {
+    // Almanca virgul, Ingilizce nokta.
+    expect(formatExtraDistance(0.04, 'de')).toBe('<0,1 km');
+    expect(formatExtraDistance(0.04, 'en')).toBe('<0.1 km');
+    expect(formatExtraDistance(0.04, 'tr')).toBe('<0,1 km');
+  });
+
+  it('still returns null for missing or unusable values', () => {
+    expect(formatExtraDuration(null, 'de')).toBeNull();
+    expect(formatExtraDistance(null, 'de')).toBeNull();
+    expect(formatExtraDuration(Number.NaN, 'de')).toBeNull();
+  });
+
+  it('exposes the thresholds as documented constants', () => {
+    expect(EXTRA_DISTANCE_DISPLAY_THRESHOLD_KM).toBe(0.1);
+    expect(EXTRA_DURATION_DISPLAY_THRESHOLD_MIN).toBe(1);
+  });
+});
+
+describe('Faz 4.1 translation completeness', () => {
+  const locales: Array<[string, Record<string, unknown>]> = [
+    ['de', de as Record<string, unknown>],
+    ['en', en as Record<string, unknown>],
+    ['tr', tr as Record<string, unknown>],
+  ];
+
+  const requiredKeys = [
+    'driverPortal.fuelStations.currentStopInService',
+    'driverPortal.fuelStations.currentStop',
+    'driverPortal.fuelStations.ambiguousActiveTour',
+  ];
+
+  for (const [lang, bundle] of locales) {
+    it(`${lang} has the new edge-case keys`, () => {
+      const missing = requiredKeys.filter((key) => {
+        const value = bundle[key];
+        return typeof value !== 'string' || value.trim() === '';
+      });
+      expect(missing, `${lang} is missing: ${missing.join(', ')}`).toEqual([]);
+    });
+  }
+
+  it('keeps the current-stop placeholder', () => {
+    for (const [, bundle] of locales) {
+      expect(bundle['driverPortal.fuelStations.currentStop']).toContain('{{stop}}');
+    }
+  });
+
+  it('translates the in-service message distinctly and non-technically', () => {
+    const values = locales.map(
+      ([, bundle]) => bundle['driverPortal.fuelStations.currentStopInService'] as string,
+    );
+    expect(new Set(values).size).toBe(3);
+    for (const value of values) {
+      expect(value.length).toBeGreaterThan(20);
+      // Ham durum kodu kullaniciya gitmemeli.
+      expect(value).not.toContain('current_stop_in_service');
+      expect(value).not.toContain('arrived');
+    }
+  });
+
+  it('keeps the ambiguous-tour message free of technical detail', () => {
+    for (const [, bundle] of locales) {
+      const value = bundle['driverPortal.fuelStations.ambiguousActiveTour'] as string;
+      expect(value).not.toContain('ambiguous_active_tour');
+      expect(value).not.toContain('tourId');
+      expect(value).not.toContain('in_progress');
+    }
   });
 });

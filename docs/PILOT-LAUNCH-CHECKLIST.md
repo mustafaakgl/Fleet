@@ -156,6 +156,32 @@ Bunlardan biri bile kapanmadıysa pilot başlamaz.
 - [ ] ❓ Redis rota önbelleği aktif (`REDIS_URL`) — ölçüm: sıcak cache 7-9× hızlı
 - [ ] ❓ `ROUTING_ACCESS_PROBE_LAT/LON` pilot bölgesine uygun ayarlanmış
 
+### 6.1 Yakıt istasyonu rota sapması — GERÇEK Valhalla kapısı
+
+Sürücüye gösterilen "rotaya etkisi: +X km" değeri, matris hücrelerinin doğru
+kaynak/hedef çiftine eşlendiği varsayımına dayanıyor. Birim testler bu eşlemeyi
+**elle kurulmuş hücrelerle** doğruluyor — yani kendi varsayımımızı kendimize
+doğrulatıyoruz. Geliştirmede yapılan stub kontrolü de aynı sınırın içinde:
+formülü ve kod yolunu kanıtlar, **gerçek Valhalla davranışını kanıtlamaz**.
+
+Lansmandan önce gerçek servise karşı çalıştırılmalı:
+
+```bash
+VALHALLA_LIVE_URL=http://<valhalla-host>:8002 npm --prefix backend test
+```
+
+`VALHALLA_LIVE_URL` verilmezse bu testler **açıkça skip** olur (opt-in).
+Kaynak: `backend/src/routing/valhalla-live.integration.spec.ts`.
+
+- [ ] ⚠️ **Matris indeksleri doğrulandı** — `matrixBetween` hücreleri aynı çiftin
+      nokta-nokta rotasıyla örtüşüyor (tek kaynak/çok hedef **ve** çok kaynak/tek hedef)
+- [ ] ⚠️ **Truck costing profili gerçekten uygulanıyor** — daha kısıtlı bir kamyon
+      profili daha kısa rota üretmiyor; sessizce `auto`'ya düşülmüyor
+- [ ] ⚠️ **Timeout kontrollü** — zaman aşımı istisna fırlatmıyor, `unavailable`
+      sonucu dönüyor ve sürücünün istasyon listesi çalışmaya devam ediyor
+- [ ] ❓ Gerçek Valhalla ile ölçülen matris gecikmesi kabul edilebilir
+      (istek başına 2 çağrı, ~21 hücre; senkron sürücü isteğinin içinde çalışıyor)
+
 ## 7. İş akışı doğrulaması — rol bazlı
 
 Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`

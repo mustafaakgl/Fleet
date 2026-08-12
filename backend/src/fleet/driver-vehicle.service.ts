@@ -42,7 +42,48 @@ export interface ResolvedActiveTourStop {
   } | null;
   /** Tur var, tamamlanmamis durak var ama koordinati yok. */
   nextStopLocationMissing: boolean;
+  /**
+   * Ilk tamamlanmamis durak `arrived` ise onun GUVENLI ozeti.
+   *
+   * Koordinat BILINCLI olarak yok: bu durak bir rota hedefi degil. Surucu
+   * zaten orada duruyor ve "mevcut konum -> istasyon -> zaten bulundugum
+   * durak" hesabi gercek hayatta anlamsiz bir oneri uretir. Yalnizca
+   * kullaniciya "hangi durakta oldugunu" gostermek icin.
+   */
+  currentStopInService: {
+    id: string;
+    sequence: number;
+    label: string;
+  } | null;
 }
+
+/**
+ * Ayni gun icinde birden fazla tur guvenilir sekilde ayirt edilemedi.
+ *
+ * Rastgele tur secmek yerine bu durum bildirilir; cagiran taraf rota
+ * metrigi olmadan yakinlik davranisina duser.
+ */
+export interface AmbiguousActiveTour {
+  ambiguous: true;
+  /** Tanilama icin: cakisan turlarin kimlikleri. */
+  tourIds: string[];
+}
+
+export type ActiveTourResolution = ResolvedActiveTourStop | AmbiguousActiveTour | null;
+
+export function isAmbiguousActiveTour(
+  resolution: ActiveTourResolution,
+): resolution is AmbiguousActiveTour {
+  return resolution !== null && 'ambiguous' in resolution;
+}
+
+/**
+ * Tur durumu onceligi: surulmekte olan tur, yayinlanmis turdan; yayinlanmis
+ * tur da yalnizca optimize edilmis turdan ONCE gelir.
+ *
+ * Dizi sirasi onceligi TANIMLAR — indeks kucukse oncelik yuksek.
+ */
+const TOUR_STATUS_PRIORITY = ['in_progress', 'released', 'optimized'] as const;
 
 /**
  * "Bu surucu bugun hangi aracta?" sorusunun TEK yeri.
@@ -152,18 +193,29 @@ export class DriverVehicleService {
    * Sorgular tenant kapsamli istemciyle: baska kiracinin turu cozumlemeye
    * giremez.
    */
-  async resolveActiveTourNextStop(driverId: string): Promise<ResolvedActiveTourStop | null> {
+  async resolveActiveTourNextStop(driverId: string): Promise<ActiveTourResolution> {
     const { start, end } = this.todayRange();
 
-    const tour = await this.prisma.tour.findFirst({
+    // TUM adaylar cekiliyor, `findFirst` ile bir tanesi DEGIL.
+    //
+    // Neden: findFirst'in orderBy'i workDate'ti ve workDate zaten bugune
+    // kisitli oldugu icin ayni gundeki iki tur arasinda siralama YOKTU —
+    // secim Prisma'nin dondurdugu dogal siraya kaliyordu. Surucu her
+    // yenilemede baska turun sapmasini gorebilirdi.
+    //
+    // Siralama repodaki canonical kurallar: workDate artan (surucu tur ucu,
+    // tour-driver.controller) ve createdAt azalan (ofis tur listesi,
+    // tour.controller). Son olarak id ile kararli tie-break.
+    const candidates = await this.prisma.tour.findMany({
       where: {
         driverId,
         workDate: { gte: start, lt: end },
         status: { in: [...DRIVER_VISIBLE_TOUR_STATUSES] },
       },
-      orderBy: { workDate: 'asc' },
+      orderBy: [{ workDate: 'asc' }, { createdAt: 'desc' }, { id: 'asc' }],
       select: {
         id: true,
+        status: true,
         updatedAt: true,
         stops: {
           where: { status: { notIn: [TourStopStatus.completed, TourStopStatus.skipped] } },
@@ -172,6 +224,7 @@ export class DriverVehicleService {
             id: true,
             sequence: true,
             kind: true,
+            status: true,
             location: {
               select: { latitude: true, longitude: true, city: true, street: true, rawAddress: true },
             },
@@ -180,35 +233,75 @@ export class DriverVehicleService {
       },
     });
 
-    if (!tour) {
+    if (candidates.length === 0) {
       return null;
     }
 
+    // En yuksek onceligi tasiyan durum secilir: in_progress > released > optimized.
+    const topPriority = Math.min(
+      ...candidates.map((candidate) =>
+        TOUR_STATUS_PRIORITY.indexOf(candidate.status as (typeof TOUR_STATUS_PRIORITY)[number]),
+      ),
+    );
+    const topStatus = TOUR_STATUS_PRIORITY[topPriority];
+    const topCandidates = candidates.filter((candidate) => candidate.status === topStatus);
+
+    // AYNI ANDA iki `in_progress` tur fiziksel olarak imkansiz — bir surucu iki
+    // turu birlikte suremez. Bu bir veri anomalisidir ve teknik olarak
+    // deterministik secilebilse bile IS ANLAMINDA keyfi olurdu; bu yuzden
+    // rastgele secmek yerine belirsizlik bildiriliyor.
+    //
+    // released/optimized icin birden fazla tur normaldir (bolunmus vardiya):
+    // surucu bunlari sirayla yapar, en erken olan aktif olandir ve yukaridaki
+    // deterministik siralama onu secer.
+    if (topStatus === 'in_progress' && topCandidates.length > 1) {
+      return { ambiguous: true, tourIds: topCandidates.map((candidate) => candidate.id) };
+    }
+
+    const tour = topCandidates[0]!;
     const routeVersion = tour.updatedAt.toISOString();
+    const base = { tourId: tour.id, routeVersion, currentStopInService: null };
 
     if (tour.stops.length === 0) {
-      return { tourId: tour.id, routeVersion, nextStop: null, nextStopLocationMissing: false };
+      return { ...base, nextStop: null, nextStopLocationMissing: false };
+    }
+
+    const first = tour.stops[0]!;
+    const label =
+      first.location.street?.trim() ||
+      first.location.city?.trim() ||
+      first.location.rawAddress?.trim() ||
+      first.kind;
+
+    // Ilk tamamlanmamis durak `arrived` ise surucu ZATEN ORADA.
+    //
+    // Bu duraga rota kurmak ("konum -> istasyon -> bulundugum durak") anlamsiz
+    // bir oneri uretir. Onu ATLAYIP sonraki pending duraga gecmek de yanlis
+    // olurdu: bu, surucunun mevcut hizmeti bitirdigini VARSAYMAK olur. Durak
+    // completed/skipped isaretlendikten sonraki sorguda sonraki pending durak
+    // normal sekilde cozulecek.
+    if (first.status === TourStopStatus.arrived) {
+      return {
+        ...base,
+        nextStop: null,
+        nextStopLocationMissing: false,
+        currentStopInService: { id: first.id, sequence: first.sequence, label },
+      };
     }
 
     // Koordinati olmayan durak SESSIZCE atlanmiyor ve yanlis koordinatla
     // hesaplanmiyor: ilk tamamlanmamis duragin koordinati yoksa sapma
     // hesaplanamaz ve bu durum ayrica bildirilir.
-    const first = tour.stops[0]!;
     if (first.location.latitude === null || first.location.longitude === null) {
-      return { tourId: tour.id, routeVersion, nextStop: null, nextStopLocationMissing: true };
+      return { ...base, nextStop: null, nextStopLocationMissing: true };
     }
 
     return {
-      tourId: tour.id,
-      routeVersion,
+      ...base,
       nextStop: {
         id: first.id,
         sequence: first.sequence,
-        label:
-          first.location.street?.trim() ||
-          first.location.city?.trim() ||
-          first.location.rawAddress?.trim() ||
-          first.kind,
+        label,
         latitude: Number(first.location.latitude),
         longitude: Number(first.location.longitude),
       },

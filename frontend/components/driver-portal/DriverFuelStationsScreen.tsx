@@ -63,6 +63,7 @@ import { buildNavigationUrl, detectMobilePlatform } from '@/lib/navigation-links
 import { cn } from '@/lib/utils';
 import type {
   FuelProductType,
+  RouteCalculationStatus,
   RouteRecommendationStation,
   RouteRecommendationsResponse,
 } from '@/lib/types';
@@ -89,6 +90,25 @@ class MapErrorBoundary extends Component<{ fallback: ReactNode; children: ReactN
 
   render() {
     return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/**
+ * `nearby_only` moduna neden dusuldugu -> kullanici metni.
+ *
+ * Ham durum kodu KULLANICIYA GOSTERILMEZ; her sebep icin ayri, teknik olmayan
+ * bir metin var.
+ */
+function nearbyOnlyReasonKey(status: RouteCalculationStatus): string {
+  switch (status) {
+    case 'next_stop_location_missing':
+      return 'driverPortal.fuelStations.nextStopLocationMissing';
+    case 'current_stop_in_service':
+      return 'driverPortal.fuelStations.currentStopInService';
+    case 'ambiguous_active_tour':
+      return 'driverPortal.fuelStations.ambiguousActiveTour';
+    default:
+      return 'driverPortal.fuelStations.noActiveTour';
   }
 }
 
@@ -386,13 +406,18 @@ export function DriverFuelStationsScreen() {
           ) : null}
 
           {data.routeContext.mode === 'nearby_only' ? (
-            <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
-              {t(
-                data.routeContext.calculationStatus === 'next_stop_location_missing'
-                  ? 'driverPortal.fuelStations.nextStopLocationMissing'
-                  : 'driverPortal.fuelStations.noActiveTour',
-              )}
-            </p>
+            <div className="space-y-1 rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
+              <p>{t(nearbyOnlyReasonKey(data.routeContext.calculationStatus))}</p>
+              {/* `arrived` durumunda hangi durakta oldugu gosterilebilir —
+                  ama rota hedefi olarak KULLANILMAZ. */}
+              {data.routeContext.currentStop ? (
+                <p className="break-words font-medium">
+                  {t('driverPortal.fuelStations.currentStop', {
+                    stop: data.routeContext.currentStop.label,
+                  })}
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
           {data.unsupportedCompatibleProducts.length > 0 ? (

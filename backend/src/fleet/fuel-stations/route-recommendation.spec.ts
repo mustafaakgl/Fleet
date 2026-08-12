@@ -58,12 +58,16 @@ function cell(sourceIndex: number, targetIndex: number, distanceKm: number | nul
 
 type BuildOptions = {
   stations?: Array<ReturnType<typeof station>>;
-  activeTour?: {
-    tourId: string;
-    routeVersion: string;
-    nextStop: { id: string; sequence: number; label: string; latitude: number; longitude: number } | null;
-    nextStopLocationMissing: boolean;
-  } | null;
+  activeTour?:
+    | {
+        tourId: string;
+        routeVersion: string;
+        nextStop: { id: string; sequence: number; label: string; latitude: number; longitude: number } | null;
+        nextStopLocationMissing: boolean;
+        currentStopInService?: { id: string; sequence: number; label: string } | null;
+      }
+    | { ambiguous: true; tourIds: string[] }
+    | null;
   /** Matris cagrilarinin sonucu; sirayla [fromOrigin, toNextStop]. */
   matrixResults?: Array<{ ok: boolean; cells?: ReturnType<typeof cell>[]; error?: string }>;
   consumption?: number | null;
@@ -104,6 +108,7 @@ function buildService(options: BuildOptions = {}) {
               longitude: 6.9,
             },
             nextStopLocationMissing: false,
+            currentStopInService: null,
           }
         : options.activeTour,
   };
@@ -685,5 +690,109 @@ describe('fuel product usage stays consistent with Faz 1', () => {
     // dogruluyoruz.
     assert.equal(FuelProductUsage.ADDITIVE, 'ADDITIVE');
     assert.equal(FuelProductType.ADBLUE, 'ADBLUE');
+  });
+});
+
+
+describe('RouteRecommendationService — ambiguous active tour', () => {
+  it('falls back to nearby_only without calling the router', async () => {
+    const { service, matrixCalls } = buildService({
+      activeTour: { ambiguous: true, tourIds: ['run-a', 'run-b'] },
+    });
+
+    const response = await service.findRouteRecommendationsForDriver('user-1', ORIGIN);
+
+    assert.equal(response.routeContext.mode, 'nearby_only');
+    assert.equal(response.routeContext.calculationStatus, 'ambiguous_active_tour');
+    assert.equal(response.routeContext.nextStop, null);
+    assert.equal(response.routeContext.baseline, null);
+    // Rastgele tur secilmedigi icin Valhalla'ya HIC gidilmiyor.
+    assert.deepEqual(matrixCalls, []);
+    // Yakinlik listesi calismaya devam ediyor.
+    assert.equal(response.stations.length, 1);
+  });
+});
+
+describe('RouteRecommendationService — current stop in service', () => {
+  it('does not route to an arrived stop and skips the router entirely', async () => {
+    const { service, matrixCalls } = buildService({
+      activeTour: {
+        tourId: 'tour-1',
+        routeVersion: 'v1',
+        nextStop: null,
+        nextStopLocationMissing: false,
+        currentStopInService: { id: 'at-stop', sequence: 2, label: 'Rampe 3' },
+      },
+    });
+
+    const response = await service.findRouteRecommendationsForDriver('user-1', ORIGIN);
+
+    assert.equal(response.routeContext.mode, 'nearby_only');
+    assert.equal(response.routeContext.calculationStatus, 'current_stop_in_service');
+    assert.equal(response.routeContext.nextStop, null);
+    // "Konum -> istasyon -> bulundugum durak" hesabi YAPILMIYOR.
+    assert.deepEqual(matrixCalls, []);
+  });
+
+  it('exposes a safe summary of the current stop without coordinates', async () => {
+    const { service } = buildService({
+      activeTour: {
+        tourId: 'tour-1',
+        routeVersion: 'v1',
+        nextStop: null,
+        nextStopLocationMissing: false,
+        currentStopInService: { id: 'at-stop', sequence: 2, label: 'Rampe 3' },
+      },
+    });
+
+    const response = await service.findRouteRecommendationsForDriver('user-1', ORIGIN);
+
+    assert.deepEqual(response.routeContext.currentStop, {
+      id: 'at-stop',
+      sequence: 2,
+      label: 'Rampe 3',
+    });
+    // Koordinat tasimiyor: rota hedefi olarak kullanilamaz.
+    assert.equal('latitude' in (response.routeContext.currentStop ?? {}), false);
+  });
+
+  it('still returns the nearby stations while the stop is in service', async () => {
+    const { service } = buildService({
+      stations: [station('a'), station('b', { distanceKm: 4 })],
+      activeTour: {
+        tourId: 'tour-1',
+        routeVersion: 'v1',
+        nextStop: null,
+        nextStopLocationMissing: false,
+        currentStopInService: { id: 'at-stop', sequence: 0, label: 'Rampe 3' },
+      },
+    });
+
+    const response = await service.findRouteRecommendationsForDriver('user-1', ORIGIN);
+
+    assert.equal(response.stations.length, 2);
+    for (const entry of response.stations) {
+      assert.equal(entry.routeMetrics.calculationStatus, 'unavailable');
+    }
+  });
+
+  it('calculates normally on the next query once the stop is completed', async () => {
+    // Durak completed olduktan sonra cozumleme siradaki pending duraga gecer;
+    // servis o zaman normal hesap yapar.
+    const { service, matrixCalls } = buildService({
+      activeTour: {
+        tourId: 'tour-1',
+        routeVersion: 'v2',
+        nextStop: { id: 'later', sequence: 1, label: 'Musterweg', latitude: 51.5, longitude: 6.9 },
+        nextStopLocationMissing: false,
+        currentStopInService: null,
+      },
+    });
+
+    const response = await service.findRouteRecommendationsForDriver('user-1', ORIGIN);
+
+    assert.equal(response.routeContext.calculationStatus, 'calculated');
+    assert.equal(response.routeContext.nextStop?.id, 'later');
+    assert.equal(matrixCalls.length, 2);
   });
 });

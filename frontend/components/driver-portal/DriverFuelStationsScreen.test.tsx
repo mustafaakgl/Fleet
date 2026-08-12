@@ -1487,3 +1487,179 @@ describe('DriverFuelStationsScreen — Faz 4 keeps Faz 3 guarantees', () => {
     expect(body).not.toContain('statusCode');
   });
 });
+
+/* ===========================================================================
+ * Faz 4.1 — aktif tur belirsizligi ve `arrived` durak
+ * ========================================================================= */
+
+describe('DriverFuelStationsScreen — current stop in service', () => {
+  function inServiceResponse() {
+    return response({
+      routeContext: {
+        mode: 'nearby_only',
+        calculatedAt: '2026-08-12T12:32:00.000Z',
+        nextStop: null,
+        currentStop: { id: 'at-stop', sequence: 2, label: 'Rampe 3, Tor B' },
+        baseline: null,
+        calculationStatus: 'current_stop_in_service',
+      },
+      stations: [station('a'), station('b', { distanceKm: 5 })],
+    });
+  }
+
+  it('explains that the current stop is not finished yet', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(inServiceResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByText('driverPortal.fuelStations.currentStopInService')).toBeDefined();
+    // Rota basligi gosterilmiyor: aktif rota hedefi yok.
+    expect(screen.queryByText(ROUTE_KEY.routeTitle)).toBeNull();
+  });
+
+  it('shows which stop the driver is on without treating it as a target', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(inServiceResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(
+      screen.getByText(/driverPortal\.fuelStations\.currentStop.*Rampe 3, Tor B/),
+    ).toBeDefined();
+    // "Sonraki durak" olarak SUNULMUYOR.
+    expect(screen.queryByText(/driverPortal\.fuelStations\.nextStop\b/)).toBeNull();
+  });
+
+  it('keeps the nearby station list fully usable', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(inServiceResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByText('Station a')).toBeDefined();
+    expect(screen.getByText('Station b')).toBeDefined();
+    expect(screen.getAllByRole('link', { name: KEY.openRoute }).length).toBe(2);
+  });
+
+  it('disables only the route sort modes', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(inServiceResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(
+      (screen.getByRole('button', { name: ROUTE_KEY.sortDetour }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: ROUTE_KEY.sortDriveTime }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    // Mesafe siralamasi calisiyor.
+    expect(
+      (screen.getByRole('button', { name: KEY.sortDistance }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it('shows no raw status code', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(inServiceResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const body = document.body.textContent ?? '';
+    expect(body).not.toContain('current_stop_in_service');
+    expect(body).not.toContain('arrived');
+  });
+});
+
+describe('DriverFuelStationsScreen — ambiguous active tour', () => {
+  function ambiguousResponse() {
+    return response({
+      routeContext: {
+        mode: 'nearby_only',
+        calculatedAt: '2026-08-12T12:32:00.000Z',
+        nextStop: null,
+        currentStop: null,
+        baseline: null,
+        calculationStatus: 'ambiguous_active_tour',
+      },
+    });
+  }
+
+  it('explains the ambiguity without technical detail', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(ambiguousResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByText('driverPortal.fuelStations.ambiguousActiveTour')).toBeDefined();
+
+    const body = document.body.textContent ?? '';
+    expect(body).not.toContain('ambiguous_active_tour');
+    expect(body).not.toContain('tourId');
+    expect(body).not.toContain('in_progress');
+  });
+
+  it('keeps the station list working', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(ambiguousResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByText('Station a')).toBeDefined();
+    expect(screen.queryByText(ROUTE_KEY.routeTitle)).toBeNull();
+  });
+});
+
+describe('DriverFuelStationsScreen — sub-threshold deviation display', () => {
+  it('shows a real sub-minute deviation as a less-than value, never as +0', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        stations: [
+          station('tiny', {
+            routeMetrics: calculatedMetrics({ extraDistanceKm: 0.04, extraDurationMin: 0.6 }),
+          }),
+        ],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const impact = screen.getByText(/driverPortal\.fuelStations\.routeImpact/).textContent ?? '';
+    expect(impact).toContain('<0,1 km');
+    expect(impact).toContain('<1 min');
+    // Gercek pozitif deger sifir gibi GORUNMEMELI.
+    expect(impact).not.toContain('+0 km');
+    expect(impact).not.toContain('+0 min');
+  });
+
+  it('shows a true zero deviation as an explicit zero', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        stations: [
+          station('onroute', {
+            routeMetrics: calculatedMetrics({ extraDistanceKm: 0, extraDurationMin: 0 }),
+          }),
+        ],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const impact = screen.getByText(/driverPortal\.fuelStations\.routeImpact/).textContent ?? '';
+    expect(impact).toContain('+0 km');
+    expect(impact).toContain('+0 min');
+    expect(impact).not.toContain('<');
+  });
+});
