@@ -26,6 +26,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const prismaMapped = this.mapPrismaError(exception);
     const statusCode = prismaMapped?.statusCode ?? this.resolveStatusCode(exception);
     const message = prismaMapped?.message ?? this.resolveMessage(exception);
+    const code = prismaMapped ? undefined : this.resolveMachineCode(exception);
 
     this.logException(exception, statusCode);
 
@@ -34,6 +35,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
         statusCode,
         message,
         timestamp,
+        // `code` uretimde de tasiniyor. `details` burada kirpiliyor ve kod
+        // yalnizca orada olsaydi istemci uretimde hata TURUNU ayirt edemez,
+        // her dogrulama hatasini "genel hata" diye gostermek zorunda kalirdi.
+        // Bu bir makine kodudur (ornegin adblue_must_be_additive) — sunucu ici
+        // detay degil, sozlesmenin parcasi.
+        ...(code ? { code } : {}),
       });
       return;
     }
@@ -42,9 +49,31 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode,
       message,
       timestamp,
+      ...(code ? { code } : {}),
       error: this.resolveErrorName(exception),
       details: this.resolveHttpExceptionDetails(exception),
     });
+  }
+
+  /**
+   * Istisna govdesindeki makine-okunur `code` alanini cikarir.
+   *
+   * Yalnizca string bir `code` kabul edilir; govdenin geri kalani (ornegin
+   * hangi urun/kullanim ucusunun cakistigi) `details` icinde kalir ve
+   * uretimde disariya verilmez.
+   */
+  private resolveMachineCode(exception: unknown): string | undefined {
+    if (!(exception instanceof HttpException)) {
+      return undefined;
+    }
+
+    const response = exception.getResponse();
+    if (!response || typeof response !== 'object') {
+      return undefined;
+    }
+
+    const code = (response as { code?: unknown }).code;
+    return typeof code === 'string' && code.trim() ? code : undefined;
   }
 
   private mapPrismaError(exception: unknown): PrismaMappedError | null {

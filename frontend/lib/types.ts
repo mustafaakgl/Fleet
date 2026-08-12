@@ -2649,3 +2649,57 @@ export type UpsertBillingProfilePayload = {
   revenueAccountReverseCharge?: string;
   debtorNumberStart?: number;
 };
+
+/**
+ * Arac yakit uyumlulugu — backend sozlesmesinin aynisi.
+ *
+ * Kaynak: backend/prisma/schema.prisma (FuelProductType / FuelProductUsage /
+ * FuelCompatibilitySource) ve
+ * backend/src/fleet/fuel-stations/dto/replace-fuel-compatibility.dto.ts.
+ * Degerler BUYUK HARF cunku pompadaki urun kodlari; tahmin edilmedi, sema'dan
+ * alindi. Backend'e yeni bir urun eklenirse burasi da guncellenmeli — aksi
+ * halde arayuz o urunu "bilinmeyen" olarak gosterir (sessizce kaybetmez).
+ */
+export type FuelProductType =
+  | 'DIESEL'
+  | 'SUPER_E5'
+  | 'SUPER_E10'
+  | 'SUPER_PLUS'
+  | 'HVO100'
+  | 'CNG'
+  | 'LNG'
+  | 'ELECTRICITY'
+  | 'HYDROGEN'
+  | 'ADBLUE';
+
+export type FuelProductUsage = 'PRIMARY' | 'ALTERNATIVE' | 'ADDITIVE';
+
+export type FuelCompatibilitySource = 'MANUFACTURER' | 'VIN' | 'ADMIN' | 'IMPORTED';
+
+/** GET /vehicles/:id/fuel-compatibility -> entries[] */
+export interface VehicleFuelCompatibilityEntry {
+  id: string;
+  productType: FuelProductType;
+  usageType: FuelProductUsage;
+  approved: boolean;
+  source: FuelCompatibilitySource;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VehicleFuelCompatibilityResponse {
+  vehicle: { id: string; plateNumber: string };
+  /** Istasyon filtresine giren urunler: approved + PRIMARY/ALTERNATIVE. */
+  compatibleProducts: FuelProductType[];
+  entries: VehicleFuelCompatibilityEntry[];
+}
+
+/** PUT govdesindeki tek kayit. `approved` verilmezse backend true sayar. */
+export interface VehicleFuelCompatibilityWriteEntry {
+  productType: FuelProductType;
+  usageType: FuelProductUsage;
+  approved?: boolean;
+  source: FuelCompatibilitySource;
+  verifiedAt?: string;
+}

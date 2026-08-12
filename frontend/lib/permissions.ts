@@ -42,6 +42,19 @@ export function canEditDriverVacationEntitlement(role: Role) {
   return role === 'admin' || role === 'boss' || role === 'office';
 }
 
+/**
+ * Arac yakit uyumlulugunu DEGISTIREBILENLER.
+ *
+ * Muhasebe bilincli olarak DISARIDA: sunucuda PUT
+ * /vehicles/:id/fuel-compatibility `@RequiresWrite()` tasiyor ve WriteRoleGuard
+ * yalnizca OPERATIONAL_WRITE_ROLES'e (admin, boss, office) izin veriyor.
+ * Muhasebe araci GOREBILIR ama kaydedemez — buraya eklenirse arayuz duzenleme
+ * dugmesi acar ve kullanici kaydederken 403 alir. Ikisi birlikte degismeli.
+ */
+export function canEditVehicleFuelCompatibility(role: Role) {
+  return role === 'admin' || role === 'boss' || role === 'office';
+}
+
 export function canImportCsv(role: Role) {
   return role === 'admin' || role === 'office';
 }

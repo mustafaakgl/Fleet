@@ -829,6 +829,27 @@ export const vehiclesApi = {
 
   removeEquipment: (vehicleId: string, equipmentId: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/vehicles/${vehicleId}/equipment/${equipmentId}`).then((r) => r.data),
+
+  getFuelCompatibility: (id: string) =>
+    api
+      .get<import('./types').VehicleFuelCompatibilityResponse>(`/vehicles/${id}/fuel-compatibility`)
+      .then((r) => r.data),
+
+  /**
+   * Uyumluluk setinin TAMAMINI degistirir (backend PUT semantigi: sil + yaz,
+   * tek transaction). Bos dizi gecerlidir ve "uyumluluk tanimsiz" durumuna
+   * geri doner.
+   */
+  replaceFuelCompatibility: (
+    id: string,
+    entries: import('./types').VehicleFuelCompatibilityWriteEntry[],
+  ) =>
+    api
+      .put<import('./types').VehicleFuelCompatibilityResponse>(
+        `/vehicles/${id}/fuel-compatibility`,
+        { entries },
+      )
+      .then((r) => r.data),
 };
 
 export interface VehicleEquipmentItem {

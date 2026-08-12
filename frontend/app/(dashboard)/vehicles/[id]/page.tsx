@@ -35,10 +35,15 @@ import { DocumentFileLink } from '@/components/documents/DocumentFileLink';
 import { ServiceRecordInlineField } from '@/components/service-records/ServiceRecordInlineField';
 import { VehicleHandoverHistory, type VehicleHandoverHistoryRow } from '@/components/vehicles/VehicleHandoverHistory';
 import { VehicleCostChart } from '@/components/vehicles/VehicleCostChart';
+import { VehicleFuelCompatibilityCard } from '@/components/vehicles/VehicleFuelCompatibilityCard';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { EquipmentPhotoPreview } from '@/components/vehicles/EquipmentPhotoPreview';
 import { getUser } from '@/lib/auth';
-import { canEditServiceRecords, canViewOperationalTachograph } from '@/lib/permissions';
+import {
+  canEditServiceRecords,
+  canEditVehicleFuelCompatibility,
+  canViewOperationalTachograph,
+} from '@/lib/permissions';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 
@@ -97,6 +102,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const { t } = useTranslation();
   const canEditServiceHistory = canEditServiceRecords(getUser()?.role ?? 'customer');
   const showVehicleCosts = canViewOperationalTachograph(getUser()?.role ?? 'customer');
+  const canEditFuelCompatibility = canEditVehicleFuelCompatibility(getUser()?.role ?? 'customer');
 
   const handleServiceRecordUpdated = useCallback((updated: ServiceRecord) => {
     setServiceRecords((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
@@ -433,6 +439,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </dl>
         </CardContent>
       </Card>
+
+      {/* Aracin teknik ozelligi — arac bilgilerinin hemen ardinda duruyor.
+          Surucunun akaryakit istasyonu onerileri bu kayda dayaniyor. */}
+      <VehicleFuelCompatibilityCard vehicleId={id} canEdit={canEditFuelCompatibility} />
 
       {showVehicleCosts ? <VehicleCostChart vehicleId={id} /> : null}
 

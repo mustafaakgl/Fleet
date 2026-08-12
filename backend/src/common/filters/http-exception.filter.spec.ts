@@ -27,6 +27,74 @@ describe('HttpExceptionFilter response redaction', () => {
     assert.equal(JSON.stringify(responseBody).includes('/private/server/path.ts'), false);
   });
 });
+describe('HttpExceptionFilter machine-readable code', () => {
+  function captureBody(exception: unknown, nodeEnv: string): Record<string, unknown> {
+    const previousEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = nodeEnv;
+    let responseBody: Record<string, unknown> | undefined;
+    const response = {
+      status: () => response,
+      json: (body: Record<string, unknown>) => {
+        responseBody = body;
+        return response;
+      },
+    } as unknown as Response;
+    const host = {
+      switchToHttp: () => ({ getResponse: () => response }),
+    } as unknown as ArgumentsHost;
+
+    try {
+      new HttpExceptionFilter().catch(exception, host);
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousEnv;
+      }
+    }
+
+    assert.ok(responseBody);
+    return responseBody;
+  }
+
+  it('carries the code in production, where details are stripped', () => {
+    // Istemci hata TURUNU uretimde de ayirt edebilmeli: kod yalnizca
+    // `details` icinde olsaydi arayuz her dogrulama hatasini "genel hata"
+    // olarak gostermek zorunda kalirdi.
+    const body = captureBody(
+      new BadRequestException({ code: 'adblue_must_be_additive', productType: 'ADBLUE' }),
+      'production',
+    );
+
+    assert.equal(body.code, 'adblue_must_be_additive');
+    assert.equal('details' in body, false);
+    // Govdenin geri kalani uretimde disariya verilmez.
+    assert.equal(JSON.stringify(body).includes('productType'), false);
+  });
+
+  it('carries the code alongside details outside production', () => {
+    const body = captureBody(
+      new BadRequestException({ code: 'duplicate_fuel_compatibility_entry' }),
+      'development',
+    );
+
+    assert.equal(body.code, 'duplicate_fuel_compatibility_entry');
+    assert.notEqual(body.details, undefined);
+  });
+
+  it('omits the field entirely when the exception carries no code', () => {
+    const body = captureBody(new BadRequestException('plain message'), 'production');
+
+    assert.equal('code' in body, false);
+  });
+
+  it('ignores a non-string code', () => {
+    const body = captureBody(new BadRequestException({ code: 42 }), 'production');
+
+    assert.equal('code' in body, false);
+  });
+});
+
 describe('HttpExceptionFilter validation messages', () => {
   it('joins class-validator array messages instead of masking them', () => {
     let responseBody: Record<string, unknown> | undefined;
