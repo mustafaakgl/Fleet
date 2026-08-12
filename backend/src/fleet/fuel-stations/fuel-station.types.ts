@@ -27,12 +27,54 @@ export interface FuelStationOffering {
 /** Kamyon erisimi. Saglayici soylemiyorsa 'unknown' — tahmin yok. */
 export type FuelStationHgvAccess = 'unknown' | 'yes' | 'no';
 
+/**
+ * Istasyon adresi.
+ *
+ * Faz 1'de bu alanlar normalize modelde YOKTU — Tankerkonig list.php street,
+ * houseNumber, postCode ve place donduruyor ama adaptor onlari atiyordu.
+ * Surucu ekraninin istasyonu tanimasi icin gerekli: koordinat surucuye
+ * "hangi benzinlik" sorusunu cevaplamiyor.
+ *
+ * Her alan ayri ayri nullable: saglayici bazi istasyonlarda ev numarasi
+ * vermiyor ve eksik parcayi uydurmak yerine bos birakiyoruz.
+ */
+export interface FuelStationAddress {
+  street: string | null;
+  houseNumber: string | null;
+  postalCode: string | null;
+  city: string | null;
+}
+
+/**
+ * Verinin gercek mi demo mu oldugu.
+ *
+ * Istemci bunu ENV degiskeninden DEGIL bu alandan okumali: frontend'in kendi
+ * ortam degiskeni backend'in hangi saglayiciyla calistigini bilmez ve yanlis
+ * tarafta "demo" uyarisi gosterip gercek fiyati sahte gibi (ya da tersi)
+ * isaretleyebilir.
+ */
+export type FuelStationDataMode = 'live' | 'mock';
+
+/**
+ * Veri kaynagi atfi.
+ *
+ * Tankerkonig/MTS-K verisi CC BY 4.0 ile geliyor ve atfi GOSTERMEK zorunlu.
+ * Mock modda kullaniciya teknik saglayici adi degil "demo verisi" bilgisi
+ * gosterilir — bkz. FuelStationProvider.attribution.
+ */
+export interface FuelStationAttribution {
+  label: string;
+  url: string | null;
+}
+
 export interface NormalizedFuelStation {
   /** Saglayicinin kendi kimligi. Bizim tarafta kalici kayit yok. */
   id: string;
   provider: string;
   name: string;
   brand: string | null;
+  /** Surucunun istasyonu tanimasi icin; parcalari ayri ayri eksik olabilir. */
+  address: FuelStationAddress;
   latitude: number;
   longitude: number;
   distanceKm: number | null;
@@ -88,6 +130,15 @@ export type FuelStationResult<T> =
 export interface FuelStationProvider {
   /** Yanit ve loglarda gorunen ad. Anahtar ICERMEZ. */
   readonly name: string;
+  /**
+   * Bu saglayicinin urettigi verinin gercek mi demo mu oldugu.
+   *
+   * Saglayicinin KENDISI bildiriyor, cagiran taraf env okuyup tahmin etmiyor:
+   * boylece yeni bir saglayici eklendiginde isaretleme yeri tek.
+   */
+  readonly dataMode: FuelStationDataMode;
+  /** Kullaniciya gosterilecek kaynak atfi. */
+  readonly attribution: FuelStationAttribution;
   /** Anahtar/URL yapilandirildi mi. */
   isConfigured(): boolean;
   /**

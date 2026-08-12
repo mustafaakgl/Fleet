@@ -2703,3 +2703,74 @@ export interface VehicleFuelCompatibilityWriteEntry {
   source: FuelCompatibilitySource;
   verifiedAt?: string;
 }
+
+/**
+ * Surucunun yakininda, aracina UYAN akaryakit istasyonlari.
+ *
+ * Kaynak: backend/src/fleet/fuel-stations/fuel-station.types.ts ve
+ * fuel-station.service.ts. Tahmin edilmedi.
+ */
+export interface FuelStationAddress {
+  street: string | null;
+  houseNumber: string | null;
+  postalCode: string | null;
+  city: string | null;
+}
+
+export interface FuelStationOffering {
+  productType: FuelProductType;
+  /** null = saglayici fiyat vermiyor. ASLA 0 ya da "ucuz" olarak yorumlanmaz. */
+  pricePerUnit: number | null;
+  unit: 'liter';
+  currency: 'EUR';
+  /**
+   * Saglayicinin bildirdigi fiyat degisim ani. Tankerkonig bunu VERMIYOR ->
+   * her zaman null. Arayuz bu yuzden `retrievedAt` gosteriyor ve onu
+   * "fiyatin guncellenme zamani" olarak ETIKETLEMIYOR.
+   */
+  updatedAt: string | null;
+}
+
+export interface NearbyFuelStation {
+  id: string;
+  provider: string;
+  name: string;
+  brand: string | null;
+  address: FuelStationAddress;
+  latitude: number;
+  longitude: number;
+  distanceKm: number | null;
+  isOpen: boolean | null;
+  pricesUpdatedAt: string | null;
+  /** Bu yaniti saglayicidan aldigimiz an — gosterilebilir tek zaman bilgisi. */
+  retrievedAt: string;
+  /** Saglayici vermiyor; arayuz 'unknown' degerini GOSTERMEZ. */
+  hgvAccess: 'unknown' | 'yes' | 'no';
+  /** Saglayici vermiyor; arayuz null degerini GOSTERMEZ. */
+  acceptedFuelCards: string[] | null;
+  offerings: FuelStationOffering[];
+}
+
+/** Demo uyarisi BU ALANA gore gosterilir, frontend env degiskenine gore degil. */
+export type FuelStationDataMode = 'live' | 'mock';
+
+export interface FuelStationAttribution {
+  label: string;
+  url: string | null;
+}
+
+export interface NearbyFuelStationsResponse {
+  vehicle: {
+    id: string;
+    plateNumber: string;
+    compatibleProducts: FuelProductType[];
+  };
+  search: { latitude: number; longitude: number; radiusKm: number };
+  dataMode: FuelStationDataMode;
+  attribution: FuelStationAttribution;
+  /** Saglayicinin fiyat verebildigi urunler — arac onayindan bagimsiz. */
+  providerSupportedProducts: FuelProductType[];
+  /** Arac kabul ediyor ama saglayici fiyatlamiyor; sessizce gizlenmez. */
+  unsupportedCompatibleProducts: FuelProductType[];
+  stations: NearbyFuelStation[];
+}

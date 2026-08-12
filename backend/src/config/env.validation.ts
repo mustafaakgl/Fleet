@@ -1,3 +1,5 @@
+import { MOCK_PROVIDER_IN_PRODUCTION_MESSAGE } from '../fleet/fuel-stations/fuel-station-provider.config';
+
 const BLOCKED_JWT_SECRETS = new Set([
   'secret',
   'development_jwt_secret',
@@ -99,6 +101,14 @@ export function validateEnv(): void {
       if (!process.env.STRIPE_PRICE_BASIC?.trim()) {
         console.warn('[boot] STRIPE_PRICE_BASIC not set — Basic plan checkout unavailable.');
       }
+    }
+
+    // Sahte yakit fiyati surucuye ULASMAMALI: mock saglayici uretimde
+    // yapilandirilmissa surec baslamamali. Modul fabrikasi da ayni kontrolu
+    // yapiyor; buradaki kopya, hatanin ilk surucu istegini beklemek yerine
+    // acilis loglarinda gorunmesini sagliyor.
+    if ((process.env.FUEL_STATION_PROVIDER ?? '').trim().toLowerCase() === 'mock') {
+      throw new Error(MOCK_PROVIDER_IN_PRODUCTION_MESSAGE);
     }
 
     const tachoCredentialKey = requireProductionEnv('TACHO_PROVIDER_CREDENTIAL_ENCRYPTION_KEY');

@@ -2620,6 +2620,32 @@ export const driverPortalApi = {
       })
       .then((r) => r.data.tour),
 
+  /**
+   * Yakindaki, ARACA UYAN akaryakit istasyonlari.
+   *
+   * `vehicleId` BILINCLI olarak yok ve eklenmemeli: arac sunucuda oturumdaki
+   * surucuye gore cozuluyor. Backend DTO'su forbidNonWhitelisted ile calistigi
+   * icin fazladan alan gonderilmesi 400 ile reddedilir.
+   *
+   * `signal`: surucu yeni arama baslattiginda ya da ekrandan ciktiginda
+   * bekleyen istek iptal edilebilsin diye disaridan veriliyor — eski bir yanit
+   * yenisinin uzerine yazmamali.
+   */
+  nearbyFuelStations: (
+    params: { latitude: number; longitude: number; radiusKm: number },
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<import('./types').NearbyFuelStationsResponse>('/driver/fuel-stations/nearby', {
+        params: {
+          latitude: params.latitude,
+          longitude: params.longitude,
+          radius_km: params.radiusKm,
+        },
+        signal,
+      })
+      .then((r) => r.data),
+
   departureCheckStatus: () =>
     api
       .get<import('./types').DriverDepartureCheckStatus>('/driver/departure-check/status')

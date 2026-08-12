@@ -30,6 +30,7 @@ function fullStation(id: string): NormalizedFuelStation {
     provider: 'test',
     name: 'Aral Duisburg',
     brand: 'Aral',
+    address: { street: 'Musterweg', houseNumber: '1', postalCode: '47051', city: 'Duisburg' },
     latitude: 51.44,
     longitude: 6.76,
     distanceKm: 1.4,
@@ -58,6 +59,8 @@ function mockProvider(
   const calls: FuelStationSearchQuery[] = [];
   const provider: FuelStationProvider = {
     name: 'test-provider',
+    dataMode: 'live',
+    attribution: { label: 'Test attribution', url: null },
     isConfigured: () => true,
     supportedProducts: () => supported,
     search: async (query) => {

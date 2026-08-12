@@ -14,6 +14,11 @@ interface TankerkoenigStation {
   id?: unknown;
   name?: unknown;
   brand?: unknown;
+  street?: unknown;
+  houseNumber?: unknown;
+  /** Sozlesmede integer; string gelen kurulumlara karsi unknown alinip suzuluyor. */
+  postCode?: unknown;
+  place?: unknown;
   lat?: unknown;
   lng?: unknown;
   dist?: unknown;
@@ -55,6 +60,18 @@ interface TankerkoenigListResponse {
 @Injectable()
 export class TankerkoenigFuelStationProvider implements FuelStationProvider {
   readonly name = 'tankerkoenig';
+
+  readonly dataMode = 'live' as const;
+
+  /**
+   * CC BY 4.0 atfi ZORUNLU: veri MTS-K'dan Tankerkonig uzerinden geliyor ve
+   * lisans kaynak gosterimini sart kosuyor. Metin burada duruyor, arayuzde
+   * cevrilmiyor — lisans atfi cevrilecek bir kullanici metni degil.
+   */
+  readonly attribution = {
+    label: 'Tankstellen- und Preisdaten: Tankerkönig / MTS-K — CC BY 4.0',
+    url: 'https://creativecommons.tankerkoenig.de',
+  } as const;
 
   private readonly logger = new Logger(TankerkoenigFuelStationProvider.name);
 
@@ -99,6 +116,23 @@ export class TankerkoenigFuelStationProvider implements FuelStationProvider {
 
   private toFiniteNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+
+  private toTrimmedString(value: unknown): string | null {
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }
+
+  /**
+   * Posta kodu. Sayi olarak geldiginde 5 haneye SIFIRLA tamamlanir.
+   *
+   * Olmasa: 01067 (Dresden) JSON'da 1067 olarak geliyor ve dogrudan string'e
+   * cevrilirse surucuye gecersiz bir posta kodu gosterilir.
+   */
+  private toPostalCode(value: unknown): string | null {
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+      return String(value).padStart(5, '0');
+    }
+    return this.toTrimmedString(value);
   }
 
   /**
@@ -167,6 +201,15 @@ export class TankerkoenigFuelStationProvider implements FuelStationProvider {
         provider: this.name,
         name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : (brand ?? 'Tankstelle'),
         brand,
+        address: {
+          street: this.toTrimmedString(raw.street),
+          houseNumber: this.toTrimmedString(raw.houseNumber),
+          // postCode sozlesmede sayi; string'e cevrilirken basindaki sifir
+          // korunmali (ornegin 01067 Dresden) — bu yuzden sayiysa oldugu gibi
+          // degil, 5 haneye tamamlanarak yaziliyor.
+          postalCode: this.toPostalCode(raw.postCode),
+          city: this.toTrimmedString(raw.place),
+        },
         latitude,
         longitude,
         distanceKm: this.toFiniteNumber(raw.dist),

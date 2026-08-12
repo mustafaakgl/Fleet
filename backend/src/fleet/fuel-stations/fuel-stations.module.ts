@@ -3,9 +3,11 @@ import { AuditModule } from '../../audit/audit.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { FleetModule } from '../fleet.module';
 import { FuelStationCacheService } from './fuel-station-cache.service';
+import { resolveFuelStationProviderKind } from './fuel-station-provider.config';
 import { FuelStationDriverController } from './fuel-station.controller';
 import { FuelStationService } from './fuel-station.service';
 import { FUEL_STATION_PROVIDER } from './fuel-station.types';
+import { MockFuelStationProvider } from './mock-fuel-station.provider';
 import { TankerkoenigFuelStationProvider } from './tankerkoenig-fuel-station.provider';
 import { VehicleFuelCompatibilityService } from './vehicle-fuel-compatibility.service';
 
@@ -25,7 +27,19 @@ import { VehicleFuelCompatibilityService } from './vehicle-fuel-compatibility.se
   providers: [
     FuelStationCacheService,
     TankerkoenigFuelStationProvider,
-    { provide: FUEL_STATION_PROVIDER, useExisting: TankerkoenigFuelStationProvider },
+    MockFuelStationProvider,
+    {
+      // Saglayici ACILISTA seciliyor, istek basina degil: yanlis yapilandirma
+      // ilk surucu istegini bekleyip sessizce 503 uretmek yerine surec
+      // baslarken duyulur olmali. resolveFuelStationProviderKind uretimde
+      // mock secilmisse burada firlatir ve modul kurulumu basarisiz olur.
+      provide: FUEL_STATION_PROVIDER,
+      useFactory: (
+        tankerkoenig: TankerkoenigFuelStationProvider,
+        mock: MockFuelStationProvider,
+      ) => (resolveFuelStationProviderKind() === 'mock' ? mock : tankerkoenig),
+      inject: [TankerkoenigFuelStationProvider, MockFuelStationProvider],
+    },
     VehicleFuelCompatibilityService,
     FuelStationService,
   ],

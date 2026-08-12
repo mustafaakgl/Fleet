@@ -7,6 +7,7 @@ import { createApp } from '../bootstrap/create-app';
 describe('Swagger/OpenAPI bootstrap', () => {
   const originalSwaggerEnabled = process.env.SWAGGER_ENABLED;
   const originalNodeEnv = process.env.NODE_ENV;
+  const originalFuelStationProvider = process.env.FUEL_STATION_PROVIDER;
   let app: NestExpressApplication | null = null;
   let baseUrl = '';
 
@@ -25,6 +26,12 @@ describe('Swagger/OpenAPI bootstrap', () => {
 
   before(async () => {
     process.env.NODE_ENV = 'test';
+    // Bu dosya bir test icinde NODE_ENV=production ile uygulamayi ayaga
+    // kaldiriyor. Uretimde demo yakit saglayicisi YASAK (bkz.
+    // resolveFuelStationProviderKind) — gercek bir uretim dagitiminda oldugu
+    // gibi canli saglayici secilmeli, aksi halde modul kurulumu bilincli
+    // olarak basarisiz olur. Depodaki `.env` gelistirme icin mock'a ayarli.
+    process.env.FUEL_STATION_PROVIDER = 'tankerkoenig';
   });
 
   after(async () => {
@@ -42,6 +49,12 @@ describe('Swagger/OpenAPI bootstrap', () => {
       delete process.env.NODE_ENV;
     } else {
       process.env.NODE_ENV = originalNodeEnv;
+    }
+
+    if (originalFuelStationProvider === undefined) {
+      delete process.env.FUEL_STATION_PROVIDER;
+    } else {
+      process.env.FUEL_STATION_PROVIDER = originalFuelStationProvider;
     }
   });
 

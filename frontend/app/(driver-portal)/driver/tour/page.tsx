@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Clock, MapPin, Navigation, Route, Undo2 } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, Check, Clock, Fuel, MapPin, Navigation, Route, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
@@ -188,6 +189,15 @@ export default function DriverTourPage() {
                 km: tour.plannedDistanceKm !== null ? Math.round(tour.plannedDistanceKm) : '—',
               })}
             </p>
+            {/* Navigasyon aksiyonlarinin yanina konuldu: surucu rotayi burada
+                aciyor, yakit ihtiyaci da ayni anda ortaya cikiyor. Konum izni
+                BURADA istenmiyor — hedef ekranda, surucu arama baslatinca. */}
+            <Button asChild variant="outline" className="mt-3 h-11 w-full">
+              <Link href="/driver/fuel-stations">
+                <Fuel className="mr-2 h-4 w-4" />
+                {t('driverPortal.fuelStations.findAction')}
+              </Link>
+            </Button>
           </CardContent>
         </Card>
 

@@ -13,6 +13,8 @@ import {
 } from './core/fuel-compatibility.util';
 import {
   FUEL_STATION_PROVIDER,
+  type FuelStationAttribution,
+  type FuelStationDataMode,
   type FuelStationProvider,
   type NormalizedFuelStation,
 } from './fuel-station.types';
@@ -29,6 +31,13 @@ export interface NearbyFuelStationsResponse {
     longitude: number;
     radiusKm: number;
   };
+  /**
+   * Verinin gercek mi demo mu oldugu. Istemci demo uyarisini BU ALANA gore
+   * gosterir; kendi ortam degiskenine bakarak karar vermez.
+   */
+  dataMode: FuelStationDataMode;
+  /** Gosterilmesi gereken kaynak atfi (live'da CC BY 4.0 zorunlu). */
+  attribution: FuelStationAttribution;
   /** Bu saglayicinin fiyat verebildigi urunler — arac onayindan BAGIMSIZ. */
   providerSupportedProducts: FuelProductType[];
   /**
@@ -127,6 +136,8 @@ export class FuelStationService {
     return {
       vehicle: vehicleView,
       search: searchView,
+      dataMode: this.provider.dataMode,
+      attribution: this.provider.attribution,
       providerSupportedProducts: providerSupported,
       unsupportedCompatibleProducts,
       // Hic istasyon bulunamamasi hata DEGIL: kirsalda 5 km yaricapta gercekten

@@ -34,6 +34,7 @@ function station(
     provider: 'test',
     name: `Station ${id}`,
     brand: 'Aral',
+    address: { street: 'Musterweg', houseNumber: '1', postalCode: '47051', city: 'Duisburg' },
     latitude: 51.44,
     longitude: 6.7,
     distanceKm: 1.2,
