@@ -625,6 +625,49 @@ export class RoutingService {
   }
 
   /**
+   * Onbellekli DIKDORTGEN matris: kaynaklar x hedefler.
+   *
+   * Neden `matrix()` yetmiyor: o kare matris kuruyor (points x points). Bir
+   * surucunun N istasyonu icin gereken hucreler yalnizca "konum -> her istasyon"
+   * ve "her istasyon -> sonraki durak"; kare matris bunun icin N^2 hucre
+   * hesaplatir. Olculen maliyet hucre sayisiyla artiyor (20x20 soguk 5,9 sn),
+   * bu yuzden 10 istasyonda 144 hucre yerine 2 cagriyla 21 hucre isteniyor.
+   *
+   * ValhallaClient.matrix zaten kaynak/hedef ayrimini destekliyor; burada
+   * yalnizca onbellek ve profil tutarliligi ekleniyor — paralel bir istemci
+   * YOK.
+   */
+  async matrixBetween(
+    sources: GeoPoint[],
+    targets: GeoPoint[],
+    profile: TruckProfile = DEFAULT_TRUCK_PROFILE,
+    ttlSecondsOverride?: number,
+  ): Promise<RoutingResult<MatrixCell[]>> {
+    if (sources.length === 0 || targets.length === 0) {
+      return { ok: false, error: 'invalid_input', message: 'matrix requires sources and targets' };
+    }
+
+    const key = [
+      'matrix2',
+      sources.map((p) => this.coordKey(p)).join(';'),
+      '>',
+      targets.map((p) => this.coordKey(p)).join(';'),
+      this.profileKey(profile),
+    ].join(':');
+
+    const cached = await this.cache.get<MatrixCell[]>(key);
+    if (cached) {
+      return { ok: true, value: cached };
+    }
+
+    const result = await this.valhalla.matrix(sources, targets, profile);
+    if (result.ok) {
+      await this.cache.set(key, result.value, ttlSecondsOverride);
+    }
+    return result;
+  }
+
+  /**
    * Onbellekli mesafe matrisi. Olculen maliyet nedeniyle (41x41 soguk 7,1 sn)
    * senkron istek icinde degil, arka plan job'unda cagrilmali.
    */

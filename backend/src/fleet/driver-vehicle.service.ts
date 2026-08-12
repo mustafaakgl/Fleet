@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AssignmentStatus } from '@prisma/client';
+import { AssignmentStatus, TourStopStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -20,6 +20,28 @@ export interface ResolvedDriverVehicle {
   plateNumber: string;
   /** Aracin hangi kayittan cozuldugu — tanilama ve denetim icin. */
   source: 'tour' | 'assignment' | 'current_driver';
+}
+
+/**
+ * Surucunun aktif turu ve SIRADAKI tamamlanmamis duragi.
+ *
+ * `routeVersion` turun o anki surumu (updatedAt): rota sapmasi onbellegi buna
+ * baglanir, boylece dispatcher turu degistirdiginde eski sapma yeniden
+ * kullanilmaz.
+ */
+export interface ResolvedActiveTourStop {
+  tourId: string;
+  routeVersion: string;
+  /** Tur bulundu ama koordinatli tamamlanmamis durak yoksa null. */
+  nextStop: {
+    id: string;
+    sequence: number;
+    label: string;
+    latitude: number;
+    longitude: number;
+  } | null;
+  /** Tur var, tamamlanmamis durak var ama koordinati yok. */
+  nextStopLocationMissing: boolean;
 }
 
 /**
@@ -111,6 +133,87 @@ export class DriverVehicleService {
     }
 
     return null;
+  }
+
+  /**
+   * Surucunun aktif turu ve siradaki tamamlanmamis duragi — SUNUCU TARAFINDA.
+   *
+   * Tur durumlari DRIVER_VISIBLE_TOUR_STATUSES ile ayni: surucunun tur
+   * ekraninda gordugu tur, sapma hesabinda da esas alinan turdur (bkz.
+   * tour-driver.controller). Taslak tur burada da yok.
+   *
+   * SIRA DEGISTIRILMEZ: duraklar `sequence` artan sirada okunuyor ve ilk
+   * gecerli tamamlanmamis durak siradaki durak sayiliyor. Yeniden optimizasyon
+   * ya da yeniden siralama YOK — bu faz yalnizca hesaplama yapiyor.
+   *
+   * Tamamlanmis (`completed`) ve atlanmis (`skipped`) duraklar disarida. Bu
+   * repoda TourStopStatus'te `cancelled` YOK; iptalin karsiligi `skipped`.
+   *
+   * Sorgular tenant kapsamli istemciyle: baska kiracinin turu cozumlemeye
+   * giremez.
+   */
+  async resolveActiveTourNextStop(driverId: string): Promise<ResolvedActiveTourStop | null> {
+    const { start, end } = this.todayRange();
+
+    const tour = await this.prisma.tour.findFirst({
+      where: {
+        driverId,
+        workDate: { gte: start, lt: end },
+        status: { in: [...DRIVER_VISIBLE_TOUR_STATUSES] },
+      },
+      orderBy: { workDate: 'asc' },
+      select: {
+        id: true,
+        updatedAt: true,
+        stops: {
+          where: { status: { notIn: [TourStopStatus.completed, TourStopStatus.skipped] } },
+          orderBy: { sequence: 'asc' },
+          select: {
+            id: true,
+            sequence: true,
+            kind: true,
+            location: {
+              select: { latitude: true, longitude: true, city: true, street: true, rawAddress: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tour) {
+      return null;
+    }
+
+    const routeVersion = tour.updatedAt.toISOString();
+
+    if (tour.stops.length === 0) {
+      return { tourId: tour.id, routeVersion, nextStop: null, nextStopLocationMissing: false };
+    }
+
+    // Koordinati olmayan durak SESSIZCE atlanmiyor ve yanlis koordinatla
+    // hesaplanmiyor: ilk tamamlanmamis duragin koordinati yoksa sapma
+    // hesaplanamaz ve bu durum ayrica bildirilir.
+    const first = tour.stops[0]!;
+    if (first.location.latitude === null || first.location.longitude === null) {
+      return { tourId: tour.id, routeVersion, nextStop: null, nextStopLocationMissing: true };
+    }
+
+    return {
+      tourId: tour.id,
+      routeVersion,
+      nextStop: {
+        id: first.id,
+        sequence: first.sequence,
+        label:
+          first.location.street?.trim() ||
+          first.location.city?.trim() ||
+          first.location.rawAddress?.trim() ||
+          first.kind,
+        latitude: Number(first.location.latitude),
+        longitude: Number(first.location.longitude),
+      },
+      nextStopLocationMissing: false,
+    };
   }
 
   /**

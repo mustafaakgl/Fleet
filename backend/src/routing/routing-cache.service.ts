@@ -69,13 +69,26 @@ export class RoutingCacheService implements OnModuleDestroy {
     return JSON.parse(entry.value) as T;
   }
 
-  async set(key: string, value: unknown): Promise<void> {
+  /**
+   * @param ttlSecondsOverride Varsayilan TTL'i (7 gun) gecersiz kilar.
+   *
+   * Neden gerekli: yol agi geometrisi haftalarca sabit, ama SURUCUYE ozel
+   * turetilmis sonuclar (ornegin aktif tura gore istasyon sapmasi) turun
+   * degismesiyle gecersizlesir. Bunlari 7 gun tutmak, degistirilmis bir turun
+   * eski sapmasini gostermek olurdu. Ayri bir onbellek sinifi yerine ayni
+   * altyapiya kisa TTL veriliyor.
+   */
+  async set(key: string, value: unknown, ttlSecondsOverride?: number): Promise<void> {
     const namespaced = `routing:${key}`;
     const serialized = JSON.stringify(value);
+    const ttl =
+      ttlSecondsOverride !== undefined && Number.isFinite(ttlSecondsOverride) && ttlSecondsOverride > 0
+        ? Math.floor(ttlSecondsOverride)
+        : this.ttlSeconds;
 
     if (this.redis) {
       try {
-        await this.redis.set(namespaced, serialized, 'EX', this.ttlSeconds);
+        await this.redis.set(namespaced, serialized, 'EX', ttl);
       } catch (error) {
         this.logger.warn(
           `Routing cache write failed: ${error instanceof Error ? error.message : 'unknown'}`,
@@ -93,7 +106,7 @@ export class RoutingCacheService implements OnModuleDestroy {
     }
     this.memory.set(namespaced, {
       value: serialized,
-      expiresAt: Date.now() + this.ttlSeconds * 1000,
+      expiresAt: Date.now() + ttl * 1000,
     });
   }
 

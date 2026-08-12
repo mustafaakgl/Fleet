@@ -2774,3 +2774,59 @@ export interface NearbyFuelStationsResponse {
   unsupportedCompatibleProducts: FuelProductType[];
   stations: NearbyFuelStation[];
 }
+
+/**
+ * Rota bazli istasyon onerileri (Faz 4).
+ *
+ * Kaynak: backend/src/fleet/fuel-stations/route-recommendation.service.ts.
+ * Faz 3 istasyon alanlari KORUNUYOR; her istasyona routeMetrics ekleniyor.
+ */
+export type RouteMetricsStatus = 'calculated' | 'unavailable';
+
+export interface StationRouteMetrics {
+  calculationStatus: RouteMetricsStatus;
+  /** Istasyona GERCEK yol mesafesi. Kus ucusu `distanceKm` ile karistirilmamali. */
+  roadDistanceToStationKm: number | null;
+  driveTimeToStationMin: number | null;
+  viaStationDistanceKm: number | null;
+  viaStationDurationMin: number | null;
+  extraDistanceKm: number | null;
+  extraDurationMin: number | null;
+  /** Istasyona tahmini SURUS varisi; yakit alma suresi DAHIL DEGIL. */
+  stationEta: string | null;
+}
+
+export type RouteCalculationStatus =
+  | 'calculated'
+  | 'no_active_tour'
+  | 'next_stop_location_missing'
+  | 'routing_unavailable';
+
+export interface FuelRouteContext {
+  mode: 'active_tour' | 'nearby_only';
+  calculatedAt: string;
+  nextStop: {
+    id: string;
+    sequence: number;
+    label: string;
+    latitude: number;
+    longitude: number;
+  } | null;
+  baseline: { distanceKm: number; durationMin: number } | null;
+  calculationStatus: RouteCalculationStatus;
+}
+
+export type RouteRecommendationStation = NearbyFuelStation & {
+  routeMetrics: StationRouteMetrics;
+};
+
+export interface RouteRecommendationsResponse
+  extends Omit<NearbyFuelStationsResponse, 'stations' | 'search' | 'vehicle'> {
+  vehicle: NearbyFuelStationsResponse['vehicle'] & {
+    /** null ise ekonomik toplam GOSTERILMEZ; uydurma tuketim kullanilmaz. */
+    avgConsumptionLPer100Km: number | null;
+  };
+  search: NearbyFuelStationsResponse['search'] & { retrievedAt: string };
+  routeContext: FuelRouteContext;
+  stations: RouteRecommendationStation[];
+}

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../../audit/audit.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { RoutingModule } from '../../routing/routing.module';
 import { FleetModule } from '../fleet.module';
 import { FuelStationCacheService } from './fuel-station-cache.service';
 import { resolveFuelStationProviderKind } from './fuel-station-provider.config';
@@ -8,6 +9,7 @@ import { FuelStationDriverController } from './fuel-station.controller';
 import { FuelStationService } from './fuel-station.service';
 import { FUEL_STATION_PROVIDER } from './fuel-station.types';
 import { MockFuelStationProvider } from './mock-fuel-station.provider';
+import { RouteRecommendationService } from './route-recommendation.service';
 import { TankerkoenigFuelStationProvider } from './tankerkoenig-fuel-station.provider';
 import { VehicleFuelCompatibilityService } from './vehicle-fuel-compatibility.service';
 
@@ -22,7 +24,9 @@ import { VehicleFuelCompatibilityService } from './vehicle-fuel-compatibility.se
  * mantigi tek yerde duruyor, burada kopyalanmiyor.
  */
 @Module({
-  imports: [PrismaModule, AuditModule, FleetModule],
+  // RoutingModule: mevcut Valhalla istemcisi, RoutingService ve rota onbellegi
+  // buradan geliyor — paralel bir routing katmani kurulmadi.
+  imports: [PrismaModule, AuditModule, FleetModule, RoutingModule],
   controllers: [FuelStationDriverController],
   providers: [
     FuelStationCacheService,
@@ -42,6 +46,7 @@ import { VehicleFuelCompatibilityService } from './vehicle-fuel-compatibility.se
     },
     VehicleFuelCompatibilityService,
     FuelStationService,
+    RouteRecommendationService,
   ],
   exports: [VehicleFuelCompatibilityService],
 })

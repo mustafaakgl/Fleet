@@ -8,6 +8,7 @@ import {
   Loader2,
   MapPin,
   Navigation,
+  Route,
   Search,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -33,16 +34,37 @@ import {
   nearestStationId,
   priceFor,
   selectableProducts,
-  sortStations,
   visibleOfferings,
-  type FuelStationSortMode,
 } from '@/lib/fuel-station-view';
+import {
+  MAX_PLANNED_LITRES,
+  MIN_PLANNED_LITRES,
+  ROUTE_SORT_MODES,
+  defaultRouteSortMode,
+  estimateDetourOperatingCost,
+  estimatePurchaseCost,
+  estimateStationChoiceCost,
+  formatCurrencyEur,
+  formatDriveTime,
+  formatExtraDistance,
+  formatExtraDuration,
+  formatRoadDistance,
+  formatStationEta,
+  hasRouteMetrics,
+  isEconomicComparisonAvailable,
+  isPlannedLitresValid,
+  isRouteSortAvailable,
+  parseLitresInput,
+  recommendedStationId,
+  sortRouteStations,
+  type FuelStationRouteSortMode,
+} from '@/lib/fuel-station-route';
 import { buildNavigationUrl, detectMobilePlatform } from '@/lib/navigation-links';
 import { cn } from '@/lib/utils';
 import type {
   FuelProductType,
-  NearbyFuelStation,
-  NearbyFuelStationsResponse,
+  RouteRecommendationStation,
+  RouteRecommendationsResponse,
 } from '@/lib/types';
 
 /** Dokunma hedefi en az ~44px: eldivenli parmak icin alt sinir. */
@@ -88,12 +110,17 @@ export function DriverFuelStationsScreen() {
   const { t, i18n } = useTranslation();
 
   const [position, setPosition] = useState<DriverPosition | null>(null);
-  const [data, setData] = useState<NearbyFuelStationsResponse | null>(null);
+  const [data, setData] = useState<RouteRecommendationsResponse | null>(null);
   const [locating, setLocating] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<ScreenError | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_FUEL_STATION_RADIUS_KM);
-  const [sortMode, setSortMode] = useState<FuelStationSortMode>('distance');
+  const [sortMode, setSortMode] = useState<FuelStationRouteSortMode>('distance');
+  /**
+   * Planlanan litre — YALNIZCA ekran state'i. Veritabanina yazilmiyor ve
+   * degismesi hicbir backend/provider/routing istegi acmiyor.
+   */
+  const [plannedLitresInput, setPlannedLitresInput] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<FuelProductType | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
 
@@ -126,7 +153,7 @@ export function DriverFuelStationsScreen() {
       setSearching(true);
       setError(null);
       try {
-        const response = await driverPortalApi.nearbyFuelStations(
+        const response = await driverPortalApi.routeRecommendedFuelStations(
           {
             latitude: origin.latitude,
             longitude: origin.longitude,
@@ -146,6 +173,14 @@ export function DriverFuelStationsScreen() {
         // Tek uyumlu urun varsa fiyat siralamasi anlamli olsun diye secili
         // baslatiliyor; birden fazlaysa surucu secer.
         setSelectedProduct(products.length === 1 ? products[0]! : null);
+        // Varsayilan siralama sunucudan gelen baglama gore: aktif tur ve
+        // hesaplanmis metrik varsa "en az rota sapmasi", aksi halde mesafe.
+        setSortMode(
+          defaultRouteSortMode({
+            mode: response.routeContext.mode,
+            anyRouteMetrics: response.stations.some(hasRouteMetrics),
+          }),
+        );
       } catch (caught) {
         if (seq !== requestSeqRef.current) return;
         if (controller.signal.aborted) return;
@@ -200,8 +235,10 @@ export function DriverFuelStationsScreen() {
     [data],
   );
 
+  const anyRouteMetrics = useMemo(() => stations.some(hasRouteMetrics), [stations]);
+
   const sorted = useMemo(
-    () => sortStations(stations, sortMode, selectedProduct),
+    () => sortRouteStations(stations, sortMode, selectedProduct),
     [selectedProduct, sortMode, stations],
   );
 
@@ -209,6 +246,24 @@ export function DriverFuelStationsScreen() {
   const cheapestId = useMemo(
     () => cheapestStationId(sorted, selectedProduct),
     [selectedProduct, sorted],
+  );
+  /**
+   * "Onerilen" — secili olcute gore ilk UYGUN istasyon. "En ucuz" ve
+   * "En yakin" ile ayni sey DEGIL: kapali istasyon onerilmez.
+   */
+  const recommendedId = useMemo(
+    () => recommendedStationId(sorted, sortMode, selectedProduct),
+    [selectedProduct, sortMode, sorted],
+  );
+
+  const plannedLitres = useMemo(
+    () => parseLitresInput(plannedLitresInput, i18n.language),
+    [i18n.language, plannedLitresInput],
+  );
+  const plannedLitresValid = plannedLitres === null ? plannedLitresInput.trim() === '' : isPlannedLitresValid(plannedLitres);
+  /** Guvenilir arac tuketimi yoksa ekonomik toplam HIC sunulmuyor. */
+  const economicAvailable = isEconomicComparisonAvailable(
+    data?.vehicle.avgConsumptionLPer100Km ?? null,
   );
 
   const selectedStation = useMemo(
@@ -298,6 +353,48 @@ export function DriverFuelStationsScreen() {
             </p>
           ) : null}
 
+          {/* Aktif tur baglami: hangi duraga gore sapma hesaplandigi. */}
+          {data.routeContext.mode === 'active_tour' && data.routeContext.nextStop ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <Route className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {t('driverPortal.fuelStations.routeBasedTitle')}
+              </p>
+              {/* break-words: uzun durak adi tasmasin. */}
+              <p className="mt-1 break-words text-sm text-slate-700">
+                {t('driverPortal.fuelStations.nextStop', {
+                  stop: data.routeContext.nextStop.label,
+                })}
+              </p>
+              {data.routeContext.calculationStatus === 'calculated' ? (
+                <p className="mt-1 text-xs text-slate-600">
+                  {t('driverPortal.fuelStations.detourHint')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Rota motoru calismiyor: liste yine calisiyor, teknik ayrinti yok. */}
+          {data.routeContext.calculationStatus === 'routing_unavailable' ? (
+            <p
+              role="status"
+              className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{t('driverPortal.fuelStations.routingUnavailable')}</span>
+            </p>
+          ) : null}
+
+          {data.routeContext.mode === 'nearby_only' ? (
+            <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
+              {t(
+                data.routeContext.calculationStatus === 'next_stop_location_missing'
+                  ? 'driverPortal.fuelStations.nextStopLocationMissing'
+                  : 'driverPortal.fuelStations.noActiveTour',
+              )}
+            </p>
+          ) : null}
+
           {data.unsupportedCompatibleProducts.length > 0 ? (
             <p className="flex items-start gap-2 rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -370,16 +467,17 @@ export function DriverFuelStationsScreen() {
             <legend className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               {t('driverPortal.fuelStations.sortLabel')}
             </legend>
-            <div className="flex gap-2">
-              {(['distance', 'price'] as const).map((mode) => (
+            {/* Siralama degistirmek YENI ISTEK ACMAZ: yalnizca ekran
+                state'i degisiyor, Tankerkonig/Valhalla cagrilmiyor. */}
+            <div className="grid grid-cols-2 gap-2">
+              {ROUTE_SORT_MODES.map((mode) => (
                 <Button
                   key={mode}
                   type="button"
                   variant={mode === sortMode ? 'default' : 'outline'}
                   aria-pressed={mode === sortMode}
-                  // Fiyata gore siralama bir yakit turu SECILMEDEN anlamsiz.
-                  disabled={mode === 'price' && !selectedProduct}
-                  className={cn('flex-1', TOUCH_TARGET)}
+                  disabled={!isRouteSortAvailable(mode, { anyRouteMetrics, selectedProduct })}
+                  className={cn('w-full', TOUCH_TARGET)}
                   onClick={() => setSortMode(mode)}
                 >
                   {t(`driverPortal.fuelStations.sort.${mode}`)}
@@ -391,7 +489,52 @@ export function DriverFuelStationsScreen() {
                 {t('driverPortal.fuelStations.sortPriceHint')}
               </p>
             ) : null}
+            {!anyRouteMetrics ? (
+              <p className="text-xs text-slate-500">
+                {t('driverPortal.fuelStations.sortRouteHint')}
+              </p>
+            ) : null}
           </fieldset>
+
+          {/* Planlanan litre: opsiyonel, BOS baslar ve yalnizca ekran
+              state'inde tutulur. Degismesi hicbir istek acmaz. */}
+          <div className="space-y-1">
+            <label
+              htmlFor="planned-litres"
+              className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+            >
+              {t('driverPortal.fuelStations.plannedLitresLabel')}
+            </label>
+            <input
+              id="planned-litres"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={plannedLitresInput}
+              onChange={(event) => setPlannedLitresInput(event.target.value)}
+              aria-invalid={!plannedLitresValid}
+              aria-describedby="planned-litres-hint"
+              className={cn(
+                'w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900',
+                TOUCH_TARGET,
+                plannedLitresValid ? 'border-slate-300' : 'border-red-400',
+              )}
+            />
+            <p id="planned-litres-hint" className="text-xs text-slate-500">
+              {plannedLitresValid
+                ? t('driverPortal.fuelStations.plannedLitresHint')
+                : t('driverPortal.fuelStations.plannedLitresInvalid', {
+                    min: MIN_PLANNED_LITRES,
+                    max: MAX_PLANNED_LITRES,
+                  })}
+            </p>
+            {/* Guvenilir arac tuketimi yoksa ekonomik TOPLAM sunulmaz. */}
+            {!economicAvailable ? (
+              <p className="text-xs text-slate-500">
+                {t('driverPortal.fuelStations.economicUnavailable')}
+              </p>
+            ) : null}
+          </div>
 
           {position ? (
             <MapErrorBoundary
@@ -453,7 +596,10 @@ export function DriverFuelStationsScreen() {
                     selected={station.id === selectedStationId}
                     isNearest={station.id === nearestId}
                     isCheapest={station.id === cheapestId}
+                    isRecommended={station.id === recommendedId}
                     selectedProduct={selectedProduct}
+                    plannedLitres={plannedLitresValid ? plannedLitres : null}
+                    consumptionLPer100Km={data.vehicle.avgConsumptionLPer100Km}
                     locale={i18n.language}
                     platform={platform}
                     onSelect={() => handleSelectStation(station.id)}
@@ -490,16 +636,22 @@ function StationCard({
   selected,
   isNearest,
   isCheapest,
+  isRecommended,
   selectedProduct,
+  plannedLitres,
+  consumptionLPer100Km,
   locale,
   platform,
   onSelect,
 }: {
-  station: NearbyFuelStation;
+  station: RouteRecommendationStation;
   selected: boolean;
   isNearest: boolean;
   isCheapest: boolean;
+  isRecommended: boolean;
   selectedProduct: FuelProductType | null;
+  plannedLitres: number | null;
+  consumptionLPer100Km: number | null;
   locale: string;
   platform: ReturnType<typeof detectMobilePlatform>;
   onSelect: () => void;
@@ -510,6 +662,28 @@ function StationCard({
   const distance = formatDistance(station.distanceKm, locale);
   const retrievedAt = formatRetrievedAt(station.retrievedAt, locale);
   const offerings = visibleOfferings(station, selectedProduct);
+
+  const metrics = station.routeMetrics;
+  const routeCalculated = metrics.calculationStatus === 'calculated';
+  const roadDistance = formatRoadDistance(metrics.roadDistanceToStationKm, locale);
+  const driveTime = formatDriveTime(metrics.driveTimeToStationMin, locale);
+  const extraDistance = formatExtraDistance(metrics.extraDistanceKm, locale);
+  const extraDuration = formatExtraDuration(metrics.extraDurationMin, locale);
+  const stationEta = formatStationEta(metrics.stationEta, locale);
+
+  // Ekonomi: secili yakitin fiyati + surucunun girdigi litre. Litre bos ise
+  // hicbir tutar UYDURULMUYOR.
+  const selectedPrice = priceFor(station, selectedProduct);
+  const purchaseCost = estimatePurchaseCost({
+    pricePerLitre: selectedPrice,
+    plannedLitres,
+  });
+  const detourOperatingCost = estimateDetourOperatingCost({
+    extraDistanceKm: metrics.extraDistanceKm,
+    consumptionLPer100Km,
+    pricePerLitre: selectedPrice,
+  });
+  const choiceCost = estimateStationChoiceCost({ purchaseCost, detourOperatingCost });
 
   /**
    * Yol tarifi. Mevcut ve guvenli yardimci kullaniliyor
@@ -559,6 +733,11 @@ function StationCard({
                   : t('driverPortal.fuelStations.closed')}
               </Badge>
             )}
+            {/* "Onerilen" ile "En ucuz"/"En yakin" AYNI SEY DEGIL: onerilen
+                secili olcute gore en iyi VE kullanilabilir olandir. */}
+            {isRecommended ? (
+              <Badge variant="success">{t('driverPortal.fuelStations.recommended')}</Badge>
+            ) : null}
             {isNearest ? (
               <Badge variant="outline">{t('driverPortal.fuelStations.nearest')}</Badge>
             ) : null}
@@ -603,6 +782,81 @@ function StationCard({
               );
             })}
           </dl>
+
+          {/* Rota metrikleri — yalnizca hesaplandiysa. Hesaplanmadiysa kus
+              ucusu mesafe yol mesafesi gibi ETIKETLENMIYOR. */}
+          {routeCalculated ? (
+            <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-sm">
+              {roadDistance || driveTime ? (
+                <div className="flex items-start gap-1.5 text-slate-700">
+                  <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    {t('driverPortal.fuelStations.toStation', {
+                      distance: roadDistance ?? '—',
+                      duration: driveTime ?? '—',
+                    })}
+                  </span>
+                </div>
+              ) : null}
+              {extraDistance || extraDuration ? (
+                <div className="flex items-start gap-1.5 text-slate-700">
+                  <Route className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    {t('driverPortal.fuelStations.routeImpact', {
+                      distance: extraDistance ?? '—',
+                      duration: extraDuration ?? '—',
+                    })}
+                  </span>
+                </div>
+              ) : null}
+              {stationEta ? (
+                <div className="flex items-start gap-1.5 text-slate-700">
+                  <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    {t('driverPortal.fuelStations.stationEta', { time: stationEta })}
+                  </span>
+                </div>
+              ) : null}
+              {/* Ekstra sure YALNIZCA surus sapmasi; yakit alma/bekleme dahil degil. */}
+              <p
+                className="pt-0.5 text-xs text-slate-500"
+                title={t('driverPortal.fuelStations.refuellingExcluded')}
+              >
+                {t('driverPortal.fuelStations.refuellingExcluded')}
+              </p>
+            </dl>
+          ) : null}
+
+          {/* Ekonomi: litre girilmeden hicbir tutar gosterilmiyor. */}
+          {purchaseCost !== null ? (
+            <dl className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <dt className="text-slate-600">
+                  {t('driverPortal.fuelStations.estimatedPurchase')}
+                </dt>
+                <dd className="font-semibold text-slate-900">
+                  {formatCurrencyEur(purchaseCost, locale)}
+                </dd>
+              </div>
+              {choiceCost !== null ? (
+                <div
+                  className="flex items-center justify-between gap-2"
+                  title={t('driverPortal.fuelStations.economicFormula')}
+                >
+                  <dt className="text-slate-600">
+                    {t('driverPortal.fuelStations.estimatedChoiceCost')}
+                  </dt>
+                  <dd className="font-semibold text-slate-900">
+                    {formatCurrencyEur(choiceCost, locale)}
+                  </dd>
+                </div>
+              ) : null}
+              {/* Bunun TUR MALIYETI olmadigi acikca yaziliyor. */}
+              <p className="pt-0.5 text-xs text-slate-500">
+                {t('driverPortal.fuelStations.purchaseEstimateNote')}
+              </p>
+            </dl>
+          ) : null}
 
           {retrievedAt ? (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">

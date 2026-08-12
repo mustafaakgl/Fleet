@@ -2646,6 +2646,32 @@ export const driverPortalApi = {
       })
       .then((r) => r.data),
 
+  /**
+   * Aktif tura olan gercek yol sapmasina gore istasyon onerileri.
+   *
+   * Ayni parametreler: `tourId`, `vehicleId`, `driverId`, `nextStopId` ve rota
+   * maliyet profili BILINCLI olarak yok — hepsi sunucuda oturumdaki surucu ve
+   * kiracidan cozuluyor. Backend forbidNonWhitelisted ile calistigi icin
+   * fazladan alan 400 ile reddedilir.
+   */
+  routeRecommendedFuelStations: (
+    params: { latitude: number; longitude: number; radiusKm: number },
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<import('./types').RouteRecommendationsResponse>(
+        '/driver/fuel-stations/route-recommendations',
+        {
+          params: {
+            latitude: params.latitude,
+            longitude: params.longitude,
+            radius_km: params.radiusKm,
+          },
+          signal,
+        },
+      )
+      .then((r) => r.data),
+
   departureCheckStatus: () =>
     api
       .get<import('./types').DriverDepartureCheckStatus>('/driver/departure-check/status')

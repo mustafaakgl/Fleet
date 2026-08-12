@@ -2,11 +2,16 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/**
+ * Ekran Faz 4'te rota bazli ucu cagiriyor. Degisken adi `nearbyFuelStations`
+ * olarak KORUNDU: mevcut testlerin tamami ayni davranisi dogruluyor, yalnizca
+ * arkadaki uc degisti.
+ */
 const nearbyFuelStations = vi.fn();
 
 vi.mock('@/lib/api', () => ({
   driverPortalApi: {
-    nearbyFuelStations: (...args: unknown[]) => nearbyFuelStations(...args),
+    routeRecommendedFuelStations: (...args: unknown[]) => nearbyFuelStations(...args),
   },
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
@@ -139,21 +144,90 @@ function station(id: string, overrides: Record<string, unknown> = {}) {
     hgvAccess: 'unknown',
     acceptedFuelCards: null,
     offerings: [offering('DIESEL', 1.759)],
+    // Varsayilan olarak rota metrigi YOK: boylece Faz 3 davranisini dogrulayan
+    // mevcut testler aynen gecerli kalir.
+    routeMetrics: unavailableMetrics(),
     ...overrides,
   };
 }
 
+function unavailableMetrics() {
+  return {
+    calculationStatus: 'unavailable',
+    roadDistanceToStationKm: null,
+    driveTimeToStationMin: null,
+    viaStationDistanceKm: null,
+    viaStationDurationMin: null,
+    extraDistanceKm: null,
+    extraDurationMin: null,
+    stationEta: null,
+  };
+}
+
+function calculatedMetrics(overrides: Record<string, unknown> = {}) {
+  return {
+    calculationStatus: 'calculated',
+    roadDistanceToStationKm: 4.8,
+    driveTimeToStationMin: 8,
+    viaStationDistanceKm: 11.6,
+    viaStationDurationMin: 15,
+    extraDistanceKm: 1.6,
+    extraDurationMin: 3,
+    stationEta: '2026-08-12T15:24:00.000Z',
+    ...overrides,
+  };
+}
+
+/** Faz 3 ile ayni ekran: aktif tur yok. */
 function response(overrides: Record<string, unknown> = {}) {
   return {
-    vehicle: { id: 'veh-1', plateNumber: 'DU-AB 123', compatibleProducts: ['DIESEL'] },
-    search: { latitude: 51.4344, longitude: 6.7623, radiusKm: 10 },
+    vehicle: {
+      id: 'veh-1',
+      plateNumber: 'DU-AB 123',
+      compatibleProducts: ['DIESEL'],
+      avgConsumptionLPer100Km: null,
+    },
+    search: {
+      latitude: 51.4344,
+      longitude: 6.7623,
+      radiusKm: 10,
+      retrievedAt: '2026-08-12T12:32:00.000Z',
+    },
     dataMode: 'mock',
     attribution: { label: 'Demodaten', url: null },
+    routeContext: {
+      mode: 'nearby_only',
+      calculatedAt: '2026-08-12T12:32:00.000Z',
+      nextStop: null,
+      baseline: null,
+      calculationStatus: 'no_active_tour',
+    },
     providerSupportedProducts: ['DIESEL', 'SUPER_E5', 'SUPER_E10'],
     unsupportedCompatibleProducts: [],
     stations: [station('a')],
     ...overrides,
   };
+}
+
+/** Aktif tur + hesaplanmis rota metrikleri olan yanit. */
+function activeTourResponse(overrides: Record<string, unknown> = {}) {
+  return response({
+    routeContext: {
+      mode: 'active_tour',
+      calculatedAt: '2026-08-12T15:16:00.000Z',
+      nextStop: {
+        id: 'stop-2',
+        sequence: 1,
+        label: 'Musterweg 12, Oberhausen',
+        latitude: 51.5,
+        longitude: 6.9,
+      },
+      baseline: { distanceKm: 10, durationMin: 12 },
+      calculationStatus: 'calculated',
+    },
+    stations: [station('a', { routeMetrics: calculatedMetrics() })],
+    ...overrides,
+  });
 }
 
 beforeEach(() => {
@@ -900,5 +974,516 @@ describe('DriverFuelStationsScreen — accessibility', () => {
     expect(
       (screen.getByRole('button', { name: KEY.sortPrice }) as HTMLButtonElement).disabled,
     ).toBe(false);
+  });
+});
+
+/* ===========================================================================
+ * Faz 4 — rota bazli oneriler
+ * ========================================================================= */
+
+const ROUTE_KEY = {
+  routeTitle: 'driverPortal.fuelStations.routeBasedTitle',
+  sortDetour: 'driverPortal.fuelStations.sort.detour',
+  sortDriveTime: 'driverPortal.fuelStations.sort.driveTime',
+  recommended: 'driverPortal.fuelStations.recommended',
+  routingUnavailable: 'driverPortal.fuelStations.routingUnavailable',
+  noActiveTour: 'driverPortal.fuelStations.noActiveTour',
+  nextStopMissing: 'driverPortal.fuelStations.nextStopLocationMissing',
+  refuellingExcluded: 'driverPortal.fuelStations.refuellingExcluded',
+  plannedLitres: 'driverPortal.fuelStations.plannedLitresLabel',
+  economicUnavailable: 'driverPortal.fuelStations.economicUnavailable',
+  purchaseNote: 'driverPortal.fuelStations.purchaseEstimateNote',
+};
+
+describe('DriverFuelStationsScreen — active tour context', () => {
+  it('shows the route-based header with the next stop', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByText(ROUTE_KEY.routeTitle)).toBeDefined();
+    expect(
+      screen.getByText(/driverPortal\.fuelStations\.nextStop.*Musterweg 12, Oberhausen/),
+    ).toBeDefined();
+  });
+
+  it('renders road distance, drive time, route impact and station ETA', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    // 4,8 km · 8 min
+    expect(screen.getByText(/driverPortal\.fuelStations\.toStation.*4,8 km.*8 min/)).toBeDefined();
+    // +1,6 km · +3 min
+    expect(
+      screen.getByText(/driverPortal\.fuelStations\.routeImpact.*\+1,6 km.*\+3 min/),
+    ).toBeDefined();
+    expect(screen.getByText(/driverPortal\.fuelStations\.stationEta/)).toBeDefined();
+  });
+
+  it('states that the extra time excludes refuelling', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    // Ekstra sure yalnizca surus sapmasi — bu acikca yaziyor.
+    expect(screen.getAllByText(ROUTE_KEY.refuellingExcluded).length).toBeGreaterThan(0);
+  });
+
+  it('does not present the station ETA as an arrival at the customer stop', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    // Sonraki musteri duragi icin sahte ETA URETILMIYOR.
+    const body = document.body.textContent ?? '';
+    expect(body).not.toContain('nextStopEta');
+    expect(body).not.toContain('customerEta');
+  });
+
+  it('defaults to the smallest-detour sort when metrics exist', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(
+      screen.getByRole('button', { name: ROUTE_KEY.sortDetour }).getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
+  it('sorts by smallest detour and marks the recommended station', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        stations: [
+          station('big-detour', {
+            distanceKm: 1,
+            routeMetrics: calculatedMetrics({ extraDistanceKm: 9, driveTimeToStationMin: 3 }),
+          }),
+          station('small-detour', {
+            distanceKm: 7,
+            routeMetrics: calculatedMetrics({ extraDistanceKm: 0.4, driveTimeToStationMin: 11 }),
+          }),
+        ],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const headings = screen.getAllByText(/^Station /).map((node) => node.textContent);
+    expect(headings[0]).toBe('Station small-detour');
+
+    const recommended = screen
+      .getAllByText(ROUTE_KEY.recommended)[0]!
+      .closest('li') as HTMLElement;
+    expect(recommended.textContent).toContain('Station small-detour');
+  });
+
+  it('sorts by drive time when that mode is chosen', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        stations: [
+          station('slow', { routeMetrics: calculatedMetrics({ driveTimeToStationMin: 20 }) }),
+          station('fast', { routeMetrics: calculatedMetrics({ driveTimeToStationMin: 3 }) }),
+        ],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+    await user.click(screen.getByRole('button', { name: ROUTE_KEY.sortDriveTime }));
+
+    const headings = screen.getAllByText(/^Station /).map((node) => node.textContent);
+    expect(headings[0]).toBe('Station fast');
+  });
+
+  it('pushes stations without route metrics to the end of a route sort', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        stations: [
+          station('nometrics', { distanceKm: 0.5, routeMetrics: unavailableMetrics() }),
+          station('withmetrics', {
+            distanceKm: 9,
+            routeMetrics: calculatedMetrics({ extraDistanceKm: 2 }),
+          }),
+        ],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const headings = screen.getAllByText(/^Station /).map((node) => node.textContent);
+    expect(headings).toEqual(['Station withmetrics', 'Station nometrics']);
+  });
+
+  it('never recommends a closed station but still lists it', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        stations: [
+          station('closed', {
+            isOpen: false,
+            routeMetrics: calculatedMetrics({ extraDistanceKm: 0.1 }),
+          }),
+          station('open', {
+            isOpen: true,
+            routeMetrics: calculatedMetrics({ extraDistanceKm: 5 }),
+          }),
+        ],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const recommended = screen.getAllByText(ROUTE_KEY.recommended)[0]!.closest('li') as HTMLElement;
+    expect(recommended.textContent).toContain('Station open');
+    // Kapali istasyon listede kaliyor.
+    expect(screen.getByText('Station closed')).toBeDefined();
+  });
+
+  it('does not start a network request when the sort changes', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+    expect(nearbyFuelStations).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: ROUTE_KEY.sortDriveTime }));
+    await user.click(screen.getByRole('button', { name: KEY.sortDistance }));
+    await user.click(screen.getByRole('button', { name: ROUTE_KEY.sortDetour }));
+
+    // Siralama yalnizca ekran state'i: Tankerkonig/Valhalla cagrilmiyor.
+    expect(nearbyFuelStations).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DriverFuelStationsScreen — nearby-only fallback', () => {
+  it('explains that there is no active tour and keeps the list working', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByText(ROUTE_KEY.noActiveTour)).toBeDefined();
+    expect(screen.queryByText(ROUTE_KEY.routeTitle)).toBeNull();
+    expect(screen.getByText('Station a')).toBeDefined();
+  });
+
+  it('explains a missing next-stop coordinate', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      response({
+        routeContext: {
+          mode: 'nearby_only',
+          calculatedAt: '2026-08-12T12:32:00.000Z',
+          nextStop: null,
+          baseline: null,
+          calculationStatus: 'next_stop_location_missing',
+        },
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByText(ROUTE_KEY.nextStopMissing)).toBeDefined();
+  });
+
+  it('disables the route sort modes without metrics', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(
+      (screen.getByRole('button', { name: ROUTE_KEY.sortDetour }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: ROUTE_KEY.sortDriveTime }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    // Mesafe siralamasi calisiyor ve varsayilan.
+    expect(
+      screen.getByRole('button', { name: KEY.sortDistance }).getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
+  it('shows no road distance when metrics are unavailable', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    // Kus ucusu mesafe YOL mesafesi gibi etiketlenmiyor.
+    expect(screen.queryByText(/driverPortal\.fuelStations\.toStation/)).toBeNull();
+    expect(screen.queryByText(/driverPortal\.fuelStations\.routeImpact/)).toBeNull();
+    // Faz 3 kus ucusu mesafesi hala gorunuyor, kendi etiketiyle.
+    expect(screen.getByText(/driverPortal\.fuelStations\.distance/)).toBeDefined();
+  });
+});
+
+describe('DriverFuelStationsScreen — routing unavailable', () => {
+  it('warns without technical detail and keeps the station list usable', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        routeContext: {
+          mode: 'active_tour',
+          calculatedAt: '2026-08-12T12:32:00.000Z',
+          nextStop: {
+            id: 'stop-2',
+            sequence: 1,
+            label: 'Musterweg 12',
+            latitude: 51.5,
+            longitude: 6.9,
+          },
+          baseline: null,
+          calculationStatus: 'routing_unavailable',
+        },
+        stations: [station('a', { routeMetrics: unavailableMetrics() })],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const warnings = screen.getAllByRole('status').map((node) => node.textContent ?? '');
+    expect(warnings.some((text) => text.includes(ROUTE_KEY.routingUnavailable))).toBe(true);
+
+    // Ham Valhalla hatasi ve teknik URL gosterilmiyor.
+    const body = document.body.textContent ?? '';
+    expect(body).not.toContain('valhalla');
+    expect(body).not.toContain('Valhalla');
+    expect(body).not.toContain('sources_to_targets');
+    expect(body).not.toContain('routing_unavailable');
+
+    // Liste ve yol tarifi calismaya devam ediyor.
+    expect(screen.getByText('Station a')).toBeDefined();
+    expect(screen.getByRole('link', { name: KEY.openRoute })).toBeDefined();
+  });
+
+  it('keeps route sorts disabled when routing failed', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        routeContext: {
+          mode: 'active_tour',
+          calculatedAt: '2026-08-12T12:32:00.000Z',
+          nextStop: { id: 'stop-2', sequence: 1, label: 'Musterweg', latitude: 51.5, longitude: 6.9 },
+          baseline: null,
+          calculationStatus: 'routing_unavailable',
+        },
+        stations: [station('a', { routeMetrics: unavailableMetrics() })],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(
+      (screen.getByRole('button', { name: ROUTE_KEY.sortDetour }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});
+
+describe('DriverFuelStationsScreen — planned litres and economics', () => {
+  it('starts empty and invents no cost', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const input = screen.getByLabelText(ROUTE_KEY.plannedLitres) as HTMLInputElement;
+    expect(input.value).toBe('');
+    // Litre girilmeden hicbir tutar gosterilmiyor.
+    expect(screen.queryByText('driverPortal.fuelStations.estimatedPurchase')).toBeNull();
+  });
+
+  it('computes the purchase cost once litres are entered', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    await user.type(screen.getByLabelText(ROUTE_KEY.plannedLitres), '400');
+
+    expect(screen.getByText('driverPortal.fuelStations.estimatedPurchase')).toBeDefined();
+    // 400 L * 1,759 = 703,60 €
+    expect(screen.getByText(/703,60/)).toBeDefined();
+    // Bunun tur maliyeti OLMADIGI yaziyor.
+    expect(screen.getByText(ROUTE_KEY.purchaseNote)).toBeDefined();
+  });
+
+  it('does not start a network request when litres change', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+    await user.type(screen.getByLabelText(ROUTE_KEY.plannedLitres), '250');
+
+    expect(nearbyFuelStations).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the economic total when the vehicle has no consumption data', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+    await user.type(screen.getByLabelText(ROUTE_KEY.plannedLitres), '400');
+
+    // Tuketim yok -> ekonomik TOPLAM sunulmuyor, sebebi yaziliyor.
+    expect(screen.getByText(ROUTE_KEY.economicUnavailable)).toBeDefined();
+    expect(screen.queryByText('driverPortal.fuelStations.estimatedChoiceCost')).toBeNull();
+  });
+
+  it('shows the economic total when consumption is recorded', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        vehicle: {
+          id: 'veh-1',
+          plateNumber: 'DU-AB 123',
+          compatibleProducts: ['DIESEL'],
+          avgConsumptionLPer100Km: 30,
+        },
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+    await user.type(screen.getByLabelText(ROUTE_KEY.plannedLitres), '400');
+
+    expect(screen.getByText('driverPortal.fuelStations.estimatedChoiceCost')).toBeDefined();
+    expect(screen.queryByText(ROUTE_KEY.economicUnavailable)).toBeNull();
+    // 703,60 + (1,6 km * 30 / 100 * 1,759 = 0,84) = 704,44
+    expect(screen.getByText(/704,44/)).toBeDefined();
+  });
+
+  it('rejects an out-of-range amount without showing a cost', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const input = screen.getByLabelText(ROUTE_KEY.plannedLitres) as HTMLInputElement;
+    await user.type(input, '99999');
+
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText(/driverPortal\.fuelStations\.plannedLitresInvalid/)).toBeDefined();
+    expect(screen.queryByText('driverPortal.fuelStations.estimatedPurchase')).toBeNull();
+  });
+
+  it('accepts a German comma decimal', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const input = screen.getByLabelText(ROUTE_KEY.plannedLitres) as HTMLInputElement;
+    await user.type(input, '100,5');
+
+    expect(input.getAttribute('aria-invalid')).toBe('false');
+    // 100,5 * 1,759 = 176,78
+    expect(screen.getByText(/176,78/)).toBeDefined();
+  });
+});
+
+describe('DriverFuelStationsScreen — Faz 4 keeps Faz 3 guarantees', () => {
+  it('still sends no vehicleId, tourId or nextStopId', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    const [params] = nearbyFuelStations.mock.calls[0] as [Record<string, unknown>];
+    expect(params).toEqual({ latitude: 51.4344, longitude: 6.7623, radiusKm: 10 });
+    const serialized = JSON.stringify(params);
+    for (const forbidden of ['vehicleId', 'tourId', 'nextStopId', 'driverId', 'tenantId', 'costing']) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  it('keeps marker and list selection in sync with route metrics present', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      activeTourResponse({
+        stations: [
+          station('a', { routeMetrics: calculatedMetrics({ extraDistanceKm: 1 }) }),
+          station('b', { distanceKm: 5, routeMetrics: calculatedMetrics({ extraDistanceKm: 2 }) }),
+        ],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    await user.click(screen.getByRole('button', { name: 'marker:b' }));
+    expect(screen.getByTestId('map-selected').textContent).toBe('b');
+    expect(within(screen.getByTestId('station-summary')).getByText('Station b')).toBeDefined();
+  });
+
+  it('does not add the station to the tour', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(activeTourResponse());
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+    await user.click(screen.getByRole('link', { name: KEY.openRoute }));
+
+    // Bu faz yalnizca hesaplama: TourStop yazimi ya da tur guncellemesi yok.
+    expect(nearbyFuelStations).toHaveBeenCalledTimes(1);
+  });
+
+  it('still aborts a pending request on unmount', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockReturnValue(new Promise(() => {}));
+
+    const view = render(<DriverFuelStationsScreen />);
+    await user.click(screen.getByRole('button', { name: KEY.find }));
+    await waitFor(() => expect(nearbyFuelStations).toHaveBeenCalled());
+
+    const [, signal] = nearbyFuelStations.mock.calls[0] as [unknown, AbortSignal];
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('shows no raw error code for any backend failure', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockRejectedValue({
+      response: { data: { statusCode: 409, code: 'driver_vehicle_not_resolved' } },
+    });
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+    const body = document.body.textContent ?? '';
+    expect(body).not.toContain('driver_vehicle_not_resolved');
+    expect(body).not.toContain('statusCode');
   });
 });

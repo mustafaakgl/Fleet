@@ -22,6 +22,15 @@ import { ValhallaClient } from './valhalla.client';
   imports: [PrismaModule],
   controllers: [RoutingController, TourController, TourDriverController],
   providers: [ValhallaClient, GeocodingService, RoutingCacheService, RoutingService, TourService, TourStopService, RouteDeviationService],
-  exports: [RoutingService, TourService, RouteDeviationService, ValhallaClient],
+  // RoutingCacheService disari veriliyor: rota TUREVI sonuclarini (ornegin
+  // aktif tura gore yakit istasyonu sapmasi) onbellege alan modullerin ikinci
+  // bir onbellek altyapisi kurmasi gerekmesin.
+  exports: [
+    RoutingService,
+    TourService,
+    RouteDeviationService,
+    ValhallaClient,
+    RoutingCacheService,
+  ],
 })
 export class RoutingModule {}
