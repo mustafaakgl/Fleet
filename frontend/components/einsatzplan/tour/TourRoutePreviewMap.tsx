@@ -37,6 +37,32 @@ function numberedIcon(sequence: number, unreachable: boolean): L.DivIcon {
   });
 }
 
+/**
+ * Yakit duragi isareti — POMPA, numara DEGIL.
+ *
+ * Bilincli olarak numarasiz: yakit duragi bir TourStop degildir ve durak
+ * numaralandirmasina girmesi, dispatcher'a "tura bir durak eklendi" izlenimi
+ * verirdi. Bicim de ayri (yesil, pompa simgesi) — renk tek basina anlam
+ * tasimasin diye tooltip'te ayrica yaziyor.
+ */
+function fuelStopIcon(): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html:
+      '<span style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;' +
+      'border-radius:9999px;background:#047857;color:#fff;border:2px solid #fff;' +
+      'box-shadow:0 1px 3px rgba(0,0,0,.4)">' +
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" ' +
+      'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<line x1="3" y1="22" x2="15" y2="22"/><line x1="4" y1="9" x2="14" y2="9"/>' +
+      '<path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/>' +
+      '<path d="M18 22V11a2 2 0 0 0-.6-1.4L15 7"/></svg>' +
+      '</span>',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+}
+
 function FitBounds({ points }: { points: Array<[number, number]> }) {
   const map = useMap();
 
@@ -61,7 +87,20 @@ function FitBounds({ points }: { points: Array<[number, number]> }) {
  * isaretler gosterilir — sahte bir rota cizmektense hicbir sey cizmemek
  * dogrudur.
  */
-export function TourRoutePreviewMap({ stops }: { stops: TourStop[] }) {
+export function TourRoutePreviewMap({
+  stops,
+  fuelStop = null,
+}: {
+  stops: TourStop[];
+  /**
+   * Planlanan yakit duragi — AYRI bir overlay isaret.
+   *
+   * Rota cizgisine DAHIL EDILMIYOR: elimizde istasyona giden gercek bir yol
+   * govdesi yok ve duraklarla arasina duz cizgi cekmek, olmayan bir rotayi
+   * varmis gibi gostermek olurdu. Govde yoksa yalnizca isaret cizilir.
+   */
+  fuelStop?: { latitude: number; longitude: number; name: string } | null;
+}) {
   const { t } = useTranslation();
 
   const positioned = useMemo(() => stops.filter(hasCoordinates), [stops]);
@@ -121,6 +160,23 @@ export function TourRoutePreviewMap({ stops }: { stops: TourStop[] }) {
             </Tooltip>
           </Marker>
         ))}
+
+        {/* Yakit duragi EN SONDA ve numarasiz: durak sirasina girmiyor. */}
+        {fuelStop &&
+        Number.isFinite(fuelStop.latitude) &&
+        Number.isFinite(fuelStop.longitude) ? (
+          <Marker
+            position={[fuelStop.latitude, fuelStop.longitude]}
+            icon={fuelStopIcon()}
+            data-testid="tour-map-fuel-stop"
+          >
+            <Tooltip>
+              <span className="text-xs">
+                {t('tours.fuelingIntent.mapMarker', { station: fuelStop.name })}
+              </span>
+            </Tooltip>
+          </Marker>
+        ) : null}
       </MapContainer>
     </div>
   );

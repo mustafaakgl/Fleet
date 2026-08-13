@@ -12,6 +12,10 @@ import {
   selectRouteCandidates,
   type StationRouteMetrics,
 } from './core/route-recommendation.util';
+import {
+  FuelSelectionContextService,
+  toSelectionContextStation,
+} from './fuel-selection-context.service';
 import { FuelStationService, type NearbyFuelStationsResponse } from './fuel-station.service';
 import type { NormalizedFuelStation } from './fuel-station.types';
 
@@ -31,6 +35,13 @@ export type RouteCalculationStatus =
 export interface RouteContext {
   mode: 'active_tour' | 'nearby_only';
   calculatedAt: string;
+  /**
+   * Cozulen aktif tur. Sapma hesaplanamasa da (rota motoru yok, durak
+   * koordinati eksik) tur BULUNMUS olabilir; yakit niyeti bu tura baglanir.
+   * Belirsiz tur durumunda null kalir — rastgele bir tura baglamak, secimi
+   * yanlis turun altinda gostermek olurdu.
+   */
+  tourId: string | null;
   nextStop: {
     id: string;
     sequence: number;
@@ -92,6 +103,7 @@ export class RouteRecommendationService {
     private readonly driverVehicle: DriverVehicleService,
     private readonly routing: RoutingService,
     private readonly cache: RoutingCacheService,
+    private readonly selectionContexts: FuelSelectionContextService,
   ) {}
 
   /** Loglarda koordinat hassasiyeti dusuruluyor (~1 km) — takip verisi sizmasin. */
@@ -136,7 +148,40 @@ export class RouteRecommendationService {
     };
   }
 
+  /**
+   * Rota bazli oneriler + secim baglaminin zenginlestirilmesi.
+   *
+   * Baglam TEK NOKTADAN guncelleniyor: hesaplamanin bes ayri cikisi var
+   * (tur yok, belirsiz tur, durakta hizmet, rota motoru yok, hesaplandi) ve
+   * her birine ayri bir onbellek yazimi koymak, birinde unutuldugunda
+   * surucunun rota metrikli bir secimi metriksiz kaydetmesine yol acardi.
+   */
   async findRouteRecommendationsForDriver(
+    userId: string,
+    query: { latitude: number; longitude: number; radiusKm: number },
+  ): Promise<RouteRecommendationsResponse> {
+    const response = await this.computeRecommendations(userId, query);
+
+    await this.selectionContexts.augment(response.selectionContextId, {
+      routeMode: response.routeContext.mode,
+      // Sapma hesaplanmadiysa "hesaplama ani" da yok: snapshot'ta bos kalir.
+      routeCalculatedAt:
+        response.routeContext.calculationStatus === 'calculated'
+          ? response.routeContext.calculatedAt
+          : null,
+      tourId: response.routeContext.tourId,
+      // Cipa YALNIZCA gercekten hedeflenen siradaki durak. `arrived` durumunda
+      // bir istasyon "o duraga giderken" onerilmis olmaz — orada null kalir.
+      anchorTourStopId: response.routeContext.nextStop?.id ?? null,
+      stations: response.stations.map((station) =>
+        toSelectionContextStation(station, station.routeMetrics),
+      ),
+    });
+
+    return response;
+  }
+
+  private async computeRecommendations(
     userId: string,
     query: { latitude: number; longitude: number; radiusKm: number },
   ): Promise<RouteRecommendationsResponse> {
@@ -156,7 +201,7 @@ export class RouteRecommendationService {
 
     const withoutMetrics = (
       status: RouteCalculationStatus,
-      currentStop: RouteContext['currentStop'] = null,
+      options: { currentStop?: RouteContext['currentStop']; tourId?: string | null } = {},
     ): RouteRecommendationsResponse => ({
       ...nearby,
       vehicle,
@@ -164,8 +209,9 @@ export class RouteRecommendationService {
       routeContext: {
         mode: status === 'calculated' ? 'active_tour' : 'nearby_only',
         calculatedAt,
+        tourId: options.tourId ?? null,
         nextStop: null,
-        currentStop,
+        currentStop: options.currentStop ?? null,
         baseline: null,
         calculationStatus: status,
       },
@@ -196,13 +242,21 @@ export class RouteRecommendationService {
 
     // Surucu mevcut duragin USTUNDE (arrived): o durak rota hedefi degil ve
     // atlanmiyor. Durak tamamlandiktan sonraki sorguda normal cozumlenecek.
+    //
+    // Tur YINE DE biliniyor: burada secilen bir yakit duragi dogru turun
+    // altinda gorunmeli. Cipa null kaliyor — istasyon bir duraga giderken
+    // onerilmedi.
     if (active.currentStopInService) {
-      return withoutMetrics('current_stop_in_service', active.currentStopInService);
+      return withoutMetrics('current_stop_in_service', {
+        currentStop: active.currentStopInService,
+        tourId: active.tourId,
+      });
     }
 
     if (!active.nextStop) {
       return withoutMetrics(
         active.nextStopLocationMissing ? 'next_stop_location_missing' : 'no_active_tour',
+        { tourId: active.tourId },
       );
     }
 
@@ -220,6 +274,7 @@ export class RouteRecommendationService {
         routeContext: {
           mode: 'active_tour',
           calculatedAt,
+          tourId: active.tourId,
           nextStop,
           currentStop: null,
           baseline: null,
@@ -244,7 +299,7 @@ export class RouteRecommendationService {
 
     const cached = await this.cache.get<{ baseline: RouteContext['baseline']; metrics: CachedMetrics }>(key);
     if (cached) {
-      return this.assemble(nearby, vehicle, retrievedAt, calculatedAt, nextStop, cached.baseline, cached.metrics);
+      return this.assemble(nearby, vehicle, retrievedAt, calculatedAt, active.tourId, nextStop, cached.baseline, cached.metrics);
     }
 
     // 4) Valhalla: IKI matris cagrisi, istasyon basina ardisik cagri YOK.
@@ -286,6 +341,7 @@ export class RouteRecommendationService {
         routeContext: {
           mode: 'active_tour',
           calculatedAt,
+          tourId: active.tourId,
           nextStop,
           currentStop: null,
           baseline: null,
@@ -309,6 +365,7 @@ export class RouteRecommendationService {
         routeContext: {
           mode: 'active_tour',
           calculatedAt,
+          tourId: active.tourId,
           nextStop,
           currentStop: null,
           baseline: null,
@@ -352,7 +409,7 @@ export class RouteRecommendationService {
 
     await this.cache.set(key, { baseline, metrics }, ROUTE_METRICS_TTL_SECONDS);
 
-    return this.assemble(nearby, vehicle, retrievedAt, calculatedAt, nextStop, baseline, metrics);
+    return this.assemble(nearby, vehicle, retrievedAt, calculatedAt, active.tourId, nextStop, baseline, metrics);
   }
 
   /**
@@ -384,6 +441,7 @@ export class RouteRecommendationService {
     vehicle: RouteRecommendationsResponse['vehicle'],
     retrievedAt: string,
     calculatedAt: string,
+    tourId: string,
     nextStop: NonNullable<RouteContext['nextStop']>,
     baseline: RouteContext['baseline'],
     metrics: CachedMetrics,
@@ -395,6 +453,7 @@ export class RouteRecommendationService {
       routeContext: {
         mode: 'active_tour',
         calculatedAt,
+        tourId,
         nextStop,
         currentStop: null,
         baseline,

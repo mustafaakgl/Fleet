@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { getApiErrorMessage, toursApi, type TourDetail } from '@/lib/api';
 import { formatDuration, orderedStops, tourSavings, unreachableStops } from '@/lib/tour-builder';
 import { showToast } from '@/lib/toast';
+import type { FuelingIntent } from '@/lib/types';
+import { TourFuelingIntentPanel } from './TourFuelingIntentPanel';
 import { TourRoutePreviewMap } from './TourRoutePreviewMap';
 
 interface TourResultPanelProps {
@@ -31,6 +33,31 @@ function timeOf(iso: string | null): string | null {
 export function TourResultPanel({ tour, onTourChange }: TourResultPanelProps) {
   const { t } = useTranslation();
   const [releasing, setReleasing] = useState(false);
+  /**
+   * Turun aktif yakit duragi. Ayri bir uctan okunuyor (bkz. toursApi.fuelingIntent):
+   * tur sozlesmesine gomulmedi, backend'de modul dongusu olusurdu.
+   *
+   * Hatasi YUTULUYOR: yakit duragi tur planinin bir parcasi degil ve
+   * yuklenememesi planlama ekranini bozmamali.
+   */
+  const [fuelingIntent, setFuelingIntent] = useState<FuelingIntent | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    // Promise.resolve().then: cagri SENKRON firlatirsa da (eski istemci, eksik
+    // uc) panel cokmez — yakit duragi turun planinin parcasi degil.
+    void Promise.resolve()
+      .then(() => toursApi.fuelingIntent(tour.id))
+      .then((result) => {
+        if (active) setFuelingIntent(result);
+      })
+      .catch(() => {
+        if (active) setFuelingIntent(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tour.id]);
 
   const stops = orderedStops(tour);
   const savings = tourSavings(tour);
@@ -54,7 +81,20 @@ export function TourResultPanel({ tour, onTourChange }: TourResultPanelProps) {
 
   return (
     <div className="space-y-3 rounded-md border border-slate-200 bg-white p-3" data-testid="tour-result">
-      <TourRoutePreviewMap stops={stops} />
+      <TourRoutePreviewMap
+        stops={stops}
+        fuelStop={
+          fuelingIntent
+            ? {
+                latitude: fuelingIntent.station.latitude,
+                longitude: fuelingIntent.station.longitude,
+                name: fuelingIntent.station.name,
+              }
+            : null
+        }
+      />
+
+      <TourFuelingIntentPanel intent={fuelingIntent} />
 
       <div className="flex flex-wrap gap-4 text-sm">
         <span className="font-semibold text-slate-900">

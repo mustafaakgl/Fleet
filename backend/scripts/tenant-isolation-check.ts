@@ -405,6 +405,16 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.vehicleFuelCompatibility.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.vehicleFuelCompatibility.count()),
       }),
+      // Yakit niyeti. Sizmasi, bir kiracinin surucusunun HANGI ISTASYONDA ve
+      // NE ZAMAN duracagini digerine gostermek olurdu — arac, tur ve secim
+      // zamani tek satirda duruyor.
+      verifyTenantScopedModel({
+        label: 'FuelingIntent', tenantA, tenantB,
+        unscopedCountA: () => base.fuelingIntent.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.fuelingIntent.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.fuelingIntent.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.fuelingIntent.count()),
+      }),
       verifyTenantScopedModel({
         label: 'TenantBillingProfile', tenantA, tenantB,
         unscopedCountA: () => base.tenantBillingProfile.count({ where: { tenantId: tenantA } }),

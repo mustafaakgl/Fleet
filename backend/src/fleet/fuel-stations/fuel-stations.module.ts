@@ -1,13 +1,18 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../../audit/audit.module';
+import { NotificationsModule } from '../../notifications/notifications.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { RoutingModule } from '../../routing/routing.module';
 import { FleetModule } from '../fleet.module';
+import { FuelSelectionContextService } from './fuel-selection-context.service';
 import { FuelStationCacheService } from './fuel-station-cache.service';
 import { resolveFuelStationProviderKind } from './fuel-station-provider.config';
 import { FuelStationDriverController } from './fuel-station.controller';
 import { FuelStationService } from './fuel-station.service';
 import { FUEL_STATION_PROVIDER } from './fuel-station.types';
+import { FuelingIntentOfficeController } from './fueling-intent-office.controller';
+import { FuelingIntentDriverController } from './fueling-intent.controller';
+import { FuelingIntentService } from './fueling-intent.service';
 import { MockFuelStationProvider } from './mock-fuel-station.provider';
 import { RouteRecommendationService } from './route-recommendation.service';
 import { TankerkoenigFuelStationProvider } from './tankerkoenig-fuel-station.provider';
@@ -26,10 +31,19 @@ import { VehicleFuelCompatibilityService } from './vehicle-fuel-compatibility.se
 @Module({
   // RoutingModule: mevcut Valhalla istemcisi, RoutingService ve rota onbellegi
   // buradan geliyor — paralel bir routing katmani kurulmadi.
-  imports: [PrismaModule, AuditModule, FleetModule, RoutingModule],
-  controllers: [FuelStationDriverController],
+  // NotificationsModule: yakit duragi olaylari MEVCUT bildirim altyapisindan
+  // gecer (OperationalNotifyService) — paralel bir bildirim tablosu ya da
+  // servisi kurulmadi.
+  imports: [PrismaModule, AuditModule, FleetModule, RoutingModule, NotificationsModule],
+  controllers: [
+    FuelStationDriverController,
+    FuelingIntentDriverController,
+    FuelingIntentOfficeController,
+  ],
   providers: [
     FuelStationCacheService,
+    FuelSelectionContextService,
+    FuelingIntentService,
     TankerkoenigFuelStationProvider,
     MockFuelStationProvider,
     {

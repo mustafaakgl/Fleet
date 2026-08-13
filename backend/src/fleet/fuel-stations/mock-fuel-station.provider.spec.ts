@@ -5,6 +5,7 @@ import {
   MOCK_PROVIDER_IN_PRODUCTION_MESSAGE,
   resolveFuelStationProviderKind,
 } from './fuel-station-provider.config';
+import { FuelSelectionContextService } from './fuel-selection-context.service';
 import { FuelStationService } from './fuel-station.service';
 import { MockFuelStationProvider } from './mock-fuel-station.provider';
 import { TankerkoenigFuelStationProvider } from './tankerkoenig-fuel-station.provider';
@@ -16,6 +17,25 @@ import { TankerkoenigFuelStationProvider } from './tankerkoenig-fuel-station.pro
  * hic fiyat gormeyen surucuden daha kotu durumda — bu yuzden yanlis yapilandirma
  * sessizce live'a dusmuyor, ACILISTA hata veriyor.
  */
+
+
+/**
+ * Gercek FuelSelectionContextService + surec ici onbellek.
+ *
+ * Sahte bir baglam servisi yazmak yerine gercegi kullaniyoruz: sinanmasi
+ * gereken sey (kimin hangi baglami cozebildigi, snapshot'ta ne durdugu) tam
+ * olarak orada.
+ */
+function memoryContextCache() {
+  const store = new Map<string, string>();
+  return {
+    store,
+    get: async (key: string) => (store.has(key) ? JSON.parse(store.get(key)!) : null),
+    set: async (key: string, value: unknown) => {
+      store.set(key, JSON.stringify(value));
+    },
+  };
+}
 
 const DUISBURG = { latitude: 51.4344, longitude: 6.7623, radiusKm: 10 };
 
@@ -302,6 +322,7 @@ describe('MockFuelStationProvider — through the vehicle compatibility filter',
     return new FuelStationService(
       driverVehicle as never,
       compat as never,
+      new FuelSelectionContextService(memoryContextCache() as never),
       buildProvider(),
     );
   }

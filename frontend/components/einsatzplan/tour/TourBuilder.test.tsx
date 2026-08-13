@@ -10,6 +10,9 @@ vi.mock('@/lib/api', () => ({
     createFromStops: (...args: unknown[]) => createFromStops(...args),
     optimize: (...args: unknown[]) => optimize(...args),
     release: vi.fn(),
+    // Faz 5: sonuc paneli turun aktif yakit duragini ayri bir uctan okuyor.
+    // Burada yok — yakit duragi tur planinin parcasi degil.
+    fuelingIntent: vi.fn().mockResolvedValue(null),
   },
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));

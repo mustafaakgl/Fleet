@@ -14,6 +14,7 @@ import {
   selectRouteCandidates,
 } from './core/route-recommendation.util';
 import { NearbyFuelStationsQueryDto } from './dto/nearby-fuel-stations.query';
+import { FuelSelectionContextService } from './fuel-selection-context.service';
 import { FuelStationDriverController } from './fuel-station.controller';
 import { RouteRecommendationService } from './route-recommendation.service';
 
@@ -24,6 +25,25 @@ import { RouteRecommendationService } from './route-recommendation.service';
  * sapma matematigi, aday secimi, onbellek guvenligi ve rota motoru
  * calismadiginda kismi basari.
  */
+
+
+/**
+ * Gercek FuelSelectionContextService + surec ici onbellek.
+ *
+ * Sahte bir baglam servisi yazmak yerine gercegi kullaniyoruz: sinanmasi
+ * gereken sey (kimin hangi baglami cozebildigi, snapshot'ta ne durdugu) tam
+ * olarak orada.
+ */
+function memoryContextCache() {
+  const store = new Map<string, string>();
+  return {
+    store,
+    get: async (key: string) => (store.has(key) ? JSON.parse(store.get(key)!) : null),
+    set: async (key: string, value: unknown) => {
+      store.set(key, JSON.stringify(value));
+    },
+  };
+}
 
 const ORIGIN = { latitude: 51.4344, longitude: 6.7623, radiusKm: 10 };
 
@@ -81,8 +101,33 @@ function buildService(options: BuildOptions = {}) {
   const cacheStore = options.cacheStore ?? new Map<string, unknown>();
   const cacheKeys: string[] = [];
 
+  // Faz 3 servisi secim baglamini ZATEN yaratmis oluyor; rota katmani onu
+  // zenginlestirir. Onbellek anahtari FuelSelectionContextService'in urettigi
+  // ile ayni (`selection:<id>`).
+  const contextCache = memoryContextCache();
+  const seededContext = {
+    id: 'ctx-route-1',
+    tenantId: null,
+    driverId: 'drv-1',
+    vehicleId: 'veh-1',
+    compatibleProducts: [FuelProductType.DIESEL],
+    attribution: { label: 'Demodaten', url: null },
+    routeMode: 'nearby_only' as const,
+    routeCalculatedAt: null,
+    tourId: null,
+    anchorTourStopId: null,
+    stations: [],
+    createdAt: '2026-08-13T09:00:00.000Z',
+    expiresAt: '2999-01-01T00:00:00.000Z',
+  };
+  contextCache.store.set(`selection:${seededContext.id}`, JSON.stringify(seededContext));
+
   const fuelStations = {
     findNearbyForDriver: async () => ({
+      // Faz 5: arama cevabi opak secim kimligi tasiyor. Rota katmani AYNI
+      // kimligi zenginlestirir, ikincisini uretmez.
+      selectionContextId: seededContext.id,
+      selectionContextExpiresAt: seededContext.expiresAt,
       vehicle: { id: 'veh-1', plateNumber: 'DU-AB 123', compatibleProducts: [FuelProductType.DIESEL] },
       search: { latitude: ORIGIN.latitude, longitude: ORIGIN.longitude, radiusKm: ORIGIN.radiusKm },
       dataMode: 'mock' as const,
@@ -158,15 +203,17 @@ function buildService(options: BuildOptions = {}) {
     },
   };
 
+  const selectionContexts = new FuelSelectionContextService(contextCache as never);
   const service = new RouteRecommendationService(
     prisma as never,
     fuelStations as never,
     driverVehicle as never,
     routing as never,
     cache as never,
+    selectionContexts,
   );
 
-  return { service, matrixCalls, cacheStore, cacheKeys };
+  return { service, matrixCalls, cacheStore, cacheKeys, contextCache, selectionContexts };
 }
 
 describe('route recommendations — endpoint contract', () => {

@@ -2672,6 +2672,50 @@ export const driverPortalApi = {
       )
       .then((r) => r.data),
 
+  /**
+   * Surucunun aktif yakit duragi. Aktif kayit yoksa `intent: null` — NORMAL
+   * durum, hata degil.
+   */
+  activeFuelingIntent: (signal?: AbortSignal) =>
+    api
+      .get<{ intent: import('./types').FuelingIntent | null }>('/driver/fueling-intents/active', {
+        signal,
+      })
+      .then((r) => r.data.intent),
+
+  /**
+   * Yakit duragini secer ya da degistirir.
+   *
+   * Govde YALNIZCA opak secim kimligi + istasyon kimligi + yakit (+ opsiyonel
+   * litre) tasir. `driverId`, `vehicleId`, `tourId`, fiyat ve koordinat
+   * BILINCLI olarak yok: backend forbidNonWhitelisted ile calistigi icin
+   * fazladan alan 400 ile reddedilir ve snapshot sunucudan okunur.
+   *
+   * Ayni secim ikinci kez gonderildiginde backend yeni kayit URETMEZ
+   * (`outcome: 'unchanged'`), bu yuzden cift dokunus guvenlidir.
+   */
+  selectFuelingIntent: (payload: import('./types').SelectFuelingIntentPayload) =>
+    api
+      .put<import('./types').SelectFuelingIntentResult>('/driver/fueling-intents/active', payload)
+      .then((r) => r.data),
+
+  /** Tekrarlanan iptal guvenlidir: aktif kayit yoksa da 200 doner. */
+  cancelFuelingIntent: () =>
+    api
+      .post<{ intent: null; cancelled: boolean }>('/driver/fueling-intents/active/cancel')
+      .then((r) => r.data),
+
+  /**
+   * Harici navigasyonun acildigi ani bildirir. Varis kaniti DEGIL ve bu cagri
+   * basarisiz olsa bile navigasyon acilir — cagiran taraf hatayi yutar.
+   */
+  markFuelingIntentNavigationOpened: () =>
+    api
+      .post<{ intent: import('./types').FuelingIntent }>(
+        '/driver/fueling-intents/active/navigation-opened',
+      )
+      .then((r) => r.data.intent),
+
   departureCheckStatus: () =>
     api
       .get<import('./types').DriverDepartureCheckStatus>('/driver/departure-check/status')
@@ -3340,6 +3384,23 @@ export const toursApi = {
     api.get<{ tours: TourListItem[] }>('/routing/tours', { params: { date } }).then((r) => r.data),
 
   detail: (id: string) => api.get<TourDetail>(`/routing/tours/${id}`).then((r) => r.data),
+
+  /**
+   * Turun aktif yakit duragi — SALT OKUNUR.
+   *
+   * Ayri bir uc, tur detayina gomulu bir alan degil: yakit katmani backend'de
+   * RoutingModule'u iceri alan bir modulde duruyor ve tur detayina gomulmesi
+   * modul dongusu yaratirdi. Arayuz bunu tur detayinin ICINDE gosteriyor —
+   * yeni ve kopuk bir panel acilmadi.
+   *
+   * Ofisin bu kaydi DEGISTIRECEGI bir uc bilincli olarak YOK.
+   */
+  fuelingIntent: (tourId: string) =>
+    api
+      .get<{ intent: import('./types').FuelingIntent | null }>(
+        `/fleet/fueling-intents/by-tour/${tourId}`,
+      )
+      .then((r) => r.data.intent),
 
   create: (payload: {
     assignment_ids: string[];

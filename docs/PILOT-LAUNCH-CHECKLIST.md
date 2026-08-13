@@ -182,6 +182,30 @@ Kaynak: `backend/src/routing/valhalla-live.integration.spec.ts`.
 - [ ] ❓ Gerçek Valhalla ile ölçülen matris gecikmesi kabul edilebilir
       (istek başına 2 çağrı, ~21 hücre; senkron sürücü isteğinin içinde çalışıyor)
 
+### 6.2 Yakıt durağı seçimi — çok örnekli kurulumda `REDIS_URL` ZORUNLU
+
+Sürücü bir istasyonu yakıt durağı seçtiğinde istek yalnızca **opak bir seçim
+bağlamı kimliği** taşır; istasyon adı, koordinatı ve fiyatı sunucudaki kısa
+ömürlü snapshot'tan okunur (TTL 10 dk, `FuelSelectionContextService`). Bu
+snapshot `FuelStationCacheService` üzerinden saklanıyor ve `REDIS_URL` tanımlı
+değilse **süreç içi belleğe** düşüyor.
+
+Sonucu: yük dengeleyici arkasında birden fazla backend örneği çalışıyorsa,
+aramayı karşılayan örnek ile seçimi karşılayan örnek farklı olabilir ve sürücü
+her seçimde `fueling_selection_context_expired` alır — yani "lütfen yeniden
+arayın". Davranış **güvenlidir** (uydurma fiyat yerine yeniden arama) ama
+kullanılamaz.
+
+- [ ] ⚠️ **`REDIS_URL` tanımlı** — tek örnekli kurulumda opsiyonel, çok örnekli
+      kurulumda yakıt durağı seçimi için zorunlu
+- [ ] ❓ Seçim bağlamı TTL'i (10 dk) sürücünün karar süresine uygun bulundu
+
+Aktif yakıt niyetinin süresi ayrıca **turun çalışma gününün sonunda**
+(Europe/Berlin) dolar; tura bağlı olmayan seçimde tavan 24 saattir. Cron
+gerekmiyor — süresi geçen kayıt ilk okumada kapanıyor
+(`FuelingIntentService.expireStale`). Sunucu yerel saatine bırakılmıyor:
+konteyner UTC çalışıyor ve gün sonu iki saat erken biterdi.
+
 ## 7. İş akışı doğrulaması — rol bazlı
 
 Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`

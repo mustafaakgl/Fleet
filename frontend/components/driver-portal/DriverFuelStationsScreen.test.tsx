@@ -8,10 +8,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * arkadaki uc degisti.
  */
 const nearbyFuelStations = vi.fn();
+/** Faz 5 uclari. Varsayilan: aktif yakit duragi YOK. */
+const activeFuelingIntent = vi.fn();
+const selectFuelingIntent = vi.fn();
+const cancelFuelingIntent = vi.fn();
+const markNavigationOpened = vi.fn();
 
 vi.mock('@/lib/api', () => ({
   driverPortalApi: {
     routeRecommendedFuelStations: (...args: unknown[]) => nearbyFuelStations(...args),
+    activeFuelingIntent: (...args: unknown[]) => activeFuelingIntent(...args),
+    selectFuelingIntent: (...args: unknown[]) => selectFuelingIntent(...args),
+    cancelFuelingIntent: (...args: unknown[]) => cancelFuelingIntent(...args),
+    markFuelingIntentNavigationOpened: (...args: unknown[]) => markNavigationOpened(...args),
   },
   getApiErrorMessage: (_error: unknown, fallback: string) => fallback,
 }));
@@ -181,6 +190,11 @@ function calculatedMetrics(overrides: Record<string, unknown> = {}) {
 /** Faz 3 ile ayni ekran: aktif tur yok. */
 function response(overrides: Record<string, unknown> = {}) {
   return {
+    // Faz 5: her arama cevabi opak bir secim kimligi tasiyor. Uzak bir sona
+    // erme ani, "baglam gecerli" hâlinin varsayilan olmasini saglar; suresi
+    // gecmis baglam davranisi ayrica sinaniyor.
+    selectionContextId: 'ctx-1',
+    selectionContextExpiresAt: '2999-01-01T00:00:00.000Z',
     vehicle: {
       id: 'veh-1',
       plateNumber: 'DU-AB 123',
@@ -232,6 +246,15 @@ function activeTourResponse(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   nearbyFuelStations.mockReset();
+  activeFuelingIntent.mockReset();
+  // Varsayilan: aktif yakit duragi yok. Kayit YOKLUGU normal bir durum ve
+  // ekranin geri kalani bundan etkilenmiyor.
+  activeFuelingIntent.mockResolvedValue(null);
+  selectFuelingIntent.mockReset();
+  cancelFuelingIntent.mockReset();
+  cancelFuelingIntent.mockResolvedValue({ intent: null, cancelled: true });
+  markNavigationOpened.mockReset();
+  markNavigationOpened.mockResolvedValue(null);
   getCurrentPosition.mockReset();
   mapRenderSpy.mockReset();
   mapShouldThrow = false;
@@ -1661,5 +1684,288 @@ describe('DriverFuelStationsScreen — sub-threshold deviation display', () => {
     expect(impact).toContain('+0 km');
     expect(impact).toContain('+0 min');
     expect(impact).not.toContain('<');
+  });
+});
+
+/* ------------------------------------------------------------------------- *
+ * Faz 5 — gecici yakit duragi secimi
+ * ------------------------------------------------------------------------- */
+
+const STOP_KEY = {
+  selectAction: 'driverPortal.fuelingIntent.selectAction',
+  alreadySelected: 'driverPortal.fuelingIntent.alreadySelected',
+  selectedBadge: 'driverPortal.fuelingIntent.selectedBadge',
+  confirmTitle: 'driverPortal.fuelingIntent.confirmTitle',
+  confirmAction: 'driverPortal.fuelingIntent.confirmAction',
+  confirmChangeTitle: 'driverPortal.fuelingIntent.confirmChangeTitle',
+  confirmChangeAction: 'driverPortal.fuelingIntent.confirmChangeAction',
+  quotedPriceNote: 'driverPortal.fuelingIntent.quotedPriceNote',
+  doesNotChangeTour: 'driverPortal.fuelingIntent.doesNotChangeTour',
+  cardTitle: 'driverPortal.fuelingIntent.title',
+  cancel: 'driverPortal.fuelingIntent.cancel',
+  cancelConfirmAction: 'driverPortal.fuelingIntent.cancelConfirmAction',
+  openNavigation: 'driverPortal.fuelingIntent.openNavigation',
+  change: 'driverPortal.fuelingIntent.change',
+  pickFuelFirst: 'driverPortal.fuelingIntent.pickFuelFirst',
+  selectionExpired: 'driverPortal.fuelStations.errors.selectionExpired',
+  fuelNotOffered: 'driverPortal.fuelStations.errors.fuelNotOffered',
+};
+
+function intent(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'intent-1',
+    status: 'ACTIVE',
+    driverId: 'drv-1',
+    vehicleId: 'veh-1',
+    vehiclePlateNumber: 'DU-AB 123',
+    tourId: null,
+    anchorTourStopId: null,
+    station: {
+      provider: 'mock',
+      providerStationId: 'a',
+      name: 'Station a',
+      brand: 'ARAL',
+      address: { street: 'Hafenstraße', houseNumber: '1', postalCode: '47059', city: 'Duisburg' },
+      latitude: 51.44,
+      longitude: 6.76,
+    },
+    selectedFuelProduct: 'DIESEL',
+    quotedPricePerLitre: 1.759,
+    priceRetrievedAt: '2026-08-13T09:58:00.000Z',
+    attribution: { label: 'Demodaten', url: null },
+    plannedLitres: null,
+    routeMode: 'nearby_only',
+    extraDistanceKm: null,
+    extraDurationMin: null,
+    driveTimeToStationMin: null,
+    stationEta: null,
+    routeCalculatedAt: null,
+    selectedAt: '2026-08-13T10:00:00.000Z',
+    navigationOpenedAt: null,
+    expiresAt: '2999-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('DriverFuelStationsScreen — selecting a fuel stop', () => {
+  it('asks for confirmation and sends only the opaque context, never a price', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+    selectFuelingIntent.mockResolvedValue({
+      intent: intent(),
+      outcome: 'created',
+      replacedIntentId: null,
+    });
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    // Onaydan ONCE hicbir istek gitmiyor.
+    await user.click(screen.getByRole('button', { name: STOP_KEY.selectAction }));
+    expect(selectFuelingIntent).not.toHaveBeenCalled();
+
+    const dialog = screen.getByTestId('fuel-stop-confirm');
+    expect(within(dialog).getByText(STOP_KEY.confirmTitle)).toBeDefined();
+    // Arama anindaki fiyat, ODENEN fiyat gibi sunulmuyor.
+    expect(within(dialog).getByText(STOP_KEY.quotedPriceNote)).toBeDefined();
+    // Musteri duraklarinin sirasinin degismedigi onaydan once yaziyor.
+    expect(within(dialog).getByText(STOP_KEY.doesNotChangeTour)).toBeDefined();
+
+    await user.click(within(dialog).getByRole('button', { name: STOP_KEY.confirmAction }));
+
+    await waitFor(() => expect(selectFuelingIntent).toHaveBeenCalledTimes(1));
+    const payload = selectFuelingIntent.mock.calls[0]![0] as Record<string, unknown>;
+    expect(payload).toEqual({
+      selectionContextId: 'ctx-1',
+      stationId: 'a',
+      selectedFuelProduct: 'DIESEL',
+    });
+    // Fiyat, koordinat, istasyon adi, surucu/arac/tur kimligi GONDERILMEZ.
+    for (const forbidden of [
+      'quotedPricePerLitre',
+      'pricePerUnit',
+      'latitude',
+      'longitude',
+      'stationName',
+      'driverId',
+      'vehicleId',
+      'tourId',
+    ]) {
+      expect(payload[forbidden]).toBeUndefined();
+    }
+  });
+
+  it('sends the planned volume when the driver typed a valid one', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+    selectFuelingIntent.mockResolvedValue({
+      intent: intent({ plannedLitres: 120 }),
+      outcome: 'created',
+      replacedIntentId: null,
+    });
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    await user.type(screen.getByLabelText('driverPortal.fuelStations.plannedLitresLabel'), '120');
+    await user.click(screen.getByRole('button', { name: STOP_KEY.selectAction }));
+    await user.click(screen.getByRole('button', { name: STOP_KEY.confirmAction }));
+
+    await waitFor(() => expect(selectFuelingIntent).toHaveBeenCalled());
+    expect(
+      (selectFuelingIntent.mock.calls[0]![0] as { plannedLitres?: number }).plannedLitres,
+    ).toBe(120);
+  });
+
+  it('shows the active stop and does not offer a duplicate selection', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+    activeFuelingIntent.mockResolvedValue(intent());
+
+    render(<DriverFuelStationsScreen />);
+    await waitFor(() => expect(screen.getByTestId('fueling-intent-card')).toBeDefined());
+    await findStations(user);
+
+    expect(screen.getByTestId('station-is-fuel-stop')).toBeDefined();
+    // Ayni istasyon icin secim dugmesi KAPALI: cift kayit olusmaz.
+    const button = screen.getByRole('button', { name: STOP_KEY.alreadySelected });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    await user.click(button);
+    expect(selectFuelingIntent).not.toHaveBeenCalled();
+  });
+
+  it('asks for an explicit change confirmation for a different station', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      response({ stations: [station('a'), station('b', { name: 'Station b' })] }),
+    );
+    activeFuelingIntent.mockResolvedValue(intent());
+    selectFuelingIntent.mockResolvedValue({
+      intent: intent({ id: 'intent-2', station: { ...intent().station, providerStationId: 'b' } }),
+      outcome: 'replaced',
+      replacedIntentId: 'intent-1',
+    });
+
+    render(<DriverFuelStationsScreen />);
+    await waitFor(() => expect(screen.getByTestId('fueling-intent-card')).toBeDefined());
+    await findStations(user);
+
+    // Ikinci istasyonun secim dugmesi (ilki "zaten secili" oldugu icin kapali).
+    await user.click(screen.getByRole('button', { name: STOP_KEY.selectAction }));
+
+    const dialog = screen.getByTestId('fuel-stop-confirm');
+    expect(within(dialog).getByText(STOP_KEY.confirmChangeTitle)).toBeDefined();
+
+    await user.click(within(dialog).getByRole('button', { name: STOP_KEY.confirmChangeAction }));
+    await waitFor(() => expect(selectFuelingIntent).toHaveBeenCalledTimes(1));
+    expect((selectFuelingIntent.mock.calls[0]![0] as { stationId: string }).stationId).toBe('b');
+  });
+
+  it('cancels the fuel stop behind a second confirmation', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+    activeFuelingIntent.mockResolvedValue(intent());
+
+    render(<DriverFuelStationsScreen />);
+    await waitFor(() => expect(screen.getByTestId('fueling-intent-card')).toBeDefined());
+
+    await user.click(screen.getByRole('button', { name: new RegExp(STOP_KEY.cancel) }));
+    // Tek dokunusla iptal YOK — eldivenli parmak yanlis dokunur.
+    expect(cancelFuelingIntent).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: STOP_KEY.cancelConfirmAction }));
+    await waitFor(() => expect(cancelFuelingIntent).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId('fueling-intent-card')).toBeNull());
+  });
+
+  it('blocks the selection and asks for a new search when the context expired', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      response({ selectionContextExpiresAt: '2020-01-01T00:00:00.000Z' }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getAllByText(STOP_KEY.selectionExpired).length).toBeGreaterThan(0);
+    const button = screen.getByRole('button', { name: STOP_KEY.selectAction });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    // Eski fiyatla secim YAPILMIYOR.
+    await user.click(button);
+    expect(selectFuelingIntent).not.toHaveBeenCalled();
+  });
+
+  it('turns a backend rejection into a plain message, never a raw code', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+    selectFuelingIntent.mockRejectedValue({
+      response: { data: { code: 'fuel_product_not_offered' } },
+    });
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    await user.click(screen.getByRole('button', { name: STOP_KEY.selectAction }));
+    await user.click(screen.getByRole('button', { name: STOP_KEY.confirmAction }));
+
+    await waitFor(() => expect(screen.getByText(STOP_KEY.fuelNotOffered)).toBeDefined());
+    expect(document.body.textContent).not.toContain('fuel_product_not_offered');
+  });
+
+  it('does not offer the action while the fuel is still ambiguous', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(
+      response({
+        vehicle: {
+          id: 'veh-1',
+          plateNumber: 'DU-AB 123',
+          compatibleProducts: ['DIESEL', 'SUPER_E5'],
+          avgConsumptionLPer100Km: null,
+        },
+        stations: [station('a', { offerings: [offering('DIESEL', 1.759), offering('SUPER_E5', 1.9)] })],
+      }),
+    );
+
+    render(<DriverFuelStationsScreen />);
+    await findStations(user);
+
+    expect(screen.getByRole('button', { name: STOP_KEY.selectAction }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    expect(screen.getByText(STOP_KEY.pickFuelFirst)).toBeDefined();
+  });
+
+  it('opens navigation safely and is not blocked by failing telemetry', async () => {
+    const user = userEvent.setup();
+    nearbyFuelStations.mockResolvedValue(response());
+    activeFuelingIntent.mockResolvedValue(intent());
+    markNavigationOpened.mockRejectedValue(new Error('offline'));
+
+    render(<DriverFuelStationsScreen />);
+    await waitFor(() => expect(screen.getByTestId('fueling-intent-card')).toBeDefined());
+
+    const card = screen.getByTestId('fueling-intent-card');
+    const link = within(card).getByRole('link', { name: STOP_KEY.openNavigation });
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(link.getAttribute('target')).toBe('_blank');
+    // Koordinatla, adres metniyle degil.
+    expect(link.getAttribute('href')).toContain('51.440000,6.760000');
+
+    await user.click(link);
+    // Telemetri reddedilse bile baglanti yerinde ve kart bozulmadi.
+    await waitFor(() => expect(markNavigationOpened).toHaveBeenCalled());
+    expect(within(card).getByRole('link', { name: STOP_KEY.openNavigation })).toBeDefined();
+  });
+
+  it('labels the quoted price as a search-time price, never as the amount paid', async () => {
+    nearbyFuelStations.mockResolvedValue(response());
+    activeFuelingIntent.mockResolvedValue(intent());
+
+    render(<DriverFuelStationsScreen />);
+    await waitFor(() => expect(screen.getByTestId('fueling-intent-card')).toBeDefined());
+
+    const card = screen.getByTestId('fueling-intent-card');
+    expect(within(card).getByText(STOP_KEY.quotedPriceNote)).toBeDefined();
+    expect(within(card).getByText(STOP_KEY.doesNotChangeTour)).toBeDefined();
   });
 });

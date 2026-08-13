@@ -2760,6 +2760,16 @@ export interface FuelStationAttribution {
 }
 
 export interface NearbyFuelStationsResponse {
+  /**
+   * Bu aramanin OPAK secim kimligi (Faz 5).
+   *
+   * Yakit duragi secilirken sunucuya YALNIZCA bu ve istasyon kimligi gider.
+   * Fiyat, koordinat, istasyon adi ve rota metrigi istekte GONDERILMEZ —
+   * backend hepsini bu kimligin arkasindaki kendi snapshot'indan okur.
+   */
+  selectionContextId: string;
+  /** Kimligin son gecerlilik ani; gecince arayuz "yeniden ara" der. */
+  selectionContextExpiresAt: string;
   vehicle: {
     id: string;
     plateNumber: string;
@@ -2809,6 +2819,8 @@ export type RouteCalculationStatus =
 export interface FuelRouteContext {
   mode: 'active_tour' | 'nearby_only';
   calculatedAt: string;
+  /** Cozulen aktif tur; sapma hesaplanamasa da dolu olabilir. */
+  tourId: string | null;
   nextStop: {
     id: string;
     sequence: number;
@@ -2835,4 +2847,73 @@ export interface RouteRecommendationsResponse
   search: NearbyFuelStationsResponse['search'] & { retrievedAt: string };
   routeContext: FuelRouteContext;
   stations: RouteRecommendationStation[];
+}
+
+/**
+ * Gecici yakit duragi (Faz 5).
+ *
+ * Kaynak: backend/src/fleet/fuel-stations/fueling-intent.service.ts.
+ * Bu bir TourStop DEGILDIR: musteri duraklarinin sirasina girmez, tur
+ * optimizasyonunu tetiklemez ve harita numaralandirmasinda yer almaz.
+ */
+export type FuelingIntentStatus =
+  | 'ACTIVE'
+  | 'CANCELLED'
+  | 'SUPERSEDED'
+  /** Fis akisi (Prompt 6) icin ayrilmis; bu fazda hicbir yerden yazilmaz. */
+  | 'COMPLETED'
+  | 'EXPIRED';
+
+export interface FuelingIntent {
+  id: string;
+  status: FuelingIntentStatus;
+  driverId: string;
+  vehicleId: string;
+  vehiclePlateNumber: string | null;
+  tourId: string | null;
+  anchorTourStopId: string | null;
+  station: {
+    provider: string;
+    providerStationId: string;
+    name: string;
+    brand: string | null;
+    address: FuelStationAddress;
+    latitude: number;
+    longitude: number;
+  };
+  selectedFuelProduct: FuelProductType;
+  /**
+   * ARAMA ANINDAKI saglayici fiyati — ODENEN FIYAT DEGIL. Arayuz bunu her
+   * zaman "arama anindaki fiyat" olarak etiketler; gercek tutar yakit fisinden
+   * gelecek.
+   */
+  quotedPricePerLitre: number | null;
+  priceRetrievedAt: string | null;
+  attribution: FuelStationAttribution;
+  plannedLitres: number | null;
+  routeMode: string | null;
+  extraDistanceKm: number | null;
+  extraDurationMin: number | null;
+  driveTimeToStationMin: number | null;
+  /** Tahmini SURUS varisi; varis garantisi degil. */
+  stationEta: string | null;
+  routeCalculatedAt: string | null;
+  selectedAt: string;
+  navigationOpenedAt: string | null;
+  expiresAt: string;
+}
+
+/** PUT /driver/fueling-intents/active govdesi — baska alan KABUL EDILMEZ. */
+export interface SelectFuelingIntentPayload {
+  selectionContextId: string;
+  stationId: string;
+  selectedFuelProduct: FuelProductType;
+  plannedLitres?: number;
+}
+
+export interface SelectFuelingIntentResult {
+  intent: FuelingIntent;
+  /** 'unchanged': ayni secim tekrar gonderildi, yeni kayit uretilmedi. */
+  outcome: 'created' | 'replaced' | 'unchanged';
+  replacedIntentId: string | null;
 }

@@ -4,7 +4,17 @@ export type OfficeNotifyKey =
   | 'driver_request_created'
   | 'accident_report_created'
   | 'cargo_damage_report_created'
-  | 'equipment_issuance_pending_approval';
+  | 'equipment_issuance_pending_approval'
+  /**
+   * Yakit duragi olaylari.
+   *
+   * Navigasyonun ACILMASI icin BILINCLI olarak bir anahtar YOK: ofisin "surucu
+   * yol tarifini acti" bildirimi almasi gurultu olurdu; o olay yalnizca denetim
+   * kaydinda duruyor.
+   */
+  | 'fueling_stop_selected'
+  | 'fueling_stop_changed'
+  | 'fueling_stop_cancelled';
 
 type CopyTemplate = {
   title: string;
@@ -41,6 +51,18 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'Aushändigung wartet auf Freigabe',
       message: (p) => `${p.driverName} hat eine Aushändigung mit ${p.count} Position(en) eingereicht.`,
     },
+    fueling_stop_selected: {
+      title: 'Tankstopp gewählt',
+      message: (p) => `Fahrer hat ${p.station} als Tankstopp gewählt (${p.plateNumber}).`,
+    },
+    fueling_stop_changed: {
+      title: 'Tankstopp geändert',
+      message: (p) => `Fahrer hat den Tankstopp auf ${p.station} geändert (${p.plateNumber}).`,
+    },
+    fueling_stop_cancelled: {
+      title: 'Tankstopp storniert',
+      message: (p) => `Fahrer hat den Tankstopp ${p.station} storniert (${p.plateNumber}).`,
+    },
   },
   en: {
     transport_request_created: {
@@ -71,6 +93,18 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'Equipment issuance pending approval',
       message: (p) => `${p.driverName} submitted an issuance with ${p.count} item(s).`,
     },
+    fueling_stop_selected: {
+      title: 'Fuel stop selected',
+      message: (p) => `Driver selected ${p.station} as fuel stop (${p.plateNumber}).`,
+    },
+    fueling_stop_changed: {
+      title: 'Fuel stop changed',
+      message: (p) => `Driver changed the fuel stop to ${p.station} (${p.plateNumber}).`,
+    },
+    fueling_stop_cancelled: {
+      title: 'Fuel stop cancelled',
+      message: (p) => `Driver cancelled the fuel stop ${p.station} (${p.plateNumber}).`,
+    },
   },
   tr: {
     transport_request_created: {
@@ -100,6 +134,18 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
     equipment_issuance_pending_approval: {
       title: 'Teslim tutanağı onay bekliyor',
       message: (p) => `${p.driverName}, ${p.count} kalemlik teslim tutanağı gönderdi.`,
+    },
+    fueling_stop_selected: {
+      title: 'Yakıt durağı seçildi',
+      message: (p) => `Sürücü ${p.station} istasyonunu yakıt durağı seçti (${p.plateNumber}).`,
+    },
+    fueling_stop_changed: {
+      title: 'Yakıt durağı değişti',
+      message: (p) => `Sürücü yakıt durağını ${p.station} olarak değiştirdi (${p.plateNumber}).`,
+    },
+    fueling_stop_cancelled: {
+      title: 'Yakıt durağı iptal edildi',
+      message: (p) => `Sürücü ${p.station} yakıt durağını iptal etti (${p.plateNumber}).`,
     },
   },
 };

@@ -215,6 +215,17 @@ const PROVIDER_ERROR_KEYS: Record<string, string> = {
   // sunucu tarafinda kaliyor.
   fuel_station_provider_not_configured:
     'driverPortal.fuelStations.errors.providerNotConfigured',
+  // --- Faz 5: yakit duragi secimi ---
+  // Baglamin suresi dolmus VEYA baglam bu surucuye/araca ait degil. Backend
+  // ikisini tek kodla bildiriyor (kehanet olmasin diye) ve kullanici acisindan
+  // dogru davranis ayni: yeniden arama.
+  fueling_selection_context_expired:
+    'driverPortal.fuelStations.errors.selectionExpired',
+  fueling_station_not_in_context: 'driverPortal.fuelStations.errors.selectionExpired',
+  fuel_product_not_compatible: 'driverPortal.fuelStations.errors.fuelNotCompatible',
+  fuel_product_not_offered: 'driverPortal.fuelStations.errors.fuelNotOffered',
+  active_fueling_intent_not_found: 'driverPortal.fuelStations.errors.noActiveIntent',
+  fueling_intent_conflict: 'driverPortal.fuelStations.errors.intentConflict',
 };
 
 export const FUEL_STATION_ERROR_CODES = Object.keys(PROVIDER_ERROR_KEYS);

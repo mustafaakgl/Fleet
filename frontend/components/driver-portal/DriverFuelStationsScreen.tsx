@@ -16,7 +16,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DriverFuelStationsMap } from '@/components/driver-portal/DriverFuelStationsMap';
+import { DriverFuelStopConfirmDialog } from '@/components/driver-portal/DriverFuelStopConfirmDialog';
+import { DriverFuelingIntentCard } from '@/components/driver-portal/DriverFuelingIntentCard';
+import { useActiveFuelingIntent } from '@/hooks/useActiveFuelingIntent';
 import { driverPortalApi } from '@/lib/api';
+import { isActiveFuelStop, isSelectionContextUsable } from '@/lib/fueling-intent-view';
 import {
   resolveDriverPosition,
   type DriverPosition,
@@ -119,15 +123,19 @@ type ScreenError =
 /**
  * Surucunun yakinindaki, aracina UYAN akaryakit istasyonlari.
  *
- * ILK RENDERDA HICBIR ISTEK YOK: ne konum izni ne de API cagrisi. Surucu
- * "Tankstelle finden"e basana kadar hicbir sey olmuyor — sayfa acilisinda izin
- * diyalogu acmak, kota harcamak ve arka planda polling yapmak bilincli olarak
- * DISARIDA.
+ * ILK RENDERDA KONUM IZNI VE SAGLAYICI CAGRISI YOK: surucu "Tankstelle
+ * finden"e basana kadar ne izin diyalogu aciliyor ne de Tankerkonig/Valhalla
+ * kotasi harcaniyor; arka planda polling de yok.
+ *
+ * TEK ISTISNA (Faz 5): aktif yakit duragi KENDI backend'imizden bir kez
+ * okunuyor. O cagri konum istemez ve saglayici kotasi harcamaz; okumadan da
+ * surucu daha once sectigi duragi goremezdi.
  *
  * Arac istekte GONDERILMEZ; sunucu oturumdaki surucuye gore cozer.
  */
 export function DriverFuelStationsScreen() {
   const { t, i18n } = useTranslation();
+  const { intent, setIntent } = useActiveFuelingIntent();
 
   const [position, setPosition] = useState<DriverPosition | null>(null);
   const [data, setData] = useState<RouteRecommendationsResponse | null>(null);
@@ -143,6 +151,10 @@ export function DriverFuelStationsScreen() {
   const [plannedLitresInput, setPlannedLitresInput] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<FuelProductType | null>(null);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  /** Onay bekleyen yakit duragi adayi — onaylanana kadar HICBIR istek gitmez. */
+  const [pendingStopStationId, setPendingStopStationId] = useState<string | null>(null);
+  const [savingStop, setSavingStop] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
 
   /** Bekleyen istegi iptal etmek icin; unmount ve yeni aramada kullaniliyor. */
   const abortRef = useRef<AbortController | null>(null);
@@ -297,6 +309,58 @@ export function DriverFuelStationsScreen() {
     setSelectedStationId((current) => (current === stationId ? null : stationId));
   }, []);
 
+  /**
+   * Secim baglami hala gecerli mi?
+   *
+   * Gecmisse ESKI FIYAT KULLANILMAZ: dugmeler kapanir ve surucuden yeniden
+   * arama istenir. Sunucu ayni kontrolu yapiyor — bu yalnizca kullaniciya
+   * bosuna bir hata gostermemek icin.
+   */
+  const contextUsable = isSelectionContextUsable(data?.selectionContextExpiresAt);
+
+  /** Bu istasyon icin hangi yakit kaydedilecek. Belirsizse null. */
+  const stopProductFor = useCallback(
+    (station: RouteRecommendationStation): FuelProductType | null => {
+      const product = selectedProduct ?? (products.length === 1 ? products[0]! : null);
+      if (!product) return null;
+      return station.offerings.some((offering) => offering.productType === product)
+        ? product
+        : null;
+    },
+    [products, selectedProduct],
+  );
+
+  const pendingStation = useMemo(
+    () => sorted.find((station) => station.id === pendingStopStationId) ?? null,
+    [pendingStopStationId, sorted],
+  );
+  const pendingProduct = pendingStation ? stopProductFor(pendingStation) : null;
+
+  const handleConfirmStop = useCallback(async () => {
+    if (!data || !pendingStation || !pendingProduct) return;
+
+    setSavingStop(true);
+    setStopError(null);
+    try {
+      // Govde YALNIZCA opak baglam kimligi + istasyon kimligi + yakit tasir.
+      // Fiyat, ad ve koordinat GONDERILMEZ — sunucu kendi snapshot'indan okur.
+      const result = await driverPortalApi.selectFuelingIntent({
+        selectionContextId: data.selectionContextId,
+        stationId: pendingStation.id,
+        selectedFuelProduct: pendingProduct,
+        ...(plannedLitresValid && plannedLitres !== null ? { plannedLitres } : {}),
+      });
+      setIntent(result.intent);
+      setPendingStopStationId(null);
+    } catch (caught) {
+      const knownKey = fuelStationErrorKey(caught);
+      setStopError(knownKey ?? 'driverPortal.fuelStations.errors.generic');
+      setPendingStopStationId(null);
+    } finally {
+      setSavingStop(false);
+    }
+  }, [data, pendingProduct, pendingStation, plannedLitres, plannedLitresValid, setIntent]);
+
   useEffect(() => {
     if (selectedStation && summaryRef.current) {
       // Marker'dan secildiginde ozet karti odaga aliniyor — klavye ve ekran
@@ -311,7 +375,35 @@ export function DriverFuelStationsScreen() {
     <div className="space-y-4">
       <p className="text-sm text-slate-600">{t('driverPortal.fuelStations.intro')}</p>
 
-      {/* Ana aksiyon. Ilk renderda hicbir istek yok; her sey buna bagli. */}
+      {/* Aktif yakit duragi listeden ONCE: surucu ekrani acar acmaz nereye
+          gitmeyi planladigini gormeli. */}
+      {intent ? (
+        <DriverFuelingIntentCard
+          intent={intent}
+          onChange={() => {
+            // "Degistir" yeni bir istek ACMAZ: liste zaten ekranda, surucu
+            // baska bir istasyonun kartindan secim yapar.
+            setStopError(null);
+            summaryRef.current?.focus();
+          }}
+          onCancelled={() => {
+            setIntent(null);
+            setStopError(null);
+          }}
+        />
+      ) : null}
+
+      {stopError ? (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{t(stopError)}</span>
+        </p>
+      ) : null}
+
+      {/* Ana aksiyon. Ilk renderda konum izni ve saglayici cagrisi yok. */}
       <Button
         type="button"
         className={cn('w-full bg-[#1a4d7a] hover:bg-[#163a5c]', TOUCH_TARGET)}
@@ -627,12 +719,31 @@ export function DriverFuelStationsScreen() {
                     consumptionLPer100Km={data.vehicle.avgConsumptionLPer100Km}
                     locale={i18n.language}
                     platform={platform}
+                    isFuelStop={isActiveFuelStop(station, intent)}
+                    stopProduct={stopProductFor(station)}
+                    contextUsable={contextUsable}
+                    savingStop={savingStop}
                     onSelect={() => handleSelectStation(station.id)}
+                    onSelectAsStop={() => {
+                      setStopError(null);
+                      setPendingStopStationId(station.id);
+                    }}
                   />
                 </li>
               ))}
             </ul>
           )}
+
+          {/* Baglam suresi gecmisse ESKI FIYATLA secim yapilamaz. */}
+          {!contextUsable && sorted.length > 0 ? (
+            <p
+              role="status"
+              className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{t('driverPortal.fuelStations.errors.selectionExpired')}</span>
+            </p>
+          ) : null}
 
           {/* Live modda kaynak atfi ZORUNLU (CC BY 4.0). Mock modda saglayici
               adi degil "Demodaten" yaziyor — bkz. MockFuelStationProvider. */}
@@ -652,6 +763,22 @@ export function DriverFuelStationsScreen() {
           </p>
         </div>
       ) : null}
+
+      {/* Onay: seciminde ne kaydedilecegi (yakit, arama anindaki fiyat, litre,
+          sapma) gosterilmeden hicbir istek gonderilmiyor. */}
+      {pendingStation && pendingProduct ? (
+        <DriverFuelStopConfirmDialog
+          station={pendingStation}
+          selectedProduct={pendingProduct}
+          plannedLitres={plannedLitresValid ? plannedLitres : null}
+          replacingStationName={
+            intent && !isActiveFuelStop(pendingStation, intent) ? intent.station.name : null
+          }
+          busy={savingStop}
+          onConfirm={() => void handleConfirmStop()}
+          onClose={() => setPendingStopStationId(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -667,7 +794,12 @@ function StationCard({
   consumptionLPer100Km,
   locale,
   platform,
+  isFuelStop,
+  stopProduct,
+  contextUsable,
+  savingStop,
   onSelect,
+  onSelectAsStop,
 }: {
   station: RouteRecommendationStation;
   selected: boolean;
@@ -679,7 +811,14 @@ function StationCard({
   consumptionLPer100Km: number | null;
   locale: string;
   platform: ReturnType<typeof detectMobilePlatform>;
+  /** Bu istasyon SU AN aktif yakit duragi mi. */
+  isFuelStop: boolean;
+  /** Kaydedilecek yakit; belirsizse null ve secim dugmesi kapali. */
+  stopProduct: FuelProductType | null;
+  contextUsable: boolean;
+  savingStop: boolean;
   onSelect: () => void;
+  onSelectAsStop: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -760,6 +899,12 @@ function StationCard({
             )}
             {/* "Onerilen" ile "En ucuz"/"En yakin" AYNI SEY DEGIL: onerilen
                 secili olcute gore en iyi VE kullanilabilir olandir. */}
+            {/* "Seçildi": bu istasyon surucunun aktif yakit duragi. */}
+            {isFuelStop ? (
+              <Badge variant="success" data-testid="station-is-fuel-stop">
+                {t('driverPortal.fuelingIntent.selectedBadge')}
+              </Badge>
+            ) : null}
             {isRecommended ? (
               <Badge variant="success">{t('driverPortal.fuelStations.recommended')}</Badge>
             ) : null}
@@ -893,11 +1038,31 @@ function StationCard({
           ) : null}
         </button>
 
+        {/* Yakit duragi secimi. Bu aksiyon ISTASYONU TURA EKLEMEZ: ayri bir
+            FuelingIntent kaydi olusur, TourStop yazilmaz ve musteri
+            duraklarinin sirasi degismez. */}
+        <Button
+          type="button"
+          className={cn('mt-3 w-full bg-emerald-600 text-white hover:bg-emerald-700', TOUCH_TARGET)}
+          disabled={isFuelStop || !stopProduct || !contextUsable || savingStop}
+          onClick={onSelectAsStop}
+        >
+          <Fuel className="mr-2 h-4 w-4" aria-hidden="true" />
+          {isFuelStop
+            ? t('driverPortal.fuelingIntent.alreadySelected')
+            : t('driverPortal.fuelingIntent.selectAction')}
+        </Button>
+        {!isFuelStop && !stopProduct ? (
+          <p className="mt-1 text-xs text-slate-500">
+            {t('driverPortal.fuelingIntent.pickFuelFirst')}
+          </p>
+        ) : null}
+
         <Button
           asChild={Boolean(navUrl)}
           disabled={!navUrl}
           variant="outline"
-          className={cn('mt-3 w-full', TOUCH_TARGET, !navUrl && 'opacity-50')}
+          className={cn('mt-2 w-full', TOUCH_TARGET, !navUrl && 'opacity-50')}
         >
           {navUrl ? (
             <a href={navUrl} target="_blank" rel="noopener noreferrer">

@@ -12,6 +12,10 @@ import {
   filterStationsForVehicle,
 } from './core/fuel-compatibility.util';
 import {
+  FuelSelectionContextService,
+  toSelectionContextStation,
+} from './fuel-selection-context.service';
+import {
   FUEL_STATION_PROVIDER,
   type FuelStationAttribution,
   type FuelStationDataMode,
@@ -21,6 +25,17 @@ import {
 import { VehicleFuelCompatibilityService } from './vehicle-fuel-compatibility.service';
 
 export interface NearbyFuelStationsResponse {
+  /**
+   * Bu aramanin OPAK secim kimligi.
+   *
+   * Surucu bir istasyonu yakit duragi yaparken yalnizca bunu ve istasyon
+   * kimligini gonderir; fiyat, koordinat ve rota metrigi govdede KABUL
+   * EDILMEZ — hepsi bu kimligin arkasindaki sunucu snapshot'indan okunur
+   * (bkz. FuelSelectionContextService).
+   */
+  selectionContextId: string;
+  /** Secim kimliginin son gecerlilik ani — arayuz "yeniden ara" diyebilsin. */
+  selectionContextExpiresAt: string;
   vehicle: {
     id: string;
     plateNumber: string;
@@ -68,6 +83,7 @@ export class FuelStationService {
   constructor(
     private readonly driverVehicle: DriverVehicleService,
     private readonly compatibility: VehicleFuelCompatibilityService,
+    private readonly selectionContexts: FuelSelectionContextService,
     @Inject(FUEL_STATION_PROVIDER) private readonly provider: FuelStationProvider,
   ) {}
 
@@ -133,7 +149,24 @@ export class FuelStationService {
 
     const stations = filterStationsForVehicle(result.value, compatibleProducts);
 
+    // Secim baglami BURADA dogar: filtreden gecmis, gercekten gosterilen
+    // istasyonlarin sunucu tarafindaki kopyasi. Rota katmani ayni kimligi
+    // zenginlestirir, ikinci bir kimlik uretmez.
+    const context = await this.selectionContexts.create({
+      driverId: driver.id,
+      vehicleId: vehicle.id,
+      compatibleProducts,
+      attribution: this.provider.attribution,
+      routeMode: 'nearby_only',
+      routeCalculatedAt: null,
+      tourId: null,
+      anchorTourStopId: null,
+      stations: stations.map((station) => toSelectionContextStation(station)),
+    });
+
     return {
+      selectionContextId: context.id,
+      selectionContextExpiresAt: context.expiresAt,
       vehicle: vehicleView,
       search: searchView,
       dataMode: this.provider.dataMode,

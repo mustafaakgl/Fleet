@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Check, Clock, Fuel, MapPin, Navigation, Route, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { DriverFuelingIntentCard } from '@/components/driver-portal/DriverFuelingIntentCard';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
 import { DriverPortalShell } from '@/components/driver-portal/DriverPortalShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useActiveFuelingIntent } from '@/hooks/useActiveFuelingIntent';
 import { driverPortalApi } from '@/lib/api';
 import { enqueueTourStopMarkQueueItem } from '@/lib/driver-offline-queue';
 import { isQueueableOfflineError } from '@/lib/driver-offline-queue-core';
@@ -58,6 +60,11 @@ export default function DriverTourPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyStopId, setBusyStopId] = useState<string | null>(null);
   const [queuedStopIds, setQueuedStopIds] = useState<string[]>([]);
+  /**
+   * Planlanan yakit duragi. Turdan AYRI okunuyor: bir TourStop degil ve tur
+   * yuklenemese bile gosterilebilir olmali.
+   */
+  const { intent: fuelingIntent, setIntent: setFuelingIntent } = useActiveFuelingIntent();
 
   useEffect(() => {
     let active = true;
@@ -353,6 +360,18 @@ export default function DriverTourPage() {
     <DriverPortalShell>
       <DriverPageBack label={t('driverPortal.backToToday')} />
       <h1 className="mb-3 text-xl font-bold text-slate-900">{t('driverPortal.tour.title')}</h1>
+      {/* Planlanan yakit duragi. Durak listesinin DISINDA ve numarasiz: bir
+          musteri duragi degil, sirayi degistirmiyor ve tur yuklenemese bile
+          gorunuyor. "Degistir" istasyon ekranina goturur. */}
+      {fuelingIntent ? (
+        <div className="mb-3">
+          <DriverFuelingIntentCard
+            intent={fuelingIntent}
+            changeHref="/driver/fuel-stations"
+            onCancelled={() => setFuelingIntent(null)}
+          />
+        </div>
+      ) : null}
       {body()}
     </DriverPortalShell>
   );

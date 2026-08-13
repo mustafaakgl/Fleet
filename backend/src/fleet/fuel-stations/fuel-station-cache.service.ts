@@ -70,13 +70,25 @@ export class FuelStationCacheService implements OnModuleDestroy {
     return JSON.parse(entry.value) as T;
   }
 
-  async set(key: string, value: unknown): Promise<void> {
+  /**
+   * @param ttlSecondsOverride Varsayilan TTL'i (5 dk) gecersiz kilar.
+   *   RoutingCacheService.set ile AYNI imza — secim baglami fiyat
+   *   onbelleginden farkli bir omur istiyor ve ikinci bir onbellek servisi
+   *   kurmak yerine mevcut olan parametrelestirildi.
+   */
+  async set(key: string, value: unknown, ttlSecondsOverride?: number): Promise<void> {
     const namespaced = `fuelstations:${key}`;
     const serialized = JSON.stringify(value);
+    const ttl =
+      ttlSecondsOverride !== undefined &&
+      Number.isFinite(ttlSecondsOverride) &&
+      ttlSecondsOverride > 0
+        ? Math.floor(ttlSecondsOverride)
+        : this.ttlSeconds;
 
     if (this.redis) {
       try {
-        await this.redis.set(namespaced, serialized, 'EX', this.ttlSeconds);
+        await this.redis.set(namespaced, serialized, 'EX', ttl);
       } catch (error) {
         this.logger.warn(
           `Fuel station cache write failed: ${error instanceof Error ? error.message : 'unknown'}`,
@@ -94,7 +106,7 @@ export class FuelStationCacheService implements OnModuleDestroy {
     }
     this.memory.set(namespaced, {
       value: serialized,
-      expiresAt: Date.now() + this.ttlSeconds * 1000,
+      expiresAt: Date.now() + ttl * 1000,
     });
   }
 
