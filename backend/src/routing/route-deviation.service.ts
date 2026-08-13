@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FleetTripStatus } from '@prisma/client';
+import { FleetTripStatus, FuelEntryWorkflowStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   type DeviationResult,
@@ -53,7 +53,11 @@ export class RouteDeviationService {
    */
   private async averagePricePerLiter(from: Date, to: Date): Promise<number | null> {
     const totals = await this.prisma.fleetFuelEntry.aggregate({
-      where: { enteredAt: { gte: from, lt: to } },
+      // YALNIZCA onaylanmis fisler: bu deger EUR/litre birim maliyeti uretiyor
+      // ve sapma raporunun para tarafinin dayanagi. Surucunun heniz muhasebe
+      // onayindan gecmemis fisi buraya girseydi, filo geneli birim maliyet
+      // dogrulanmamis veriyle kayardi.
+      where: { enteredAt: { gte: from, lt: to }, workflowStatus: FuelEntryWorkflowStatus.approved },
       _sum: { liters: true, totalCost: true },
     });
 

@@ -398,6 +398,16 @@ async function main() {
     }
 
     await Promise.all([
+      // Yakit islemi. Faz 6'dan itibaren fis GORUNTUSU, istasyon adi, fis
+      // numarasi ve odeme yontemi de bu satirda duruyor — sizmasi bir
+      // kiracinin mali belgesini digerine gostermek olurdu.
+      verifyTenantScopedModel({
+        label: 'FleetFuelEntry', tenantA, tenantB,
+        unscopedCountA: () => base.fleetFuelEntry.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.fleetFuelEntry.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.fleetFuelEntry.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.fleetFuelEntry.count()),
+      }),
       verifyTenantScopedModel({
         label: 'VehicleFuelCompatibility', tenantA, tenantB,
         unscopedCountA: () => base.vehicleFuelCompatibility.count({ where: { tenantId: tenantA } }),

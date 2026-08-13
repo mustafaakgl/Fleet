@@ -956,6 +956,10 @@ model FuelingIntent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Bu niyete baglanan yakit fisleri. Fis yuklemek icin niyet ZORUNLU DEGIL;
+  /// bag opsiyonel ve tek yonlu bir baglamdir.
+  fuelEntries FleetFuelEntry[]
+
   /// Bir surucu icin ayni anda tek ACTIVE kayit — kiraci kapsamli.
   @@unique([tenantId, activeDriverKey])
   @@index([tenantId])
@@ -3612,6 +3616,48 @@ model FleetDrivingEvent {
   @@map("fleet_driving_events")
 }
 
+/// Fisin IS AKISI durumu. OCR'in TEKNIK durumuyla karistirilmamali: OCR
+/// basarisiz olsa bile fis kaybolmaz, surucu formu elle doldurup gonderebilir.
+///
+/// MALIYET KURALI: yalnizca `approved` kayitlar arac maliyeti, TCO ve yakit
+/// analitigine girer. Bekleyen fisler ayri gosterilebilir ama onaylanmis
+/// maliyete EKLENMEZ.
+enum FuelEntryWorkflowStatus {
+  /// Yuklendi; surucu OCR taslagini kontrol ediyor. Mali alanlar bos olabilir.
+  driver_review
+  /// Surucu degerleri dogruladi. Surucu artik degistiremez.
+  submitted
+  /// Muhasebe onayladi. RAPORLARA GIREN TEK DURUM.
+  approved
+  /// Muhasebe reddetti. Maliyete girmez.
+  rejected
+}
+
+/// OCR'in TEKNIK durumu. Is akisindan bagimsiz: `succeeded` fisin gonderildigi
+/// anlamina gelmez, `failed` de fisin gecersiz oldugu anlamina gelmez.
+enum FuelReceiptOcrStatus {
+  not_requested
+  processing
+  succeeded
+  failed
+}
+
+/// Yakit islemi — sistemdeki CANONICAL kayit.
+///
+/// NEDEN PARALEL MODEL YOK: fis yukleme, OCR ve surucu dogrulamasi bu modelin
+/// uzerine kuruldu. Ayri bir FuelReceipt/FuelExpense tablosu ayni gercegi iki
+/// yerde tutar ve raporlarin hangisini saydigini belirsiz birakirdi. Faz 5
+/// raporundaki `FuelReceipt.fuelingIntentId` ifadesi bir model karari DEGILDI.
+///
+/// UPLOAD-FIRST: surucu once fisin fotografini yukluyor, degerler sonra
+/// geliyor. Bu yuzden `liters` ve `totalCost` artik NULLABLE — yuklendigi anda
+/// gercekten bilinmiyorlar ve 0 yazmak "bedava yakit" demek olurdu. `submitted`
+/// durumuna gecmeden once ikisi de zorunlu.
+///
+/// `enteredAt` BILINCLI olarak NOT NULL kaldi: indeksli ve repo genelinde
+/// orderBy/where'de kullaniliyor (telematik, bakim, sapma raporu). Nullable
+/// yapmak onlarca sorguyu bozardi. Yuklemede `now()` yazilir, surucu confirm'de
+/// fisteki gercek tarihi girer.
 model FleetFuelEntry {
   id                String   @id @default(cuid())
   tenantId          String   @default("default-tenant")
@@ -3619,8 +3665,11 @@ model FleetFuelEntry {
   vehicleId         String
   driverId          String
   enteredAt         DateTime
-  liters            Decimal  @db.Decimal(10, 3)
-  totalCost         Decimal  @db.Decimal(12, 2)
+  liters            Decimal? @db.Decimal(10, 3)
+  /// YAKIT satirinin brut toplami — fisin genel toplami DEGIL. Karma fiste
+  /// (kahve, market, arac yikama) genel toplami buraya yazmak aracin yakit
+  /// maliyetini sisirir; genel toplam `receiptGrossAmount`'ta durur.
+  totalCost         Decimal? @db.Decimal(12, 2)
   currency          String   @default("EUR")
   odometerKm        Decimal? @db.Decimal(12, 3)
   isFullTank        Boolean  @default(false)
@@ -3629,14 +3678,71 @@ model FleetFuelEntry {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  /// --- Is akisi ---
+  workflowStatus FuelEntryWorkflowStatus @default(driver_review)
+  submittedAt    DateTime?
+
+  /// --- Surucunun ONAYLADIGI canonical fis alanlari ---
+  stationName        String?
+  stationAddress     String?
+  receiptNumber      String?
+  fuelProduct        FuelProductType?
+  pricePerLiter      Decimal?         @db.Decimal(10, 4)
+  receiptGrossAmount Decimal?         @db.Decimal(12, 2)
+  receiptNetAmount   Decimal?         @db.Decimal(12, 2)
+  receiptVatAmount   Decimal?         @db.Decimal(12, 2)
+  receiptVatRate     Decimal?         @db.Decimal(5, 2)
+  paymentMethod      String?
+  /// Fiste plaka yaziyorsa. Aracin plakasi DEGIL — karsilastirma icin.
+  receiptPlateNumber String?
+
+  /// --- Yakit uyumlulugu istisnasi ---
+  /// Fisteki urun aracin onayli listesinde degil. Kayit YOK EDILMEZ; surucunun
+  /// acik onayiyla muhasebe incelemesine gider.
+  compatibilityMismatch       Boolean   @default(false)
+  compatibilityAcknowledgedAt DateTime?
+
+  /// --- Dosya guvenligi ---
+  /// SHA-256. Ayni kiraci icinde birebir ayni dosya iki kez yuklenemez.
+  receiptFileHash     String?
+  receiptFileSize     Int?
+  receiptOriginalName String?
+
+  /// --- OCR ---
+  ocrStatus          FuelReceiptOcrStatus @default(not_requested)
+  ocrProvider        String?
+  ocrProviderVersion String?
+  ocrProcessedAt     DateTime?
+  /// Normalize edilmis snapshot: alan basina { value, confidence }. HAM
+  /// saglayici cevabi, base64 resim ya da tam OCR metni BURAYA YAZILMAZ.
+  ocrExtraction      Json?
+  /// Teknik olmayan hata SINIFI (ornegin 'unreadable'), saglayici mesaji degil.
+  ocrErrorClass      String?
+  /// Verinin gercek mi demo mu oldugu — istemci kendi env'inden tahmin etmez.
+  ocrDataMode        String?
+
+  /// --- Yakit niyeti bagi (opsiyonel) ---
+  /// Fis yuklemek icin FuelingIntent ZORUNLU DEGIL ve olmayacak.
+  fuelingIntentId         String?
+  fuelingIntent           FuelingIntent? @relation(fields: [fuelingIntentId], references: [id], onDelete: SetNull)
+  /// Bir yakit niyetine EN FAZLA BIR kesinlesmis fis baglanabilir.
+  /// `submitted`/`approved` iken fuelingIntentId, aksi halde null — tekil
+  /// indeksin tasiyicisi (Faz 5'teki activeDriverKey ile ayni desen).
+  fuelingIntentSettledKey String?
+
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
   fuelCardTransactions FuelCardTransaction[]
 
+  @@unique([tenantId, receiptFileHash])
+  @@unique([tenantId, fuelingIntentSettledKey])
   @@index([tenantId])
   @@index([vehicleId, enteredAt])
   @@index([driverId, enteredAt])
+  @@index([tenantId, workflowStatus])
+  @@index([tenantId, driverId, workflowStatus])
+  @@index([fuelingIntentId])
   @@map("fleet_fuel_entries")
 }
 

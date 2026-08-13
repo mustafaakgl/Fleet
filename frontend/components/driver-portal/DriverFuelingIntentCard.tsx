@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Clock, Fuel, Navigation, Route, Undo2 } from 'lucide-react';
+import { Clock, Fuel, Navigation, Receipt, Route, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -169,6 +169,16 @@ export function DriverFuelingIntentCard({
             ) : (
               <span>{t('driverPortal.fuelStations.noCoordinates')}</span>
             )}
+          </Button>
+
+          {/* Bu yakit alimi icin fis yukleme — OPSIYONEL kisayol. Fis yuklemek
+              icin yakit duragi hicbir zaman zorunlu degil; bu yalnizca bagi
+              hazir kuran bir baglanti. */}
+          <Button asChild variant="outline" className={cn('w-full', TOUCH_TARGET)}>
+            <Link href={`/driver/fuel-receipts?fuelingIntentId=${encodeURIComponent(intent.id)}`}>
+              <Receipt className="mr-2 h-4 w-4" aria-hidden="true" />
+              {t('driverPortal.fuelingIntent.uploadReceipt')}
+            </Link>
           </Button>
 
           <div className="grid grid-cols-2 gap-2">

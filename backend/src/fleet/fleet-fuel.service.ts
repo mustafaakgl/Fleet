@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   FleetTripStatus,
+  FuelEntryWorkflowStatus,
   NotificationType,
   Prisma,
 } from '@prisma/client';
@@ -44,9 +45,12 @@ export type FleetFuelEntrySummary = {
   vehicleId: string;
   driverId: string;
   enteredAt: string;
-  liters: number;
-  totalCost: number;
+  /** Taslak fiste HENUZ BILINMIYOR — 0 degil null. */
+  liters: number | null;
+  /** YAKIT satirinin brut toplami; taslakta null. Fisin genel toplami DEGIL. */
+  totalCost: number | null;
   currency: string;
+  workflowStatus: FuelEntryWorkflowStatus;
   odometerKm: number | null;
   isFullTank: boolean;
   hasReceipt: boolean;
@@ -221,6 +225,13 @@ export class FleetFuelService {
     const entry = await this.prisma.$transaction(async (tx) => {
       const created = await tx.fleetFuelEntry.create({
         data: {
+          // DOGRUDAN GIRIS UCU — davranis Faz 6'da BILINCLI olarak degismedi.
+          // Yeni varsayilan `driver_review`; burada acikca `approved` yaziliyor
+          // cunku bu uc fis inceleme akisinin parcasi DEGIL: degerler zaten
+          // elle giriliyor ve kayit bugune kadar dogrudan raporlara giriyordu.
+          // Varsayilana birakmak, calisan bir akisi sessizce raporlardan
+          // dusururdu ve geri almanin yolu (muhasebe onay ekrani) Faz 7'de.
+          workflowStatus: FuelEntryWorkflowStatus.approved,
           vehicleId: dto.vehicleId,
           driverId: driver.id,
           enteredAt,
@@ -255,7 +266,9 @@ export class FleetFuelService {
 
   async listFuelEntries(query: ListFuelEntriesQueryDto): Promise<FleetFuelEntrySummary[]> {
     const entries = await this.prisma.fleetFuelEntry.findMany({
-      where: this.buildListWhere(query),
+      // Listeleme: bekleyen fisler de gorunur. Bu uc toplam maliyet
+      // hesaplamiyor; her satir kendi durumunu tasiyor.
+      where: this.buildListWhere(query, 'all_statuses'),
       orderBy: { enteredAt: 'desc' },
       take: 500,
       include: {
@@ -283,10 +296,15 @@ export class FleetFuelService {
       throw new NotFoundException('Fuel entry not found');
     }
 
+    // Bir onceki dolum: yalnizca ONAYLANMIS kayitlar. Bu deger ekranda
+    // "onceki km" olarak gosteriliyor ve iki dolum arasi tuketim okumasinin
+    // dayanagi; heniz onaylanmamis bir taslak araya girerse aralik yanlis
+    // kapanir — ustelik taslakta kilometre cogu zaman hic yoktur.
     const previous = await this.prisma.fleetFuelEntry.findFirst({
       where: {
         vehicleId: entry.vehicleId,
         enteredAt: { lt: entry.enteredAt },
+        workflowStatus: FuelEntryWorkflowStatus.approved,
       },
       orderBy: { enteredAt: 'desc' },
       select: { enteredAt: true, odometerKm: true },
@@ -330,6 +348,10 @@ export class FleetFuelService {
     const entry = await this.prisma.$transaction(async (tx) => {
       const created = await tx.fleetFuelEntry.create({
         data: {
+          // OFIS GIRISI — kaydi zaten muhasebe/ofis olusturuyor, yani onay
+          // adimi bu istegin kendisi. `driver_review`'da birakmak, ofisin
+          // girdigi kaydi kendi onayini bekler halde tutardi.
+          workflowStatus: FuelEntryWorkflowStatus.approved,
           vehicleId: dto.vehicleId,
           driverId,
           enteredAt,
@@ -1005,8 +1027,28 @@ export class FleetFuelService {
     };
   }
 
-  private buildListWhere(query: ListFuelEntriesQueryDto): Prisma.FleetFuelEntryWhereInput {
+  /**
+   * @param scope Hangi is akisi durumlarinin sayilacagi.
+   *
+   * VARSAYILAN `approved_only` VE BU BILINCLI: Faz 6'dan itibaren surucu
+   * dogrudan fis yukluyor ve bu kayitlar muhasebe onayindan GECMEDEN
+   * veritabaninda duruyor. Varsayilan "hepsi" olsaydi, ileride eklenen her yeni
+   * maliyet sorgusu sessizce onaylanmamis fisleri de toplar ve arac maliyeti
+   * gercekte olmayan giderlerle sisirdi. Parametreyi unutan cagri GUVENLI
+   * tarafta kalsin diye varsayilan daraltici.
+   *
+   * `all_statuses` yalnizca LISTELEME uclarinda: ofis ve surucu bekleyen
+   * fislerini gorebilmeli — ama o sayfalar toplam maliyet hesaplamiyor.
+   */
+  private buildListWhere(
+    query: ListFuelEntriesQueryDto,
+    scope: 'approved_only' | 'all_statuses' = 'approved_only',
+  ): Prisma.FleetFuelEntryWhereInput {
     const where: Prisma.FleetFuelEntryWhereInput = {};
+
+    if (scope === 'approved_only') {
+      where.workflowStatus = FuelEntryWorkflowStatus.approved;
+    }
 
     if (query.vehicleId) {
       where.vehicleId = query.vehicleId;
@@ -1069,9 +1111,10 @@ export class FleetFuelService {
     vehicleId: string;
     driverId: string;
     enteredAt: Date;
-    liters: Prisma.Decimal;
-    totalCost: Prisma.Decimal;
+    liters: Prisma.Decimal | null;
+    totalCost: Prisma.Decimal | null;
     currency: string;
+    workflowStatus: FuelEntryWorkflowStatus;
     odometerKm: Prisma.Decimal | null;
     isFullTank: boolean;
     receiptStoredPath: string | null;
@@ -1083,9 +1126,10 @@ export class FleetFuelService {
       vehicleId: entry.vehicleId,
       driverId: entry.driverId,
       enteredAt: entry.enteredAt.toISOString(),
-      liters: Number(entry.liters),
-      totalCost: Number(entry.totalCost),
+      liters: entry.liters != null ? Number(entry.liters) : null,
+      totalCost: entry.totalCost != null ? Number(entry.totalCost) : null,
       currency: entry.currency,
+      workflowStatus: entry.workflowStatus,
       odometerKm: entry.odometerKm != null ? Number(entry.odometerKm) : null,
       isFullTank: entry.isFullTank,
       hasReceipt: Boolean(entry.receiptStoredPath),

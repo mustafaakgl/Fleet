@@ -507,7 +507,20 @@ export class TelematicsService {
 
     const [fuelEntries, fuelTheftNotifications] = await Promise.all([
       this.prisma.fleetFuelEntry.findMany({
-        where: { vehicleId, enteredAt: { gte: windowStart, lte: now } },
+        // BILINCLI olarak is akisi durumuna gore FILTRELENMIYOR: bu seri bir
+        // MALI rapor degil, yakit seviyesi grafiginin uzerine konan dolum
+        // isaretleri ve tek bir para alani tasimiyor. `approved` sartı
+        // konsaydi, gercekten yapilmis ama heniz onaylanmamis bir dolum
+        // grafikte gorunmez ve seviyedeki artis "aciklanamayan" gibi okunurdu
+        // — yani yanlis hirsizlik suphesi uretirdi.
+        //
+        // Litresi bilinmeyen TASLAK fis yine de disarida: hacmi bilinmeyen bir
+        // dolum isareti grafige hicbir sey anlatmaz.
+        where: {
+          vehicleId,
+          enteredAt: { gte: windowStart, lte: now },
+          liters: { not: null },
+        },
         select: { id: true, enteredAt: true, liters: true, odometerKm: true },
         orderBy: { enteredAt: 'asc' },
       }),
@@ -542,7 +555,7 @@ export class TelematicsService {
       fuelLevel: hourlyBuckets,
       refuelPoints: fuelEntries.map((entry) => ({
         at: entry.enteredAt.toISOString(),
-        liters: this.decimalToNumber(entry.liters),
+        liters: entry.liters ? this.decimalToNumber(entry.liters) : null,
         odometerKm: entry.odometerKm ? this.decimalToNumber(entry.odometerKm) : null,
       })),
       suspiciousDrops: fuelTheftNotifications.map((row) => ({

@@ -1,6 +1,7 @@
 'use client';
 
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import {
   AlertTriangle,
   Clock,
@@ -8,6 +9,7 @@ import {
   Loader2,
   MapPin,
   Navigation,
+  Receipt,
   Route,
   Search,
 } from 'lucide-react';
@@ -374,6 +376,15 @@ export function DriverFuelStationsScreen() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-600">{t('driverPortal.fuelStations.intro')}</p>
+
+      {/* Fis yukleme: istasyon aramasindan ve yakit duragi seciminden BAGIMSIZ.
+          Ekranin en ustunde ve her zaman gorunur. */}
+      <Button asChild variant="outline" className={cn('w-full', TOUCH_TARGET)}>
+        <Link href="/driver/fuel-receipts">
+          <Receipt className="mr-2 h-4 w-4" aria-hidden="true" />
+          {t('driverPortal.fuelReceipts.uploadAction')}
+        </Link>
+      </Button>
 
       {/* Aktif yakit duragi listeden ONCE: surucu ekrani acar acmaz nereye
           gitmeyi planladigini gormeli. */}

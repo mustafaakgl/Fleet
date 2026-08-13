@@ -14,7 +14,14 @@ export type OfficeNotifyKey =
    */
   | 'fueling_stop_selected'
   | 'fueling_stop_changed'
-  | 'fueling_stop_cancelled';
+  | 'fueling_stop_cancelled'
+  /**
+   * Yakit fisi olaylari. Surucu fisi DOGRULADIGINDA tek bir olay uretiliyor;
+   * yukleme ve OCR adimlari ofisi ilgilendirmiyor ve yalnizca denetim
+   * kaydinda duruyor.
+   */
+  | 'fuel_receipt_submitted'
+  | 'fuel_receipt_needs_review';
 
 type CopyTemplate = {
   title: string;
@@ -63,6 +70,15 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'Tankstopp storniert',
       message: (p) => `Fahrer hat den Tankstopp ${p.station} storniert (${p.plateNumber}).`,
     },
+    fuel_receipt_submitted: {
+      title: 'Tankbeleg zur Prüfung',
+      message: (p) => `Fahrer hat einen Tankbeleg bestätigt (${p.plateNumber} · ${p.station}).`,
+    },
+    fuel_receipt_needs_review: {
+      title: 'Tankbeleg: Kraftstoff weicht ab',
+      message: (p) =>
+        `Tankbeleg bestätigt, aber der Kraftstoff weicht von der Fahrzeugfreigabe ab (${p.plateNumber} · ${p.station}).`,
+    },
   },
   en: {
     transport_request_created: {
@@ -105,6 +121,15 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'Fuel stop cancelled',
       message: (p) => `Driver cancelled the fuel stop ${p.station} (${p.plateNumber}).`,
     },
+    fuel_receipt_submitted: {
+      title: 'Fuel receipt for review',
+      message: (p) => `Driver confirmed a fuel receipt (${p.plateNumber} · ${p.station}).`,
+    },
+    fuel_receipt_needs_review: {
+      title: 'Fuel receipt: fuel type differs',
+      message: (p) =>
+        `Fuel receipt confirmed, but the fuel differs from the vehicle approval (${p.plateNumber} · ${p.station}).`,
+    },
   },
   tr: {
     transport_request_created: {
@@ -146,6 +171,15 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
     fueling_stop_cancelled: {
       title: 'Yakıt durağı iptal edildi',
       message: (p) => `Sürücü ${p.station} yakıt durağını iptal etti (${p.plateNumber}).`,
+    },
+    fuel_receipt_submitted: {
+      title: 'Yakıt fişi incelemede',
+      message: (p) => `Sürücü bir yakıt fişini doğruladı (${p.plateNumber} · ${p.station}).`,
+    },
+    fuel_receipt_needs_review: {
+      title: 'Yakıt fişi: yakıt türü uyuşmuyor',
+      message: (p) =>
+        `Yakıt fişi doğrulandı ama yakıt türü aracın onaylı listesinde değil (${p.plateNumber} · ${p.station}).`,
     },
   },
 };

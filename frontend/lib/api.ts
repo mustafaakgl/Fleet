@@ -2716,6 +2716,63 @@ export const driverPortalApi = {
       )
       .then((r) => r.data.intent),
 
+  /**
+   * Yakit fisi yukler.
+   *
+   * `vehicleId`, `driverId`, `tenantId` BILINCLI olarak yok: ucu de sunucuda
+   * oturumdan cozuluyor. `fuelingIntentId` OPSIYONEL — aktif tur ya da istasyon
+   * secimi olmadan da fis yuklenebilir ve bu yol hicbir zaman kapanmaz.
+   */
+  uploadFuelReceipt: (file: File, fuelingIntentId?: string, signal?: AbortSignal) => {
+    const formData = new FormData();
+    formData.append('receipt', file);
+    if (fuelingIntentId) formData.append('fuelingIntentId', fuelingIntentId);
+    return api
+      .post<import('./types').FuelReceipt>('/driver/fuel-receipts', formData, {
+        headers: driverMultipartHeaders(),
+        signal,
+      })
+      .then((r) => r.data);
+  },
+
+  /**
+   * OCR'i calistirir. Tekrarlanan es zamanli cagri saglayiciya IKINCI KEZ
+   * gitmez; sunucu mevcut durumu doner.
+   */
+  analyzeFuelReceipt: (receiptId: string, signal?: AbortSignal) =>
+    api
+      .post<import('./types').FuelReceipt>(`/driver/fuel-receipts/${receiptId}/analyze`, undefined, {
+        signal,
+      })
+      .then((r) => r.data),
+
+  listFuelReceipts: (signal?: AbortSignal) =>
+    api
+      .get<import('./types').FuelReceipt[]>('/driver/fuel-receipts', { signal })
+      .then((r) => r.data),
+
+  fuelReceipt: (receiptId: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').FuelReceipt>(`/driver/fuel-receipts/${receiptId}`, { signal })
+      .then((r) => r.data),
+
+  /**
+   * Surucu degerleri dogrular -> `submitted`.
+   *
+   * Yalnizca izin verilen canonical alanlar gonderilir; `workflowStatus`,
+   * `vehicleId` gibi bir alan eklenirse backend 400 doner.
+   */
+  confirmFuelReceipt: (
+    receiptId: string,
+    payload: import('./types').ConfirmFuelReceiptPayload,
+  ) =>
+    api
+      .put<import('./types').ConfirmFuelReceiptResult>(
+        `/driver/fuel-receipts/${receiptId}/confirm`,
+        payload,
+      )
+      .then((r) => r.data),
+
   departureCheckStatus: () =>
     api
       .get<import('./types').DriverDepartureCheckStatus>('/driver/departure-check/status')

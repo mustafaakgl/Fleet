@@ -47,6 +47,7 @@ import { LicenseComplianceModule } from './license-compliance/license-compliance
 import { DepartureCheckModule } from './departure-check/departure-check.module';
 import { FineManagementModule } from './fine-management/fine-management.module';
 import { FleetModule } from './fleet/fleet.module';
+import { FuelReceiptsModule } from './fleet/fuel-receipts/fuel-receipts.module';
 import { FuelStationsModule } from './fleet/fuel-stations/fuel-stations.module';
 import { RoutingModule } from './routing/routing.module';
 import { HealthModule } from './health/health.module';
@@ -120,6 +121,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     FineManagementModule,
     FleetModule,
     FuelStationsModule,
+    FuelReceiptsModule,
     RoutingModule,
     TachographModule,
     TelematicsModule,

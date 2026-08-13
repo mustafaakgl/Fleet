@@ -25,6 +25,10 @@ export const DATEV_EXPORT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), DATEV_EXPORT
 export const PAYROLL_EXPORT_UPLOAD_RELATIVE_DIR = join('uploads', 'payroll-exports');
 export const PAYROLL_EXPORT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), PAYROLL_EXPORT_UPLOAD_RELATIVE_DIR);
 
+// Yakit fisleri mali belgedir; genel `documents` klasoruyle karistirilmiyor.
+export const FUEL_RECEIPT_UPLOAD_RELATIVE_DIR = join('uploads', 'fuel-receipts');
+export const FUEL_RECEIPT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), FUEL_RECEIPT_UPLOAD_RELATIVE_DIR);
+
 const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
   documents: DOCUMENT_UPLOAD_ABSOLUTE_DIR,
   vehicles: VEHICLE_PHOTO_UPLOAD_ABSOLUTE_DIR,
@@ -35,6 +39,7 @@ const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
   'invoice-documents': INVOICE_DOCUMENT_UPLOAD_ABSOLUTE_DIR,
   'datev-exports': DATEV_EXPORT_UPLOAD_ABSOLUTE_DIR,
   'payroll-exports': PAYROLL_EXPORT_UPLOAD_ABSOLUTE_DIR,
+  'fuel-receipts': FUEL_RECEIPT_UPLOAD_ABSOLUTE_DIR,
 };
 
 export function uploadAbsoluteDirForBucket(bucket: StorageBucket): string {

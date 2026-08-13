@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { FuelEntryWorkflowStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   computeMaintenanceRuleStatus,
@@ -190,6 +190,10 @@ export class FleetMaintenanceService {
           tenantId,
           vehicleId,
           enteredAt: { gte: start },
+          // YALNIZCA onaylanmis fisler: bu toplam aracin TCO'suna giriyor.
+          // Onaylanmamis fis buraya girseydi arac maliyeti, muhasebenin hic
+          // gormedigi tutarlarla sisirdi.
+          workflowStatus: FuelEntryWorkflowStatus.approved,
         },
         select: { enteredAt: true, totalCost: true },
       }),

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Check, Clock, Fuel, MapPin, Navigation, Route, Undo2 } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Fuel, MapPin, Navigation, Receipt, Route, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DriverFuelingIntentCard } from '@/components/driver-portal/DriverFuelingIntentCard';
 import { DriverPageBack } from '@/components/driver-portal/DriverPageBack';
@@ -205,6 +205,7 @@ export default function DriverTourPage() {
                 {t('driverPortal.fuelStations.findAction')}
               </Link>
             </Button>
+
           </CardContent>
         </Card>
 
@@ -360,6 +361,15 @@ export default function DriverTourPage() {
     <DriverPortalShell>
       <DriverPageBack label={t('driverPortal.backToToday')} />
       <h1 className="mb-3 text-xl font-bold text-slate-900">{t('driverPortal.tour.title')}</h1>
+      {/* Fis yukleme TURDAN VE YAKIT DURAGINDAN BAGIMSIZ. Bilincli olarak
+          `body()` disinda: tur yoksa, taslaksa ya da yuklenemediyse de
+          gorunmeli — surucu her hâlukârda fis yukleyebilmeli. */}
+      <Button asChild variant="outline" className="mb-3 h-11 w-full">
+        <Link href="/driver/fuel-receipts">
+          <Receipt className="mr-2 h-4 w-4" />
+          {t('driverPortal.fuelReceipts.uploadAction')}
+        </Link>
+      </Button>
       {/* Planlanan yakit duragi. Durak listesinin DISINDA ve numarasiz: bir
           musteri duragi degil, sirayi degistirmiyor ve tur yuklenemese bile
           gorunuyor. "Degistir" istasyon ekranina goturur. */}

@@ -7,7 +7,13 @@ export type StorageBucket =
   | 'message-attachments'
   | 'invoice-documents'
   | 'datev-exports'
-  | 'payroll-exports';
+  | 'payroll-exports'
+  /**
+   * Yakit fisleri. `documents`ten AYRI: fis bir mali belgedir ve kendi saklama
+   * suresine tabidir; genel belge klasorune karistirmak, bir DSGVO silme
+   * talebinde neyin silinecegini belirsiz birakirdi.
+   */
+  | 'fuel-receipts';
 
 export abstract class StorageService {
   /** Internal storage path persisted in the database (not publicly served). */

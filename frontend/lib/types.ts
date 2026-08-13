@@ -2903,6 +2903,128 @@ export interface FuelingIntent {
   expiresAt: string;
 }
 
+/**
+ * Yakit fisi (Faz 6).
+ *
+ * Kaynak: backend/src/fleet/fuel-receipts/fuel-receipt.service.ts.
+ * CANONICAL MODEL FleetFuelEntry — ayri bir fis tablosu YOK.
+ */
+export type FuelEntryWorkflowStatus =
+  /** Yuklendi; surucu OCR taslagini kontrol ediyor. Mali alanlar bos olabilir. */
+  | 'driver_review'
+  /** Surucu dogruladi; muhasebe incelemesi bekliyor. Surucu artik degistiremez. */
+  | 'submitted'
+  /** Muhasebe onayladi. RAPORLARA GIREN TEK DURUM. */
+  | 'approved'
+  | 'rejected';
+
+/** OCR'in TEKNIK durumu — is akisindan bagimsiz. */
+export type FuelReceiptOcrStatus = 'not_requested' | 'processing' | 'succeeded' | 'failed';
+
+/** Alan basina okuma. `confidence` null ise "bilinmiyor" — uydurma yuzde yok. */
+export interface OcrField<T> {
+  value: T | null;
+  confidence: number | null;
+}
+
+export interface FuelReceiptExtraction {
+  stationName: OcrField<string>;
+  stationAddress: OcrField<string>;
+  receiptNumber: OcrField<string>;
+  purchasedAt: OcrField<string>;
+  fuelProduct: OcrField<FuelProductType>;
+  /** Canonical enum'a guvenle eslenemeyen ham yakit metni. */
+  rawFuelLabel: string | null;
+  liters: OcrField<number>;
+  pricePerLiter: OcrField<number>;
+  fuelGrossAmount: OcrField<number>;
+  receiptGrossAmount: OcrField<number>;
+  receiptNetAmount: OcrField<number>;
+  receiptVatAmount: OcrField<number>;
+  receiptVatRate: OcrField<number>;
+  currency: OcrField<string>;
+  paymentMethod: OcrField<string>;
+  odometerKm: OcrField<number>;
+  plateNumber: OcrField<string>;
+  /** Fiste yakit disi kalem var mi (kahve, market, arac yikama). */
+  hasNonFuelItems: boolean;
+}
+
+export interface FuelReceipt {
+  id: string;
+  workflowStatus: FuelEntryWorkflowStatus;
+  ocrStatus: FuelReceiptOcrStatus;
+  /** Demo uyarisi BU ALANA gore; frontend env degiskenine gore DEGIL. */
+  ocrDataMode: string | null;
+  /** Teknik olmayan hata sinifi; kullaniciya ceviri anahtariyla gosterilir. */
+  ocrErrorClass: string | null;
+  /** TASLAK — surucu onaylamadan canonical deger degildir. */
+  ocrExtraction: FuelReceiptExtraction | null;
+  vehicle: { id: string; plateNumber: string };
+  fuelingIntentId: string | null;
+  /** Yetkili indirme yolu; ham depolama yolu istemciye hic verilmez. */
+  fileDownloadPath: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  enteredAt: string;
+  purchasedAt: string | null;
+  stationName: string | null;
+  stationAddress: string | null;
+  receiptNumber: string | null;
+  fuelProduct: FuelProductType | null;
+  liters: number | null;
+  pricePerLiter: number | null;
+  /** YAKIT satirinin brut toplami — araca yazilan maliyet. */
+  fuelGrossAmount: number | null;
+  /** Fisin GENEL brut toplami — kasada odenen. Karma fiste farklidir. */
+  receiptGrossAmount: number | null;
+  receiptNetAmount: number | null;
+  receiptVatAmount: number | null;
+  receiptVatRate: number | null;
+  currency: string;
+  paymentMethod: string | null;
+  odometerKm: number | null;
+  receiptPlateNumber: string | null;
+  isFullTank: boolean;
+  compatibilityMismatch: boolean;
+  submittedAt: string | null;
+  createdAt: string;
+}
+
+/** Engelleyici olmayan uyarilar da doner: yuvarlama farki kaydi ENGELLEMEZ. */
+export interface FuelReceiptIssue {
+  code: string;
+  field: string;
+  blocking: boolean;
+}
+
+export interface ConfirmFuelReceiptPayload {
+  purchasedAt: string;
+  fuelProduct: FuelProductType;
+  liters: number;
+  fuelGrossAmount: number;
+  currency: string;
+  pricePerLiter?: number;
+  receiptGrossAmount?: number;
+  receiptNetAmount?: number;
+  receiptVatAmount?: number;
+  receiptVatRate?: number;
+  stationName?: string;
+  stationAddress?: string;
+  receiptNumber?: string;
+  paymentMethod?: string;
+  odometerKm?: number;
+  receiptPlateNumber?: string;
+  isFullTank?: boolean;
+  /** Yalnizca yakit turu araca uymuyorken gerekir. */
+  acknowledgeFuelMismatch?: boolean;
+}
+
+export interface ConfirmFuelReceiptResult {
+  receipt: FuelReceipt;
+  issues: FuelReceiptIssue[];
+}
+
 /** PUT /driver/fueling-intents/active govdesi — baska alan KABUL EDILMEZ. */
 export interface SelectFuelingIntentPayload {
   selectionContextId: string;
