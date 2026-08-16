@@ -587,7 +587,11 @@ describe('fuel receipt — OCR', () => {
   });
 
   it('refuses the mock provider in production', () => {
-    assert.equal(resolveFuelReceiptOcrProviderKind(undefined, false), 'disabled');
+    // Bos deger ACIKCA veriliyor, `undefined` DEGIL: `undefined` fonksiyonun
+    // varsayilan parametresini devreye sokar ve o da process.env'i okur, yani
+    // test calistigi makinenin .env dosyasina bagimli hale gelirdi. Bu test
+    // "yapilandirilmamis -> disabled" kuralini sinamali, ortami degil.
+    assert.equal(resolveFuelReceiptOcrProviderKind('', false), 'disabled');
     assert.equal(resolveFuelReceiptOcrProviderKind('mock', false), 'mock');
     assert.throws(
       () => resolveFuelReceiptOcrProviderKind('mock', true),

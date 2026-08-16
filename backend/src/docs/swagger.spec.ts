@@ -8,6 +8,7 @@ describe('Swagger/OpenAPI bootstrap', () => {
   const originalSwaggerEnabled = process.env.SWAGGER_ENABLED;
   const originalNodeEnv = process.env.NODE_ENV;
   const originalFuelStationProvider = process.env.FUEL_STATION_PROVIDER;
+  const originalFuelReceiptOcrProvider = process.env.FUEL_RECEIPT_OCR_PROVIDER;
   let app: NestExpressApplication | null = null;
   let baseUrl = '';
 
@@ -32,6 +33,13 @@ describe('Swagger/OpenAPI bootstrap', () => {
     // gibi canli saglayici secilmeli, aksi halde modul kurulumu bilincli
     // olarak basarisiz olur. Depodaki `.env` gelistirme icin mock'a ayarli.
     process.env.FUEL_STATION_PROVIDER = 'tankerkoenig';
+    // Ayni gerekce yakit fisi OCR saglayicisi icin de gecerli (Faz 6): uretimde
+    // demo OCR YASAK, cunku uydurma fis tutarlari muhasebeye gercek maliyet gibi
+    // girerdi. `disabled` uretimde gecerli olan degerdir — OCR calismaz, surucu
+    // formu elle doldurur. Depodaki `.env` gelistirme icin `mock`a ayarli
+    // olabilir ve bu dosya uygulamayi NODE_ENV=production ile kaldirdigi icin
+    // acikca gecersiz kilinmali.
+    process.env.FUEL_RECEIPT_OCR_PROVIDER = 'disabled';
   });
 
   after(async () => {
@@ -55,6 +63,12 @@ describe('Swagger/OpenAPI bootstrap', () => {
       delete process.env.FUEL_STATION_PROVIDER;
     } else {
       process.env.FUEL_STATION_PROVIDER = originalFuelStationProvider;
+    }
+
+    if (originalFuelReceiptOcrProvider === undefined) {
+      delete process.env.FUEL_RECEIPT_OCR_PROVIDER;
+    } else {
+      process.env.FUEL_RECEIPT_OCR_PROVIDER = originalFuelReceiptOcrProvider;
     }
   });
 
