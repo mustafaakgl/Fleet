@@ -22,6 +22,7 @@ import {
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
+import { FuelReceiptReviewPanel } from '@/components/costs/FuelReceiptReviewPanel';
 import type { VehicleCostsResponse } from '@/lib/types';
 import { formatFleetCurrency } from '@/lib/locale-format';
 
@@ -42,6 +43,7 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
     'model',
     'service_cost',
     'fine_cost',
+    'fuel_cost',
     'total_cost',
     'revenue',
     'margin',
@@ -56,6 +58,8 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
         row.model,
         row.service_cost.toFixed(2),
         row.fine_cost.toFixed(2),
+        // Yalnizca ONAYLANMIS yakit; export da ayni kurala uyuyor.
+        row.fuel_cost.toFixed(2),
         row.total_cost.toFixed(2),
         row.revenue.toFixed(2),
         row.margin.toFixed(2),
@@ -76,6 +80,12 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
 export default function CostsPage() {
   const { t } = useTranslation();
   const [months, setMonths] = useState(6);
+  /**
+   * Sekmeler ayni rotada: mevcut `/costs` baglantilari ve yer imleri
+   * BOZULMUYOR. Yeni bir rota acip eskisini yonlendirmek, calisan linkleri
+   * bir sey kazanmadan riske atardi.
+   */
+  const [tab, setTab] = useState<'summary' | 'receipts'>('summary');
   const [data, setData] = useState<VehicleCostsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +114,9 @@ export default function CostsPage() {
       { key: 'total', label: t('costs.summary.totalCost'), value: data.fleet.total_cost },
       { key: 'service', label: t('costs.summary.serviceCost'), value: data.fleet.service_cost },
       { key: 'fines', label: t('costs.summary.fineCost'), value: data.fleet.fine_cost },
+      // ONAYLANMIS yakit. Bekleyen fisler bu rakama DAHIL DEGIL — ayri
+      // gosteriliyor ki "gorunmeyen ne var" sorusu cevapsiz kalmasin.
+      { key: 'fuel', label: t('costs.summary.fuelCost'), value: data.fleet.fuel_cost },
       { key: 'revenue', label: t('costs.summary.revenue'), value: data.fleet.revenue },
       { key: 'margin', label: t('costs.summary.margin'), value: data.fleet.margin },
       {
@@ -144,7 +157,31 @@ export default function CostsPage() {
         </div>
       </div>
 
-      {!loading && error ? (
+      {/* Araclar > Arac maliyetleri altinda iki sekme. Rota AYNI kaliyor. */}
+      <div className="flex flex-wrap gap-2" role="tablist">
+        {(['summary', 'receipts'] as const).map((key) => (
+          <Button
+            key={key}
+            type="button"
+            role="tab"
+            size="sm"
+            aria-selected={tab === key}
+            variant={tab === key ? 'default' : 'outline'}
+            onClick={() => setTab(key)}
+          >
+            {t(`costs.tabs.${key}`)}
+            {key === 'receipts' && data && data.fuel.pending_count > 0 ? (
+              <span className="ml-2 rounded-full bg-amber-500 px-1.5 text-[11px] font-bold text-white">
+                {data.fuel.pending_count}
+              </span>
+            ) : null}
+          </Button>
+        ))}
+      </div>
+
+      {tab === 'receipts' ? <FuelReceiptReviewPanel /> : null}
+
+      {tab === 'summary' && !loading && error ? (
         <EmptyState
           icon={WifiOff}
           title={t('costs.loadErrorTitle')}
@@ -156,11 +193,38 @@ export default function CostsPage() {
         />
       ) : null}
 
-      {!loading && !error && data ? (
+      {tab === 'summary' && !loading && !error && data ? (
         <>
           <p className="text-sm text-slate-500">
             {t('costs.periodInfo', { from: data.from, to: data.to })}
           </p>
+
+          {/* Bekleyen fisler TOPLAMA DAHIL DEGIL; sayisi ayri duruyor. */}
+          {data.fuel.pending_count > 0 ? (
+            <p
+              className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+              data-testid="pending-fuel-note"
+            >
+              {t('costs.pendingFuelNote', { count: data.fuel.pending_count })}
+            </p>
+          ) : null}
+
+          {/* Base currency DISINDAKI onaylanmis fisler toplama katilmadi:
+              guvenilir bir kur altyapisi olmadan donusturmek kur uydurmak
+              olurdu. Ayri ve acikca "donusturulmemis" gosteriliyor. */}
+          {data.fuel.unconverted.length > 0 ? (
+            <p
+              className="rounded-md border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700"
+              data-testid="unconverted-fuel-note"
+            >
+              {t('costs.unconvertedFuelNote', {
+                base: data.currency,
+                list: data.fuel.unconverted
+                  .map((entry) => `${entry.amount} ${entry.currency} (${entry.count})`)
+                  .join(', '),
+              })}
+            </p>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {summaryCards.map((card) => (

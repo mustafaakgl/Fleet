@@ -8,6 +8,8 @@ import { FuelStationsModule } from '../fuel-stations/fuel-stations.module';
 import { DisabledFuelReceiptOcrProvider } from './disabled-fuel-receipt-ocr.provider';
 import { resolveFuelReceiptOcrProviderKind } from './fuel-receipt-ocr.config';
 import { FUEL_RECEIPT_OCR_PROVIDER } from './fuel-receipt-ocr.types';
+import { FuelReceiptReviewController } from './fuel-receipt-review.controller';
+import { FuelReceiptReviewService } from './fuel-receipt-review.service';
 import { FuelReceiptDriverController } from './fuel-receipt.controller';
 import { FuelReceiptService } from './fuel-receipt.service';
 import { MockFuelReceiptOcrProvider } from './mock-fuel-receipt-ocr.provider';
@@ -23,7 +25,12 @@ import { MockFuelReceiptOcrProvider } from './mock-fuel-receipt-ocr.provider';
  */
 @Module({
   imports: [PrismaModule, AuditModule, NotificationsModule, StorageModule, FleetModule, FuelStationsModule],
-  controllers: [FuelReceiptDriverController],
+  controllers: [
+    FuelReceiptDriverController,
+    // Muhasebe incelemesi AYNI modulde: ayni canonical kayit uzerinde
+    // calisiyorlar ve iki modul olsaydi durum kurallari iki yerde yasardi.
+    FuelReceiptReviewController,
+  ],
   providers: [
     MockFuelReceiptOcrProvider,
     DisabledFuelReceiptOcrProvider,
@@ -38,6 +45,7 @@ import { MockFuelReceiptOcrProvider } from './mock-fuel-receipt-ocr.provider';
       inject: [MockFuelReceiptOcrProvider, DisabledFuelReceiptOcrProvider],
     },
     FuelReceiptService,
+    FuelReceiptReviewService,
   ],
 })
 export class FuelReceiptsModule {}

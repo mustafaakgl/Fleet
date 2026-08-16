@@ -538,6 +538,71 @@ export const customerPortalApi = {
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
+/**
+ * Muhasebe yakit fisi incelemesi (Faz 7).
+ *
+ * Rol kontrolu SUNUCUDA (`FINANCIAL_ROLES`): buradaki cagrilarin gizlenmesi
+ * guvenlik degil, yalnizca arayuz nezaketidir.
+ */
+export const fuelReceiptReviewApi = {
+  list: (
+    params: {
+      status?: import('./types').FuelEntryWorkflowStatus;
+      page?: number;
+      pageSize?: number;
+      vehicleId?: string;
+      driverId?: string;
+      station?: string;
+      fuelProduct?: import('./types').FuelProductType;
+      mismatchOnly?: boolean;
+      ocrProblemOnly?: boolean;
+      from?: string;
+      to?: string;
+      sort?: 'oldest' | 'newest' | 'amount';
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<import('./types').FuelReceiptQueueResponse>('/fleet/fuel-receipts', {
+        params: {
+          ...params,
+          mismatchOnly: params.mismatchOnly ? 'true' : undefined,
+          ocrProblemOnly: params.ocrProblemOnly ? 'true' : undefined,
+        },
+        signal,
+      })
+      .then((r) => r.data),
+
+  detail: (receiptId: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').FuelReceiptReviewDetail>(`/fleet/fuel-receipts/${receiptId}`, {
+        signal,
+      })
+      .then((r) => r.data),
+
+  /**
+   * Onay. `expectedUpdatedAt` ZORUNLU: iki muhasebeci ayni fisi ayni anda
+   * kapatamasin. Kaybeden istek 409 `fuel_receipt_review_conflict` alir ve
+   * arayuz kaydi yeniden yukler.
+   */
+  approve: (receiptId: string, payload: { expectedUpdatedAt: string; accountingNote?: string }) =>
+    api
+      .post<{ receipt: import('./types').FuelReceiptReviewDetail; changed: boolean }>(
+        `/fleet/fuel-receipts/${receiptId}/approve`,
+        payload,
+      )
+      .then((r) => r.data),
+
+  /** Ret. Neden ZORUNLU — surucu neyi duzeltecegini bilmeli. */
+  reject: (receiptId: string, payload: { expectedUpdatedAt: string; reason: string }) =>
+    api
+      .post<{ receipt: import('./types').FuelReceiptReviewDetail; changed: boolean }>(
+        `/fleet/fuel-receipts/${receiptId}/reject`,
+        payload,
+      )
+      .then((r) => r.data),
+};
+
 export const dashboardApi = {
   getSummary: () => api.get<DashboardSummary>('/dashboard').then((r) => r.data),
 

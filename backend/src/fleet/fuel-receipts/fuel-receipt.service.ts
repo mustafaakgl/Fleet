@@ -88,6 +88,9 @@ export interface FuelReceiptView {
   isFullTank: boolean;
   compatibilityMismatch: boolean;
   submittedAt: string | null;
+  /** Muhasebenin SON ret nedeni — surucuye gosterilir (Faz 7). */
+  rejectionReason: string | null;
+  rejectedAt: string | null;
   createdAt: string;
 }
 
@@ -120,6 +123,8 @@ const RECEIPT_SELECT = {
   paymentMethod: true,
   receiptPlateNumber: true,
   compatibilityMismatch: true,
+  rejectionReason: true,
+  rejectedAt: true,
   ocrStatus: true,
   ocrProvider: true,
   ocrProcessedAt: true,
@@ -474,10 +479,21 @@ export class FuelReceiptService {
       // Tekrarlanan confirm: yeni yazma yok, yeni bildirim yok.
       return { receipt: this.toView(current), issues: [] };
     }
-    if (current.workflowStatus !== FuelEntryWorkflowStatus.driver_review) {
-      // approved/rejected bir kaydi surucu DEGISTIREMEZ.
+    // `rejected` DUZENLENEBILIR (Faz 7): muhasebe duzeltme istedi, surucu AYNI
+    // kayit uzerinde duzeltip yeniden gonderiyor. Yeni bir FleetFuelEntry
+    // acmak, ayni yakit alimini iki kez muhasebelestirme riski uretirdi ve ret
+    // gecmisini kaydin disinda birakirdi.
+    //
+    // `approved` IMMUTABLE terminal durum: raporlara girmis bir tutari surucu
+    // sonradan degistirememeli.
+    if (
+      current.workflowStatus !== FuelEntryWorkflowStatus.driver_review &&
+      current.workflowStatus !== FuelEntryWorkflowStatus.rejected
+    ) {
       throw new ConflictException({ code: 'fuel_receipt_not_editable' });
     }
+
+    const isResubmission = current.workflowStatus === FuelEntryWorkflowStatus.rejected;
 
     const receiptGross = dto.receiptGrossAmount ?? dto.fuelGrossAmount;
     const issues = validateFuelReceiptDraft({
@@ -519,6 +535,11 @@ export class FuelReceiptService {
         data: {
           workflowStatus: FuelEntryWorkflowStatus.submitted,
           submittedAt: now,
+          // Yeniden gonderim AYRICA isaretleniyor: muhasebe "bu kayit bir kez
+          // geri gonderilmisti" bilgisini kuyrukta gormeli. Ret nedeni
+          // BILINCLI olarak silinmiyor — surucu neyi duzelttigini, muhasebe de
+          // neyi istedigini gormeye devam etsin.
+          ...(isResubmission ? { resubmittedAt: now } : {}),
           enteredAt: new Date(dto.purchasedAt),
           stationName: dto.stationName ?? null,
           stationAddress: dto.stationAddress ?? null,
@@ -722,6 +743,8 @@ export class FuelReceiptService {
       isFullTank: row.isFullTank,
       compatibilityMismatch: row.compatibilityMismatch,
       submittedAt: row.submittedAt?.toISOString() ?? null,
+      rejectionReason: row.rejectionReason,
+      rejectedAt: row.rejectedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
     };
   }

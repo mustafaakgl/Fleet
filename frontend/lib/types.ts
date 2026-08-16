@@ -440,6 +440,9 @@ export interface VehicleCostRow {
   service_count: number;
   fine_cost: number;
   fine_count: number;
+  /** YALNIZCA onaylanmis yakit fisleri (Faz 7). */
+  fuel_cost: number;
+  fuel_count: number;
   total_cost: number;
   revenue: number;
   assignment_count: number;
@@ -450,15 +453,128 @@ export interface VehicleCostsResponse {
   period_months: number;
   from: string;
   to: string;
+  /** Toplamlarin cinsi — istemci tahmin etmiyor (Faz 7). */
+  currency: string;
   fleet: {
     service_cost: number;
     fine_cost: number;
+    /** YALNIZCA onaylanmis yakit fisleri. Bekleyenler dahil DEGIL. */
+    fuel_cost: number;
     total_cost: number;
     revenue: number;
     margin: number;
     avg_cost_per_vehicle: number;
   };
   vehicles: VehicleCostRow[];
+  fuel: {
+    /** Onay bekleyen fis SAYISI — tutari toplama dahil degil. */
+    pending_count: number;
+    /**
+     * Base currency disindaki onaylanmis fisler. Toplama KATILMADILAR:
+     * guvenilir FX altyapisi olmadan donusturmek kur uydurmak olurdu.
+     */
+    unconverted: Array<{ currency: string; amount: number; count: number }>;
+  };
+}
+
+/**
+ * Muhasebe yakit fisi incelemesi (Faz 7).
+ *
+ * Kaynak: backend/src/fleet/fuel-receipts/fuel-receipt-review.service.ts
+ */
+export interface FuelReceiptQueueRow {
+  id: string;
+  workflowStatus: FuelEntryWorkflowStatus;
+  vehicle: { id: string; plateNumber: string };
+  driver: { id: string; name: string };
+  stationName: string | null;
+  purchasedAt: string;
+  fuelProduct: FuelProductType | null;
+  liters: number | null;
+  /** YAKIT satirinin brut toplami — araca yazilacak tutar. */
+  fuelGrossAmount: number | null;
+  currency: string;
+  submittedAt: string | null;
+  waitingDays: number | null;
+  compatibilityMismatch: boolean;
+  duplicateSuspected: boolean;
+  ocrProblem: boolean;
+  /** Optimistic concurrency icin geri gonderilecek deger. */
+  updatedAt: string;
+}
+
+export interface FuelReceiptQueueResponse {
+  rows: FuelReceiptQueueRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  summary: { pendingCount: number; oldestWaitingDays: number | null };
+}
+
+export interface FuelReceiptReviewDetail {
+  id: string;
+  workflowStatus: FuelEntryWorkflowStatus;
+  vehicle: { id: string; plateNumber: string };
+  driver: { id: string; name: string };
+  fuelingIntent: {
+    id: string;
+    stationName: string;
+    selectedFuelProduct: FuelProductType;
+    quotedPricePerLitre: number | null;
+    selectedAt: string;
+    status: string;
+  } | null;
+  stationName: string | null;
+  stationAddress: string | null;
+  receiptNumber: string | null;
+  purchasedAt: string;
+  fuelProduct: FuelProductType | null;
+  liters: number | null;
+  pricePerLiter: number | null;
+  fuelGrossAmount: number | null;
+  receiptGrossAmount: number | null;
+  receiptNetAmount: number | null;
+  receiptVatAmount: number | null;
+  receiptVatRate: number | null;
+  currency: string;
+  paymentMethod: string | null;
+  odometerKm: number | null;
+  receiptPlateNumber: string | null;
+  isFullTank: boolean;
+  /** Yakit toplami ile fis genel toplami FARKLI. */
+  mixedReceipt: boolean;
+  compatibilityMismatch: boolean;
+  duplicateSuspected: boolean;
+  issues: FuelReceiptIssue[];
+  ocr: {
+    status: FuelReceiptOcrStatus;
+    provider: string | null;
+    processedAt: string | null;
+    errorClass: string | null;
+    dataMode: string | null;
+    extraction: FuelReceiptExtraction | null;
+    lowConfidenceFields: string[];
+    lowConfidenceThreshold: number;
+  };
+  /** Yetkili akis; ham depolama yolu DEGIL. */
+  fileDownloadPath: string;
+  fileName: string | null;
+  mimeType: string | null;
+  timeline: {
+    uploadedAt: string;
+    ocrProcessedAt: string | null;
+    submittedAt: string | null;
+    resubmittedAt: string | null;
+    reviewedAt: string | null;
+    rejectedAt: string | null;
+  };
+  review: {
+    reviewedBy: { id: string; name: string } | null;
+    accountingNote: string | null;
+    rejectionReason: string | null;
+  };
+  updatedAt: string;
 }
 
 export interface FleetFuelEntry {
@@ -2988,6 +3104,9 @@ export interface FuelReceipt {
   isFullTank: boolean;
   compatibilityMismatch: boolean;
   submittedAt: string | null;
+  /** Muhasebenin SON ret nedeni — surucuye gosterilir (Faz 7). */
+  rejectionReason: string | null;
+  rejectedAt: string | null;
   createdAt: string;
 }
 

@@ -91,5 +91,13 @@
   "tacho_download_due": {
     "title": "Tachographen-Auslesefrist fällig",
     "message": "{{subject}}: {{deadlineText}} (Intervall {{intervalDays}} Tage, FPersV/EU 165/2014)."
+  },
+  "fuel_receipt_approved": {
+    "title": "Tankbeleg freigegeben",
+    "message": "Dein Tankbeleg für {{plateNumber}} ({{station}}) wurde freigegeben."
+  },
+  "fuel_receipt_rejected": {
+    "title": "Tankbeleg: Korrektur nötig",
+    "message": "Dein Tankbeleg für {{plateNumber}} ({{station}}) braucht eine Korrektur: {{reason}}"
   }
 }

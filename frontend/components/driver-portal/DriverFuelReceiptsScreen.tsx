@@ -143,8 +143,16 @@ export function DriverFuelReceiptsScreen({ fuelingIntentId }: { fuelingIntentId?
         if (seq !== seqRef.current) return;
         setCurrent(uploaded);
 
-        // Zaten gonderilmis bir fisin tekrar yuklenmesi (ayni dosya): forma
-        // dusmuyoruz, durum ekranini gosteriyoruz.
+        // Reddedilen fis DUZENLENEBILIR: muhasebe duzeltme istedi, surucu ayni
+        // kayit uzerinde duzeltip yeniden gonderiyor.
+        if (uploaded.workflowStatus === 'rejected') {
+          setValues(formFromReceipt(uploaded));
+          setStage('form');
+          reloadList();
+          return;
+        }
+
+        // Zaten gonderilmis ya da onaylanmis fis: forma dusmuyoruz.
         if (uploaded.workflowStatus !== 'driver_review') {
           setValues(formFromReceipt(uploaded));
           setStage('submitted');
@@ -535,9 +543,27 @@ export function DriverFuelReceiptsScreen({ fuelingIntentId }: { fuelingIntentId?
                           ? ` · ${receipt.fuelGrossAmount} ${receipt.currency}`
                           : ''}
                       </p>
+                      {/* Ret nedeni surucuye GOSTERILIYOR: neyi duzeltecegini
+                          bilmeden yeniden gonderemez. */}
+                      {receipt.workflowStatus === 'rejected' && receipt.rejectionReason ? (
+                        <p
+                          className="mt-1 break-words rounded border border-red-300 bg-red-50 p-2 text-xs text-red-900"
+                          data-testid="receipt-rejection-reason"
+                        >
+                          {t('driverPortal.fuelReceipts.rejectionReason', {
+                            reason: receipt.rejectionReason,
+                          })}
+                        </p>
+                      ) : null}
                     </div>
                     <Badge
-                      variant={receipt.workflowStatus === 'approved' ? 'success' : 'outline'}
+                      variant={
+                        receipt.workflowStatus === 'approved'
+                          ? 'success'
+                          : receipt.workflowStatus === 'rejected'
+                            ? 'destructive'
+                            : 'outline'
+                      }
                     >
                       {t(`driverPortal.fuelReceipts.status.${receipt.workflowStatus}`)}
                     </Badge>

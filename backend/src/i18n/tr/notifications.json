@@ -91,5 +91,13 @@
   "tacho_download_due": {
     "title": "Takograf okuma vadesi yaklaştı",
     "message": "{{subject}}: {{deadlineText}} ({{intervalDays}} günlük yükümlülük, FPersV/EU 165/2014)."
+  },
+  "fuel_receipt_approved": {
+    "title": "Yakıt fişi onaylandı",
+    "message": "{{plateNumber}} ({{station}}) için yakıt fişin onaylandı."
+  },
+  "fuel_receipt_rejected": {
+    "title": "Yakıt fişi: düzeltme gerekiyor",
+    "message": "{{plateNumber}} ({{station}}) için yakıt fişin düzeltme istiyor: {{reason}}"
   }
 }

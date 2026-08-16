@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { AssignmentStatus } from '@prisma/client';
+import { AssignmentStatus,
+  FuelEntryWorkflowStatus,
+} from '@prisma/client';
 import { maskFinancialFields, type UserRole } from '../common/utils/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -15,6 +17,17 @@ const REVENUE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
 
 /** Upper bound for ad-hoc revenue range queries. */
 const MAX_REVENUE_RANGE_DAYS = 366;
+
+/**
+ * Filonun base currency'si.
+ *
+ * Repoda tenant bazli bir base currency ALANI YOK (dogrulandi) ve
+ * ServiceRecord.costAmount ile Fine.amount para birimi hic tasimiyor — yani
+ * mevcut maliyet toplamlari ortuk olarak bu birim cinsinden. Sabit burada tek
+ * yerde duruyor ki cok para birimli destek geldiginde degisecek nokta belli
+ * olsun.
+ */
+const BASE_CURRENCY = 'EUR';
 
 @Injectable()
 export class DashboardService {
@@ -1134,7 +1147,7 @@ export class DashboardService {
     const start = new Date(end.getFullYear(), end.getMonth() - (safeMonths - 1), 1);
 
     const db = this.prisma as any;
-    const [vehicles, serviceRecords, fines, assignments] = await Promise.all([
+    const [vehicles, serviceRecords, fines, assignments, fuelEntries, pendingFuel] = await Promise.all([
       db.vehicle.findMany({
         select: {
           id: true,
@@ -1165,6 +1178,35 @@ export class DashboardService {
           company: { select: { defaultDailyRevenue: true } },
         },
       }),
+      // YAKIT — yalnizca ONAYLANMIS fisler (Faz 7).
+      //
+      // Donem olcutu `enteredAt`, yani fisteki GERCEK yakit alma tarihi;
+      // `reviewedAt` DEGIL. Gec onaylanan bir fis ait oldugu gecmis aya
+      // yazilmali, yoksa muhasebe donemleri onay hizina gore kayar.
+      //
+      // Tipli istemci kullaniliyor (`db` degil): bu sorgu yeni yazildi ve
+      // `as any` uzerinden gecmesi icin bir sebep yok.
+      this.prisma.fleetFuelEntry.findMany({
+        where: {
+          enteredAt: { gte: start, lt: dayAfterEnd },
+          workflowStatus: FuelEntryWorkflowStatus.approved,
+        },
+        select: { vehicleId: true, totalCost: true, currency: true },
+      }),
+      // Bekleyen fisler AYRI sayiliyor ve maliyete EKLENMIYOR: muhasebe
+      // "gorunmeyen ne var" sorusunu gormeli ama toplam, onaylanmamis
+      // tutarlarla sismemeli.
+      this.prisma.fleetFuelEntry.count({
+        where: {
+          enteredAt: { gte: start, lt: dayAfterEnd },
+          workflowStatus: {
+            in: [
+              FuelEntryWorkflowStatus.driver_review,
+              FuelEntryWorkflowStatus.submitted,
+            ],
+          },
+        },
+      }),
     ]);
 
     type Agg = {
@@ -1172,6 +1214,9 @@ export class DashboardService {
       serviceCount: number;
       fineCost: number;
       fineCount: number;
+      /** YALNIZCA base currency'deki onaylanmis yakit. */
+      fuelCost: number;
+      fuelCount: number;
       revenue: number;
       assignmentCount: number;
     };
@@ -1184,6 +1229,8 @@ export class DashboardService {
           serviceCount: 0,
           fineCost: 0,
           fineCount: 0,
+          fuelCost: 0,
+          fuelCount: 0,
           revenue: 0,
           assignmentCount: 0,
         };
@@ -1208,16 +1255,50 @@ export class DashboardService {
       agg.assignmentCount += 1;
     }
 
+    // --- YAKIT: para birimi guvenligi ---
+    //
+    // ServiceRecord.costAmount ve Fine.amount para birimi TASIMIYOR (dogrulandi)
+    // ve repoda tenant base currency alani YOK; yani mevcut toplamlar ortuk
+    // olarak base currency cinsinden. FleetFuelEntry ise satir basina
+    // `currency` tasiyor.
+    //
+    // Bu yuzden base currency DISINDAKI onaylanmis fisler toplama
+    // KATILMIYOR — `100 EUR + 500 TRY = 600` gibi anlamsiz bir rakam uretmek,
+    // eksik gostermekten cok daha kotu. Onlar ayri para birimi kiriliminda
+    // "donusturulmemis" olarak raporlaniyor. Kur UYDURULMUYOR ve bu fazda
+    // canli doviz servisi eklenmiyor.
+    const unconvertedByCurrency = new Map<string, { amount: number; count: number }>();
+    for (const row of fuelEntries) {
+      const amount = this.toCurrencyNumber(row.totalCost);
+      const currency = (row.currency ?? BASE_CURRENCY).toUpperCase();
+
+      if (currency !== BASE_CURRENCY) {
+        const bucket = unconvertedByCurrency.get(currency) ?? { amount: 0, count: 0 };
+        bucket.amount += amount;
+        bucket.count += 1;
+        unconvertedByCurrency.set(currency, bucket);
+        continue;
+      }
+
+      const agg = aggFor(row.vehicleId);
+      agg.fuelCost += amount;
+      agg.fuelCount += 1;
+    }
+
     const rows = vehicles.map((vehicle: any) => {
       const agg = byVehicle.get(vehicle.id) ?? {
         serviceCost: 0,
         serviceCount: 0,
         fineCost: 0,
         fineCount: 0,
+        fuelCost: 0,
+        fuelCount: 0,
         revenue: 0,
         assignmentCount: 0,
       };
-      const totalCost = agg.serviceCost + agg.fineCost;
+      // Yakit artik toplamin PARCASI. Yalnizca `approved` kayitlar geldigi
+      // icin bekleyen fisler bu rakami degistirmiyor.
+      const totalCost = agg.serviceCost + agg.fineCost + agg.fuelCost;
       return {
         vehicle_id: vehicle.id,
         plate_number: vehicle.plateNumber,
@@ -1229,6 +1310,8 @@ export class DashboardService {
         service_count: agg.serviceCount,
         fine_cost: agg.fineCost,
         fine_count: agg.fineCount,
+        fuel_cost: agg.fuelCost,
+        fuel_count: agg.fuelCount,
         total_cost: totalCost,
         revenue: agg.revenue,
         assignment_count: agg.assignmentCount,
@@ -1242,11 +1325,12 @@ export class DashboardService {
       (acc: any, row: any) => {
         acc.service_cost += row.service_cost;
         acc.fine_cost += row.fine_cost;
+        acc.fuel_cost += row.fuel_cost;
         acc.total_cost += row.total_cost;
         acc.revenue += row.revenue;
         return acc;
       },
-      { service_cost: 0, fine_cost: 0, total_cost: 0, revenue: 0 },
+      { service_cost: 0, fine_cost: 0, fuel_cost: 0, total_cost: 0, revenue: 0 },
     );
     fleet.margin = fleet.revenue - fleet.total_cost;
     fleet.avg_cost_per_vehicle = rows.length > 0 ? fleet.total_cost / rows.length : 0;
@@ -1255,8 +1339,25 @@ export class DashboardService {
       period_months: safeMonths,
       from: this.toDateKey(start),
       to: this.toDateKey(end),
+      /** Toplamlarin cinsi ACIKCA bildiriliyor; istemci tahmin etmiyor. */
+      currency: BASE_CURRENCY,
       fleet,
       vehicles: rows,
+      fuel: {
+        /** Onay bekleyen fis SAYISI — tutari toplama DAHIL DEGIL. */
+        pending_count: pendingFuel,
+        /**
+         * Base currency disindaki onaylanmis fisler. Toplama KATILMADILAR;
+         * guvenilir bir FX altyapisi olmadan donusturmek kur uydurmak olurdu.
+         */
+        unconverted: [...unconvertedByCurrency.entries()]
+          .map(([currency, bucket]) => ({
+            currency,
+            amount: Number(bucket.amount.toFixed(2)),
+            count: bucket.count,
+          }))
+          .sort((left, right) => left.currency.localeCompare(right.currency)),
+      },
     };
   }
 

@@ -105,6 +105,8 @@ function receipt(overrides: Partial<FuelReceipt> = {}): FuelReceipt {
     isFullTank: false,
     compatibilityMismatch: false,
     submittedAt: null,
+    rejectionReason: null,
+    rejectedAt: null,
     createdAt: '2026-08-13T12:00:00.000Z',
     ...overrides,
   };

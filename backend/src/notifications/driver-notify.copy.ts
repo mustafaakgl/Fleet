@@ -20,4 +20,12 @@ export type DriverNotifyKey =
   | 'work_session_corrected'
   | 'tacho_infringement'
   | 'tacho_infringement_ack_reminder'
-  | 'tacho_download_due';
+  | 'tacho_download_due'
+  /**
+   * Yakit fisi inceleme sonucu (Faz 7).
+   *
+   * Bildirim YALNIZCA ilgili surucuye gidiyor; muhasebedeki her kullaniciya
+   * haber vermek gurultu olurdu, kuyrugu zaten ekranda goruyorlar.
+   */
+  | 'fuel_receipt_approved'
+  | 'fuel_receipt_rejected';

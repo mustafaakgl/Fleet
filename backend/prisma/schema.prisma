@@ -1193,6 +1193,7 @@ model User {
   decidedBreakCandidates          BreakCandidate[]            @relation("BreakCandidateDecidedBy")
   recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
   createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
+  reviewedFuelEntries             FleetFuelEntry[]            @relation("FuelEntryReviewedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -3721,6 +3722,29 @@ model FleetFuelEntry {
   /// Verinin gercek mi demo mu oldugu — istemci kendi env'inden tahmin etmez.
   ocrDataMode        String?
 
+  /// --- Muhasebe incelemesi (Faz 7) ---
+  /// Onay AYRI BIR MALIYET SATIRI URETMIYOR: is akisi durumu bu kayitta
+  /// duruyor ve maliyet sorgusu dogrudan onu filtreliyor. Ikinci bir "onay"
+  /// ya da "gider" tablosu, hangi satirin gercek oldugunu belirsiz birakirdi.
+  ///
+  /// GECMIS icin de paralel model YOK: AuditLog kiraci kapsamli ve
+  /// entityType + entityId + action ile sorgulanabiliyor, review zaman
+  /// cizelgesi oradan okunuyor. Asagidakiler yalnizca SON durumun ozeti —
+  /// ekranda gostermek ve her satir icin denetim tablosuna gitmemek icin.
+  reviewedById    String?
+  reviewedBy      User?     @relation("FuelEntryReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  /// Son inceleme ani (onay ya da ret).
+  reviewedAt      DateTime?
+  /// Muhasebenin onaydaki opsiyonel notu. HTML olarak RENDER EDILMEZ.
+  accountingNote  String?
+  /// SON ret nedeni — surucuye gosterildigi icin zorunlu ve okunabilir.
+  /// Yeniden gonderimde SILINMIYOR: surucu neyi duzeltmesi gerektigini
+  /// gormeye devam etmeli.
+  rejectionReason String?
+  rejectedAt      DateTime?
+  /// Surucunun ret sonrasi yeniden gonderme ani.
+  resubmittedAt   DateTime?
+
   /// --- Yakit niyeti bagi (opsiyonel) ---
   /// Fis yuklemek icin FuelingIntent ZORUNLU DEGIL ve olmayacak.
   fuelingIntentId         String?
@@ -3741,6 +3765,9 @@ model FleetFuelEntry {
   @@index([vehicleId, enteredAt])
   @@index([driverId, enteredAt])
   @@index([tenantId, workflowStatus])
+  /// Muhasebe kuyrugunun canonical sorgusu: kiraci + durum + en uzun bekleyen
+  /// once. Buyuk filolarda her acilista tam tarama yapilmasin.
+  @@index([tenantId, workflowStatus, submittedAt])
   @@index([tenantId, driverId, workflowStatus])
   @@index([fuelingIntentId])
   @@map("fleet_fuel_entries")
