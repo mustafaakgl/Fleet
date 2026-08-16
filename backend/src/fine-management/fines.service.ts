@@ -16,6 +16,7 @@ import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantCurrencyService } from '../common/utils/tenant-currency.service';
 import { FineDocumentStorageService } from '../storage/fine-document-storage.service';
 import { AssignFineDriverDto } from './dto/assign-fine-driver.dto';
 import { CreateFineDto } from './dto/create-fine.dto';
@@ -61,6 +62,7 @@ export class FinesService {
     private readonly notifications: NotificationsService,
     private readonly driverNotify: DriverNotifyService,
     private readonly push: PushNotificationsService,
+    private readonly tenantCurrency: TenantCurrencyService,
   ) {}
 
   previewMatch(vehicleId: string, violationAt: string, toleranceMinutes?: number) {
@@ -229,10 +231,14 @@ export class FinesService {
 
     const status = driverId ? FineStatus.fahrer_zugeordnet : FineStatus.neu;
 
+    const baseCurrency = await this.tenantCurrency.resolveBaseCurrency();
+
     const created = await this.prisma.$transaction(async (tx) => {
       const fine = await tx.fine.create({
         data: {
           tenantId: vehicle.tenantId ?? tenantId,
+          // Para birimi SUNUCUDAN — bkz. TenantCurrencyService.
+          currency: baseCurrency,
           vehicleId: dto.vehicle_id,
           driverId,
           matchType,

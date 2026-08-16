@@ -4,6 +4,7 @@ import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { parseCsv, pickField } from '../import/csv.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantCurrencyService } from '../common/utils/tenant-currency.service';
 import { CreateServiceRecordDto } from './dto/create-service-record.dto';
 import { UpdateServiceRecordDto } from './dto/update-service-record.dto';
 
@@ -49,6 +50,7 @@ export class ServiceRecordsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly tenantCurrency: TenantCurrencyService,
   ) {}
 
   async list(query: { vehicle_id?: string; from?: string; to?: string; repair_company?: string }) {
@@ -289,8 +291,13 @@ export class ServiceRecordsService {
   }
 
   async create(dto: CreateServiceRecordDto, actorUserId?: string) {
+    // Para birimi SUNUCUDAN: istemcinin gonderdigi bir degere guvenmek, TRY
+    // bir kiracida tutari EUR diye etiketleyip toplama sokmak olurdu.
+    const currency = await this.tenantCurrency.resolveBaseCurrency();
+
     const record = await this.prisma.serviceRecord.create({
       data: {
+        currency,
         vehicleId: dto.vehicle_id,
         driverId: dto.driver_id,
         date: new Date(dto.date),

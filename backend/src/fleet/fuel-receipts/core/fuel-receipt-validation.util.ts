@@ -1,3 +1,5 @@
+import { isSupportedCurrency } from '../../../common/utils/currency';
+
 /**
  * Fis dogrulamasinin SAF mantigi.
  *
@@ -36,8 +38,15 @@ export const MAX_RECEIPT_AGE_DAYS = 400;
 export const AMOUNT_TOLERANCE_ABSOLUTE = 0.05;
 export const AMOUNT_TOLERANCE_RELATIVE = 0.01;
 
-/** Desteklenen para birimleri. Repo genelinde EUR; digerleri sinir gecisleri icin. */
-export const SUPPORTED_CURRENCIES = ['EUR', 'CHF', 'GBP', 'PLN', 'CZK', 'DKK', 'SEK', 'NOK'];
+/**
+ * Desteklenen para birimleri — ORTAK listeden.
+ *
+ * Faz 7.1'de buradaki yerel liste `common/utils/currency`'ye tasindi ve TRY
+ * eklendi. Iki ayri liste, bir tarafta kabul edilen bir fisin digerinde
+ * reddedilmesi demek olurdu. Yeniden export ediliyor ki bu modulu kullanan
+ * mevcut cagrilar kirilmasin.
+ */
+export { SUPPORTED_CURRENCIES } from '../../../common/utils/currency';
 
 export type FuelReceiptIssueCode =
   | 'date_missing'
@@ -164,7 +173,7 @@ export function validateFuelReceiptDraft(
   }
 
   // --- Para birimi ---
-  if (!draft.currency || !SUPPORTED_CURRENCIES.includes(draft.currency.toUpperCase())) {
+  if (!isSupportedCurrency(draft.currency)) {
     add('currency_unsupported', 'currency', true);
   }
 

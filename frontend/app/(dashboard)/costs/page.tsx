@@ -218,7 +218,7 @@ export default function CostsPage() {
               data-testid="unconverted-fuel-note"
             >
               {t('costs.unconvertedFuelNote', {
-                base: data.currency,
+                base: data.baseCurrency,
                 list: data.fuel.unconverted
                   .map((entry) => `${entry.amount} ${entry.currency} (${entry.count})`)
                   .join(', '),
@@ -242,7 +242,7 @@ export default function CostsPage() {
                         : 'text-slate-900'
                     }`}
                   >
-                    {formatFleetCurrency(card.value)}
+                    {formatFleetCurrency(card.value, data.baseCurrency)}
                   </span>
                 </CardContent>
               </Card>
@@ -278,23 +278,23 @@ export default function CostsPage() {
                         </div>
                       </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
-                        {formatFleetCurrency(row.service_cost)}
+                        {formatFleetCurrency(row.service_cost, data.baseCurrency)}
                         <span className="ml-1 text-xs text-slate-400">({row.service_count})</span>
                       </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
-                        {formatFleetCurrency(row.fine_cost)}
+                        {formatFleetCurrency(row.fine_cost, data.baseCurrency)}
                         <span className="ml-1 text-xs text-slate-400">({row.fine_count})</span>
                       </TableCell>
                       <TableCell className={`${FLEET_TABLE_CELL} font-semibold`}>
-                        {formatFleetCurrency(row.total_cost)}
+                        {formatFleetCurrency(row.total_cost, data.baseCurrency)}
                       </TableCell>
-                      <TableCell className={FLEET_TABLE_CELL}>{formatFleetCurrency(row.revenue)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>{formatFleetCurrency(row.revenue, data.baseCurrency)}</TableCell>
                       <TableCell
                         className={`${FLEET_TABLE_CELL} font-semibold ${
                           row.margin >= 0 ? 'text-emerald-700' : 'text-red-700'
                         }`}
                       >
-                        {formatFleetCurrency(row.margin)}
+                        {formatFleetCurrency(row.margin, data.baseCurrency)}
                       </TableCell>
                     </TableRow>
                   ))}

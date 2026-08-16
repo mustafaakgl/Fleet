@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TenantCurrencyService } from '../common/utils/tenant-currency.service';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -19,7 +20,7 @@ import { FinesService } from './fines.service';
     PushNotificationsModule,
   ],
   controllers: [FinesController, FinesDriverController],
-  providers: [FineMatchingService, FinesService, FineManagementScheduler],
+  providers: [FineMatchingService, FinesService, FineManagementScheduler, TenantCurrencyService],
   exports: [FinesService, FineMatchingService],
 })
 export class FineManagementModule {}

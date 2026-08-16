@@ -455,6 +455,17 @@ export interface VehicleCostsResponse {
   to: string;
   /** Toplamlarin cinsi — istemci tahmin etmiyor (Faz 7). */
   currency: string;
+  /** Kiracinin TEMEL para birimi (Faz 7.1). Bicimleme bunu kullanir. */
+  baseCurrency: string;
+  /** Money sozlesmesi: tutarlar STRING — float muhasebe ekranina dusmesin. */
+  totals: {
+    fuel: { amount: string; currency: string };
+    service: { amount: string; currency: string };
+    fines: { amount: string; currency: string };
+    total: { amount: string; currency: string };
+  };
+  /** Temel para birimi disindaki onaylanmis fisler — toplama KATILMADI. */
+  unconvertedByCurrency: Array<{ currency: string; fuelAmount: string; entryCount: number }>;
   fleet: {
     service_cost: number;
     fine_cost: number;

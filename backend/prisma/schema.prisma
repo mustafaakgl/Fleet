@@ -979,6 +979,16 @@ model Tenant {
   contactPhone String?
   address      String?
   language     String       @default("de")
+  /// Kiracinin TEMEL para birimi (ISO-4217, uc buyuk harf).
+  ///
+  /// Maliyet toplamlari YALNIZCA bu birimdeki kayitlardan olusur; farkli
+  /// birimdeki kayitlar ayri gosterilir, cunku guvenilir bir kur altyapisi
+  /// olmadan donusturmek kur uydurmak olur.
+  ///
+  /// Prisma ENUM DEGIL: dunyadaki tum para birimlerini enum'a kopyalamak her
+  /// yeni pazar icin migration gerektiren olu bir liste uretirdi. Dogrulama
+  /// common/utils/currency uzerinden yapiliyor.
+  baseCurrency String       @default("EUR")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -3099,6 +3109,10 @@ model ServiceRecord {
   vendor        String?
   repairCompany String
   costAmount    Decimal   @db.Decimal(10, 2)
+  /// Tutarin para birimi. Faz 7.1 oncesi bu alan YOKTU ve tutarlar ortuk
+  /// olarak EUR sayiliyordu; kiraci TRY'ye gectiginde bu sessiz varsayim
+  /// yanlis toplam uretirdi. Sunucuda kiracinin baseCurrency'sinden cozulur.
+  currency      String    @default("EUR")
   mileageKm     Int?
   notes         String?
   createdAt     DateTime  @default(now())
@@ -3446,6 +3460,8 @@ model Fine {
   violationType              String
   violationCategory          FineViolationCategory
   amount                     Decimal?              @db.Decimal(10, 2)
+  /// Tutarin para birimi — bkz. ServiceRecord.currency.
+  currency                   String                @default("EUR")
   paymentDueDate             DateTime?             @db.Date
   noticeDate                 DateTime?             @db.Date
   documentStoredPath         String?

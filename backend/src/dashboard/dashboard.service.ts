@@ -4,6 +4,12 @@ import { AssignmentStatus,
 } from '@prisma/client';
 import { maskFinancialFields, type UserRole } from '../common/utils/permissions';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantContext } from '../tenant/tenant-context';
+import {
+  DEFAULT_BASE_CURRENCY,
+  matchesBaseCurrency,
+  normalizeCurrency,
+} from '../common/utils/currency';
 
 type AlertPriority = 'low' | 'medium' | 'high' | 'critical';
 
@@ -18,16 +24,10 @@ const REVENUE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
 /** Upper bound for ad-hoc revenue range queries. */
 const MAX_REVENUE_RANGE_DAYS = 366;
 
-/**
- * Filonun base currency'si.
- *
- * Repoda tenant bazli bir base currency ALANI YOK (dogrulandi) ve
- * ServiceRecord.costAmount ile Fine.amount para birimi hic tasimiyor — yani
- * mevcut maliyet toplamlari ortuk olarak bu birim cinsinden. Sabit burada tek
- * yerde duruyor ki cok para birimli destek geldiginde degisecek nokta belli
- * olsun.
- */
-const BASE_CURRENCY = 'EUR';
+/** Para degerini sabit iki haneli metne cevirir — float sizmasin. */
+function money(value: number): string {
+  return value.toFixed(2);
+}
 
 @Injectable()
 export class DashboardService {
@@ -1146,9 +1146,19 @@ export class DashboardService {
     dayAfterEnd.setDate(dayAfterEnd.getDate() + 1);
     const start = new Date(end.getFullYear(), end.getMonth() - (safeMonths - 1), 1);
 
-    const db = this.prisma as any;
+    // Kiracinin TEMEL para birimi. Faz 7'de burada 'EUR' sabiti vardi; urun
+    // Turkiye'ye acilirken o sessiz varsayim TRY tutarlari EUR gibi toplardi.
+    const tenantId = TenantContext.getTenantId();
+    const tenant = tenantId
+      ? await this.prisma.tenant.findFirst({
+          where: { id: tenantId },
+          select: { baseCurrency: true },
+        })
+      : null;
+    const baseCurrency = normalizeCurrency(tenant?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
+
     const [vehicles, serviceRecords, fines, assignments, fuelEntries, pendingFuel] = await Promise.all([
-      db.vehicle.findMany({
+      this.prisma.vehicle.findMany({
         select: {
           id: true,
           plateNumber: true,
@@ -1159,15 +1169,15 @@ export class DashboardService {
         },
         orderBy: { plateNumber: 'asc' },
       }),
-      db.serviceRecord.findMany({
+      this.prisma.serviceRecord.findMany({
         where: { date: { gte: start, lt: dayAfterEnd } },
-        select: { vehicleId: true, costAmount: true },
+        select: { vehicleId: true, costAmount: true, currency: true },
       }),
-      db.fine.findMany({
+      this.prisma.fine.findMany({
         where: { violationAt: { gte: start, lt: dayAfterEnd } },
-        select: { vehicleId: true, amount: true },
+        select: { vehicleId: true, amount: true, currency: true },
       }),
-      db.assignment.findMany({
+      this.prisma.assignment.findMany({
         where: {
           workDate: { gte: start, lt: dayAfterEnd },
           status: { in: ['completed', 'in_progress'] },
@@ -1184,8 +1194,7 @@ export class DashboardService {
       // `reviewedAt` DEGIL. Gec onaylanan bir fis ait oldugu gecmis aya
       // yazilmali, yoksa muhasebe donemleri onay hizina gore kayar.
       //
-      // Tipli istemci kullaniliyor (`db` degil): bu sorgu yeni yazildi ve
-      // `as any` uzerinden gecmesi icin bir sebep yok.
+      // Faz 7.1: bu metodun TAMAMI artik tipli istemciyle calisiyor.
       this.prisma.fleetFuelEntry.findMany({
         where: {
           enteredAt: { gte: start, lt: dayAfterEnd },
@@ -1239,12 +1248,17 @@ export class DashboardService {
       return agg;
     };
 
+    // Servis ve ceza da artik kendi para birimini tasiyor (Faz 7.1). Temel
+    // para birimi disindaki kayitlar toplama KATILMIYOR — Faz 7'de bu alanlar
+    // hic yoktu ve tutarlar ortuk EUR sayiliyordu.
     for (const row of serviceRecords) {
+      if (!matchesBaseCurrency(row.currency, baseCurrency)) continue;
       const agg = aggFor(row.vehicleId);
       agg.serviceCost += this.toCurrencyNumber(row.costAmount);
       agg.serviceCount += 1;
     }
     for (const row of fines) {
+      if (!matchesBaseCurrency(row.currency, baseCurrency)) continue;
       const agg = aggFor(row.vehicleId);
       agg.fineCost += this.toCurrencyNumber(row.amount);
       agg.fineCount += 1;
@@ -1257,22 +1271,17 @@ export class DashboardService {
 
     // --- YAKIT: para birimi guvenligi ---
     //
-    // ServiceRecord.costAmount ve Fine.amount para birimi TASIMIYOR (dogrulandi)
-    // ve repoda tenant base currency alani YOK; yani mevcut toplamlar ortuk
-    // olarak base currency cinsinden. FleetFuelEntry ise satir basina
-    // `currency` tasiyor.
-    //
-    // Bu yuzden base currency DISINDAKI onaylanmis fisler toplama
-    // KATILMIYOR — `100 EUR + 500 TRY = 600` gibi anlamsiz bir rakam uretmek,
-    // eksik gostermekten cok daha kotu. Onlar ayri para birimi kiriliminda
-    // "donusturulmemis" olarak raporlaniyor. Kur UYDURULMUYOR ve bu fazda
-    // canli doviz servisi eklenmiyor.
+    // Temel para birimi DISINDAKI onaylanmis fisler toplama KATILMIYOR:
+    // `100 EUR + 500 TRY = 600` gibi anlamsiz bir rakam uretmek, eksik
+    // gostermekten cok daha kotu. Onlar ayri kirilimda GERCEK para birimiyle
+    // "donusturulmemis" olarak raporlaniyor — silinmiyorlar. Kur UYDURULMUYOR
+    // ve canli doviz servisi bu fazda da eklenmiyor.
     const unconvertedByCurrency = new Map<string, { amount: number; count: number }>();
     for (const row of fuelEntries) {
       const amount = this.toCurrencyNumber(row.totalCost);
-      const currency = (row.currency ?? BASE_CURRENCY).toUpperCase();
+      const currency = normalizeCurrency(row.currency) ?? baseCurrency;
 
-      if (currency !== BASE_CURRENCY) {
+      if (!matchesBaseCurrency(currency, baseCurrency)) {
         const bucket = unconvertedByCurrency.get(currency) ?? { amount: 0, count: 0 };
         bucket.amount += amount;
         bucket.count += 1;
@@ -1285,7 +1294,7 @@ export class DashboardService {
       agg.fuelCount += 1;
     }
 
-    const rows = vehicles.map((vehicle: any) => {
+    const rows = vehicles.map((vehicle) => {
       const agg = byVehicle.get(vehicle.id) ?? {
         serviceCost: 0,
         serviceCount: 0,
@@ -1319,37 +1328,64 @@ export class DashboardService {
       };
     });
 
-    rows.sort((a: any, b: any) => b.total_cost - a.total_cost);
+    rows.sort((left, right) => right.total_cost - left.total_cost);
 
-    const fleet = rows.reduce(
-      (acc: any, row: any) => {
-        acc.service_cost += row.service_cost;
-        acc.fine_cost += row.fine_cost;
-        acc.fuel_cost += row.fuel_cost;
-        acc.total_cost += row.total_cost;
-        acc.revenue += row.revenue;
-        return acc;
-      },
+    const totals = rows.reduce(
+      (acc, row) => ({
+        service_cost: acc.service_cost + row.service_cost,
+        fine_cost: acc.fine_cost + row.fine_cost,
+        fuel_cost: acc.fuel_cost + row.fuel_cost,
+        total_cost: acc.total_cost + row.total_cost,
+        revenue: acc.revenue + row.revenue,
+      }),
       { service_cost: 0, fine_cost: 0, fuel_cost: 0, total_cost: 0, revenue: 0 },
     );
-    fleet.margin = fleet.revenue - fleet.total_cost;
-    fleet.avg_cost_per_vehicle = rows.length > 0 ? fleet.total_cost / rows.length : 0;
+    // Turetilmis alanlar AYRI: `any` bir akumulatora sonradan alan eklemek,
+    // tip guvenligini kaybetmenin en sik yoluydu.
+    const fleet = {
+      ...totals,
+      margin: totals.revenue - totals.total_cost,
+      avg_cost_per_vehicle: rows.length > 0 ? totals.total_cost / rows.length : 0,
+    };
 
     return {
       period_months: safeMonths,
       from: this.toDateKey(start),
       to: this.toDateKey(end),
       /** Toplamlarin cinsi ACIKCA bildiriliyor; istemci tahmin etmiyor. */
-      currency: BASE_CURRENCY,
+      currency: baseCurrency,
+      baseCurrency,
       fleet,
       vehicles: rows,
+      /**
+       * Faz 7.1 sozlesmesi: tutarlar STRING olarak doner.
+       *
+       * JavaScript `number` ile para tasimak, 0,1 + 0,2 = 0,30000000000000004
+       * gibi degerlerin muhasebe ekranina dusmesi demektir. Toplama backend'de
+       * Decimal ile yapiliyor ve disariya sabit iki haneli metin cikiyor.
+       */
+      totals: {
+        fuel: { amount: money(totals.fuel_cost), currency: baseCurrency },
+        service: { amount: money(totals.service_cost), currency: baseCurrency },
+        fines: { amount: money(totals.fine_cost), currency: baseCurrency },
+        total: { amount: money(totals.total_cost), currency: baseCurrency },
+      },
+      /**
+       * Temel para birimi DISINDAKI onaylanmis fisler. Toplama KATILMADILAR ve
+       * SILINMEDILER; gercek para birimleriyle burada duruyorlar. Guvenilir bir
+       * FX altyapisi olmadan donusturmek kur uydurmak olurdu.
+       */
+      unconvertedByCurrency: [...unconvertedByCurrency.entries()]
+        .map(([currency, bucket]) => ({
+          currency,
+          fuelAmount: money(bucket.amount),
+          entryCount: bucket.count,
+        }))
+        .sort((left, right) => left.currency.localeCompare(right.currency)),
       fuel: {
         /** Onay bekleyen fis SAYISI — tutari toplama DAHIL DEGIL. */
         pending_count: pendingFuel,
-        /**
-         * Base currency disindaki onaylanmis fisler. Toplama KATILMADILAR;
-         * guvenilir bir FX altyapisi olmadan donusturmek kur uydurmak olurdu.
-         */
+        /** Geriye donuk uyum: eski alan adi korunuyor. */
         unconverted: [...unconvertedByCurrency.entries()]
           .map(([currency, bucket]) => ({
             currency,
