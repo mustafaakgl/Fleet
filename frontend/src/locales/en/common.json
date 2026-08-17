@@ -4693,6 +4693,8 @@
   "driverPortal.fuelReceipts.status.submitted": "With accounting",
   "driverPortal.fuelReceipts.status.approved": "Approved",
   "driverPortal.fuelReceipts.status.rejected": "Rejected",
+  "driverPortal.fuelReceipts.status.reversed": "Reversed",
+  "driverPortal.fuelReceipts.reversedNote": "Accounting reversed this receipt and is correcting it. Nothing to do on your side.",
   "driverPortal.fuelReceipts.warnings.unit_price_mismatch": "Litres × price per litre does not match the fuel total. Please check.",
   "driverPortal.fuelReceipts.warnings.vat_breakdown_mismatch": "Net plus VAT does not match the receipt total. Please check.",
   "driverPortal.fuelReceipts.warnings.receipt_total_below_fuel_total": "The receipt total is lower than the fuel total. Please check.",

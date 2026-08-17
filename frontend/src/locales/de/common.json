@@ -4693,6 +4693,8 @@
   "driverPortal.fuelReceipts.status.submitted": "Bei der Buchhaltung",
   "driverPortal.fuelReceipts.status.approved": "Freigegeben",
   "driverPortal.fuelReceipts.status.rejected": "Abgelehnt",
+  "driverPortal.fuelReceipts.status.reversed": "Storniert",
+  "driverPortal.fuelReceipts.reversedNote": "Die Buchhaltung hat diesen Beleg storniert und korrigiert ihn. Von dir ist nichts zu tun.",
   "driverPortal.fuelReceipts.warnings.unit_price_mismatch": "Liter × Preis je Liter ergibt nicht die Kraftstoffsumme. Bitte prüfen.",
   "driverPortal.fuelReceipts.warnings.vat_breakdown_mismatch": "Netto plus MwSt. ergibt nicht die Belegsumme. Bitte prüfen.",
   "driverPortal.fuelReceipts.warnings.receipt_total_below_fuel_total": "Die Belegsumme ist kleiner als die Kraftstoffsumme. Bitte prüfen.",

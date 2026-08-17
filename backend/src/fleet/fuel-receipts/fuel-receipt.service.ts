@@ -22,6 +22,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FUEL_RECEIPT_UPLOAD_ABSOLUTE_DIR } from '../../storage/local-storage.service';
 import { StorageService } from '../../storage/storage.service';
 import { compatibleProductsForStationFilter } from '../fuel-stations/core/fuel-compatibility.util';
+import {
+  effectiveAccountingStatus,
+  type EffectiveAccountingStatus,
+} from './core/effective-fuel-cost';
 import { VehicleFuelCompatibilityService } from '../fuel-stations/vehicle-fuel-compatibility.service';
 import { DriverVehicleService } from '../driver-vehicle.service';
 import {
@@ -55,6 +59,15 @@ export interface UploadedReceiptBuffer {
 export interface FuelReceiptView {
   id: string;
   workflowStatus: FuelEntryWorkflowStatus;
+  /**
+   * Muhasebe acisindan ETKILI durum (Faz 9).
+   *
+   * Surucuye giden bildirim "fisiniz duzeltmeye alindi" derken ekranin
+   * "Freigegeben" demesi CELISKIYDI. `workflowStatus` ham gercegi tasimaya
+   * devam ediyor; bu alan "su anda gecerli mi" sorusuna cevap veriyor ve
+   * muhasebe uclariyla AYNI turetmeden geciyor.
+   */
+  effectiveAccountingStatus: EffectiveAccountingStatus;
   ocrStatus: FuelReceiptOcrStatus;
   ocrDataMode: string | null;
   ocrErrorClass: string | null;
@@ -123,6 +136,9 @@ const RECEIPT_SELECT = {
   paymentMethod: true,
   receiptPlateNumber: true,
   compatibilityMismatch: true,
+  // Ters kayit iliskisi: etkili durumu ikinci bir sorguyla cozmek, liste
+  // buyudukce satir basina bir istek (N+1) demekti.
+  reversal: { select: { id: true } },
   rejectionReason: true,
   rejectedAt: true,
   ocrStatus: true,
@@ -710,6 +726,12 @@ export class FuelReceiptService {
     return {
       id: row.id,
       workflowStatus: row.workflowStatus,
+      effectiveAccountingStatus: effectiveAccountingStatus(
+        row.workflowStatus,
+        // `!= null`: iliski secilmemisse `undefined` gelir ve `!== null`
+        // o durumda yanlislikla "ters kayit var" derdi.
+        row.reversal != null,
+      ),
       ocrStatus: row.ocrStatus,
       ocrDataMode: row.ocrDataMode,
       ocrErrorClass: row.ocrErrorClass,

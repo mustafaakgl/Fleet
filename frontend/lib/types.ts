@@ -3225,6 +3225,14 @@ export interface FuelReceiptExtraction {
 export interface FuelReceipt {
   id: string;
   workflowStatus: FuelEntryWorkflowStatus;
+  /**
+   * ETKILI muhasebe durumu (Faz 9).
+   *
+   * Surucu ekrani ROZETI bundan seciyor: ters kayda alinmis bir fisin
+   * "Freigegeben" gorunmesi, gonderdigimiz "duzeltmeye alindi" bildirimiyle
+   * celisirdi.
+   */
+  effectiveAccountingStatus: EffectiveAccountingStatus;
   ocrStatus: FuelReceiptOcrStatus;
   /** Demo uyarisi BU ALANA gore; frontend env degiskenine gore DEGIL. */
   ocrDataMode: string | null;

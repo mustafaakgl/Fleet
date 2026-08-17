@@ -4693,6 +4693,8 @@
   "driverPortal.fuelReceipts.status.submitted": "Muhasebede",
   "driverPortal.fuelReceipts.status.approved": "Onaylandı",
   "driverPortal.fuelReceipts.status.rejected": "Reddedildi",
+  "driverPortal.fuelReceipts.status.reversed": "Ters kayıt",
+  "driverPortal.fuelReceipts.reversedNote": "Muhasebe bu fişi geri aldı ve düzeltiyor. Senin yapman gereken bir şey yok.",
   "driverPortal.fuelReceipts.warnings.unit_price_mismatch": "Litre × litre fiyatı yakıt toplamını vermiyor. Lütfen kontrol et.",
   "driverPortal.fuelReceipts.warnings.vat_breakdown_mismatch": "Net artı KDV fiş toplamını vermiyor. Lütfen kontrol et.",
   "driverPortal.fuelReceipts.warnings.receipt_total_below_fuel_total": "Fiş genel toplamı yakıt toplamından küçük. Lütfen kontrol et.",

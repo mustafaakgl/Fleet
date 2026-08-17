@@ -109,6 +109,14 @@ function receipt(overrides: Partial<FuelReceipt> = {}): FuelReceipt {
     rejectedAt: null,
     createdAt: '2026-08-13T12:00:00.000Z',
     ...overrides,
+    // Etkili durum, acikca gecilmediyse `workflowStatus`tan TURETILIYOR —
+    // gercek backend de oyle yapiyor. Sabit bir varsayilan koysaydik durum
+    // degistiren mevcut testler sessizce yanlis rozet sinardi.
+    effectiveAccountingStatus:
+      overrides.effectiveAccountingStatus ??
+      (overrides.workflowStatus === 'approved'
+        ? 'approved_effective'
+        : overrides.workflowStatus ?? 'driver_review'),
   };
 }
 
@@ -464,5 +472,43 @@ describe('DriverFuelReceiptsScreen — recent receipts', () => {
     const list = screen.getByTestId('receipt-list');
     expect(within(list).getByText('driverPortal.fuelReceipts.status.submitted')).toBeDefined();
     expect(within(list).getByText('driverPortal.fuelReceipts.status.approved')).toBeDefined();
+  });
+
+  it('ters kayda alinmis fis ONAYLI gorunmez', async () => {
+    // Surucuye "fisiniz duzeltmeye alindi" bildirimi gidiyor; ekranin
+    // "Freigegeben" demesi o bildirimle CELISIRDI.
+    listFuelReceipts.mockResolvedValue([
+      receipt({
+        id: 'a',
+        workflowStatus: 'approved',
+        effectiveAccountingStatus: 'reversed',
+        fuelGrossAmount: 250,
+      }),
+    ]);
+
+    render(<DriverFuelReceiptsScreen />);
+    const list = await screen.findByTestId('receipt-list');
+    expect(within(list).getByText('driverPortal.fuelReceipts.status.reversed')).toBeDefined();
+    expect(within(list).queryByText('driverPortal.fuelReceipts.status.approved')).toBeNull();
+  });
+
+  it('ters kayitta surucuye ne oldugu yaziliyor ama SEBEP gosterilmiyor', async () => {
+    listFuelReceipts.mockResolvedValue([
+      receipt({ id: 'a', workflowStatus: 'approved', effectiveAccountingStatus: 'reversed' }),
+    ]);
+
+    render(<DriverFuelReceiptsScreen />);
+    const note = await screen.findByTestId('receipt-reversed-note');
+    expect(note.textContent).toContain('driverPortal.fuelReceipts.reversedNote');
+    // Muhasebe aciklamasi ve sebep kodu surucu ekranina HIC gelmiyor.
+    expect(note.textContent).not.toContain('incorrect_amount');
+  });
+
+  it('normal onayli fiste ters kayit aciklamasi CIKMAZ', async () => {
+    listFuelReceipts.mockResolvedValue([receipt({ id: 'a', workflowStatus: 'approved' })]);
+
+    render(<DriverFuelReceiptsScreen />);
+    await screen.findByTestId('receipt-list');
+    expect(screen.queryByTestId('receipt-reversed-note')).toBeNull();
   });
 });

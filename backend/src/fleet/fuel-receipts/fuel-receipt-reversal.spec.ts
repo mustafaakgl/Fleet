@@ -801,6 +801,29 @@ describe('fuel receipt reversal — denetim ve bildirim', () => {
   });
 });
 
+describe('surucu gorunumu', () => {
+  it('ters kayda alinmis fis surucuye de ONAYLI gorunmez', () => {
+    // Surucuye "duzeltmeye alindi" bildirimi gidiyor; ayni kaydin surucu
+    // ekraninda "onayli" gorunmesi o bildirimle celisirdi. Muhasebe ve
+    // surucu uclari AYNI turetmeden geciyor.
+    assert.equal(
+      effectiveAccountingStatus(FuelEntryWorkflowStatus.approved, true),
+      'reversed',
+    );
+  });
+
+  it('ters kayit yoksa surucu gorunumu degismez', () => {
+    assert.equal(
+      effectiveAccountingStatus(FuelEntryWorkflowStatus.approved, false),
+      'approved_effective',
+    );
+    assert.equal(
+      effectiveAccountingStatus(FuelEntryWorkflowStatus.submitted, false),
+      'submitted',
+    );
+  });
+});
+
 describe('etkili maliyet kurali', () => {
   it('maliyet filtresi HEM onay HEM ters kayit yoklugu ister', () => {
     assert.equal(EFFECTIVE_FUEL_COST_WHERE.workflowStatus, FuelEntryWorkflowStatus.approved);

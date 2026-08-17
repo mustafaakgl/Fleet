@@ -545,6 +545,18 @@ export function DriverFuelReceiptsScreen({ fuelingIntentId }: { fuelingIntentId?
                       </p>
                       {/* Ret nedeni surucuye GOSTERILIYOR: neyi duzeltecegini
                           bilmeden yeniden gonderemez. */}
+                      {/* Ters kayitta surucuye SEBEP GOSTERILMIYOR: muhasebe
+                          aciklamasi ic degerlendirme icerebilir ve surucudan
+                          istenen bir sey yok. Yalnizca durumun degistigi
+                          soyleniyor. */}
+                      {receipt.effectiveAccountingStatus === 'reversed' ? (
+                        <p
+                          className="mt-1 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900"
+                          data-testid="receipt-reversed-note"
+                        >
+                          {t('driverPortal.fuelReceipts.reversedNote')}
+                        </p>
+                      ) : null}
                       {receipt.workflowStatus === 'rejected' && receipt.rejectionReason ? (
                         <p
                           className="mt-1 break-words rounded border border-red-300 bg-red-50 p-2 text-xs text-red-900"
@@ -556,16 +568,23 @@ export function DriverFuelReceiptsScreen({ fuelingIntentId }: { fuelingIntentId?
                         </p>
                       ) : null}
                     </div>
+                    {/* Rozet ETKILI durumdan geliyor: ters kayda alinmis bir
+                        fis "Freigegeben" gorunemez. */}
                     <Badge
                       variant={
-                        receipt.workflowStatus === 'approved'
+                        receipt.effectiveAccountingStatus === 'approved_effective'
                           ? 'success'
-                          : receipt.workflowStatus === 'rejected'
+                          : receipt.effectiveAccountingStatus === 'rejected'
                             ? 'destructive'
                             : 'outline'
                       }
+                      data-testid={`receipt-status-${receipt.id}`}
                     >
-                      {t(`driverPortal.fuelReceipts.status.${receipt.workflowStatus}`)}
+                      {t(
+                        receipt.effectiveAccountingStatus === 'approved_effective'
+                          ? 'driverPortal.fuelReceipts.status.approved'
+                          : `driverPortal.fuelReceipts.status.${receipt.effectiveAccountingStatus}`,
+                      )}
                     </Badge>
                   </CardContent>
                 </Card>
