@@ -603,6 +603,20 @@ export const fuelReceiptReviewApi = {
       .then((r) => r.data),
 };
 
+/** Kiraci temel para birimi ayari (Faz 7.1 ucu, Faz 8 arayuzu). */
+export const tenantSettingsApi = {
+  getCurrency: (signal?: AbortSignal) =>
+    api
+      .get<import('./types').TenantCurrencySettings>('/tenant/settings/currency', { signal })
+      .then((r) => r.data),
+
+  /** Kilit karari BACKEND'de; frontend kendi basina karar vermiyor. */
+  setCurrency: (baseCurrency: string) =>
+    api
+      .put<import('./types').TenantCurrencySettings>('/tenant/settings/currency', { baseCurrency })
+      .then((r) => r.data),
+};
+
 export const dashboardApi = {
   getSummary: () => api.get<DashboardSummary>('/dashboard').then((r) => r.data),
 
@@ -622,6 +636,23 @@ export const dashboardApi = {
       .then((r) => r.data),
 
   // Financial-roles only: per-vehicle cost breakdown (TCO).
+  /** Maliyet dashboard'u (Faz 8) — karsilastirmali gorunum. */
+  getCostDashboard: (
+    params: {
+      from?: string;
+      to?: string;
+      months?: number;
+      vehicleId?: string;
+      sort?: 'total' | 'costPerKm' | 'margin' | 'change';
+      page?: number;
+      pageSize?: number;
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<import('./types').CostDashboardResponse>('/dashboard/cost-dashboard', { params, signal })
+      .then((r) => r.data),
+
   getVehicleCosts: (months?: number) =>
     api
       .get<VehicleCostsResponse>('/dashboard/vehicle-costs', { params: { months } })

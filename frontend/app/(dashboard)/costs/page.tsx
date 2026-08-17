@@ -22,6 +22,7 @@ import {
   FLEET_TABLE_HEADER_ROW,
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
+import { CostDashboard } from '@/components/costs/CostDashboard';
 import { FuelReceiptReviewPanel } from '@/components/costs/FuelReceiptReviewPanel';
 import type { VehicleCostsResponse } from '@/lib/types';
 import { formatFleetCurrency } from '@/lib/locale-format';
@@ -85,7 +86,7 @@ export default function CostsPage() {
    * BOZULMUYOR. Yeni bir rota acip eskisini yonlendirmek, calisan linkleri
    * bir sey kazanmadan riske atardi.
    */
-  const [tab, setTab] = useState<'summary' | 'receipts'>('summary');
+  const [tab, setTab] = useState<'dashboard' | 'summary' | 'receipts'>('dashboard');
   const [data, setData] = useState<VehicleCostsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +160,7 @@ export default function CostsPage() {
 
       {/* Araclar > Arac maliyetleri altinda iki sekme. Rota AYNI kaliyor. */}
       <div className="flex flex-wrap gap-2" role="tablist">
-        {(['summary', 'receipts'] as const).map((key) => (
+        {(['dashboard', 'summary', 'receipts'] as const).map((key) => (
           <Button
             key={key}
             type="button"
@@ -179,6 +180,7 @@ export default function CostsPage() {
         ))}
       </div>
 
+      {tab === 'dashboard' ? <CostDashboard /> : null}
       {tab === 'receipts' ? <FuelReceiptReviewPanel /> : null}
 
       {tab === 'summary' && !loading && error ? (

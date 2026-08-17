@@ -17,7 +17,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { vehiclesApi } from '@/lib/api';
 import { formatFleetDateTime } from '@/lib/locale-format';
 
-const EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+/**
+ * Para bicimi ARTIK SABIT DEGIL (Faz 8).
+ *
+ * Onceki hali `de-DE` + `EUR` sabitliyordu; TRY bir kiracida her tutar yanlis
+ * sembolle ve yanlis ayraclarla gorunurdu. Locale kullanicinin dilinden, para
+ * birimi ise verinin kendisinden geliyor.
+ */
+function formatAmount(value: number, currency: string, locale: string): string {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(value);
+}
 
 const COLORS = {
   fuel: '#2563eb',
@@ -25,8 +34,18 @@ const COLORS = {
   fine: '#dc2626',
 } as const;
 
-export function VehicleCostChart({ vehicleId }: { vehicleId: string }) {
-  const { t } = useTranslation();
+export function VehicleCostChart({
+  vehicleId,
+  /**
+   * Kiracinin temel para birimi. Varsayilan EUR yalnizca cagiran taraf henuz
+   * gecirmiyorsa; sabit sembol DEGIL, gecirilebilir bir varsayilan.
+   */
+  currency = 'EUR',
+}: {
+  vehicleId: string;
+  currency?: string;
+}) {
+  const { t, i18n } = useTranslation();
   const costsQuery = useQuery({
     queryKey: ['vehicle-costs', vehicleId],
     queryFn: () => vehiclesApi.getCosts(vehicleId, { months: 6 }),
@@ -51,8 +70,8 @@ export function VehicleCostChart({ vehicleId }: { vehicleId: string }) {
         {costsQuery.data ? (
           <p className="text-sm text-slate-600">
             {t('vehicleDetail.costsSummary', {
-              total: EUR.format(costsQuery.data.totalEur),
-              average: EUR.format(costsQuery.data.monthlyAverageEur),
+              total: formatAmount(costsQuery.data.totalEur, currency, i18n.language),
+              average: formatAmount(costsQuery.data.monthlyAverageEur, currency, i18n.language),
             })}
           </p>
         ) : null}
@@ -74,9 +93,9 @@ export function VehicleCostChart({ vehicleId }: { vehicleId: string }) {
                   <YAxis
                     tick={{ fontSize: 11, fill: '#64748b' }}
                     width={48}
-                    tickFormatter={(value) => EUR.format(value).replace(/\s/g, '')}
+                    tickFormatter={(value) => formatAmount(value, currency, i18n.language).replace(/\s/g, '')}
                   />
-                  <Tooltip formatter={(value: number) => EUR.format(value)} />
+                  <Tooltip formatter={(value: number) => formatAmount(value, currency, i18n.language)} />
                   <Legend />
                   <Bar dataKey="fuelEur" stackId="costs" fill={COLORS.fuel} name={t('vehicleDetail.costsFuel')} />
                   {!serviceUnavailable ? (

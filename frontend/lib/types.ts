@@ -588,6 +588,89 @@ export interface FuelReceiptReviewDetail {
   updatedAt: string;
 }
 
+/**
+ * Maliyet dashboard'u (Faz 8).
+ *
+ * Kaynak: backend/src/dashboard/cost-dashboard.service.ts
+ * TUTARLAR STRING: muhasebe tablosunun gercek kaynagi budur. Grafik adaptoru
+ * yalnizca GORSELLESTIRME icin dogrulanmis finite number'a cevirir.
+ */
+export interface MetricComparison {
+  current: string;
+  previous: string;
+  absoluteChange: string;
+  /** Onceki donem sifirsa null — sahte yuzde YOK. */
+  percentChange: string | null;
+}
+
+export interface CostDashboardMonthPoint {
+  bucket: string;
+  label: string;
+  fuel: string;
+  service: string;
+  fines: string;
+  total: string;
+  revenue: string | null;
+  distanceKm: string | null;
+  costPerKm: string | null;
+}
+
+export interface CostDashboardVehicleRow {
+  vehicleId: string;
+  plateNumber: string;
+  displayName: string | null;
+  fuel: string;
+  service: string;
+  fines: string;
+  total: string;
+  revenue: string | null;
+  margin: string | null;
+  distanceKm: string | null;
+  costPerKm: string | null;
+  previousTotal: string;
+  changePercent: string | null;
+  /** 'no_distance' | 'no_costs' | 'no_revenue' */
+  dataQuality: string[];
+}
+
+export interface CostDashboardResponse {
+  baseCurrency: string;
+  period: { from: string; to: string; timezone: string };
+  comparisonPeriod: { from: string; to: string };
+  summary: {
+    totalCost: MetricComparison;
+    fuelCost: MetricComparison;
+    serviceCost: MetricComparison;
+    fineCost: MetricComparison;
+    revenue: MetricComparison | null;
+    margin: MetricComparison | null;
+    costPerKm: MetricComparison | null;
+    distanceKm: MetricComparison | null;
+    /** Toplam maliyete DAHIL DEGIL — yalnizca adet. */
+    pendingReceiptCount: number;
+  };
+  monthlySeries: CostDashboardMonthPoint[];
+  composition: { fuel: string; service: string; fines: string; total: string };
+  vehicleRanking: CostDashboardVehicleRow[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  unconvertedByCurrency: Array<{ currency: string; fuelAmount: string; entryCount: number }>;
+  dataQuality: {
+    vehiclesWithoutDistance: number;
+    vehiclesWithoutCosts: number;
+    excludedUnconvertedEntries: number;
+    notes: string[];
+  };
+}
+
+/** GET/PUT /tenant/settings/currency */
+export interface TenantCurrencySettings {
+  baseCurrency: string;
+  supportedCurrencies: string[];
+  changeable: boolean;
+  lockedReason: 'has_monetary_records' | null;
+  monetaryRecordCounts: { serviceRecords: number; fines: number; fuelEntries: number };
+}
+
 export interface FleetFuelEntry {
   id: string;
   vehicleId: string;

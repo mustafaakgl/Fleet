@@ -5,13 +5,17 @@ import { DriverBlockGuard } from '../common/guards/driver-block.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { FINANCIAL_ROLES, OPERATIONAL_ROLES } from '../common/utils/permissions';
+import { CostDashboardService } from './cost-dashboard.service';
 import { DashboardService } from './dashboard.service';
+import { CostDashboardQueryDto } from './dto/cost-dashboard.query';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)
 export class DashboardController {
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(private readonly dashboardService: DashboardService,
+    private readonly costDashboard: CostDashboardService,
+  ) {}
 
   @Get()
   getDashboard(@Query('date') date?: string, @CurrentUser('role') role?: string) {
@@ -35,6 +39,20 @@ export class DashboardController {
     @CurrentUser('role') role?: string,
   ) {
     return this.dashboardService.getRevenueByCompany(from, to, role);
+  }
+
+  /**
+   * Arac maliyeti dashboard'u (Faz 8).
+   *
+   * `vehicle-costs` ucu KORUNUYOR — mevcut CSV ve tablo ona bagli. Bu uc ayni
+   * canonical kaynaklardan TUREYEN karsilastirmali gorunumu doner; ayni veriyi
+   * iki yerde HESAPLAMIYOR, ikisi de CostDashboardService/DashboardService
+   * uzerinden ayni kurallari kullaniyor.
+   */
+  @Get('cost-dashboard')
+  @Roles(...FINANCIAL_ROLES)
+  getCostDashboard(@Query() query: CostDashboardQueryDto) {
+    return this.costDashboard.getCostDashboard(query);
   }
 
   @Get('vehicle-costs')
