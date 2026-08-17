@@ -1,6 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { ensureP0Fixture, type FixtureManifest, type Role } from './support/p0-fixture';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
@@ -19,12 +18,6 @@ const BACKEND_ROOT = path.resolve(E2E_ROOT, '../../backend');
 const FIXTURE_PATH = path.resolve(E2E_ROOT, '.auth/p0-fixture.json');
 const API_BASE_URL = process.env.API_BASE_URL?.trim() || 'http://127.0.0.1:3000/api/v1';
 
-type Role = 'admin' | 'boss' | 'accounting' | 'office' | 'driver';
-type FixtureManifest = {
-  tenantA: { tenantId: string; users: Record<Role, { id: string; email: string; role: Role }> };
-  tenantB?: { tenantId: string; users: Record<Role, { id: string; email: string; role: Role }> };
-  accessTokens: Record<string, Record<Role, string>>;
-};
 
 function token(fixture: FixtureManifest, role: Role, tenant: 'tenantA' | 'tenantB' = 'tenantA') {
   const scope = fixture[tenant];
@@ -64,18 +57,9 @@ test.describe.serial('Tankbeleg-Stornierung', () => {
   let adminToken: string;
 
   test.beforeAll(() => {
-    /**
-     * Seed AYNI KOSUDA IKINCI KEZ calisirsa tekil kisita takiliyor. Bu bir
-     * hata degil, "zaten kurulu" demek: birden fazla spec dosyasi ayni
-     * fixture'i paylasiyor. Manifest diskte durdugu icin onu yeniden
-     * kullaniyoruz — koru koruye tekrar seed etmek yerine.
-     */
-    try {
-      execFileSync('npm', ['run', 'seed:p0-qa'], { cwd: BACKEND_ROOT, env: process.env, stdio: 'pipe' });
-    } catch (error) {
-      if (!existsSync(FIXTURE_PATH)) throw error;
-    }
-    fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as FixtureManifest;
+    // Seed KOSU BASINA BIR KEZ; paralel worker'lar birbirinin verisini
+    // ortadan cekmesin (bkz. tests/support/p0-fixture.ts).
+    fixture = ensureP0Fixture();
     accountingToken = token(fixture, 'accounting')!;
     adminToken = token(fixture, 'admin')!;
   });
