@@ -286,3 +286,98 @@ describe('tenant settings roles', () => {
     assert.equal(writeRoles.includes('accounting'), false);
   });
 });
+
+describe('timezone util', () => {
+  it('accepts any real IANA identifier, not just the suggested list', async () => {
+    const { isSupportedTimeZone, SUGGESTED_TIME_ZONES } = await import('./timezone');
+    // Oneri listesi KISITLAYICI DEGIL.
+    assert.equal(isSupportedTimeZone('Europe/Istanbul'), true);
+    assert.equal(isSupportedTimeZone('America/Sao_Paulo'), true);
+    assert.ok((SUGGESTED_TIME_ZONES as readonly string[]).includes('Europe/Istanbul'));
+  });
+
+  it('rejects an invalid identifier instead of silently defaulting', async () => {
+    const { isSupportedTimeZone, normalizeTimeZone } = await import('./timezone');
+    // Kaydedilirse her rapor sorgusu patlar ya da sessizce varsayilana duser.
+    assert.equal(isSupportedTimeZone('Mars/Olympus'), false);
+    assert.equal(isSupportedTimeZone('Berlin'), false);
+    assert.equal(normalizeTimeZone('Mars/Olympus'), null);
+    assert.equal(normalizeTimeZone(''), null);
+    assert.equal(normalizeTimeZone(null), null);
+  });
+
+  it('falls back to the documented default for a broken stored value', async () => {
+    const { resolveTimeZone, DEFAULT_TIME_ZONE } = await import('./timezone');
+    // Bozuk veri uygulamayi COKERTMEZ.
+    assert.equal(resolveTimeZone('Mars/Olympus'), DEFAULT_TIME_ZONE);
+    assert.equal(resolveTimeZone(null), DEFAULT_TIME_ZONE);
+    assert.equal(resolveTimeZone('Europe/Istanbul'), 'Europe/Istanbul');
+  });
+});
+
+describe('TenantSettingsService — timezone', () => {
+  function buildTz(timezone = 'Europe/Berlin', counts = { serviceRecords: 0, fines: 0, fuelEntries: 0 }) {
+    const tenant = { baseCurrency: 'EUR', timezone };
+    const audits: Array<Record<string, unknown>> = [];
+    const prisma = {
+      tenant: {
+        findFirst: async () => tenant,
+        updateMany: async (args: { data: Record<string, string> }) => {
+          Object.assign(tenant, args.data);
+          return { count: 1 };
+        },
+      },
+      serviceRecord: { count: async () => counts.serviceRecords },
+      fine: { count: async () => counts.fines },
+      fleetFuelEntry: { count: async () => counts.fuelEntries },
+    };
+    const audit = { logAction: async (p: Record<string, unknown>) => { audits.push(p); return {}; } };
+    return { service: new TenantSettingsService(prisma as never, audit as never), tenant, audits };
+  }
+
+  const run = <T>(fn: () => Promise<T>) => {
+    const { TenantContext } = require('../../tenant/tenant-context') as {
+      TenantContext: { run: (id: string, cb: () => Promise<T>) => Promise<T> };
+    };
+    return TenantContext.run('tenant-a', fn);
+  };
+
+  it('reports Europe/Berlin for an existing tenant after the migration', async () => {
+    const { service } = buildTz();
+    const settings = await run(() => service.getCurrencySettings());
+    assert.equal(settings.timezone, 'Europe/Berlin');
+  });
+
+  it('switches a Turkish tenant to Europe/Istanbul', async () => {
+    const { service, tenant, audits } = buildTz();
+    const settings = await run(() => service.setTimezone('user-admin', 'Europe/Istanbul'));
+    assert.equal(settings.timezone, 'Europe/Istanbul');
+    assert.equal(tenant.timezone, 'Europe/Istanbul');
+    assert.ok(audits.some((a) => a.action === 'tenant.timezone_changed'));
+  });
+
+  it('is NOT locked by monetary records, unlike the currency', async () => {
+    // Zaman dilimi hicbir TUTARI degistirmez; kilitlemek yanlis bolgeyle
+    // acilmis bir kiracinin dogru raporu hic gorememesi olurdu.
+    const { service, tenant } = buildTz('Europe/Berlin', {
+      serviceRecords: 5,
+      fines: 3,
+      fuelEntries: 9,
+    });
+    const settings = await run(() => service.setTimezone('user-admin', 'Europe/Istanbul'));
+    assert.equal(settings.timezone, 'Europe/Istanbul');
+    assert.equal(tenant.timezone, 'Europe/Istanbul');
+  });
+
+  it('refuses an invalid identifier', async () => {
+    const { service, tenant } = buildTz();
+    await assert.rejects(run(() => service.setTimezone('user-admin', 'Mars/Olympus')));
+    assert.equal(tenant.timezone, 'Europe/Berlin');
+  });
+
+  it('treats a no-op write as no change', async () => {
+    const { service, audits } = buildTz();
+    await run(() => service.setTimezone('user-admin', 'Europe/Berlin'));
+    assert.equal(audits.length, 0);
+  });
+});

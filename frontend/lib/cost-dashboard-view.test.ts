@@ -9,7 +9,15 @@ import {
   toChartNumber,
   toComposition,
   toMonthlyChartData,
+  toTrendSeries,
   trendDirection,
+  buildCostDashboardCsv,
+  costDashboardCsvName,
+  escapeCsvCell,
+  formatCoveragePercent,
+  formatTrendValue,
+  isCoverageLow,
+  isTrendMetricAvailable,
 } from './cost-dashboard-view';
 import type { CostDashboardResponse } from './types';
 
@@ -201,5 +209,137 @@ describe('error mapping', () => {
 
   it('falls back to a generic message for an unknown code', () => {
     expect(costDashboardErrorKey('brand_new_code')).toBe('costs.dashboard.errors.generic');
+  });
+});
+
+describe('trend serisi', () => {
+  const series = [
+    { bucket: '2026-07', label: '2026-07', fuel: '100.00', service: '50.00', fines: '10.00', total: '160.00', revenue: '900.00', distanceKm: '2000', costPerKm: '0.080' },
+    { bucket: '2026-08', label: '2026-08', fuel: '120.00', service: '0.00', fines: '0.00', total: '120.00', revenue: null, distanceKm: null, costPerKm: null },
+  ];
+
+  it('secilen olcutun degerlerini dondurur', () => {
+    expect(toTrendSeries(series, 'fuel')).toEqual([
+      { bucket: '2026-07', value: 100 },
+      { bucket: '2026-08', value: 120 },
+    ]);
+  });
+
+  it('maliyet/km olmayan ayi SIFIRA cevirmez', () => {
+    // Sifir "bedava" demek olurdu; eksik veri kendi anlamini korumali.
+    expect(toTrendSeries(series, 'costPerKm')[1]).toEqual({ bucket: '2026-08', value: null });
+  });
+
+  it('para olcutlerinde eksik ay sifir sayilir', () => {
+    expect(toTrendSeries(series, 'fines')[1].value).toBe(0);
+  });
+
+  it('mesafe verisi hic yoksa maliyet/km secilemez', () => {
+    expect(isTrendMetricAvailable('costPerKm', [series[1]])).toBe(false);
+  });
+
+  it('tek bir ayda bile veri varsa maliyet/km secilebilir', () => {
+    expect(isTrendMetricAvailable('costPerKm', series)).toBe(true);
+  });
+
+  it('para olcutleri her zaman secilebilir', () => {
+    expect(isTrendMetricAvailable('total', [])).toBe(true);
+  });
+
+  it('bos degeri tire olarak bicimler', () => {
+    expect(formatTrendValue(null, 'costPerKm', 'EUR', 'de-DE')).toBe('—');
+  });
+
+  it('maliyet/km degerini km ekiyle bicimler', () => {
+    expect(formatTrendValue(0.08, 'costPerKm', 'EUR', 'de-DE')).toContain('/km');
+  });
+});
+
+describe('maliyet/km kapsami', () => {
+  it('esigin altinda uyari ister', () => {
+    expect(isCoverageLow('61.00')).toBe(true);
+  });
+
+  it('esigin ustunde uyari istemez', () => {
+    expect(isCoverageLow('99.00')).toBe(false);
+  });
+
+  it('kapsam bilinmiyorsa uyari UYDURMAZ', () => {
+    expect(isCoverageLow(null)).toBe(false);
+  });
+
+  it('kapsam yuzdesini isaretsiz bicimler', () => {
+    expect(formatCoveragePercent('62.50', 'de-DE')).not.toContain('+');
+  });
+});
+
+describe('CSV disa aktarimi', () => {
+  it('formul karakteriyle baslayan hucreyi etkisizlestirir', () => {
+    // Excel'de `=` ile baslayan hucre CALISTIRILIR.
+    expect(escapeCsvCell('=1+1')).toBe("'=1+1");
+    expect(escapeCsvCell('+49 170')).toBe("'+49 170");
+    expect(escapeCsvCell('-12')).toBe("'-12");
+    expect(escapeCsvCell('@cmd')).toBe("'@cmd");
+  });
+
+  it('virgul ve tirnak iceren hucreyi kacisla sarar', () => {
+    expect(escapeCsvCell('a,b')).toBe('"a,b"');
+    expect(escapeCsvCell('a"b')).toBe('"a""b"');
+  });
+
+  it('basliga para birimi sutunu koyar', () => {
+    const csv = buildCostDashboardCsv(response());
+    expect(csv.split('\n')[0]).toContain('currency');
+  });
+
+  it('tutarlari makine okunabilir decimal olarak yazar', () => {
+    const csv = buildCostDashboardCsv(response());
+    // Locale sembolu ya da bin ayraci YOK.
+    expect(csv).not.toContain('€');
+    expect(csv).toContain('1000.00');
+  });
+
+  it('mesafe verisi yoksa maliyet/km hucresini BOS birakir', () => {
+    const csv = buildCostDashboardCsv(
+      response({
+        vehicleRanking: [
+          {
+            vehicleId: 'v-1',
+            plateNumber: 'DU-AB 123',
+            displayName: null,
+            fuel: '10.00',
+            service: '0.00',
+            fines: '0.00',
+            total: '10.00',
+            revenue: null,
+            margin: null,
+            distanceKm: null,
+            costPerKm: null,
+            previousTotal: '0.00',
+            changePercent: null,
+            dataQuality: ['no_distance'],
+          },
+        ],
+      }),
+    );
+    const row = csv.split('\n')[1].split(',');
+    // `0` yazmak "kilometresi bedava" demek olurdu.
+    expect(row[6]).toBe('');
+  });
+
+  it('donusturulmemis tutarlari AYRI bir bolumde listeler', () => {
+    const csv = buildCostDashboardCsv(
+      response({ unconvertedByCurrency: [{ currency: 'TRY', fuelAmount: '4200.00', entryCount: 2 }] }),
+    );
+    expect(csv).toContain('unconverted_currency');
+    expect(csv).toContain('TRY');
+  });
+
+  it('donusturulmemis tutar yoksa o bolumu hic yazmaz', () => {
+    expect(buildCostDashboardCsv(response())).not.toContain('unconverted_currency');
+  });
+
+  it('dosya adi secili donemi tasir', () => {
+    expect(costDashboardCsvName(response())).toMatch(/^fahrzeugkosten-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/);
   });
 });

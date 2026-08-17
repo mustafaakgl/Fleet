@@ -12,7 +12,14 @@ import { Prisma } from '@prisma/client';
  * 0,30000000000000004'u muhasebe ekranina dusurur.
  */
 
-/** Filonun isletme zaman dilimi — repo genelinde tek deger. */
+/**
+ * Kiracida zaman dilimi cozulemezse kullanilan VARSAYILAN.
+ *
+ * Artik bir SABIT DEGIL, yalnizca yedek: gercek deger `Tenant.timezone`dan
+ * geliyor (bkz. CostDashboardService). Almanya'da baslayan urun icin
+ * varsayilanin Berlin olmasi dogru, ama Istanbul kiracisi kendi ayini
+ * gormeli.
+ */
 export const FLEET_TIME_ZONE = 'Europe/Berlin';
 
 /** Hazir donem secenekleri (ay). */
@@ -225,6 +232,7 @@ export type PeriodError =
 export function resolvePeriod(
   input: { from?: string; to?: string; months?: number },
   now: Date = new Date(),
+  timeZone: string = FLEET_TIME_ZONE,
 ): { ok: true; period: ResolvedPeriod } | { ok: false; error: PeriodError } {
   let to: Date;
   let from: Date;
@@ -241,8 +249,10 @@ export function resolvePeriod(
   } else {
     const months = input.months ?? DEFAULT_PERIOD_MONTHS;
     to = now;
-    const p = zonedParts(now, FLEET_TIME_ZONE);
-    from = zonedMonthStart(p.year, p.month - (months - 1), FLEET_TIME_ZONE);
+    // Donem basi KIRACININ zaman diliminde: sabit bolge kullanmak Istanbul
+    // kiracisinin ay sinirini kaydirirdi.
+    const p = zonedParts(now, timeZone);
+    from = zonedMonthStart(p.year, p.month - (months - 1), timeZone);
   }
 
   // Gelecege sorgu ANLAMSIZ: henuz olmamis bir donemin maliyeti yok ve
@@ -276,6 +286,57 @@ export function resolvePeriod(
  * bir aracin oranlarini esit agirlikla ortalamak, filonun gercek birim
  * maliyetini tamamen carpitir.
  */
+export interface CostPerKmCoverage {
+  includedVehicleCount: number;
+  excludedVehicleCount: number;
+  includedDistanceKm: string;
+  includedCost: string;
+  totalFleetCost: string;
+  /** Oranin filo maliyetinin YUZDE KACINI temsil ettigi. */
+  costCoveragePercent: string | null;
+}
+
+/**
+ * Maliyet/km'nin HANGI VERI KUMESI uzerinden hesaplandigi.
+ *
+ * Bu oran mesafesi olmayan araclarin maliyetini de disarida birakiyor — yani
+ * filonun TAMAMINI temsil etmiyor. Bu ancak ACIKCA soylenirse durustur:
+ * "0,06 EUR/km" rakami, filonun yarisinin disarida kaldigi bir kumeden
+ * geliyorsa yonetimi yanlis bir kesinlige ikna eder.
+ */
+export function costPerKmCoverage(
+  rows: ReadonlyArray<{ total: Prisma.Decimal; distanceKm: Prisma.Decimal | null }>,
+): CostPerKmCoverage {
+  let includedCost = ZERO;
+  let includedKm = ZERO;
+  let totalCost = ZERO;
+  let included = 0;
+  let excluded = 0;
+
+  for (const row of rows) {
+    totalCost = totalCost.plus(row.total);
+    if (row.distanceKm === null || row.distanceKm.lessThanOrEqualTo(0)) {
+      excluded += 1;
+      continue;
+    }
+    included += 1;
+    includedCost = includedCost.plus(row.total);
+    includedKm = includedKm.plus(row.distanceKm);
+  }
+
+  return {
+    includedVehicleCount: included,
+    excludedVehicleCount: excluded,
+    includedDistanceKm: includedKm.toFixed(3),
+    includedCost: money(includedCost),
+    totalFleetCost: money(totalCost),
+    // Filo maliyeti sifirsa yuzde ANLAMSIZ — sahte %100 uretilmiyor.
+    costCoveragePercent: totalCost.isZero()
+      ? null
+      : includedCost.dividedBy(totalCost).times(100).toFixed(1),
+  };
+}
+
 export function fleetCostPerKm(
   rows: ReadonlyArray<{ total: Prisma.Decimal; distanceKm: Prisma.Decimal | null }>,
 ): Prisma.Decimal | null {

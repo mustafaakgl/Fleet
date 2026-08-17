@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Copy, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +39,15 @@ const TABS: Array<{ key: 'pending' | 'approved' | 'rejected' | 'all'; status?: F
  * Rol kontrolu sunucuda (`FINANCIAL_ROLES`); bu bilesenin gizlenmesi guvenlik
  * degil, yalnizca arayuz nezaketidir.
  */
-export function FuelReceiptReviewPanel() {
+/** Dashboard'dan gelen drill-down filtresi. */
+export interface FuelReceiptPanelFilter {
+  vehicleId?: string;
+  plateNumber?: string;
+  from?: string;
+  to?: string;
+}
+
+export function FuelReceiptReviewPanel({ filter }: { filter?: FuelReceiptPanelFilter } = {}) {
   const { t, i18n } = useTranslation();
 
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('pending');
@@ -52,6 +61,16 @@ export function FuelReceiptReviewPanel() {
   /** Eski cevap yenisinin uzerine YAZMAMALI. */
   const seqRef = useRef(0);
 
+  /**
+   * Filtre SUNUCUDA uygulaniyor.
+   *
+   * Sayfalanmis bir listeyi istemcide filtrelemek, "3 fis" yerine "bu sayfada
+   * gorunen 3 fis" demek olurdu — sayfa 2'deki kayitlar sessizce kaybolurdu.
+   */
+  const filterVehicleId = filter?.vehicleId;
+  const filterFrom = filter?.from;
+  const filterTo = filter?.to;
+
   const load = useCallback(
     async (targetPage: number, targetTab: (typeof TABS)[number]['key']) => {
       abortRef.current?.abort();
@@ -64,7 +83,13 @@ export function FuelReceiptReviewPanel() {
       setErrorKey(null);
       try {
         const response = await fuelReceiptReviewApi.list(
-          { status: TABS.find((entry) => entry.key === targetTab)?.status, page: targetPage },
+          {
+            status: TABS.find((entry) => entry.key === targetTab)?.status,
+            page: targetPage,
+            vehicleId: filterVehicleId,
+            from: filterFrom,
+            to: filterTo,
+          },
           controller.signal,
         );
         if (seq !== seqRef.current) return;
@@ -76,13 +101,18 @@ export function FuelReceiptReviewPanel() {
         if (seq === seqRef.current) setLoading(false);
       }
     },
-    [],
+    [filterVehicleId, filterFrom, filterTo],
   );
 
   useEffect(() => {
     void load(page, tab);
     return () => abortRef.current?.abort();
   }, [load, page, tab]);
+
+  // Filtre degisince sayfa 1'e doner: 5. sayfada bos bir liste gostermeyelim.
+  useEffect(() => {
+    setPage(1);
+  }, [filterVehicleId, filterFrom, filterTo]);
 
   const rows = data?.rows ?? [];
 
@@ -94,6 +124,25 @@ export function FuelReceiptReviewPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Filtre GORUNUR: kisitli bir liste, tam liste gibi okunmamali. */}
+      {filterVehicleId ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-sm text-blue-900"
+          data-testid="receipt-filter-banner"
+        >
+          <span>
+            {t('costs.fuelReceipts.filtered', {
+              vehicle: filter?.plateNumber ?? filterVehicleId,
+              from: filterFrom ?? '—',
+              to: filterTo ?? '—',
+            })}
+          </span>
+          <Link className="underline underline-offset-2" href="/costs?tab=receipts">
+            {t('costs.fuelReceipts.clearFilter')}
+          </Link>
+        </div>
+      ) : null}
+
       {/* Kuyrugun iki rakami: kac tane bekliyor ve en eskisi ne kadardir. */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Card>

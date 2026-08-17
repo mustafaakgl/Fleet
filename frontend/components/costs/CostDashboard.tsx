@@ -8,6 +8,8 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -15,7 +17,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowDown, ArrowRight, ArrowUp, Minus } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Download, Minus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,17 +25,26 @@ import { dashboardApi } from '@/lib/api';
 import { extractApiErrorCode } from '@/lib/fuel-station-view';
 import {
   CATEGORY_COLORS,
+  TREND_METRICS,
+  buildCostDashboardCsv,
   buildInsights,
+  costDashboardCsvName,
   changeSentiment,
   costDashboardErrorKey,
   formatCostPerKm,
+  formatCoveragePercent,
   formatMoney,
   formatPercent,
+  formatTrendValue,
+  isCoverageLow,
+  isTrendMetricAvailable,
   toComposition,
   toMonthlyChartData,
+  toTrendSeries,
   toVehicleChartData,
   trendDirection,
   type MetricPolarity,
+  type TrendMetric,
 } from '@/lib/cost-dashboard-view';
 import { cn } from '@/lib/utils';
 import type { CostDashboardResponse, MetricComparison } from '@/lib/types';
@@ -57,7 +68,9 @@ export function CostDashboard() {
 
   const [months, setMonths] = useState<number>(6);
   const [sort, setSort] = useState<(typeof SORTS)[number]>('total');
+  /** TEK canonical secim state'i: bar, tablo, insight ve filtre ayni yeri yazar. */
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>('total');
   const [data, setData] = useState<CostDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -92,6 +105,47 @@ export function CostDashboard() {
     return () => abortRef.current?.abort();
   }, [load]);
 
+  /**
+   * Secili aracin AY AY serisi.
+   *
+   * Ayri bir istek, cunku ana cevaptaki `monthlySeries` FILONUN tamamina ait.
+   * Arac kirilimini istemcide uydurmak yerine ayni uctan `vehicleId` ile
+   * istiyoruz — hesap TEK yerde kaliyor ve toplamlar birbirini tutuyor.
+   */
+  const [trend, setTrend] = useState<CostDashboardResponse['monthlySeries']>([]);
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendErrorKey, setTrendErrorKey] = useState<string | null>(null);
+  const trendAbortRef = useRef<AbortController | null>(null);
+  const trendSeqRef = useRef(0);
+
+  const loadTrend = useCallback(
+    async (vehicleId: string) => {
+      trendAbortRef.current?.abort();
+      const controller = new AbortController();
+      trendAbortRef.current = controller;
+      const seq = trendSeqRef.current + 1;
+      trendSeqRef.current = seq;
+
+      setTrendLoading(true);
+      setTrendErrorKey(null);
+      try {
+        const response = await dashboardApi.getCostDashboard(
+          { months, vehicleId, pageSize: 1 },
+          controller.signal,
+        );
+        // Hizli arac degistirmede ESKI cevap yenisini EZMEZ.
+        if (seq !== trendSeqRef.current) return;
+        setTrend(response.monthlySeries);
+      } catch (caught) {
+        if (seq !== trendSeqRef.current || controller.signal.aborted) return;
+        setTrendErrorKey(costDashboardErrorKey(extractApiErrorCode(caught)));
+      } finally {
+        if (seq === trendSeqRef.current) setTrendLoading(false);
+      }
+    },
+    [months],
+  );
+
   const currency = data?.baseCurrency ?? 'EUR';
   const locale = i18n.language;
 
@@ -115,6 +169,29 @@ export function CostDashboard() {
       null
     );
   }, [data, selectedVehicleId]);
+
+  const selectedId = selected?.vehicleId ?? null;
+  useEffect(() => {
+    if (!selectedId) {
+      setTrend([]);
+      return;
+    }
+    void loadTrend(selectedId);
+    return () => trendAbortRef.current?.abort();
+  }, [selectedId, loadTrend]);
+
+  const trendData = useMemo(() => toTrendSeries(trend, trendMetric), [trend, trendMetric]);
+  /**
+   * Mesafe verisi olmayan aracta `costPerKm` SECILEMEZ.
+   * Secili haldeyken veri kaybolursa toplama geri duseriz — kullanici bos bir
+   * grafige bakip "bozuk" sonucuna varmasin.
+   */
+  const perKmAvailable = isTrendMetricAvailable('costPerKm', trend);
+  useEffect(() => {
+    if (trendMetric === 'costPerKm' && trend.length > 0 && !perKmAvailable) {
+      setTrendMetric('total');
+    }
+  }, [trendMetric, perKmAvailable, trend.length]);
 
   if (loading && !data) {
     return (
@@ -143,6 +220,10 @@ export function CostDashboard() {
   }
 
   if (!data) return null;
+
+  // Drill-down baglantilarinin tasidigi donem — GUN hassasiyeti yeterli.
+  const periodFrom = data.period.from.slice(0, 10);
+  const periodTo = data.period.to.slice(0, 10);
 
   const kpis: Array<{ key: string; metric: MetricComparison | null; polarity: MetricPolarity }> = [
     { key: 'totalCost', metric: data.summary.totalCost, polarity: 'cost' },
@@ -205,6 +286,23 @@ export function CostDashboard() {
                 </span>
               )}
             </p>
+            {/* HANGI araclar uzerinden hesaplandigi ACIKCA yaziyor. */}
+            <p className="text-xs text-muted-foreground" data-testid="coverage-note">
+              {t('costs.dashboard.coverage.note', {
+                included: data.costPerKmCoverage.includedVehicleCount,
+                excluded: data.costPerKmCoverage.excludedVehicleCount,
+              })}
+            </p>
+            {isCoverageLow(data.costPerKmCoverage.costCoveragePercent) ? (
+              <p
+                className="mt-1 rounded border border-amber-300 bg-amber-50 p-1.5 text-xs text-amber-900"
+                data-testid="coverage-warning"
+              >
+                {t('costs.dashboard.coverage.warning', {
+                  percent: formatCoveragePercent(data.costPerKmCoverage.costCoveragePercent, locale),
+                })}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -406,6 +504,159 @@ export function CostDashboard() {
         </Card>
       </div>
 
+      {/* Arac tablosu — grafikle AYNI secim state'ini paylasiyor. */}
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
+          <CardTitle className="text-base">{t('costs.dashboard.table.title')}</CardTitle>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="cost-dashboard-export"
+            onClick={() => downloadDashboardCsv(data)}
+          >
+            <Download className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+            {t('costs.dashboard.table.export')}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {/* Genis tablo YATAY kayiyor; sayfanin kendisi kaymiyor. */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[52rem] text-sm" data-testid="vehicle-table">
+              <caption className="sr-only">{t('costs.dashboard.table.caption')}</caption>
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th scope="col" className="py-2 pr-3">{t('costs.dashboard.table.plate')}</th>
+                  <th scope="col" className="py-2 pr-3">{t('costs.dashboard.table.name')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.table.distance')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.category.fuel')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.category.service')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.category.fines')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.totalCost')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.costPerKm')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.revenue')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.margin')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.table.change')}</th>
+                  <th scope="col" className="py-2 pr-3">{t('costs.dashboard.table.drilldown')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.vehicleRanking.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} className="py-6 text-center text-muted-foreground">
+                      {t('costs.dashboard.table.empty')}
+                    </td>
+                  </tr>
+                ) : (
+                  data.vehicleRanking.map((row) => {
+                    const isSelected = selected?.vehicleId === row.vehicleId;
+                    return (
+                      <tr
+                        key={row.vehicleId}
+                        // Satir KLAVYEYLE de secilebiliyor; fare tek yol degil.
+                        tabIndex={0}
+                        role="button"
+                        aria-pressed={isSelected}
+                        data-testid={`vehicle-row-${row.plateNumber}`}
+                        data-selected={isSelected ? 'true' : 'false'}
+                        className={cn(
+                          'cursor-pointer border-b outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          isSelected && 'bg-accent',
+                        )}
+                        onClick={() => setSelectedVehicleId(row.vehicleId)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedVehicleId(row.vehicleId);
+                          }
+                        }}
+                      >
+                        <th scope="row" className="py-2 pr-3 text-left font-medium">
+                          {row.plateNumber}
+                        </th>
+                        <td className="max-w-[10rem] truncate py-2 pr-3 text-muted-foreground" title={row.displayName ?? undefined}>
+                          {row.displayName ?? '—'}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {row.distanceKm === null
+                            ? t('costs.dashboard.noDistance')
+                            : `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(
+                                Number(row.distanceKm),
+                              )} km`}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatMoney(row.fuel, currency, locale)}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatMoney(row.service, currency, locale)}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatMoney(row.fines, currency, locale)}</td>
+                        <td className="py-2 pr-3 text-right font-semibold tabular-nums">
+                          {formatMoney(row.total, currency, locale)}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {/* Mesafe yoksa `0` DEGIL, sebebi yaziyor. */}
+                          {formatCostPerKm(row.costPerKm, currency, locale) ?? (
+                            <span className="text-xs text-muted-foreground">
+                              {t('costs.dashboard.noDistance')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {row.revenue === null ? '—' : formatMoney(row.revenue, currency, locale)}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {row.margin === null ? '—' : formatMoney(row.margin, currency, locale)}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {/* Onceki donem sifirsa yuzde UYDURULMUYOR. */}
+                          {formatPercent(row.changePercent, locale) ?? (
+                            <span className="text-xs text-muted-foreground">
+                              {t('costs.dashboard.noPreviousData')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {/* Donem parametreleri KORUNUYOR: acilan liste ayni araligi gosterir. */}
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            <Link className="underline underline-offset-2" href={`/vehicles/${row.vehicleId}`}>
+                              {t('costs.dashboard.table.linkVehicle')}
+                            </Link>
+                            <Link
+                              className="underline underline-offset-2"
+                              href={`/costs?tab=receipts&vehicleId=${encodeURIComponent(row.vehicleId)}&from=${periodFrom}&to=${periodTo}`}
+                            >
+                              {t('costs.dashboard.table.linkReceipts')}
+                            </Link>
+                            <Link
+                              className="underline underline-offset-2"
+                              href={`/service-history?vehicle_id=${encodeURIComponent(row.vehicleId)}&from=${periodFrom}&to=${periodTo}`}
+                            >
+                              {t('costs.dashboard.table.linkService')}
+                            </Link>
+                            <Link
+                              className="underline underline-offset-2"
+                              href={`/fines?vehicle_id=${encodeURIComponent(row.vehicleId)}&from=${periodFrom}&to=${periodTo}`}
+                            >
+                              {t('costs.dashboard.table.linkFines')}
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t('costs.dashboard.table.pagination', {
+              shown: data.vehicleRanking.length,
+              total: data.pagination.total,
+            })}
+            {/* Yatay kaydirma GIZLI bir ozellik olmamali. */}
+            {' '}
+            {t('costs.dashboard.table.scrollHint')}
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Donusturulmemis tutarlar — TOPLAMA KATILMADI. */}
       {data.unconvertedByCurrency.length > 0 ? (
         <p
@@ -447,6 +698,115 @@ export function CostDashboard() {
                 }
               />
             </dl>
+
+            {/* Olcut secici — TEK olcut, TEK y ekseni. */}
+            <div
+              className="flex flex-wrap gap-1"
+              role="group"
+              aria-label={t('costs.dashboard.trend.metricLabel')}
+              data-testid="trend-metric-selector"
+            >
+              {TREND_METRICS.map((option) => {
+                const available = option === 'costPerKm' ? perKmAvailable : true;
+                return (
+                  <Button
+                    key={option}
+                    type="button"
+                    size="sm"
+                    variant={option === trendMetric ? 'default' : 'outline'}
+                    aria-pressed={option === trendMetric}
+                    // Sebep GIZLENMIYOR: neden secilemedigi yardim metninde.
+                    disabled={!available}
+                    title={available ? undefined : t('costs.dashboard.trend.noDistanceHint')}
+                    data-testid={`trend-metric-${option}`}
+                    onClick={() => setTrendMetric(option)}
+                  >
+                    {t(`costs.dashboard.trend.metric.${option}`)}
+                  </Button>
+                );
+              })}
+            </div>
+            {!perKmAvailable && trend.length > 0 ? (
+              <p className="text-xs text-muted-foreground" data-testid="trend-nodistance-hint">
+                {t('costs.dashboard.trend.noDistanceHint')}
+              </p>
+            ) : null}
+
+            {trendErrorKey ? (
+              <div className="space-y-2" data-testid="trend-error">
+                <p role="alert" className="text-sm">{t(trendErrorKey)}</p>
+                <Button type="button" size="sm" variant="outline" onClick={() => void loadTrend(selected.vehicleId)}>
+                  {t('common.retry')}
+                </Button>
+              </div>
+            ) : trendLoading && trend.length === 0 ? (
+              <div className="h-56 animate-pulse rounded-lg bg-muted" data-testid="trend-loading" />
+            ) : (
+              <div
+                className="h-56"
+                role="img"
+                aria-label={t('costs.dashboard.trend.title', { plate: selected.plateNumber })}
+                data-testid="trend-chart"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
+                    {/* TEK eksen: para ile EUR/km ayni eksene sikistirilMIYOR. */}
+                    <YAxis tick={{ fontSize: 11 }} width={70} />
+                    <Tooltip
+                      formatter={(value: number) => [
+                        formatTrendValue(value, trendMetric, currency, locale),
+                        t(`costs.dashboard.trend.metric.${trendMetric}`),
+                      ]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke={CATEGORY_COLORS.fuel}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      // Veri olmayan ay 0'a DUSURULMEZ: cizgide bosluk kalir.
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Ayni seri METIN olarak — ekran okuyucu ve yazdirma icin. */}
+            <table className="w-full text-xs" data-testid="trend-table">
+              <caption className="sr-only">
+                {t('costs.dashboard.trend.title', { plate: selected.plateNumber })}
+              </caption>
+              <thead>
+                <tr className="text-left text-muted-foreground">
+                  <th scope="col">{t('costs.dashboard.month')}</th>
+                  <th scope="col">{t(`costs.dashboard.trend.metric.${trendMetric}`)}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trendData.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="py-2 text-muted-foreground">
+                      {t('costs.dashboard.trend.empty')}
+                    </td>
+                  </tr>
+                ) : (
+                  trendData.map((point) => (
+                    <tr key={point.bucket}>
+                      <td>{point.bucket}</td>
+                      <td className="font-medium">
+                        {/* Bos ay GORUNUR kaliyor — satir atlanMIYOR. */}
+                        {formatTrendValue(point.value, trendMetric, currency, locale)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+
             <Button asChild variant="outline" size="sm">
               <Link href={`/vehicles/${selected.vehicleId}`}>
                 {t('costs.dashboard.openVehicle')}
@@ -458,6 +818,25 @@ export function CostDashboard() {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Dashboard CSV'si indirilir.
+ *
+ * EKRANDAKI VERININ AYNISI: ayri bir istek atilmiyor, dolayisiyla export
+ * secili donemi ve kiracinin temel para birimini birebir tasiyor.
+ */
+function downloadDashboardCsv(data: CostDashboardResponse) {
+  // BOM: Excel UTF-8'i dogru okusun.
+  const blob = new Blob([`\uFEFF${buildCostDashboardCsv(data)}`], {
+    type: 'text/csv;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = costDashboardCsvName(data);
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

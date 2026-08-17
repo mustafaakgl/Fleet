@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { SettingsToggle } from '@/components/settings/SettingsToggle';
+import { TenantFinanceSettingsCard } from '@/components/settings/TenantFinanceSettingsCard';
 import { billingApi, onboardingApi, type BillingStatusResponse, type TenantProfile } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import {
@@ -527,6 +528,10 @@ export function GeneralSettingsPage() {
         </div>
       </SettingsCard>
 
+      {/* Raporlarin DAYANDIGI ayarlar — asagidaki bolgesel tercihler yalnizca
+          bu tarayicidaki gorunumu etkiler. */}
+      <TenantFinanceSettingsCard />
+
       <SettingsCard title={t('settings.general.regionalSection')}>
         <div>
           <Label htmlFor="currency">{t('settings.general.currency')}</Label>
@@ -542,6 +547,7 @@ export function GeneralSettingsPage() {
             <option value="GBP">{t('settings.currencies.gbp')}</option>
             <option value="TRY">{t('settings.currencies.try')}</option>
           </Select>
+          <FieldHint>{t('settings.general.currencyDisplayHint')}</FieldHint>
         </div>
 
         <div>

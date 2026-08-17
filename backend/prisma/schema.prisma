@@ -989,6 +989,16 @@ model Tenant {
   /// yeni pazar icin migration gerektiren olu bir liste uretirdi. Dogrulama
   /// common/utils/currency uzerinden yapiliyor.
   baseCurrency String       @default("EUR")
+  /// Kiracinin isletme zaman dilimi (IANA kimligi).
+  ///
+  /// Rapor AY SINIRLARI buna gore hesaplanir: 31 Temmuz 23:30 UTC kaydi
+  /// Berlin'de 1 Agustos, Istanbul'da 2 Agustos'tur. Sabit `Europe/Berlin`
+  /// kullanmak Turkiye kiracisinin aylik raporunu kaydirirdi.
+  ///
+  /// Prisma enum DEGIL: IANA veritabani yuzlerce bolge tasiyor ve yilda
+  /// birkac kez degisiyor. Dogrulama common/utils/timezone icinde Intl
+  /// uzerinden calisma aninda yapiliyor.
+  timezone     String       @default("Europe/Berlin")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 

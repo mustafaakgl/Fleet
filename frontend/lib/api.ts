@@ -615,6 +615,15 @@ export const tenantSettingsApi = {
     api
       .put<import('./types').TenantCurrencySettings>('/tenant/settings/currency', { baseCurrency })
       .then((r) => r.data),
+
+  /**
+   * Zaman dilimi. Para biriminden farkli olarak KILITLI DEGIL: hicbir tutari
+   * degistirmez, yalnizca rapor ay sinirlarini kaydirir.
+   */
+  setTimezone: (timezone: string) =>
+    api
+      .put<import('./types').TenantCurrencySettings>('/tenant/settings/timezone', { timezone })
+      .then((r) => r.data),
 };
 
 export const dashboardApi = {

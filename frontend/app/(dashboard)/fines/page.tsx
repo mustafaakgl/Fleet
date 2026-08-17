@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, Scale, WifiOff, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { FineStatusBadge } from '@/components/fines/FineStatusBadge';
@@ -39,7 +40,26 @@ const STATUS_VALUES: FineStatus[] = [
 ];
 
 export default function FinesPage() {
+  // `useSearchParams` istemcide askiya alabilir.
+  return (
+    <Suspense fallback={null}>
+      <FinesPageContent />
+    </Suspense>
+  );
+}
+
+function FinesPageContent() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
+  /**
+   * Maliyet dashboard'undan gelen drill-down.
+   *
+   * Filtre SUNUCUYA gidiyor: listeyi istemcide kirpmak, ozet kartlarindaki
+   * rakamlarla tablonun birbirini tutmamasina yol acardi.
+   */
+  const vehicleIdParam = searchParams.get('vehicle_id');
+  const fromParam = searchParams.get('from');
+  const toParam = searchParams.get('to');
   const [fines, setFines] = useState<Fine[]>([]);
   const [dueSoon, setDueSoon] = useState<Fine[]>([]);
   const [stats, setStats] = useState<FineStats | null>(null);
@@ -57,7 +77,12 @@ export default function FinesPage() {
     setError(null);
     try {
       const [rows, dueRows, statsRow] = await Promise.all([
-        finesApi.list(statusFilter ? { status: statusFilter } : undefined),
+        finesApi.list({
+          status: statusFilter || undefined,
+          vehicle_id: vehicleIdParam ?? undefined,
+          from: fromParam ?? undefined,
+          to: toParam ?? undefined,
+        }),
         finesApi.dueSoon(7),
         finesApi.stats(),
       ]);
@@ -72,7 +97,7 @@ export default function FinesPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, t]);
+  }, [statusFilter, vehicleIdParam, fromParam, toParam, t]);
 
   useEffect(() => {
     void load();
@@ -111,6 +136,24 @@ export default function FinesPage() {
           </Button>
         </div>
       </div>
+
+      {/* Kisitli liste TAM liste gibi okunmamali. */}
+      {vehicleIdParam ? (
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-sm text-blue-900"
+          data-testid="fines-filter-banner"
+        >
+          <span>
+            {t('fines.filteredByVehicle', {
+              from: fromParam ?? '—',
+              to: toParam ?? '—',
+            })}
+          </span>
+          <Link className="underline underline-offset-2" href="/fines">
+            {t('fines.clearFilter')}
+          </Link>
+        </div>
+      ) : null}
 
       {!loading && error ? (
         <EmptyState

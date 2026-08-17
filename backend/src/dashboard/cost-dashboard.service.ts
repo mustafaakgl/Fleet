@@ -6,9 +6,9 @@ import {
   normalizeCurrency,
 } from '../common/utils/currency';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveTimeZone } from '../common/utils/timezone';
 import { TenantContext } from '../tenant/tenant-context';
 import {
-  FLEET_TIME_ZONE,
   ZERO,
   bucketKeyFor,
   compare,
@@ -16,6 +16,7 @@ import {
   costPerKm,
   dataQualityFlags,
   distance,
+  costPerKmCoverage,
   fleetCostPerKm,
   money,
   monthBuckets,
@@ -77,21 +78,24 @@ export class CostDashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getCostDashboard(query: CostDashboardQuery) {
-    const resolved = resolvePeriod(query);
+    const tenantId = TenantContext.getTenantId();
+    const tenant = tenantId
+      ? await this.prisma.tenant.findFirst({
+          where: { id: tenantId },
+          select: { baseCurrency: true, timezone: true },
+        })
+      : null;
+    const baseCurrency = normalizeCurrency(tenant?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
+    // Ay sinirlari KIRACININ zaman diliminde: ayni UTC ani Berlin ve
+    // Istanbul'da farkli aya dusebilir.
+    const timeZone = resolveTimeZone(tenant?.timezone);
+
+    const resolved = resolvePeriod(query, new Date(), timeZone);
     if (!resolved.ok) {
       // Ham hata degil makine-okunur kod: arayuz kullanici metnine cevirir.
       throw new BadRequestException({ code: `cost_dashboard_${resolved.error}` });
     }
     const { from, to, comparisonFrom, comparisonTo } = resolved.period;
-
-    const tenantId = TenantContext.getTenantId();
-    const tenant = tenantId
-      ? await this.prisma.tenant.findFirst({
-          where: { id: tenantId },
-          select: { baseCurrency: true },
-        })
-      : null;
-    const baseCurrency = normalizeCurrency(tenant?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
 
     const vehicleFilter = query.vehicleId ? { vehicleId: query.vehicleId } : {};
 
@@ -101,8 +105,8 @@ export class CostDashboardService {
         select: { id: true, plateNumber: true, internalCode: true, brand: true, model: true },
         orderBy: { plateNumber: 'asc' },
       }),
-      this.collect(from, to, baseCurrency, vehicleFilter),
-      this.collect(comparisonFrom, comparisonTo, baseCurrency, vehicleFilter),
+      this.collect(from, to, baseCurrency, vehicleFilter, timeZone),
+      this.collect(comparisonFrom, comparisonTo, baseCurrency, vehicleFilter, timeZone),
       this.prisma.fleetFuelEntry.count({
         where: {
           ...vehicleFilter,
@@ -114,7 +118,7 @@ export class CostDashboardService {
       }),
     ]);
 
-    const buckets = monthBuckets(from, to);
+    const buckets = monthBuckets(from, to, timeZone);
 
     // --- Aylik seri: BOS AYLAR DA VAR ---
     const monthlySeries = buckets.map((bucket) => {
@@ -209,7 +213,7 @@ export class CostDashboardService {
 
     return {
       baseCurrency,
-      period: { from: from.toISOString(), to: to.toISOString(), timezone: FLEET_TIME_ZONE },
+      period: { from: from.toISOString(), to: to.toISOString(), timezone: timeZone },
       comparisonPeriod: {
         from: comparisonFrom.toISOString(),
         to: comparisonTo.toISOString(),
@@ -265,6 +269,14 @@ export class CostDashboardService {
           entryCount: bucket.count,
         }))
         .sort((left, right) => left.currency.localeCompare(right.currency)),
+      /**
+       * Maliyet/km HANGI kume uzerinden hesaplandi.
+       *
+       * Oran, mesafesi olmayan araclarin maliyetini de disarida birakiyor —
+       * yani filonun tamamini temsil ETMIYOR. Bunu soylemeden "0,06 EUR/km"
+       * yazmak yonetimi yanlis bir kesinlige ikna eder.
+       */
+      costPerKmCoverage: costPerKmCoverage(ranked),
       dataQuality: {
         vehiclesWithoutDistance: ranked.filter((row) => row.dataQuality.includes('no_distance'))
           .length,
@@ -327,6 +339,7 @@ export class CostDashboardService {
     to: Date,
     baseCurrency: string,
     vehicleFilter: { vehicleId?: string },
+    timeZone: string,
   ) {
     const [fuelRows, serviceRows, fineRows, tripRows, assignmentRows] = await Promise.all([
       this.prisma.fleetFuelEntry.findMany({
@@ -392,7 +405,7 @@ export class CostDashboardService {
       amount: Prisma.Decimal,
     ) => {
       const vehicle = bucketFor(byVehicle, vehicleId);
-      const month = bucketFor(byMonth, bucketKeyFor(at));
+      const month = bucketFor(byMonth, bucketKeyFor(at, timeZone));
       vehicle[field] = vehicle[field].plus(amount);
       month[field] = month[field].plus(amount);
       total[field] = total[field].plus(amount);
@@ -437,7 +450,7 @@ export class CostDashboardService {
     for (const row of tripRows) {
       if (row.distanceKm === null) continue;
       const vehicle = bucketFor(byVehicle, row.vehicleId);
-      const month = bucketFor(byMonth, bucketKeyFor(row.startedAt));
+      const month = bucketFor(byMonth, bucketKeyFor(row.startedAt, timeZone));
       vehicle.distanceKm = (vehicle.distanceKm ?? ZERO).plus(row.distanceKm);
       month.distanceKm = (month.distanceKm ?? ZERO).plus(row.distanceKm);
       total.distanceKm = (total.distanceKm ?? ZERO).plus(row.distanceKm);

@@ -267,3 +267,165 @@ export const CATEGORY_COLORS = {
   other: '#94a3b8',
   revenue: '#16a34a',
 } as const;
+
+/** Trend grafiginin gosterebilecegi olcutler. */
+export const TREND_METRICS = ['total', 'fuel', 'service', 'fines', 'costPerKm'] as const;
+export type TrendMetric = (typeof TREND_METRICS)[number];
+
+/**
+ * Bu olcut secilebilir mi.
+ *
+ * `costPerKm` yalnizca SERIDE en az bir gercek deger varsa acik: mesafe verisi
+ * yokken secilebilir birakmak, kullaniciyi bos bir grafige tiklatip "bozuk"
+ * hissi verirdi. Selector pasif ve SEBEBI yazili.
+ */
+export function isTrendMetricAvailable(
+  metric: TrendMetric,
+  series: readonly CostDashboardMonthPoint[],
+): boolean {
+  if (metric !== 'costPerKm') return true;
+  return series.some((point) => toChartNumber(point.costPerKm) !== null);
+}
+
+export interface TrendPoint {
+  bucket: string;
+  value: number;
+}
+
+/**
+ * Trend serisi — TEK olcut, TEK y ekseni.
+ *
+ * Para ile `EUR/km` ayni grafige ciziLMEZ: iki farkli birimi tek eksene
+ * sikistirmak (ya da iki eksen acmak) buyukluk algisini tamamen bozar. Olcut
+ * degisince ayni grafik tek ölçütü gosterir.
+ *
+ * BOS AYLAR KORUNUYOR: cost/km'de degeri olmayan ay 0 DEGIL, seride bosluk
+ * olarak kaliyor — "o ay maliyet sifirdi" ile "o ay mesafe verisi yoktu"
+ * ayni gorunmemeli.
+ */
+export function toTrendSeries(
+  series: readonly CostDashboardMonthPoint[],
+  metric: TrendMetric,
+): Array<{ bucket: string; value: number | null }> {
+  return series.map((point) => ({
+    bucket: point.bucket,
+    value:
+      metric === 'costPerKm'
+        ? toChartNumber(point.costPerKm)
+        : toChartNumber(point[metric]) ?? 0,
+  }));
+}
+
+/** Trend degerinin metin karsiligi — grafik tek bilgi kaynagi degil. */
+export function formatTrendValue(
+  value: number | null,
+  metric: TrendMetric,
+  currency: string,
+  locale: string,
+): string {
+  if (value === null) return '—';
+  return metric === 'costPerKm'
+    ? (formatCostPerKm(String(value), currency, locale) ?? '—')
+    : formatMoney(value, currency, locale);
+}
+
+/**
+ * Maliyet/km kapsam uyarisi gerekli mi.
+ *
+ * Oran filo maliyetinin buyuk bolumunu temsil etmiyorsa kullanici bunu
+ * gormeli: %60 kapsamli bir "0,06 EUR/km" rakami, filonun tamami icin
+ * gecerliymis gibi okunursa yanlis karar uretir.
+ */
+export const COVERAGE_WARNING_THRESHOLD = 80;
+
+/** Kapsam yuzdesi — ISARET GOSTERILMEZ: bu bir degisim degil, bir oran. */
+export function formatCoveragePercent(value: string | null, locale: string): string {
+  const parsed = toChartNumber(value);
+  if (parsed === null) return '—';
+  return new Intl.NumberFormat(locale, {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  }).format(parsed / 100);
+}
+
+export function isCoverageLow(coveragePercent: string | null): boolean {
+  const parsed = toChartNumber(coveragePercent);
+  return parsed !== null && parsed < COVERAGE_WARNING_THRESHOLD;
+}
+
+/** CSV hucresi — formul enjeksiyonuna karsi mevcut repo deseni. */
+export function escapeCsvCell(value: string): string {
+  // `=`, `+`, `-`, `@` ile baslayan hucre Excel'de FORMUL olarak calisir.
+  const guarded = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+}
+
+/**
+ * Dashboard CSV'si.
+ *
+ * DASHBOARD ILE AYNI VERIDEN uretiliyor — ayri bir sorgu ya da ayri bir
+ * hesap yok, yani toplamlar birebir tutuyor. Tutarlar MAKINE OKUNABILIR
+ * decimal olarak yaziliyor; locale sembollu metne cevirmek dosyayi
+ * hesap tablosunda toplanamaz hale getirirdi.
+ *
+ * Donusturulmemis kayitlar AYRI ve etiketli bir bolumde: base toplamin
+ * icine karistirilmiyor.
+ */
+export function buildCostDashboardCsv(data: CostDashboardResponse): string {
+  const header = [
+    'plate_number',
+    'distance_km',
+    'fuel',
+    'service',
+    'fines',
+    'total',
+    'cost_per_km',
+    'revenue',
+    'margin',
+    'change_percent',
+    'data_quality',
+    'currency',
+  ];
+
+  const lines = [header.join(',')];
+  for (const row of data.vehicleRanking) {
+    lines.push(
+      [
+        row.plateNumber,
+        row.distanceKm ?? '',
+        row.fuel,
+        row.service,
+        row.fines,
+        row.total,
+        // Mesafe yoksa BOS — `0` yazmak "bedava" demek olurdu.
+        row.costPerKm ?? '',
+        row.revenue ?? '',
+        row.margin ?? '',
+        row.changePercent ?? '',
+        row.dataQuality.join('|'),
+        data.baseCurrency,
+      ]
+        .map((cell) => escapeCsvCell(String(cell)))
+        .join(','),
+    );
+  }
+
+  if (data.unconvertedByCurrency.length > 0) {
+    lines.push('');
+    lines.push('unconverted_currency,unconverted_fuel_amount,unconverted_entry_count');
+    for (const entry of data.unconvertedByCurrency) {
+      lines.push(
+        [entry.currency, entry.fuelAmount, String(entry.entryCount)]
+          .map((cell) => escapeCsvCell(cell))
+          .join(','),
+      );
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/** CSV dosya adi — secili filtreleri tasiyor. */
+export function costDashboardCsvName(data: CostDashboardResponse): string {
+  return `fahrzeugkosten-${data.period.from.slice(0, 10)}-${data.period.to.slice(0, 10)}.csv`;
+}

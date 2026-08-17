@@ -654,6 +654,15 @@ export interface CostDashboardResponse {
   vehicleRanking: CostDashboardVehicleRow[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
   unconvertedByCurrency: Array<{ currency: string; fuelAmount: string; entryCount: number }>;
+  /** Maliyet/km HANGI arac kumesi uzerinden hesaplandi. */
+  costPerKmCoverage: {
+    includedVehicleCount: number;
+    excludedVehicleCount: number;
+    includedDistanceKm: string;
+    includedCost: string;
+    totalFleetCost: string;
+    costCoveragePercent: string | null;
+  };
   dataQuality: {
     vehiclesWithoutDistance: number;
     vehiclesWithoutCosts: number;
@@ -665,6 +674,9 @@ export interface CostDashboardResponse {
 /** GET/PUT /tenant/settings/currency */
 export interface TenantCurrencySettings {
   baseCurrency: string;
+  /** IANA kimligi — rapor ay sinirlari buna gore. */
+  timezone: string;
+  suggestedTimeZones: string[];
   supportedCurrencies: string[];
   changeable: boolean;
   lockedReason: 'has_monetary_records' | null;

@@ -7,6 +7,7 @@ import {
   bucketKeyFor,
   compare,
   costPerKm,
+  costPerKmCoverage,
   dataQualityFlags,
   fleetCostPerKm,
   monthBuckets,
@@ -277,5 +278,104 @@ describe('data quality flags', () => {
       dataQualityFlags({ distanceKm: d(1000), total: d(500), hasRevenue: true }),
       [],
     );
+  });
+});
+
+describe('tenant timezone', () => {
+  it('puts the same UTC instant in a different month for Berlin and Istanbul', () => {
+    // 31 Temmuz 23:30 UTC: Berlin'de (UTC+2) 1 Agustos 01:30,
+    // Istanbul'da (UTC+3) 1 Agustos 02:30 — ikisi de agustos.
+    // Kritik ornek ayin ILK aninda: 31 Temmuz 21:30 UTC Berlin'de
+    // 31 Temmuz 23:30 (temmuz), Istanbul'da 1 Agustos 00:30 (AGUSTOS).
+    const instant = new Date('2026-07-31T21:30:00Z');
+
+    assert.equal(bucketKeyFor(instant, 'Europe/Berlin'), '2026-07');
+    assert.equal(bucketKeyFor(instant, 'Europe/Istanbul'), '2026-08');
+  });
+
+  it('starts the month at local midnight in each zone', () => {
+    const localHour = (instant: Date, zone: string) =>
+      new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', hour12: false }).format(
+        instant,
+      );
+
+    const berlin = zonedMonthStart(2026, 8, 'Europe/Berlin');
+    const istanbul = zonedMonthStart(2026, 8, 'Europe/Istanbul');
+
+    assert.equal(localHour(berlin, 'Europe/Berlin'), '00');
+    assert.equal(localHour(istanbul, 'Europe/Istanbul'), '00');
+    // Istanbul UTC+3, Berlin yazin UTC+2 -> ay basi bir saat ONCE gelir.
+    assert.equal(berlin.getTime() - istanbul.getTime(), 3_600_000);
+  });
+
+  it('keeps Istanbul month starts correct although it has no DST', () => {
+    // Turkiye 2016'dan beri kalici UTC+3; yaz/kis ofseti DEGISMEZ.
+    const winter = zonedMonthStart(2026, 1, 'Europe/Istanbul');
+    const summer = zonedMonthStart(2026, 7, 'Europe/Istanbul');
+
+    const offset = (instant: Date) => {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Istanbul',
+        hour: '2-digit',
+        hour12: false,
+      }).format(instant);
+      return parts;
+    };
+    assert.equal(offset(winter), '00');
+    assert.equal(offset(summer), '00');
+  });
+
+  it('handles the Berlin DST switch without shifting the month start', () => {
+    // Berlin kisin UTC+1, yazin UTC+2 — ay basi HER IKISINDE de yerel 00:00.
+    const beforeDst = zonedMonthStart(2026, 3, 'Europe/Berlin');
+    const afterDst = zonedMonthStart(2026, 4, 'Europe/Berlin');
+    const localHour = (instant: Date) =>
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Berlin',
+        hour: '2-digit',
+        hour12: false,
+      }).format(instant);
+
+    assert.equal(localHour(beforeDst), '00');
+    assert.equal(localHour(afterDst), '00');
+  });
+
+  it('resolves the default period in the tenant zone', () => {
+    const now = new Date('2026-08-01T00:30:00Z');
+    // Istanbul'da bu an 03:30, 1 Agustos. Berlin'de 02:30, yine 1 Agustos.
+    const istanbul = resolvePeriod({ months: 1 }, now, 'Europe/Istanbul');
+    assert.ok(istanbul.ok);
+    assert.deepEqual(
+      monthBuckets(istanbul.period.from, istanbul.period.to, 'Europe/Istanbul').map((b) => b.key),
+      ['2026-08'],
+    );
+  });
+});
+
+describe('cost per km coverage', () => {
+  it('reports which slice of the fleet the ratio actually covers', () => {
+    const coverage = costPerKmCoverage([
+      { total: d(600), distanceKm: d(10000) },
+      { total: d(400), distanceKm: null },
+    ]);
+
+    assert.equal(coverage.includedVehicleCount, 1);
+    assert.equal(coverage.excludedVehicleCount, 1);
+    assert.equal(coverage.includedCost, '600.00');
+    assert.equal(coverage.totalFleetCost, '1000.00');
+    // Oran filo maliyetinin YALNIZCA %60'ini temsil ediyor — bunu soylemeden
+    // "0,06 EUR/km" yazmak yanlis bir kesinlik verirdi.
+    assert.equal(coverage.costCoveragePercent, '60.0');
+  });
+
+  it('reports full coverage when every vehicle has distance', () => {
+    const coverage = costPerKmCoverage([{ total: d(500), distanceKm: d(1000) }]);
+    assert.equal(coverage.costCoveragePercent, '100.0');
+    assert.equal(coverage.excludedVehicleCount, 0);
+  });
+
+  it('returns null coverage instead of a fake 100% when there are no costs', () => {
+    const coverage = costPerKmCoverage([{ total: d(0), distanceKm: null }]);
+    assert.equal(coverage.costCoveragePercent, null);
   });
 });

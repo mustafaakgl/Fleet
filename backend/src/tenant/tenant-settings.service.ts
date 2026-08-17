@@ -8,10 +8,19 @@ import {
   isSupportedCurrency,
   normalizeCurrency,
 } from '../common/utils/currency';
+import {
+  SUGGESTED_TIME_ZONES,
+  isSupportedTimeZone,
+  normalizeTimeZone,
+  resolveTimeZone,
+} from '../common/utils/timezone';
 import { TenantContext } from './tenant-context';
 
 export interface TenantCurrencySettings {
   baseCurrency: string;
+  /** IANA kimligi — rapor ay sinirlari buna gore hesaplanir. */
+  timezone: string;
+  suggestedTimeZones: readonly string[];
   supportedCurrencies: readonly string[];
   /** false ise degistirilemez; sebebi `lockedReason`da. */
   changeable: boolean;
@@ -66,7 +75,7 @@ export class TenantSettingsService {
     const tenantId = this.requireTenantId();
     const tenant = await this.prisma.tenant.findFirst({
       where: { id: tenantId },
-      select: { baseCurrency: true },
+      select: { baseCurrency: true, timezone: true },
     });
     if (!tenant) {
       throw new NotFoundException({ code: 'tenant_not_found' });
@@ -77,11 +86,53 @@ export class TenantSettingsService {
 
     return {
       baseCurrency: normalizeCurrency(tenant.baseCurrency) ?? DEFAULT_BASE_CURRENCY,
+      timezone: resolveTimeZone(tenant.timezone),
+      suggestedTimeZones: SUGGESTED_TIME_ZONES,
       supportedCurrencies: SUPPORTED_CURRENCIES,
       changeable: !locked,
       lockedReason: locked ? 'has_monetary_records' : null,
       monetaryRecordCounts: counts,
     };
+  }
+
+  /**
+   * Zaman dilimini degistirir.
+   *
+   * PARA BIRIMINDEN FARKLI OLARAK KILITLI DEGIL: zaman dilimi hicbir TUTARI
+   * degistirmez, yalnizca raporun ay sinirlarini kaydirir. Kilitlemek,
+   * yanlis bolgeyle acilmis bir kiracinin dogru raporu hic gorememesi
+   * demek olurdu. Degisimin rapor kovalarini etkiledigi arayuzde yaziyor.
+   */
+  async setTimezone(userId: string, rawTimezone: string): Promise<TenantCurrencySettings> {
+    const tenantId = this.requireTenantId();
+    const timezone = normalizeTimeZone(rawTimezone);
+
+    // Gecersiz IANA kimligi REDDEDILIYOR: kaydedilirse her rapor sorgusu
+    // patlar ya da sessizce varsayilana duser.
+    if (!timezone || !isSupportedTimeZone(timezone)) {
+      throw new BadRequestException({ code: 'unsupported_timezone' });
+    }
+
+    const current = await this.getCurrencySettings();
+    if (current.timezone === timezone) {
+      return current;
+    }
+
+    await this.prisma.tenant.updateMany({
+      where: { id: tenantId },
+      data: { timezone },
+    });
+
+    await this.audit.logAction({
+      actorUserId: userId,
+      action: 'tenant.timezone_changed',
+      entityType: 'Tenant',
+      entityId: tenantId,
+      summary: `Zeitzone ${current.timezone} → ${timezone}`,
+      metadata: { from: current.timezone, to: timezone, occurredAt: new Date().toISOString() },
+    });
+
+    return this.getCurrencySettings();
   }
 
   async setBaseCurrency(userId: string, rawCurrency: string): Promise<TenantCurrencySettings> {

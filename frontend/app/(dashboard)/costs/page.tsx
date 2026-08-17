@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Euro, WifiOff, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -23,18 +24,12 @@ import {
   FLEET_TABLE_ROW_CLICKABLE,
 } from '@/lib/fleet-table';
 import { CostDashboard } from '@/components/costs/CostDashboard';
+import { escapeCsvCell } from '@/lib/cost-dashboard-view';
 import { FuelReceiptReviewPanel } from '@/components/costs/FuelReceiptReviewPanel';
 import type { VehicleCostsResponse } from '@/lib/types';
 import { formatFleetCurrency } from '@/lib/locale-format';
 
 const PERIOD_OPTIONS = [3, 6, 12];
-
-function escapeCsvCell(value: string): string {
-  if (/[",\n\r]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
 
 function downloadCostsCsv(data: VehicleCostsResponse) {
   const headers = [
@@ -48,6 +43,8 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
     'total_cost',
     'revenue',
     'margin',
+    // Tutarlarin CINSI dosyada yaziyor: EUR varsayimi yok.
+    'currency',
   ];
   const lines = [headers.join(',')];
   for (const row of data.vehicles) {
@@ -64,6 +61,7 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
         row.total_cost.toFixed(2),
         row.revenue.toFixed(2),
         row.margin.toFixed(2),
+        data.baseCurrency,
       ]
         .map((cell) => escapeCsvCell(String(cell)))
         .join(','),
@@ -79,14 +77,39 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
 }
 
 export default function CostsPage() {
+  // Suspense: `useSearchParams` istemci tarafinda askiya alabilir.
+  return (
+    <Suspense fallback={null}>
+      <CostsPageContent />
+    </Suspense>
+  );
+}
+
+function CostsPageContent() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const [months, setMonths] = useState(6);
   /**
    * Sekmeler ayni rotada: mevcut `/costs` baglantilari ve yer imleri
    * BOZULMUYOR. Yeni bir rota acip eskisini yonlendirmek, calisan linkleri
    * bir sey kazanmadan riske atardi.
    */
-  const [tab, setTab] = useState<'dashboard' | 'summary' | 'receipts'>('dashboard');
+  const tabParam = searchParams.get('tab');
+  const [tab, setTab] = useState<'dashboard' | 'summary' | 'receipts'>(
+    // Drill-down baglantisi dogrudan dogru sekmeyi aciyor.
+    tabParam === 'receipts' || tabParam === 'summary' ? tabParam : 'dashboard',
+  );
+
+  /** Drill-down filtresi — yalnizca fis sekmesi icin anlamli. */
+  const receiptFilter = useMemo(() => {
+    const vehicleId = searchParams.get('vehicleId');
+    if (!vehicleId) return undefined;
+    return {
+      vehicleId,
+      from: searchParams.get('from') ?? undefined,
+      to: searchParams.get('to') ?? undefined,
+    };
+  }, [searchParams]);
   const [data, setData] = useState<VehicleCostsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +204,7 @@ export default function CostsPage() {
       </div>
 
       {tab === 'dashboard' ? <CostDashboard /> : null}
-      {tab === 'receipts' ? <FuelReceiptReviewPanel /> : null}
+      {tab === 'receipts' ? <FuelReceiptReviewPanel filter={receiptFilter} /> : null}
 
       {tab === 'summary' && !loading && error ? (
         <EmptyState

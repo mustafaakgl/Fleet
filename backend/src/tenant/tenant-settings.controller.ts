@@ -7,6 +7,13 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { ADMIN_ONLY_ROLES, FINANCIAL_ROLES } from '../common/utils/permissions';
 import { TenantSettingsService } from './tenant-settings.service';
 
+export class SetTimezoneDto {
+  /** IANA kimligi. Dogrulama servis katmaninda Intl ile tekrarlaniyor. */
+  @IsString()
+  @Length(1, 64)
+  timezone!: string;
+}
+
 export class SetBaseCurrencyDto {
   /** ISO-4217, uc harf. Dogrulama servis katmaninda da tekrarlaniyor. */
   @IsString()
@@ -46,5 +53,17 @@ export class TenantSettingsController {
   @Roles('admin', 'boss')
   setCurrency(@CurrentUser('id') userId: string, @Body() dto: SetBaseCurrencyDto) {
     return this.settings.setBaseCurrency(userId, dto.baseCurrency);
+  }
+
+  /**
+   * Zaman dilimini degistirir.
+   *
+   * Para biriminden farkli olarak KILITLI DEGIL: hicbir tutari degistirmez,
+   * yalnizca rapor ay sinirlarini kaydirir.
+   */
+  @Put('timezone')
+  @Roles('admin', 'boss')
+  setTimezone(@CurrentUser('id') userId: string, @Body() dto: SetTimezoneDto) {
+    return this.settings.setTimezone(userId, dto.timezone);
   }
 }
