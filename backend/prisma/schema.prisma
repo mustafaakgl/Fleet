@@ -1815,6 +1815,11 @@ model TourStop {
   @@unique([tourId, sequence])
   @@index([tenantId])
   @@index([tourId])
+  /// Tur yurutme ekraninin canonical sorgusu: bir turun ACIK duraklari.
+  /// Indeks 20260808200000_tour_stop_execution ile veritabaninda ZATEN vardi;
+  /// semaya yazilmasi unutulmustu ve bu, her `migrate dev` kosusunun onu
+  /// dusurmeye calismasi anlamina geliyordu.
+  @@index([tourId, status])
   @@index([tenantId, locationId])
   @@index([assignmentId])
 }
@@ -2406,6 +2411,9 @@ model WorkSession {
   @@index([tenantId])
   @@index([driverId, status])
   @@index([driverId, startedAt])
+  /// Acik oturumlarin canliligi. 20260713153000_work_session_reliability_fields
+  /// ile veritabaninda var; semada eksikti.
+  @@index([status, lastSeenAt])
 }
 
 /// Bordro tarafinin tenant ayari.
@@ -4056,6 +4064,10 @@ model TachoInfringement {
   @@index([tenantId, acknowledgedAt, occurredAt])
   @@index([driverId, occurredAt])
   @@index([dddFileId])
+  /// Bordro isaretlemesinin geri sorgusu. Indeks
+  /// 20260717090000_tacho_infringement_escalation_chain ile veritabaninda
+  /// olusturulmustu; semada eksikti.
+  @@index([payrollMarkedById])
   @@map("tacho_infringements")
 }
 
