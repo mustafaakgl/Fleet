@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
@@ -64,7 +64,17 @@ test.describe.serial('Tankbeleg-Stornierung', () => {
   let adminToken: string;
 
   test.beforeAll(() => {
-    execFileSync('npm', ['run', 'seed:p0-qa'], { cwd: BACKEND_ROOT, env: process.env, stdio: 'pipe' });
+    /**
+     * Seed AYNI KOSUDA IKINCI KEZ calisirsa tekil kisita takiliyor. Bu bir
+     * hata degil, "zaten kurulu" demek: birden fazla spec dosyasi ayni
+     * fixture'i paylasiyor. Manifest diskte durdugu icin onu yeniden
+     * kullaniyoruz — koru koruye tekrar seed etmek yerine.
+     */
+    try {
+      execFileSync('npm', ['run', 'seed:p0-qa'], { cwd: BACKEND_ROOT, env: process.env, stdio: 'pipe' });
+    } catch (error) {
+      if (!existsSync(FIXTURE_PATH)) throw error;
+    }
     fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as FixtureManifest;
     accountingToken = token(fixture, 'accounting')!;
     adminToken = token(fixture, 'admin')!;
@@ -118,10 +128,19 @@ test.describe.serial('Tankbeleg-Stornierung', () => {
         receipt: {
           name: `e2e-${Date.now()}.jpg`,
           mimeType: 'image/jpeg',
-          // Kucuk ama GECERLI bir JPEG basligi.
-          buffer: Buffer.from([
-            0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
-            0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+          /**
+           * Kucuk ama GECERLI bir JPEG — her kosuda FARKLI baytlar.
+           *
+           * Sabit baytlar kullanmak testi TEK KULLANIMLIK yapiyordu:
+           * `receiptFileHash` tekilligi (tenant + hash) ikinci kosuda onceki
+           * kosunun ZATEN ONAYLANMIS fisini geri donduruyor ve confirm
+           * `fuel_receipt_not_editable` ile dusuyordu. Gercek bir surucu
+           * fotografi da her seferinde farklidir.
+           */
+          buffer: Buffer.concat([
+            Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
+            Buffer.from(`e2e-${Date.now()}-${Math.random()}`),
+            Buffer.from([0xff, 0xd9]),
           ]),
         },
       },

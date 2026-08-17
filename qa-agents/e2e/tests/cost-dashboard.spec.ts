@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -47,7 +47,17 @@ test.describe.serial('Fahrzeugkosten-Dashboard', () => {
   let fixture: FixtureManifest;
 
   test.beforeAll(() => {
-    execFileSync('npm', ['run', 'seed:p0-qa'], { cwd: BACKEND_ROOT, env: process.env, stdio: 'pipe' });
+    /**
+     * Seed AYNI KOSUDA IKINCI KEZ calisirsa tekil kisita takiliyor. Bu bir
+     * hata degil, "zaten kurulu" demek: birden fazla spec dosyasi ayni
+     * fixture'i paylasiyor. Manifest diskte durdugu icin onu yeniden
+     * kullaniyoruz — koru koruye tekrar seed etmek yerine.
+     */
+    try {
+      execFileSync('npm', ['run', 'seed:p0-qa'], { cwd: BACKEND_ROOT, env: process.env, stdio: 'pipe' });
+    } catch (error) {
+      if (!existsSync(FIXTURE_PATH)) throw error;
+    }
     fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as FixtureManifest;
   });
 

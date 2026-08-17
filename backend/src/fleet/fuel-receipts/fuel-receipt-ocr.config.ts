@@ -1,4 +1,11 @@
-export type FuelReceiptOcrProviderKind = 'mock' | 'disabled';
+export type FuelReceiptOcrProviderKind = 'mock' | 'disabled' | 'azure_document_intelligence';
+
+/** Kabul edilen degerler — hata mesaji ve dogrulama TEK kaynaktan. */
+export const FUEL_RECEIPT_OCR_PROVIDER_KINDS: readonly FuelReceiptOcrProviderKind[] = [
+  'disabled',
+  'mock',
+  'azure_document_intelligence',
+];
 
 /**
  * Varsayilan: KAPALI.
@@ -9,6 +16,10 @@ export type FuelReceiptOcrProviderKind = 'mock' | 'disabled';
  * Rastgele bir ucretli servis secip varsayilan yapmak, kimsenin sozlesme
  * imzalamadigi bir saticiya bagimlilik uretirdi. Bu yuzden varsayilan
  * `disabled`: OCR calismaz, fis yine yuklenir ve form ELLE doldurulur.
+ *
+ * FAZ 10 NOTU: gercek bir saglayici (Azure) eklendi ama VARSAYILAN
+ * DEGISMEDI. Ucretli bir dis servisi varsayilan yapmak, yapilandirmayi hic
+ * gormemis bir kurulumu sessizce faturaya baglardi. Acikca secilmeli.
  */
 export const DEFAULT_FUEL_RECEIPT_OCR_PROVIDER: FuelReceiptOcrProviderKind = 'disabled';
 
@@ -55,7 +66,64 @@ export function resolveFuelReceiptOcrProviderKind(
     return 'disabled';
   }
 
+  if (value === 'azure_document_intelligence') {
+    // Uretimde IZINLI: gercek saglayici. Yapilandirma eksikse adaptor
+    // kurulumu acilista firlatir (bkz. resolveAzureDocumentIntelligenceConfig).
+    return 'azure_document_intelligence';
+  }
+
   throw new Error(
-    `FUEL_RECEIPT_OCR_PROVIDER must be "mock" or "disabled" (received "${raw}").`,
+    `FUEL_RECEIPT_OCR_PROVIDER must be one of ${FUEL_RECEIPT_OCR_PROVIDER_KINDS.join(
+      ', ',
+    )} (received "${raw}").`,
   );
 }
+
+/**
+ * Health ucu icin HASSAS OLMAYAN OCR ozeti.
+ *
+ * Endpoint, anahtar, model kimligi ve operasyon kimligi BILINCLI olarak yok:
+ * health ucu cogu kurulumda kimlik dogrulamasiz erisilebilir ve bir kesif
+ * araci olmamali. Doner deger yalnizca "hangi saglayici, canli mi, ayarli mi"
+ * sorusunu cevaplar.
+ *
+ * Yapilandirma HATALIYSA firlatmaz: health ucunun kendisi, yanlis
+ * yapilandirma yuzunden 500 vermemeli — `configured: false` doner ve bu zaten
+ * aranan sinyaldir.
+ */
+export function describeFuelReceiptOcr(env: NodeJS.ProcessEnv = process.env): {
+  provider: FuelReceiptOcrProviderKind;
+  mode: 'live' | 'mock' | 'disabled';
+  configured: boolean;
+} {
+  let kind: FuelReceiptOcrProviderKind;
+  try {
+    kind = resolveFuelReceiptOcrProviderKind(env.FUEL_RECEIPT_OCR_PROVIDER);
+  } catch {
+    return { provider: 'disabled', mode: 'disabled', configured: false };
+  }
+
+  if (kind === 'mock') {
+    return { provider: 'mock', mode: 'mock', configured: true };
+  }
+  if (kind === 'disabled') {
+    return { provider: 'disabled', mode: 'disabled', configured: false };
+  }
+
+  // Azure: yalnizca "gerekli degiskenler dolu mu" — degerler okunmuyor.
+  const configured = Boolean(
+    env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT?.trim() &&
+      env.AZURE_DOCUMENT_INTELLIGENCE_API_KEY?.trim() &&
+      env.AZURE_DOCUMENT_INTELLIGENCE_REGION?.trim(),
+  );
+  return { provider: 'azure_document_intelligence', mode: 'live', configured };
+}
+
+/**
+ * Iki OCR denemesi arasindaki en kisa sure.
+ *
+ * Her deneme UCRETLI bir dis cagri; dugmeye arka arkaya basmak faturayi
+ * katlamamali. 20 saniye, gercek bir "yeniden dene" niyetini engellemeyecek
+ * kadar kisa, tekrar tiklamayi durduracak kadar uzun.
+ */
+export const OCR_RETRY_COOLDOWN_MS = 20_000;

@@ -311,3 +311,29 @@ Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`
 | **G4** | **Konum için hukuki dayanak "onay"** | Alman iş hukukunda tartışmalı — avukat görüşü gerekir |
 | **G5** | **Karantina akışı test edilmiyor** | Bozuk paket geldiğinde ne olduğu bilinmiyor |
 | **G6** | **Gerçek yük testi yok** | 100+ cihazlı pilotta davranış bilinmiyor |
+
+## Tankbeleg-OCR (Azure Document Intelligence) — Faz 10
+
+OCR **varsayılan olarak kapalı** gelir. Aşağıdakiler tamamlanmadan
+`FUEL_RECEIPT_OCR_PROVIDER=azure_document_intelligence` **açılmamalıdır**.
+
+| # | Kapı | Neden |
+|---|---|---|
+| **O1** | Azure kaynağı gerçekten bir **AB bölgesinde** oluşturuldu | `AZURE_DOCUMENT_INTELLIGENCE_REGION` bir **beyandır, kanıt değil**. Kod bu değere bakarak GDPR uyumluluğunu kanıtlayamaz; kaynağın nerede olduğu Azure portalından **elle** doğrulanmalı. |
+| **O2** | Microsoft ile **DPA** ve alt-işleyen kaydı kontrol edildi | Fiş görüntüsü kişisel veri içerebilir (konum, kart son haneleri, sürücü davranışı). |
+| **O3** | Kiracı sözleşmelerinde **alt-işleyen bildirimi** yapıldı | Yeni bir alt-işleyen ekleniyor. |
+| **O4** | Anahtar **secret manager**'a taşındı, `.env` dosyasında değil | `.env.example` yalnızca boş örnek taşır; gerçek anahtar repoya girmemeli. |
+| **O5** | **Anahtar rotasyonu** prosedürü yazıldı ve bir kez denendi | Azure iki anahtar verir; kesintisiz rotasyon mümkün ama prosedürsüz yapılmaz. |
+| **O6** | **Veri saklama/silme** politikası netleşti | Azure analiz sonrası belgeyi saklamaz, ama bizim `receiptStoredPath` dosyalarımızın saklama süresi ayrıca kararlaştırılmalı. |
+| **O7** | Azure aboneliğinde **maliyet alarmı** kuruldu | Sayfa başına ücret. Kod `pages=1` gönderiyor ve yeniden denemeyi sınırlıyor, ama bütçe alarmı yine de şart. |
+| **O8** | **Gerçek Almanca fişlerle** alan doğruluğu ölçüldü | `prebuilt-receipt` perakende fişi için eğitilmiş **genel** bir modeldir, yakıt fişi için özel değil. Litre/birim fiyat hangi alana düştüğü istasyona göre değişir. |
+| **O9** | **Gerçek Türkçe fişlerle** alan doğruluğu ölçüldü | Model Türkçeyi destekliyor (thermal receipts listesi), ama TR yakıt fişi düzeni ayrıca ölçülmeli. |
+| **O10** | Ölçüm sonucu **yazılı** bir doğruluk beklentisine dönüştü | Sürücülere "otomatik dolacak" demeden önce ne kadarının gerçekten dolduğu bilinmeli. |
+| **O11** | Canlı bağlantı testi çalıştırıldı | `AZURE_DOCUMENT_INTELLIGENCE_LIVE_*` değişkenleriyle; bağlantı ve sözleşme kapısı, doğruluk kapısı değil. |
+
+**Kodun kanıtladığı ve kanıtlamadığı şeyler.** Kod şunları garanti eder:
+anahtar yalnızca yapılandırılmış origin'e gider, yönlendirme takip edilmez,
+ham yanıt ve fiş içeriği loglanmaz, kart bilgisi normalize modele taşınmaz,
+sonsuz polling yoktur, belirsiz ağ hatasında analiz tekrar edilmez.
+Kod şunları **kanıtlamaz**: kaynağın fiziksel konumu, sözleşmesel uyumluluk
+ve alan düzeyinde okuma doğruluğu. Bunlar O1–O10'daki manuel kapılardır.

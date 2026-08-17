@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { isProductionEnv } from '../config/env.validation';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { describeFuelReceiptOcr } from '../fleet/fuel-receipts/fuel-receipt-ocr.config';
 import { ObjectStorageService } from '../storage/object-storage.service';
 
 export type HealthStatus = {
@@ -16,6 +17,17 @@ export type ReadinessStatus = HealthStatus & {
     smtp: 'ok' | 'error' | 'skipped';
     storage: 'ok' | 'error' | 'skipped';
     sentry: 'ok' | 'skipped';
+  };
+  /**
+   * Fis OCR saglayicisinin HASSAS OLMAYAN durumu (Faz 10).
+   *
+   * Endpoint, anahtar ve operasyon kimligi YOK — health ucu bir kesif araci
+   * olmamali.
+   */
+  ocr: {
+    provider: string;
+    mode: 'live' | 'mock' | 'disabled';
+    configured: boolean;
   };
 };
 
@@ -70,6 +82,9 @@ export class HealthService {
       uptimeSeconds: this.uptimeSeconds(),
       timestamp: new Date().toISOString(),
       checks: { database, smtp, storage, sentry },
+      // OCR durumu (Faz 10). HASSAS OLMAYAN: endpoint, anahtar ve operasyon
+      // kimligi BILINCLI olarak yok — health ucu bir kesif araci olmamali.
+      ocr: describeFuelReceiptOcr(),
     };
   }
 

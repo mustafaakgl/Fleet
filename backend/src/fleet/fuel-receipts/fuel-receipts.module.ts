@@ -5,6 +5,8 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
 import { FleetModule } from '../fleet.module';
 import { FuelStationsModule } from '../fuel-stations/fuel-stations.module';
+import { AzureDocumentIntelligenceFuelReceiptOcrProvider } from './azure-document-intelligence-fuel-receipt-ocr.provider';
+import { resolveAzureDocumentIntelligenceConfig } from './azure-document-intelligence.config';
 import { DisabledFuelReceiptOcrProvider } from './disabled-fuel-receipt-ocr.provider';
 import { resolveFuelReceiptOcrProviderKind } from './fuel-receipt-ocr.config';
 import { FUEL_RECEIPT_OCR_PROVIDER } from './fuel-receipt-ocr.types';
@@ -41,8 +43,20 @@ import { MockFuelReceiptOcrProvider } from './mock-fuel-receipt-ocr.provider';
       // baslarken duyulur olmali. resolveFuelReceiptOcrProviderKind uretimde
       // mock secilmisse burada firlatir ve modul kurulumu basarisiz olur.
       provide: FUEL_RECEIPT_OCR_PROVIDER,
-      useFactory: (mock: MockFuelReceiptOcrProvider, disabled: DisabledFuelReceiptOcrProvider) =>
-        resolveFuelReceiptOcrProviderKind() === 'mock' ? mock : disabled,
+      useFactory: (mock: MockFuelReceiptOcrProvider, disabled: DisabledFuelReceiptOcrProvider) => {
+        const kind = resolveFuelReceiptOcrProviderKind();
+        if (kind === 'mock') return mock;
+        if (kind === 'azure_document_intelligence') {
+          // FAIL-FAST: eksik/gecersiz yapilandirma BURADA firlatir ve modul
+          // kurulumu basarisiz olur. Ilk surucu istegini bekleyip orada
+          // sessizce "okunamadi" uretmek, yanlis yapilandirmayi gorunmez
+          // kilardi.
+          return new AzureDocumentIntelligenceFuelReceiptOcrProvider(
+            resolveAzureDocumentIntelligenceConfig(),
+          );
+        }
+        return disabled;
+      },
       inject: [MockFuelReceiptOcrProvider, DisabledFuelReceiptOcrProvider],
     },
     FuelReceiptService,

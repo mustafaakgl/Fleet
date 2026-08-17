@@ -22,6 +22,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FUEL_RECEIPT_UPLOAD_ABSOLUTE_DIR } from '../../storage/local-storage.service';
 import { StorageService } from '../../storage/storage.service';
 import { compatibleProductsForStationFilter } from '../fuel-stations/core/fuel-compatibility.util';
+import { OCR_RETRY_COOLDOWN_MS } from './fuel-receipt-ocr.config';
 import {
   effectiveAccountingStatus,
   type EffectiveAccountingStatus,
@@ -362,6 +363,23 @@ export class FuelReceiptService {
   async analyze(userId: string, receiptId: string): Promise<FuelReceiptView> {
     const owner = await this.resolveOwner(userId);
     const receipt = await this.requireOwnDraft(owner.driverId, receiptId);
+
+    /**
+     * YENIDEN DENEME BEKLEME SURESI (Faz 10).
+     *
+     * Her deneme UCRETLI bir dis cagri. Onceki denemenin uzerinden yeterli
+     * sure gecmediyse yeni cagri BASLATILMIYOR ve mevcut durum donuyor —
+     * hizli hizli dokunulan bir dugme, faturayi katlamamali.
+     *
+     * Hata DEGIL, mevcut durum donuyor: surucu zaten sonucu bekliyor ve
+     * ona teknik bir ret gostermek bir sey kazandirmaz.
+     */
+    if (receipt.ocrProcessedAt) {
+      const sinceLastAttempt = Date.now() - receipt.ocrProcessedAt.getTime();
+      if (sinceLastAttempt < OCR_RETRY_COOLDOWN_MS) {
+        return this.toView(receipt);
+      }
+    }
 
     const claimed = await this.prisma.fleetFuelEntry.updateMany({
       where: {
