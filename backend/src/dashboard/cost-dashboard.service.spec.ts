@@ -27,6 +27,8 @@ interface Seed {
     totalCost: number;
     currency?: string;
     workflowStatus?: FuelEntryWorkflowStatus;
+    /** Faz 9: bu fis ters kayda alindi mi. */
+    reversed?: boolean;
   }>;
   service?: Array<{ vehicleId: string; date: string; costAmount: number; currency?: string }>;
   fines?: Array<{ vehicleId: string; violationAt: string; amount: number; currency?: string }>;
@@ -72,8 +74,18 @@ function build(seed: Seed = {}) {
     fleetFuelEntry: {
       findMany: async (args: { where: Record<string, unknown> }) => {
         count('fuel.findMany');
+        // Taklit, servisin GONDERDIGI `where`i uyguluyor — kendi kuralini
+        // uydurmuyor. Aksi halde "maliyet filtresi ters kaydi disliyor"
+        // testi, servis filtreyi hic gondermese bile gecerdi.
+        const wantsEffective =
+          (args.where as { reversal?: { is?: null } }).reversal?.is === null;
         return (seed.fuel ?? [])
-          .filter((row) => (row.workflowStatus ?? FuelEntryWorkflowStatus.approved) === FuelEntryWorkflowStatus.approved)
+          .filter(
+            (row) =>
+              (row.workflowStatus ?? FuelEntryWorkflowStatus.approved) ===
+              (args.where.workflowStatus ?? FuelEntryWorkflowStatus.approved),
+          )
+          .filter((row) => !(wantsEffective && row.reversed === true))
           .filter((row) => inRange(row.enteredAt, args.where.enteredAt as never))
           .map((row) => ({
             vehicleId: row.vehicleId,
@@ -484,5 +496,123 @@ describe('cost dashboard — currency and revenue', () => {
     // Uydurma sifir gelir GOSTERILMIYOR.
     assert.equal(result.summary.revenue, null);
     assert.equal(result.summary.margin, null);
+  });
+});
+
+describe('cost dashboard — ters kayit (Faz 9)', () => {
+  it('ters kayda alinmis fis toplama GIRMEZ', async () => {
+    const { service } = build({
+      fuel: [
+        { vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 },
+        { vehicleId: 'v1', enteredAt: '2026-06-11T10:00:00Z', totalCost: 400, reversed: true },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.composition.fuel, '100.00');
+    assert.equal(result.summary.totalCost.current, '100.00');
+  });
+
+  it('ters kayit ORIJINAL DONEMIN maliyetini dusurur', async () => {
+    const withReversal = build({
+      fuel: [{ vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 250, reversed: true }],
+    });
+    const withoutReversal = build({
+      fuel: [{ vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 250 }],
+    });
+
+    const reversed = await withReversal.service.getCostDashboard(RANGE);
+    const intact = await withoutReversal.service.getCostDashboard(RANGE);
+
+    const june = (result: typeof intact) =>
+      result.monthlySeries.find((point) => point.bucket === '2026-06')!;
+
+    // Gecmis rapor DUZELTILMIS gosteriyor: tutar kendi ayindan dusuyor.
+    assert.equal(june(intact).fuel, '250.00');
+    assert.equal(june(reversed).fuel, '0.00');
+  });
+
+  it('ters kaydin girildigi ayda SAHTE NEGATIF gider olusmaz', async () => {
+    // Fis mayista alindi, ters kayit agustosta girildi.
+    const { service } = build({
+      fuel: [{ vehicleId: 'v1', enteredAt: '2026-05-10T10:00:00Z', totalCost: 300, reversed: true }],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    for (const point of result.monthlySeries) {
+      assert.ok(
+        Number(point.fuel) >= 0,
+        `${point.bucket} ayinda negatif gider olusmamali: ${point.fuel}`,
+      );
+      assert.ok(Number(point.total) >= 0, `${point.bucket} toplami negatif olmamali`);
+    }
+  });
+
+  it('maliyet/km hesabi ters kaydi DISARIDA birakir', async () => {
+    const { service } = build({
+      fuel: [
+        { vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 },
+        { vehicleId: 'v1', enteredAt: '2026-06-11T10:00:00Z', totalCost: 900, reversed: true },
+      ],
+      trips: [{ vehicleId: 'v1', startedAt: '2026-06-10T10:00:00Z', distanceKm: 1000 }],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    // 100 / 1000 km = 0,100 — geri alinan 900 hesaba KATILMIYOR.
+    assert.equal(result.vehicleRanking[0].costPerKm, '0.1000');
+  });
+
+  it('ters kayit, farkli para birimi davranisini BOZMAZ', async () => {
+    const { service } = build({
+      fuel: [
+        { vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 },
+        { vehicleId: 'v1', enteredAt: '2026-06-11T10:00:00Z', totalCost: 5000, currency: 'TRY' },
+        {
+          vehicleId: 'v1',
+          enteredAt: '2026-06-12T10:00:00Z',
+          totalCost: 7000,
+          currency: 'TRY',
+          reversed: true,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.composition.fuel, '100.00');
+    // Geri alinan TRY fisi donusturulmemisler listesine de GIRMEZ.
+    assert.deepEqual(result.unconvertedByCurrency, [
+      { currency: 'TRY', fuelAmount: '5000.00', entryCount: 1 },
+    ]);
+  });
+
+  it('tutarlar ters kayittan sonra da STRING kalir', async () => {
+    const { service } = build({
+      fuel: [
+        { vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 },
+        { vehicleId: 'v1', enteredAt: '2026-06-11T10:00:00Z', totalCost: 400, reversed: true },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(typeof result.summary.totalCost.current, 'string');
+    assert.equal(typeof result.composition.fuel, 'string');
+    assert.equal(typeof result.vehicleRanking[0].total, 'string');
+  });
+
+  it('ters kayit filtresi arac basina EK SORGU URETMEZ', async () => {
+    const { service, queries } = build({
+      vehicles: Array.from({ length: 12 }, (_, i) => ({ id: `v${i}`, plateNumber: `AA-${i}` })),
+      fuel: Array.from({ length: 12 }, (_, i) => ({
+        vehicleId: `v${i}`,
+        enteredAt: '2026-06-10T10:00:00Z',
+        totalCost: 100,
+        reversed: i % 2 === 0,
+      })),
+    });
+
+    await service.getCostDashboard(RANGE);
+    // Ters kayit iliskisi ayni `where` icinde cozuluyor; satir basina ikinci
+    // bir sorgu atilsaydi bu sayi arac sayisiyla buyurdu.
+    assert.equal(queries.filter((q) => q === 'fuel.findMany').length, 2);
   });
 });

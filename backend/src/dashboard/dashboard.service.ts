@@ -3,6 +3,7 @@ import { AssignmentStatus,
   FuelEntryWorkflowStatus,
 } from '@prisma/client';
 import { maskFinancialFields, type UserRole } from '../common/utils/permissions';
+import { effectiveFuelCostWhere } from '../fleet/fuel-receipts/core/effective-fuel-cost';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenant/tenant-context';
 import {
@@ -1196,10 +1197,7 @@ export class DashboardService {
       //
       // Faz 7.1: bu metodun TAMAMI artik tipli istemciyle calisiyor.
       this.prisma.fleetFuelEntry.findMany({
-        where: {
-          enteredAt: { gte: start, lt: dayAfterEnd },
-          workflowStatus: FuelEntryWorkflowStatus.approved,
-        },
+        where: effectiveFuelCostWhere({ enteredAt: { gte: start, lt: dayAfterEnd } }),
         select: { vehicleId: true, totalCost: true, currency: true },
       }),
       // Bekleyen fisler AYRI sayiliyor ve maliyete EKLENMIYOR: muhasebe

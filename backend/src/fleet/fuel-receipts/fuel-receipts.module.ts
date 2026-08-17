@@ -8,6 +8,7 @@ import { FuelStationsModule } from '../fuel-stations/fuel-stations.module';
 import { DisabledFuelReceiptOcrProvider } from './disabled-fuel-receipt-ocr.provider';
 import { resolveFuelReceiptOcrProviderKind } from './fuel-receipt-ocr.config';
 import { FUEL_RECEIPT_OCR_PROVIDER } from './fuel-receipt-ocr.types';
+import { FuelReceiptReversalService } from './fuel-receipt-reversal.service';
 import { FuelReceiptReviewController } from './fuel-receipt-review.controller';
 import { FuelReceiptReviewService } from './fuel-receipt-review.service';
 import { FuelReceiptDriverController } from './fuel-receipt.controller';
@@ -46,6 +47,9 @@ import { MockFuelReceiptOcrProvider } from './mock-fuel-receipt-ocr.provider';
     },
     FuelReceiptService,
     FuelReceiptReviewService,
+    // Ters kayit AYNI modulde: durum kurallari ve kayit cozumu tek yerde
+    // kalsin diye inceleme servisini yeniden kullaniyor.
+    FuelReceiptReversalService,
   ],
 })
 export class FuelReceiptsModule {}

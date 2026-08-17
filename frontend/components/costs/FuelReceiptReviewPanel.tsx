@@ -222,7 +222,23 @@ export function FuelReceiptReviewPanel({ filter }: { filter?: FuelReceiptPanelFi
               <TableBody className={FLEET_TABLE_BODY}>
                 {rows.map((row) => (
                   <TableRow key={row.id} data-testid="receipt-row">
-                    <TableCell className={FLEET_TABLE_CELL_PRIMARY}>{row.vehicle.plateNumber}</TableCell>
+                    <TableCell className={FLEET_TABLE_CELL_PRIMARY}>
+                      <span className="flex flex-wrap items-center gap-1">
+                        {row.vehicle.plateNumber}
+                        {/* Ters kayit ve duzeltme LISTEDE de gorunur: ayrinti
+                            acmadan hangi satirin gecerli oldugu anlasilmali. */}
+                        {row.effectiveAccountingStatus === 'reversed' ? (
+                          <Badge variant="secondary" data-testid={`row-reversed-${row.id}`}>
+                            {t('costs.fuelReceipts.reversal.badge')}
+                          </Badge>
+                        ) : null}
+                        {row.isCorrection ? (
+                          <Badge variant="outline" data-testid={`row-correction-${row.id}`}>
+                            {t('costs.fuelReceipts.reversal.correctionBadge')}
+                          </Badge>
+                        ) : null}
+                      </span>
+                    </TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>{row.driver.name}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>{row.stationName ?? '—'}</TableCell>
                     <TableCell className={FLEET_TABLE_CELL}>
@@ -305,6 +321,9 @@ export function FuelReceiptReviewPanel({ filter }: { filter?: FuelReceiptPanelFi
           receiptId={openId}
           onClose={() => setOpenId(null)}
           onReviewed={handleReviewed}
+          // Zincirde gezinme: kullanici orijinal ile duzeltilmis kayit
+          // arasinda kaybolmadan gecebilsin.
+          onOpenReceipt={(id) => setOpenId(id)}
         />
       ) : null}
     </div>

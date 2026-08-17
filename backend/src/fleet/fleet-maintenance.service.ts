@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FuelEntryWorkflowStatus, Prisma } from '@prisma/client';
+import { effectiveFuelCostWhere } from './fuel-receipts/core/effective-fuel-cost';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   computeMaintenanceRuleStatus,
@@ -186,15 +187,11 @@ export class FleetMaintenanceService {
 
     const [fuelRows, serviceRows, fineRows] = await Promise.all([
       this.prisma.fleetFuelEntry.findMany({
-        where: {
-          tenantId,
-          vehicleId,
-          enteredAt: { gte: start },
-          // YALNIZCA onaylanmis fisler: bu toplam aracin TCO'suna giriyor.
-          // Onaylanmamis fis buraya girseydi arac maliyeti, muhasebenin hic
-          // gormedigi tutarlarla sisirdi.
-          workflowStatus: FuelEntryWorkflowStatus.approved,
-        },
+        // YALNIZCA ETKILI fisler: onaylanmis VE ters kayda alinmamis. Bu
+        // toplam aracin TCO'suna giriyor; onaylanmamis ya da geri alinmis
+        // bir fis buraya girseydi arac maliyeti gercekte olmayan giderle
+        // sisirdi.
+        where: effectiveFuelCostWhere({ tenantId, vehicleId, enteredAt: { gte: start } }),
         select: { enteredAt: true, totalCost: true },
       }),
       this.prisma.serviceRecord.findMany({

@@ -110,6 +110,10 @@ function build(options: { rows?: Row[] } = {}) {
     driver: { id: row.driverId, firstName: 'İlker', lastName: 'Çukur' },
     reviewedBy: row.reviewedById ? { id: row.reviewedById, fullName: 'Buchhalter' } : null,
     fuelingIntent: null,
+    // Gercek Prisma iliski secildiginde YOKSA `null` doner; taklidi de oyle
+    // yapmali, aksi halde "ters kayit yok" durumu hic sinanmamis olur.
+    reversal: (row.reversal as Row | undefined) ?? null,
+    correctionOf: (row.correctionOf as Row | undefined) ?? null,
   });
 
   const fleetFuelEntry = {

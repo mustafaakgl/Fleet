@@ -99,5 +99,9 @@
   "fuel_receipt_rejected": {
     "title": "Yakıt fişi: düzeltme gerekiyor",
     "message": "{{plateNumber}} ({{station}}) için yakıt fişin düzeltme istiyor: {{reason}}"
+  },
+  "fuel_receipt_reversed": {
+    "title": "Yakıt fişi geri alındı",
+    "message": "{{plateNumber}} ({{station}}) için yakıt fişiniz muhasebe tarafından geri alındı ve düzeltmeye alındı."
   }
 }

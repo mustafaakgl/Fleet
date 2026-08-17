@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { fuelReceiptReviewApi } from '@/lib/api';
 import { extractApiErrorCode } from '@/lib/fuel-station-view';
+import { canReverse, reasonLabelKey, statusBadge } from '@/lib/fuel-reversal-view';
+import { FuelReceiptReversalDialog } from './FuelReceiptReversalDialog';
+import { FuelReceiptCorrectionForm } from './FuelReceiptCorrectionForm';
 import { formatFleetCurrency } from '@/lib/locale-format';
 import { cn } from '@/lib/utils';
 import type { FuelReceiptReviewDetail } from '@/lib/types';
@@ -38,14 +41,29 @@ function reviewErrorKey(code: string | null): string {
  * da surucu yeniden gonderdi) kayit YENIDEN YUKLENIYOR — eski veriyle ikinci
  * bir karar verilmesin.
  */
+/** Rozet tonundan gorsel varyanta — RENK TEK BASINA anlam tasimiyor, her
+ *  rozetin ayri bir metni de var. */
+const BADGE_VARIANT: Record<
+  ReturnType<typeof statusBadge>['tone'],
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+  positive: 'default',
+  warning: 'secondary',
+  danger: 'destructive',
+  neutral: 'outline',
+};
+
 export function FuelReceiptReviewDrawer({
   receiptId,
   onClose,
   onReviewed,
+  onOpenReceipt,
 }: {
   receiptId: string;
   onClose: () => void;
   onReviewed: () => void;
+  /** Zincirde gezinme: orijinal <-> duzeltilmis kayit. */
+  onOpenReceipt?: (id: string) => void;
 }) {
   const { t, i18n } = useTranslation();
 
@@ -56,6 +74,7 @@ export function FuelReceiptReviewDrawer({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
+  const [reversing, setReversing] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -142,6 +161,11 @@ export function FuelReceiptReviewDrawer({
   }, [detail]);
 
   const canReview = detail?.workflowStatus === 'submitted';
+  /** Ters kayit YALNIZCA etkili onayli kayitta. */
+  const reversible = canReverse(detail);
+  const badge = detail
+    ? statusBadge(detail.effectiveAccountingStatus, detail.correctionOf !== null)
+    : null;
   const reasonValid = reason.trim().length >= MIN_REASON;
 
   return (
@@ -172,7 +196,71 @@ export function FuelReceiptReviewDrawer({
               </p>
             ) : null}
 
-            {/* Uyarilar en ustte: karar vermeden ONCE gorulmeli. */}
+            {/* ETKILI durum rozeti — maliyete girip girmedigi de yaziyor. */}
+            {badge ? (
+              <div className="flex flex-wrap items-center gap-2" data-testid="effective-status">
+                <Badge variant={BADGE_VARIANT[badge.tone]}>{t(badge.labelKey)}</Badge>
+                {badge.costNoteKey ? (
+                  <span className="text-xs text-muted-foreground" data-testid="cost-note">
+                    {t(badge.costNoteKey)}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Ters kayit ayrintisi: sebep, tarih, kim ve duzeltme bagi. */}
+            {detail.reversal ? (
+              <div
+                className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                data-testid="reversal-details"
+              >
+                <p className="font-semibold">{t('costs.fuelReceipts.reversal.detailsTitle')}</p>
+                <p>{t(reasonLabelKey(detail.reversal.reasonCode))}</p>
+                <p className="break-words">{detail.reversal.reason}</p>
+                <p className="text-xs">
+                  {t('costs.fuelReceipts.reversal.reversedAt')}:{' '}
+                  {fmt(detail.reversal.reversedAt, i18n.language)}
+                  {detail.reversal.reversedBy
+                    ? ` · ${t('costs.fuelReceipts.reversal.reversedBy')}: ${detail.reversal.reversedBy.name}`
+                    : ''}
+                </p>
+                {detail.reversal.replacementEntryId && onOpenReceipt ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    data-testid="open-replacement"
+                    onClick={() => onOpenReceipt(detail.reversal!.replacementEntryId!)}
+                  >
+                    {t('costs.fuelReceipts.reversal.openReplacement')}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Duzeltilmis kayitta orijinale DONUS yolu — kullanici zincirde
+                kaybolmasin. */}
+            {detail.correctionOf ? (
+              <div
+                className="space-y-1 rounded-md border bg-muted/30 p-3 text-sm"
+                data-testid="correction-of"
+              >
+                <p>{t('costs.fuelReceipts.reversal.correctionNotice')}</p>
+                {onOpenReceipt ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    data-testid="open-original"
+                    onClick={() => onOpenReceipt(detail.correctionOf!.originalEntryId)}
+                  >
+                    {t('costs.fuelReceipts.reversal.openOriginal')}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Uyarilar: karar vermeden ONCE gorulmeli. */}
             <div className="flex flex-wrap gap-2">
               {detail.compatibilityMismatch ? (
                 <Badge variant="destructive" data-testid="flag-mismatch">
@@ -404,9 +492,47 @@ export function FuelReceiptReviewDrawer({
                 {t(`costs.fuelReceipts.status.${detail.workflowStatus}`)}
               </p>
             )}
+
+            {/* Duzeltme formu — YALNIZCA heniz onaylanmamis duzeltme kaydinda.
+                Kaydetmek ONAYLAMAZ; onay yukaridaki ayri aksiyonla gecer. */}
+            {detail.correctionOf && detail.workflowStatus === 'submitted' ? (
+              <FuelReceiptCorrectionForm detail={detail} onSaved={() => void load()} />
+            ) : null}
+
+            {/* Ters kayit — onaylanmis ve HALA ETKILI kayitta. */}
+            {reversible ? (
+              <div className="border-t pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="open-reversal"
+                  onClick={() => setReversing(true)}
+                >
+                  {t('costs.fuelReceipts.reversal.action')}
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
+
+      {reversing && detail ? (
+        <FuelReceiptReversalDialog
+          detail={detail}
+          onClose={() => setReversing(false)}
+          onReversed={(replacementId) => {
+            setReversing(false);
+            // Kuyruk KONTROLLU tazeleniyor; ayrica bu kaydin detayi da
+            // yenileniyor ki rozet ve `updatedAt` guncel olsun.
+            onReviewed();
+            if (replacementId && onOpenReceipt) {
+              onOpenReceipt(replacementId);
+            } else {
+              void load();
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }

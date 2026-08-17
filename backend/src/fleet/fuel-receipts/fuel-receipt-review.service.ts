@@ -14,6 +14,10 @@ import {
   validateFuelReceiptDraft,
   type FuelReceiptIssue,
 } from './core/fuel-receipt-validation.util';
+import {
+  effectiveAccountingStatus,
+  type EffectiveAccountingStatus,
+} from './core/effective-fuel-cost';
 import { LOW_OCR_CONFIDENCE, lowConfidenceFields } from './core/ocr-confidence.util';
 import type { NormalizedFuelReceiptExtraction } from './fuel-receipt-ocr.types';
 
@@ -38,6 +42,13 @@ export interface ReviewQueueRow {
   compatibilityMismatch: boolean;
   duplicateSuspected: boolean;
   ocrProblem: boolean;
+  /**
+   * Muhasebe acisindan ETKILI durum. Liste ve detay AYNI turetmeden geciyor;
+   * bir ekranda "onayli", digerinde "ters kayit" gorunmesi mumkun degil.
+   */
+  effectiveAccountingStatus: EffectiveAccountingStatus;
+  /** Bu satir bir ters kaydin duzeltilmis kopyasi mi. */
+  isCorrection: boolean;
   updatedAt: string;
 }
 
@@ -77,6 +88,10 @@ const QUEUE_SELECT = {
   updatedAt: true,
   vehicle: { select: { id: true, plateNumber: true } },
   driver: { select: { id: true, firstName: true, lastName: true } },
+  // Ters kayit iliskisi HER sorguda geliyor: etkili durumu ikinci bir
+  // sorguyla cozmek, kuyruk buyudukce satir basina bir istek (N+1) demekti.
+  reversal: { select: { id: true } },
+  correctionOf: { select: { id: true } },
 } satisfies Prisma.FleetFuelEntrySelect;
 
 /**
@@ -195,6 +210,13 @@ export class FuelReceiptReviewService {
         compatibilityMismatch: row.compatibilityMismatch,
         duplicateSuspected: duplicates.has(row.id),
         ocrProblem: this.hasOcrProblem(row),
+        effectiveAccountingStatus: effectiveAccountingStatus(
+          row.workflowStatus,
+          // `!= null`: iliski secilmemisse `undefined` gelir ve `!== null`
+          // o durumda yanlislikla "ters kayit var" derdi.
+          row.reversal != null,
+        ),
+        isCorrection: row.correctionOf != null,
         updatedAt: row.updatedAt.toISOString(),
       })),
       page,
@@ -290,6 +312,9 @@ export class FuelReceiptReviewService {
         isFullTank: true,
         receiptMimeType: true,
         receiptOriginalName: true,
+        // Duzeltilmis kopya AYNI dosyayi paylasiyor; fiziksel ikinci kopya
+        // uretilmiyor (bkz. FuelReceiptReversalService.buildReplacementData).
+        receiptStoredPath: true,
         ocrProvider: true,
         ocrProcessedAt: true,
         ocrErrorClass: true,
@@ -302,6 +327,22 @@ export class FuelReceiptReviewService {
         resubmittedAt: true,
         fuelingIntentId: true,
         reviewedBy: { select: { id: true, fullName: true } },
+        // Ters kayit ve duzeltme zinciri. Aktor icin mevcut GUVENLI kullanici
+        // ozeti deseni kullaniliyor: e-posta, telefon, rol gibi alanlar
+        // response'a hic girmiyor.
+        reversal: {
+          select: {
+            id: true,
+            reasonCode: true,
+            reason: true,
+            reversedAt: true,
+            replacementEntryId: true,
+            reversedBy: { select: { id: true, fullName: true } },
+          },
+        },
+        correctionOf: {
+          select: { id: true, originalEntryId: true, reversedAt: true },
+        },
         fuelingIntent: {
           select: {
             id: true,
@@ -413,9 +454,44 @@ export class FuelReceiptReviewService {
         accountingNote: row.accountingNote,
         rejectionReason: row.rejectionReason,
       },
+      /**
+       * ETKILI muhasebe durumu (Faz 9).
+       *
+       * `workflowStatus` ham gercegi tasimaya devam ediyor — onay gercekten
+       * yasandi ve kayit silinmedi. Ekranin sordugu soru ise "bu tutar su an
+       * gecerli mi": ters kayit ikinciyi degistirir, birincisini degil.
+       */
+      effectiveAccountingStatus: effectiveAccountingStatus(
+        row.workflowStatus,
+        row.reversal != null,
+      ),
+      reversal: row.reversal
+        ? {
+            id: row.reversal.id,
+            reasonCode: row.reversal.reasonCode,
+            reason: row.reversal.reason,
+            reversedAt: row.reversal.reversedAt.toISOString(),
+            reversedBy: row.reversal.reversedBy
+              ? { id: row.reversal.reversedBy.id, name: row.reversal.reversedBy.fullName }
+              : null,
+            replacementEntryId: row.reversal.replacementEntryId,
+          }
+        : null,
+      correctionOf: row.correctionOf
+        ? {
+            reversalId: row.correctionOf.id,
+            originalEntryId: row.correctionOf.originalEntryId,
+            reversedAt: row.correctionOf.reversedAt.toISOString(),
+          }
+        : null,
       /** Optimistic concurrency icin istemcinin geri gonderecegi deger. */
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  /** Ters kayit servisinin ayni kayit cozumunu tekrar etmemesi icin. */
+  async requireReceiptForReversal(receiptId: string) {
+    return this.requireReceipt(receiptId);
   }
 
   async approve(userId: string, receiptId: string, dto: ApproveFuelReceiptDto) {

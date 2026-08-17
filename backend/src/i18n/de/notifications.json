@@ -99,5 +99,9 @@
   "fuel_receipt_rejected": {
     "title": "Tankbeleg: Korrektur nötig",
     "message": "Dein Tankbeleg für {{plateNumber}} ({{station}}) braucht eine Korrektur: {{reason}}"
+  },
+  "fuel_receipt_reversed": {
+    "title": "Tankbeleg storniert",
+    "message": "Dein Tankbeleg für {{plateNumber}} ({{station}}) wurde von der Buchhaltung storniert und wird korrigiert."
   }
 }

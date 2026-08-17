@@ -408,6 +408,16 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.fleetFuelEntry.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.fleetFuelEntry.count()),
       }),
+      // Ters kayit. Sizmasi, bir kiracinin hangi fisi neden geri aldigini —
+      // yani muhasebe hatasini ve serbest aciklamasini — digerine gostermek
+      // olurdu.
+      verifyTenantScopedModel({
+        label: 'FleetFuelEntryReversal', tenantA, tenantB,
+        unscopedCountA: () => base.fleetFuelEntryReversal.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.fleetFuelEntryReversal.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.fleetFuelEntryReversal.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.fleetFuelEntryReversal.count()),
+      }),
       verifyTenantScopedModel({
         label: 'VehicleFuelCompatibility', tenantA, tenantB,
         unscopedCountA: () => base.vehicleFuelCompatibility.count({ where: { tenantId: tenantA } }),

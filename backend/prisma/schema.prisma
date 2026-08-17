@@ -1042,6 +1042,7 @@ model Tenant {
   fleetTripPurposeLogs       FleetTripPurposeLog[]
   fleetDrivingEvents         FleetDrivingEvent[]
   fleetFuelEntries           FleetFuelEntry[]
+  fleetFuelEntryReversals    FleetFuelEntryReversal[]
   fuelCardImportBatches      FuelCardImportBatch[]
   fuelCardTransactions       FuelCardTransaction[]
   vehicleFuelCompatibilities VehicleFuelCompatibility[]
@@ -1214,6 +1215,7 @@ model User {
   recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
   createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
   reviewedFuelEntries             FleetFuelEntry[]            @relation("FuelEntryReviewedBy")
+  reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -3780,6 +3782,14 @@ model FleetFuelEntry {
   /// indeksin tasiyicisi (Faz 5'teki activeDriverKey ile ayni desen).
   fuelingIntentSettledKey String?
 
+  /// --- Ters kayit (Faz 9) ---
+  /// Bu kayit tersine cevrildiyse iliskisi burada. VARLIGI kaydin muhasebe
+  /// acisindan ETKISIZ oldugunu soyler; `workflowStatus` `approved` olarak
+  /// KALIR cunku onayin gercekten yasandigi bir olay ve silinmemeli.
+  reversal              FleetFuelEntryReversal? @relation("FuelEntryReversalOriginal")
+  /// Bu kayit bir ters kaydin DUZELTILMIS KOPYASI ise iliskisi burada.
+  correctionOf          FleetFuelEntryReversal? @relation("FuelEntryReversalReplacement")
+
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
@@ -3797,6 +3807,71 @@ model FleetFuelEntry {
   @@index([tenantId, driverId, workflowStatus])
   @@index([fuelingIntentId])
   @@map("fleet_fuel_entries")
+}
+
+/// Onaylanmis bir yakit fisinin muhasebe tarafindan tersine cevrilmesi.
+///
+/// NEDEN AYRI BIR TABLO: orijinal kayit DEGISMIYOR. Onaylanmis bir tutari
+/// yerinde duzeltmek ya da silmek, "muhasebe neyi onayladi" sorusunun
+/// cevabini yok eder ve fis goruntusuyle kayit birbirini tutmaz hale gelir.
+/// Append-only bir ters kayit ise hem gecmisi korur hem de raporlari
+/// duzeltir.
+///
+/// NEDEN NEGATIF TUTAR YOK: reversal bir GIDER DEGIL, bir gecerlilik
+/// ifadesidir. Negatif satir yazsaydik ters kaydin olusturuldugu ay sahte
+/// bir negatif giderle kirlenirdi; oysa dogru davranis, orijinal tutarin
+/// KENDI doneminden dusmesidir. Finansal dogruluk orijinal kaydin etkili
+/// durumundan turetiliyor, kopyalanmiyor.
+model FleetFuelEntryReversal {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Tersine cevrilen kayit. `@unique`: bir fis EN FAZLA BIR KEZ ters kayda
+  /// alinabilir — bu kural uygulamada degil VERITABANINDA, cunku iki
+  /// es zamanli istek uygulama kontrolunu birlikte gecebilir.
+  originalEntryId String         @unique
+  originalEntry   FleetFuelEntry @relation("FuelEntryReversalOriginal", fields: [originalEntryId], references: [id], onDelete: Restrict)
+
+  /// Opsiyonel duzeltilmis kopya. `@unique`: bir duzeltme kaydi EN FAZLA BIR
+  /// ters kayda ait olabilir.
+  ///
+  /// Zincir bu iki tekil alanla kuruluyor: bir replacement daha sonra yanlis
+  /// onaylanirsa KENDISI de `originalEntryId` olarak yeni bir reversal'a
+  /// girebilir. Orijinal -> Reversal -> Replacement -> Reversal -> ...
+  replacementEntryId String?         @unique
+  replacementEntry   FleetFuelEntry? @relation("FuelEntryReversalReplacement", fields: [replacementEntryId], references: [id], onDelete: Restrict)
+
+  /// Sebep KODU: rapor ve filtre bunun uzerinden calisir, serbest metin uzerinden degil.
+  reasonCode FuelEntryReversalReason
+  /// Zorunlu insan aciklamasi. HTML olarak RENDER EDILMEZ.
+  reason     String
+
+  /// Islemi yapan muhasebeci. Kullanici silinirse ters kayit KALIR: denetim
+  /// izi, aktoru artik cozulemese bile kaybolmamali.
+  reversedById String?
+  reversedBy   User?   @relation("FuelEntryReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+  reversedAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, reversedAt])
+  @@map("fleet_fuel_entry_reversals")
+}
+
+/// Ters kayit sebepleri. Serbest metin TEK BASINA yeterli degil: raporun
+/// "kac fis yanlis tutarla onaylandi" sorusunu cevaplayabilmesi icin
+/// sayilabilir bir kod gerekiyor.
+enum FuelEntryReversalReason {
+  duplicate
+  incorrect_amount
+  incorrect_vehicle
+  incorrect_currency
+  incorrect_date
+  wrong_or_unreadable_document
+  other
 }
 
 model FuelCardImportBatch {

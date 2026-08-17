@@ -37,6 +37,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'FleetTripPurposeLog',
   'FleetDrivingEvent',
   'FleetFuelEntry',
+  'FleetFuelEntryReversal',
   'FuelCardImportBatch',
   'FuelCardTransaction',
   'VehicleFuelCompatibility',

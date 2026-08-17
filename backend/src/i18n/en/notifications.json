@@ -99,5 +99,9 @@
   "fuel_receipt_rejected": {
     "title": "Fuel receipt: correction needed",
     "message": "Your fuel receipt for {{plateNumber}} ({{station}}) needs a correction: {{reason}}"
+  },
+  "fuel_receipt_reversed": {
+    "title": "Fuel receipt reversed",
+    "message": "Your fuel receipt for {{plateNumber}} ({{station}}) was reversed by accounting and is being corrected."
   }
 }

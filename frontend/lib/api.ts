@@ -573,6 +573,37 @@ export const fuelReceiptReviewApi = {
       })
       .then((r) => r.data),
 
+  /**
+   * Ters kayit (Faz 9).
+   *
+   * Silmez, finansal alan degistirmez: orijinal kayit oldugu gibi kalir ve
+   * yanina append-only bir ters kayit duser.
+   */
+  reverse: (
+    receiptId: string,
+    body: {
+      expectedUpdatedAt: string;
+      reasonCode: import('./types').FuelReversalReasonCode;
+      reason: string;
+      createReplacement: boolean;
+    },
+  ) =>
+    api
+      .post<{
+        receipt: import('./types').FuelReceiptReviewDetail;
+        replacement: import('./types').FuelReceiptReviewDetail | null;
+      }>(`/fleet/fuel-receipts/${receiptId}/reverse`, body)
+      .then((r) => r.data),
+
+  /** Duzeltilmis kopyanin duzenlenmesi. KAYDETMEK ONAYLAMAZ. */
+  updateCorrection: (receiptId: string, body: Record<string, unknown>) =>
+    api
+      .put<{ receipt: import('./types').FuelReceiptReviewDetail }>(
+        `/fleet/fuel-receipts/${receiptId}/correction`,
+        body,
+      )
+      .then((r) => r.data),
+
   detail: (receiptId: string, signal?: AbortSignal) =>
     api
       .get<import('./types').FuelReceiptReviewDetail>(`/fleet/fuel-receipts/${receiptId}`, {

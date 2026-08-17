@@ -5,6 +5,7 @@ import {
   matchesBaseCurrency,
   normalizeCurrency,
 } from '../common/utils/currency';
+import { effectiveFuelCostWhere } from '../fleet/fuel-receipts/core/effective-fuel-cost';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveTimeZone } from '../common/utils/timezone';
 import { TenantContext } from '../tenant/tenant-context';
@@ -343,12 +344,10 @@ export class CostDashboardService {
   ) {
     const [fuelRows, serviceRows, fineRows, tripRows, assignmentRows] = await Promise.all([
       this.prisma.fleetFuelEntry.findMany({
-        where: {
+        where: effectiveFuelCostWhere({
           ...vehicleFilter,
           enteredAt: { gte: from, lt: to },
-          // YALNIZCA onaylanmis fisler maliyete girer.
-          workflowStatus: FuelEntryWorkflowStatus.approved,
-        },
+        }),
         select: { vehicleId: true, enteredAt: true, totalCost: true, currency: true },
       }),
       this.prisma.serviceRecord.findMany({

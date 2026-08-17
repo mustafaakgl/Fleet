@@ -65,6 +65,9 @@ function queueRow(overrides: Record<string, unknown> = {}) {
     compatibilityMismatch: false,
     duplicateSuspected: false,
     ocrProblem: false,
+    // Faz 9: etkili durum HER satirda geliyor.
+    effectiveAccountingStatus: 'submitted' as const,
+    isCorrection: false,
     updatedAt: '2026-08-14T09:00:00.000Z',
     ...overrides,
   };
@@ -85,6 +88,8 @@ function queue(overrides: Partial<FuelReceiptQueueResponse> = {}): FuelReceiptQu
 function detail(overrides: Record<string, unknown> = {}): FuelReceiptReviewDetail {
   return {
     ...queueRow(),
+    reversal: null,
+    correctionOf: null,
     stationAddress: 'Hafenstraße 12',
     receiptNumber: 'RG-1',
     pricePerLiter: 1.719,

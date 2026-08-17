@@ -23,6 +23,9 @@ describe('TENANT_SCOPED_MODELS', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('FleetTrip'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('FleetDrivingEvent'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('FleetFuelEntry'), true);
+    // Faz 9: ters kayit da kiraci kapsamli. Kapsam disi kalirsa bir kiracinin
+    // muhasebe duzeltmesi ve sebep aciklamasi digerine gorunur olurdu.
+    assert.equal(TENANT_SCOPED_MODELS.has('FleetFuelEntryReversal'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('FleetMaintenanceRule'), true);
   });
 

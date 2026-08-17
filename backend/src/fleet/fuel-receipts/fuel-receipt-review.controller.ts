@@ -5,6 +5,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
@@ -23,6 +24,11 @@ import {
   ListFuelReceiptsQueryDto,
   RejectFuelReceiptDto,
 } from './dto/review-fuel-receipt.dto';
+import {
+  ReverseFuelReceiptDto,
+  UpdateFuelReceiptCorrectionDto,
+} from './dto/reverse-fuel-receipt.dto';
+import { FuelReceiptReversalService } from './fuel-receipt-reversal.service';
 import { FuelReceiptReviewService } from './fuel-receipt-review.service';
 
 /**
@@ -42,7 +48,10 @@ import { FuelReceiptReviewService } from './fuel-receipt-review.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...FINANCIAL_ROLES)
 export class FuelReceiptReviewController {
-  constructor(private readonly review: FuelReceiptReviewService) {}
+  constructor(
+    private readonly review: FuelReceiptReviewService,
+    private readonly reversal: FuelReceiptReversalService,
+  ) {}
 
   /**
    * Inceleme kuyrugu. Varsayilan: yalnizca `submitted`, en uzun bekleyen once,
@@ -99,5 +108,40 @@ export class FuelReceiptReviewController {
     @Body() dto: RejectFuelReceiptDto,
   ) {
     return this.review.reject(userId, id, dto);
+  }
+
+  /**
+   * Ters kayit (Faz 9).
+   *
+   * ROL: sinif seviyesindeki `FINANCIAL_ROLES` — onay/ret ile BIREBIR AYNI.
+   * Ayri bir politika tanimlanmadi: onaylayabilen geri de alabilmeli, ofis ve
+   * surucu ise ikisini de yapamamali.
+   *
+   * Silmez, finansal alan degistirmez. Orijinal kayit oldugu gibi kalir;
+   * yalnizca yanina append-only bir ters kayit duser.
+   */
+  @Post(':id/reverse')
+  @HttpCode(200)
+  reverse(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: ReverseFuelReceiptDto,
+  ) {
+    return this.reversal.reverse(userId, id, dto);
+  }
+
+  /**
+   * Duzeltilmis kopyanin duzenlenmesi.
+   *
+   * KAYDETMEK ONAYLAMAZ: kayit `submitted` kalir ve onay mevcut
+   * `POST :id/approve` ucundan, ayri bir istekle gecer.
+   */
+  @Put(':id/correction')
+  correction(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateFuelReceiptCorrectionDto,
+  ) {
+    return this.reversal.updateCorrection(userId, id, dto);
   }
 }

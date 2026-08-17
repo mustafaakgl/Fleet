@@ -28,4 +28,13 @@ export type DriverNotifyKey =
    * haber vermek gurultu olurdu, kuyrugu zaten ekranda goruyorlar.
    */
   | 'fuel_receipt_approved'
-  | 'fuel_receipt_rejected';
+  | 'fuel_receipt_rejected'
+  /**
+   * Onaylanmis fis muhasebe tarafindan geri alindi (Faz 9).
+   *
+   * Metin bilincli olarak GENEL: sebep kodu ve muhasebe aciklamasi
+   * gonderilmiyor. O metin ic degerlendirme icerebilir ve surucunun bir
+   * hatasi olmayabilir — burada surucudan istenen bir sey yok, yalnizca
+   * bilgi veriliyor.
+   */
+  | 'fuel_receipt_reversed';

@@ -10,6 +10,10 @@ import {
   NotificationType,
   Prisma,
 } from '@prisma/client';
+import {
+  EFFECTIVE_FUEL_COST_WHERE,
+  effectiveFuelCostWhere,
+} from './fuel-receipts/core/effective-fuel-cost';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocalStorageService } from '../storage/local-storage.service';
 import { DriverVehicleService } from './driver-vehicle.service';
@@ -301,11 +305,13 @@ export class FleetFuelService {
     // dayanagi; heniz onaylanmamis bir taslak araya girerse aralik yanlis
     // kapanir — ustelik taslakta kilometre cogu zaman hic yoktur.
     const previous = await this.prisma.fleetFuelEntry.findFirst({
-      where: {
+      // Ters kayda alinmis fis burada da ATLANIYOR: geri alinmis bir kaydin
+      // kilometresi uzerinden tuketim hesaplamak, muhasebede gecersiz saydigimiz
+      // bir olcumu teknik rapora tasimak olurdu.
+      where: effectiveFuelCostWhere({
         vehicleId: entry.vehicleId,
         enteredAt: { lt: entry.enteredAt },
-        workflowStatus: FuelEntryWorkflowStatus.approved,
-      },
+      }),
       orderBy: { enteredAt: 'desc' },
       select: { enteredAt: true, odometerKm: true },
     });
@@ -1047,7 +1053,10 @@ export class FleetFuelService {
     const where: Prisma.FleetFuelEntryWhereInput = {};
 
     if (scope === 'approved_only') {
-      where.workflowStatus = FuelEntryWorkflowStatus.approved;
+      // Faz 9: "onayli" ARTIK "etkili onayli" demek — ters kayda alinmis fis
+      // maliyete girmez. Kosul burada elle yazilmiyor, ortak tanimdan
+      // geliyor; yoksa yeni bir maliyet ucu eklendiginde biri unutulurdu.
+      Object.assign(where, EFFECTIVE_FUEL_COST_WHERE);
     }
 
     if (query.vehicleId) {

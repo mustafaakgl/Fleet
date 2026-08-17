@@ -493,6 +493,47 @@ export interface VehicleCostsResponse {
  *
  * Kaynak: backend/src/fleet/fuel-receipts/fuel-receipt-review.service.ts
  */
+/** Ters kayit sebepleri (Faz 9) — backend enum'uyla BIREBIR. */
+export const FUEL_REVERSAL_REASONS = [
+  'duplicate',
+  'incorrect_amount',
+  'incorrect_vehicle',
+  'incorrect_currency',
+  'incorrect_date',
+  'wrong_or_unreadable_document',
+  'other',
+] as const;
+export type FuelReversalReasonCode = (typeof FUEL_REVERSAL_REASONS)[number];
+
+/**
+ * Muhasebe acisindan ETKILI durum.
+ *
+ * `workflowStatus` ham gercegi tasir (onay gercekten yasandi); bu alan ise
+ * "su anda gecerli mi" sorusuna cevap verir. Ekranlar ROZET ve maliyet
+ * aciklamasi icin BUNU okur.
+ */
+export type EffectiveAccountingStatus =
+  | 'approved_effective'
+  | 'reversed'
+  | 'driver_review'
+  | 'submitted'
+  | 'rejected';
+
+export interface FuelReceiptReversal {
+  id: string;
+  reasonCode: FuelReversalReasonCode;
+  reason: string;
+  reversedAt: string;
+  reversedBy: { id: string; name: string } | null;
+  replacementEntryId: string | null;
+}
+
+export interface FuelReceiptCorrectionOf {
+  reversalId: string;
+  originalEntryId: string;
+  reversedAt: string;
+}
+
 export interface FuelReceiptQueueRow {
   id: string;
   workflowStatus: FuelEntryWorkflowStatus;
@@ -510,6 +551,9 @@ export interface FuelReceiptQueueRow {
   compatibilityMismatch: boolean;
   duplicateSuspected: boolean;
   ocrProblem: boolean;
+  effectiveAccountingStatus: EffectiveAccountingStatus;
+  /** Bu satir bir ters kaydin duzeltilmis kopyasi mi. */
+  isCorrection: boolean;
   /** Optimistic concurrency icin geri gonderilecek deger. */
   updatedAt: string;
 }
@@ -585,6 +629,12 @@ export interface FuelReceiptReviewDetail {
     accountingNote: string | null;
     rejectionReason: string | null;
   };
+  /** ETKILI muhasebe durumu (Faz 9). Rozet ve maliyet aciklamasi bunu okur. */
+  effectiveAccountingStatus: EffectiveAccountingStatus;
+  /** Bu kayit tersine cevrildiyse ayrintisi. */
+  reversal: FuelReceiptReversal | null;
+  /** Bu kayit bir ters kaydin duzeltilmis kopyasi ise zincir bagi. */
+  correctionOf: FuelReceiptCorrectionOf | null;
   updatedAt: string;
 }
 
