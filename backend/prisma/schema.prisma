@@ -1059,6 +1059,9 @@ model Tenant {
   approvalTasks              ApprovalTask[]
   automationCorrectionEvents AutomationCorrectionEvent[]
   automationDocuments        AutomationDocument[]
+  documentIntakes            DocumentIntake[]
+  intakeDocuments            IntakeDocument[]
+  intakeDocumentRoutings     IntakeDocumentRouting[]
   vehicleDtcs                VehicleDtc[]
   tachoProviderCredentials   TachoProviderCredential[]
   dddFiles                   DddFile[]
@@ -1230,6 +1233,10 @@ model User {
   decidedApprovalTasks            ApprovalTask[]              @relation("ApprovalTaskDecidedBy")
   assignedApprovalTasks           ApprovalTask[]              @relation("ApprovalTaskAssignedTo")
   uploadedAutomationDocuments     AutomationDocument[]        @relation("AutomationDocumentUploadedBy")
+  uploadedDocumentIntakes         DocumentIntake[]            @relation("DocumentIntakeUploadedBy")
+  assignedIntakeDocuments         IntakeDocument[]            @relation("IntakeDocumentAssignedTo")
+  decidedIntakeDocuments          IntakeDocument[]            @relation("IntakeDocumentDecidedBy")
+  routedIntakeDocuments           IntakeDocumentRouting[]     @relation("IntakeDocumentRoutedBy")
   reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
@@ -1495,6 +1502,7 @@ model Vehicle {
   tachoInfringements      TachoInfringement[]
   tachoDownloadSchedules  TachoDownloadSchedule[]
   tours                   Tour[]
+  intakeDocuments         IntakeDocument[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -4067,8 +4075,18 @@ model FuelReconciliation {
 }
 
 /// Otomasyona giren belgenin turu. Faz 13'te YALNIZCA servis faturasi.
+/**
+ * Blob'un HANGI ALT SISTEME ait oldugu — belge TURU degil.
+ *
+ * Kapali ve kucuk bir kume oldugu icin enum kalabiliyor. Belge turleri
+ * (`service_invoice@v1`, `traffic_fine@v1`, ...) buyuyen bir kume oldugu icin
+ * BURAYA GIRMEZ; onlar registry ile dogrulanan surumlu anahtarlardir.
+ */
 enum AutomationDocumentKind {
+  /// Faz 13 — dogrudan servis faturasi yuklemesi.
   service_invoice
+  /// Faz 14 — belge gelen kutusu yuklemesi. Turu mantiksal belge belirler.
+  document_intake
 }
 
 /**
@@ -4102,7 +4120,8 @@ model AutomationDocument {
   uploadedBy   User     @relation("AutomationDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
   createdAt    DateTime @default(now())
 
-  jobs AutomationJob[]
+  jobs    AutomationJob[]
+  intakes DocumentIntake[]
 
   /// Kiraci ICINDE tekil: baska bir kiracinin ayni dosyayi yuklemesi
   /// engellenmez ve varligi da sizdirilmaz.
@@ -4500,6 +4519,9 @@ model OrdivanConnector {
   jobs AutomationJob[]
   runs AgentRun[]
 
+  /// Faz 14 — bu tarayicidan gelen belge yuklemeleri.
+  documentIntakes DocumentIntake[]
+
   @@unique([tenantId, displayName])
   @@index([tenantId])
   @@index([tenantId, status])
@@ -4800,4 +4822,244 @@ model AutomationCorrectionEvent {
   @@index([approvalTaskId])
   @@index([tenantId, category, createdAt])
   @@map("automation_correction_events")
+}
+
+// ============================================================================
+// FAZ 14 — AKILLI BELGE GELEN KUTUSU
+// ============================================================================
+
+/**
+ * Belgenin Fleet'e GIRDIGI kanal.
+ *
+ * Kapali bir kume: kanal eklemek protokol isidir, veri girisi degil. Belge
+ * TURLERI aksine buyuyen bir kume oldugu icin enum DEGIL, registry ile
+ * dogrulanan surumlu anahtar kullaniyor (bkz. core/document-type-registry.ts).
+ */
+enum DocumentIntakeSource {
+  /// Buro web arayuzu.
+  web
+  /// Mobil tarayici — kamera ya da dosya.
+  mobile
+  /// Faz 12 connector protokolu uzerinden tarayici.
+  connector
+}
+
+/// Fiziksel yuklemenin yasam dongusu.
+enum DocumentIntakeStatus {
+  /// Siniflandirma suruyor.
+  processing
+  /// En az bir mantiksal belge insan kararini bekliyor.
+  needs_review
+  /// Butun mantiksal belgeler sonuclandi.
+  settled
+  /// Isleme alinamadi (bozuk/sifreli dosya, sayfa sayilamadi).
+  failed
+}
+
+/// Mantiksal belgenin yasam dongusu.
+enum IntakeDocumentStatus {
+  classifying
+  needs_review
+  /**
+   * Tur DOGRU ama canonical modele guvenli esleme yapilamiyor — ornegin yakit
+   * fisinde surucu belirlenemedi. PARALEL MODEL UYDURULMAZ: belge burada
+   * bekler ve raporda gorunur.
+   */
+  needs_domain_review
+  routed
+  rejected
+  failed
+}
+
+/// Sunucu tarafi arac eslestirmesinin sonucu. `unknown` "sorun yok" DEMEK DEGILDIR.
+enum IntakeVehicleMatchStatus {
+  verified
+  failed
+  unknown
+}
+
+/**
+ * FIZIKSEL YUKLEME (Faz 14).
+ *
+ * Bir yukleme = bir dosya = bir `AutomationDocument` (blob). Blob Faz 13'ten
+ * GENELLESTIRILEREK yeniden kullaniliyor; ikinci bir dosya deposu ya da ayri
+ * bir servis-faturasi saklama sistemi KURULMADI.
+ *
+ * ORIJINAL DEGISMEZ: hash, boyut ve dosyanin kendisi bu kayittan sonra hicbir
+ * akista yeniden yazilmaz. Bolme, birlestirme ve yeniden siniflandirma
+ * yalnizca mantiksal belgeleri degistirir — dosya KOPYALANMAZ.
+ */
+model DocumentIntake {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Degismez blob. Ayni blob birden fazla yuklemeye baglanabilir mi? HAYIR:
+  /// kiraci icinde hash tekil oldugu icin ikinci yukleme var olan girisi doner.
+  artifactId String
+  artifact   AutomationDocument @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+
+  source DocumentIntakeSource
+  status DocumentIntakeStatus @default(processing)
+
+  /// Sunucunun DOSYADAN saydigi sayfa sayisi. Istemcinin bildirdigi deger degil.
+  pageCount Int @default(1)
+
+  /**
+   * Connector yuklemesinin idempotency anahtari.
+   *
+   * Tarayici ayni belgeyi aglar koptugunda yeniden gonderir. Anahtar kiraci
+   * icinde tekil: ikinci gonderim YENI bir gelen kutusu girdisi ACMAZ.
+   */
+  idempotencyKey String?
+
+  /// Web/mobil yuklemede kullanici, connector yuklemesinde `null`.
+  uploadedById String?
+  uploadedBy   User?   @relation("DocumentIntakeUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  /// Connector yuklemesinde tarayici, aksi halde `null`.
+  connectorId String?
+  connector   OrdivanConnector? @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+
+  /// Siniflandirmayi ureten mock surumu — duzeltme analizinin karsilastirma ekseni.
+  classifierVersion String?
+  /// Teknik hata SINIFI, saglayici mesaji degil.
+  failureClass      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents IntakeDocument[]
+
+  /// Kiraci ICINDE tekil. Kiracilar arasinda anahtar CAKISABILIR ve sizmaz.
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, source, createdAt])
+  @@index([artifactId])
+  @@map("document_intakes")
+}
+
+/**
+ * MANTIKSAL BELGE = ayni blob + SAYFA ARALIGI (Faz 14).
+ *
+ * NEDEN AYRI TABLO: taranmis bir yigin, ic ice gecmis birden fazla belge
+ * tasiyabilir. Bunlari ayri dosyalara bolmek orijinalin butunlugunu ve
+ * hash'ini yok ederdi. Bolme/birlestirme burada olur, DOSYAYA DOKUNULMAZ.
+ *
+ * AJANIN ILK CIKTISI DEGISMEZ (Faz 13 sozlesmesi): `proposed*` alanlari
+ * yazildiktan sonra HICBIR akista guncellenmez. Insanin karari `typeKey`,
+ * `pageFrom/pageTo` ve `vehicleId` alanlarinda durur. Ikisi ayni alanda
+ * dursaydi "model mi yanildi yoksa insan mi degistirdi" sorusunun cevabi
+ * olmazdi.
+ */
+model IntakeDocument {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  intakeId String
+  intake   DocumentIntake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  // --- AJANIN ILK CIKTISI — DEGISMEZ ---
+  /// Registry ile dogrulanan SURUMLU anahtar (ornegin `service_invoice@v1`).
+  /// Prisma enum DEGIL: belge turleri buyuyen bir kume.
+  proposedTypeKey     String
+  proposedConfidence  Decimal? @db.Decimal(4, 3)
+  proposedPageFrom    Int
+  proposedPageTo      Int
+  /// Muayene alt turu: `tuv | sp | unknown`.
+  proposedSubtype     String?
+  /// Neyin nereden geldigi. HAM OCR METNI KOPYALANMAZ.
+  evidence            Json?
+  /// Plaka/VIN/tarih/tutar ADAYLARI. Ajan `vehicleId` BELIRLEYEMEZ.
+  candidates          Json?
+  /// Uc durumlu kontroller: [{ code, status, ... }].
+  checks              Json?
+  /// Ajanin sayfa sinirlarina guvenildi mi (ortusen/tasan oneri `false`).
+  segmentationTrusted Boolean  @default(false)
+
+  // --- INSANIN KARARI ---
+  typeKey  String
+  subtype  String?
+  pageFrom Int
+  pageTo   Int
+
+  status IntakeDocumentStatus @default(classifying)
+
+  /**
+   * Arac SUNUCUDA cozulur: tam VIN → tam plaka. Ajan bu alani DOLDURAMAZ.
+   */
+  vehicleId         String?
+  vehicle           Vehicle?                  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleMatchStatus IntakeVehicleMatchStatus @default(unknown)
+
+  assignedUserId String?
+  assignedUser   User?   @relation("IntakeDocumentAssignedTo", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  decidedById String?
+  decidedBy   User?     @relation("IntakeDocumentDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  /// Red sebebi — reddederken ZORUNLU, kullaniciya gosterilir.
+  rejectionReason String?
+  /// `needs_domain_review` sebebi — raporda gorunur.
+  domainReviewReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  routing IntakeDocumentRouting?
+
+  @@index([tenantId])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, typeKey, createdAt])
+  @@index([intakeId])
+  @@index([vehicleId])
+  @@index([assignedUserId])
+  @@map("intake_documents")
+}
+
+/**
+ * YONLENDIRME — EXACTLY-ONCE (Faz 14).
+ *
+ * `intakeDocumentId` TEKIL: bir mantiksal belge EN FAZLA BIR canonical kayit
+ * uretebilir. Bu kural uygulamada degil VERITABANINDA, cunku cift tiklama ve
+ * eszamanli iki incelemeci uygulama kontrolunu gecebilir — Faz 13'teki
+ * `AutomationProposal.resultServiceRecordId` ile ayni desen.
+ *
+ * `[tenantId, entityType, entityId]` de TEKIL: ayni canonical kayda iki farkli
+ * belge baglanamaz. Ikinci bir baglanti, sessizce olusmus bir cift kaydin en
+ * dogrudan isaretidir.
+ *
+ * PARALEL MODEL YOK: `entityType/entityId` repodaki MEVCUT kayitlari gosterir
+ * (`ServiceRecord`, `FleetFuelEntry`, `Document`, `Fine`); bu tablo yalnizca
+ * izlenebilirlik bagi ve tekillik tasiyicisidir.
+ */
+model IntakeDocumentRouting {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  intakeDocumentId String         @unique
+  intakeDocument   IntakeDocument @relation(fields: [intakeDocumentId], references: [id], onDelete: Cascade)
+
+  /// Registry ile dogrulanan hedef anahtari.
+  destination String
+
+  entityType String
+  entityId   String
+
+  /// Yan etki kaydi — ornegin muayene belgesinden turetilen hatirlatma.
+  /// TASLAK/ONERI: kullanici acikca onayladiysa olusur.
+  secondaryEntityType String?
+  secondaryEntityId   String?
+
+  routedById String?
+  routedBy   User?    @relation("IntakeDocumentRoutedBy", fields: [routedById], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, entityType, entityId])
+  @@index([tenantId])
+  @@index([tenantId, destination, createdAt])
+  @@map("intake_document_routings")
 }

@@ -692,6 +692,31 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.automationCorrectionEvent.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.automationCorrectionEvent.count()),
       }),
+      // Faz 14 — fiziksel yukleme. Sizmasi, baska bir kiracinin belgesinin
+      // VARLIGINI ele vermek olurdu; hash tekilligi de kiraci ICINDE.
+      verifyTenantScopedModel({
+        label: 'DocumentIntake', tenantA, tenantB,
+        unscopedCountA: () => base.documentIntake.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.documentIntake.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.documentIntake.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.documentIntake.count()),
+      }),
+      // Mantiksal belge. Tur, arac ve aday degerleri tasiyor.
+      verifyTenantScopedModel({
+        label: 'IntakeDocument', tenantA, tenantB,
+        unscopedCountA: () => base.intakeDocument.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.intakeDocument.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.intakeDocument.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.intakeDocument.count()),
+      }),
+      // Yonlendirme bagi — hangi belgeden hangi canonical kayit dogdu.
+      verifyTenantScopedModel({
+        label: 'IntakeDocumentRouting', tenantA, tenantB,
+        unscopedCountA: () => base.intakeDocumentRouting.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.intakeDocumentRouting.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.intakeDocumentRouting.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.intakeDocumentRouting.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');
