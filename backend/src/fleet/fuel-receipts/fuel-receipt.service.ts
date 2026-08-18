@@ -69,6 +69,15 @@ export interface FuelReceiptView {
    * muhasebe uclariyla AYNI turetmeden geciyor.
    */
   effectiveAccountingStatus: EffectiveAccountingStatus;
+  /**
+   * Telematik kontrolu ACIK MI (Faz 11).
+   *
+   * SURUCUYE GIDEN TEK BILGI BU. Risk seviyesi, puan, tetiklenen kurallar ve
+   * muhasebenin inceleme notu bu ucun ARKASINDA KALIR: surucuye hakkindaki
+   * supheyi ham haliyle gostermek ne dogru ne de gerekli. Ekranda yalnizca
+   * "fisiniz inceleniyor" karsiligi var.
+   */
+  underTelematicsReview: boolean;
   ocrStatus: FuelReceiptOcrStatus;
   ocrDataMode: string | null;
   ocrErrorClass: string | null;
@@ -140,6 +149,9 @@ const RECEIPT_SELECT = {
   // Ters kayit iliskisi: etkili durumu ikinci bir sorguyla cozmek, liste
   // buyudukce satir basina bir istek (N+1) demekti.
   reversal: { select: { id: true } },
+  // Faz 11: YALNIZCA acik/kapali ve risk seviyesi cekiliyor; sinyaller, puan
+  // ve inceleme notu surucu sorgusuna HIC GIRMIYOR.
+  reconciliation: { select: { riskLevel: true, reviewState: true } },
   rejectionReason: true,
   rejectedAt: true,
   ocrStatus: true,
@@ -750,6 +762,11 @@ export class FuelReceiptService {
         // o durumda yanlislikla "ters kayit var" derdi.
         row.reversal != null,
       ),
+      underTelematicsReview:
+        row.reconciliation != null &&
+        row.reconciliation.reviewState === 'open' &&
+        (row.reconciliation.riskLevel === 'review_required' ||
+          row.reconciliation.riskLevel === 'high_attention'),
       ocrStatus: row.ocrStatus,
       ocrDataMode: row.ocrDataMode,
       ocrErrorClass: row.ocrErrorClass,

@@ -21,7 +21,14 @@ export type OfficeNotifyKey =
    * kaydinda duruyor.
    */
   | 'fuel_receipt_submitted'
-  | 'fuel_receipt_needs_review';
+  | 'fuel_receipt_needs_review'
+  /**
+   * Telematik mutabakati (Faz 11) — YALNIZCA FINANSAL rollere gider.
+   *
+   * Metin bilincli olarak NOTRDUR: bir suclama degil, bakilmasi gereken
+   * bir kayit bildirir. Surucu adi GECMEZ.
+   */
+  | 'fuel_reconciliation_high_attention';
 
 type CopyTemplate = {
   title: string;
@@ -79,6 +86,11 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       message: (p) =>
         `Tankbeleg bestätigt, aber der Kraftstoff weicht von der Fahrzeugfreigabe ab (${p.plateNumber} · ${p.station}).`,
     },
+    fuel_reconciliation_high_attention: {
+      title: 'Tankbeleg: Telematikprüfung offen',
+      message: (p) =>
+        `Der Telematikabgleich eines freigegebenen Tankbelegs konnte nicht bestätigt werden (${p.plateNumber} · ${p.date}). Bitte prüfen.`,
+    },
   },
   en: {
     transport_request_created: {
@@ -130,6 +142,11 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       message: (p) =>
         `Fuel receipt confirmed, but the fuel differs from the vehicle approval (${p.plateNumber} · ${p.station}).`,
     },
+    fuel_reconciliation_high_attention: {
+      title: 'Fuel receipt: telematics check open',
+      message: (p) =>
+        `The telematics check of an approved fuel receipt could not be confirmed (${p.plateNumber} · ${p.date}). Please review.`,
+    },
   },
   tr: {
     transport_request_created: {
@@ -180,6 +197,11 @@ const COPY: Record<string, Record<OfficeNotifyKey, CopyTemplate>> = {
       title: 'Yakıt fişi: yakıt türü uyuşmuyor',
       message: (p) =>
         `Yakıt fişi doğrulandı ama yakıt türü aracın onaylı listesinde değil (${p.plateNumber} · ${p.station}).`,
+    },
+    fuel_reconciliation_high_attention: {
+      title: 'Yakıt fişi: telematik kontrolü açık',
+      message: (p) =>
+        `Onaylanmış bir yakıt fişinin telematik kontrolü doğrulanamadı (${p.plateNumber} · ${p.date}). Lütfen inceleyin.`,
     },
   },
 };

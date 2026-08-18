@@ -103,6 +103,7 @@ function build(options: { rows?: Row[] } = {}) {
   const audits: Row[] = [];
   const notifications: Row[] = [];
   const forbiddenWrites: string[] = [];
+  const reconciliationEnqueues: string[] = [];
 
   const withRelations = (row: Row): Row => ({
     ...row,
@@ -174,6 +175,13 @@ function build(options: { rows?: Row[] } = {}) {
     fuelingIntent: { update: forbid('fuelingIntent.update'), updateMany: forbid('fuelingIntent.updateMany') },
     tour: { update: forbid('tour.update'), create: forbid('tour.create') },
     tourStop: { update: forbid('tourStop.update'), create: forbid('tourStop.create') },
+    // Faz 11: onay, analiz kaydini AYNI transaction'da yaratiyor.
+    fuelReconciliation: {
+      createMany: async () => {
+        reconciliationEnqueues.push('enqueue');
+        return { count: 1 };
+      },
+    },
   };
   const prisma = {
     ...client,
@@ -185,14 +193,56 @@ function build(options: { rows?: Row[] } = {}) {
     notifyUserSafely: (input: Row) => { notifications.push(input); },
   };
 
+  const reconciliation = {
+    enqueueWithin: async (tx: { fuelReconciliation: { createMany: () => Promise<{ count: number }> } }) => {
+      const created = await tx.fuelReconciliation.createMany();
+      return created.count > 0;
+    },
+    logEnqueued: async () => {},
+  };
+  const reconciliationReview = {
+    panelForFuelEntry: async () => null,
+  };
+
   const service = new FuelReceiptReviewService(
     prisma as never,
     audit as never,
     driverNotify as never,
+    reconciliation as never,
+    reconciliationReview as never,
   );
 
-  return { service, rows, audits, notifications, forbiddenWrites };
+  return { service, rows, audits, notifications, forbiddenWrites, reconciliationEnqueues };
 }
+
+describe('yakit fisi onayi — telematik mutabakati (Faz 11)', () => {
+  it('onay, analiz kaydini AYNI transaction icinde yaratir', async () => {
+    const { service, rows, reconciliationEnqueues } = build();
+    await service.approve('user-1', 'r-1', approveDto((rows[0]!.updatedAt as Date).toISOString()));
+
+    assert.deepEqual(reconciliationEnqueues, ['enqueue']);
+  });
+
+  it('ret analiz kaydi YARATMAZ: incelenecek onayli bir tutar yok', async () => {
+    const { service, rows, reconciliationEnqueues } = build();
+    await service.reject('user-1', 'r-1', {
+      expectedUpdatedAt: (rows[0]!.updatedAt as Date).toISOString(),
+      reason: 'Beleg unleserlich',
+    } as RejectFuelReceiptDto);
+
+    assert.deepEqual(reconciliationEnqueues, []);
+  });
+
+  it('tekrar gonderilen ayni onay ikinci bir analiz kaydi yaratmaz', async () => {
+    const { service, rows, reconciliationEnqueues } = build();
+    const updatedAt = (rows[0]!.updatedAt as Date).toISOString();
+    await service.approve('user-1', 'r-1', approveDto(updatedAt));
+    const second = await service.approve('user-1', 'r-1', approveDto(updatedAt));
+
+    assert.equal(second.changed, false);
+    assert.deepEqual(reconciliationEnqueues, ['enqueue']);
+  });
+});
 
 async function expectCode(promise: Promise<unknown>, code: string) {
   await assert.rejects(promise, (error: unknown) => {

@@ -259,7 +259,17 @@ function build(
   const audit = { logAction: async (p: Row) => { audits.push(p); return {}; } };
   const driverNotify = { notifyUserSafely: (input: Row) => { notifications.push(input); } };
 
-  const review = new FuelReceiptReviewService(prisma as never, audit as never, driverNotify as never);
+  // Faz 11: mutabakat bagimliliklari — ters kayit testleri analizi
+  // ilgilendirmiyor, bu yuzden etkisiz sahteler yeterli.
+  const reconciliation = { enqueueWithin: async () => false, logEnqueued: async () => {} };
+  const reconciliationReview = { panelForFuelEntry: async () => null };
+  const review = new FuelReceiptReviewService(
+    prisma as never,
+    audit as never,
+    driverNotify as never,
+    reconciliation as never,
+    reconciliationReview as never,
+  );
   const service = new FuelReceiptReversalService(
     prisma as never,
     audit as never,

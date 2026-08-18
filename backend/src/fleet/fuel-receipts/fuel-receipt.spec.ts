@@ -638,6 +638,53 @@ describe('fuel receipt — ownership', () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0]!.id, 'mine');
   });
+
+  it('surucu gorunumu telematik incelemesinin IC AYRINTISINI tasimaz (Faz 11)', async () => {
+    const base = {
+      driverId: 'drv-1',
+      receiptStoredPath: '/uploads/fuel-receipts/a.jpg',
+      createdAt: new Date(),
+      vehicleId: 'veh-1',
+      enteredAt: new Date(),
+      currency: 'EUR',
+      workflowStatus: FuelEntryWorkflowStatus.approved,
+      ocrStatus: FuelReceiptOcrStatus.not_requested,
+      isFullTank: false,
+      compatibilityMismatch: false,
+    };
+    const { service } = build({
+      entries: [
+        {
+          ...base,
+          id: 'under-review',
+          reconciliation: { riskLevel: 'high_attention', reviewState: 'open' },
+        },
+        {
+          ...base,
+          id: 'closed-review',
+          reconciliation: { riskLevel: 'high_attention', reviewState: 'closed' },
+        },
+        { ...base, id: 'normal', reconciliation: { riskLevel: 'normal', reviewState: 'open' } },
+        { ...base, id: 'no-analysis', reconciliation: null },
+      ],
+    });
+
+    const rows = await service.list('user-1');
+    const byId = new Map(rows.map((row) => [row.id, row]));
+
+    assert.equal(byId.get('under-review')!.underTelematicsReview, true);
+    // Muhasebe kapattiysa surucu ekraninda da kapanir.
+    assert.equal(byId.get('closed-review')!.underTelematicsReview, false);
+    assert.equal(byId.get('normal')!.underTelematicsReview, false);
+    assert.equal(byId.get('no-analysis')!.underTelematicsReview, false);
+
+    // Risk puani, kural adlari, kanit ve inceleme notu surucu gorunumunde
+    // HIC YOK — alan adiyla bile gorunmemeli.
+    const serialized = JSON.stringify(rows);
+    for (const leaked of ['riskLevel', 'riskScore', 'signals', 'evidence', 'reviewNote', 'high_attention']) {
+      assert.ok(!serialized.includes(leaked), `surucu gorunumune sizdi: ${leaked}`);
+    }
+  });
 });
 
 describe('fuel receipt — confirmation', () => {

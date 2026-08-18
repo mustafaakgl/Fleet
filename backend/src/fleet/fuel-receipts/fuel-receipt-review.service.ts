@@ -3,6 +3,8 @@ import { FuelEntryWorkflowStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../../audit/audit.service';
 import { DriverNotifyService } from '../../notifications/driver-notify.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FuelReconciliationReviewService } from '../fuel-reconciliation/fuel-reconciliation-review.service';
+import { FuelReconciliationService } from '../fuel-reconciliation/fuel-reconciliation.service';
 import type {
   ApproveFuelReceiptDto,
   ListFuelReceiptsQueryDto,
@@ -115,6 +117,8 @@ export class FuelReceiptReviewService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly driverNotify: DriverNotifyService,
+    private readonly reconciliation: FuelReconciliationService,
+    private readonly reconciliationReview: FuelReconciliationReviewService,
   ) {}
 
   private isTrue(raw: string | undefined): boolean {
@@ -365,6 +369,10 @@ export class FuelReceiptReviewService {
     const row = await this.requireReceipt(receiptId);
     const extraction = row.ocrExtraction as NormalizedFuelReceiptExtraction | null;
     const duplicates = await this.duplicateSuspectIds([row]);
+    // Telematik mutabakati (Faz 11) — AYNI istekte geliyor: cekmece zaten bu
+    // detayi cekiyor ve ikinci bir tur, panelin fis bilgisinden daha gec
+    // gelmesine yol acardi.
+    const reconciliation = await this.reconciliationReview.panelForFuelEntry(receiptId);
 
     const issues: FuelReceiptIssue[] =
       row.workflowStatus === FuelEntryWorkflowStatus.driver_review
@@ -484,6 +492,11 @@ export class FuelReceiptReviewService {
             reversedAt: row.correctionOf.reversedAt.toISOString(),
           }
         : null,
+      /**
+       * Telematik kontrolu. `null` = fis heniz onaylanmadi (analiz yalnizca
+       * ONAYDAN SONRA baslar) ya da bu kayit onay akisindan once olusmus.
+       */
+      reconciliation,
       /** Optimistic concurrency icin istemcinin geri gonderecegi deger. */
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -560,8 +573,8 @@ export class FuelReceiptReviewService {
     }
 
     const now = new Date();
-    const claimed = await this.prisma.$transaction(async (tx) =>
-      tx.fleetFuelEntry.updateMany({
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.fleetFuelEntry.updateMany({
         where: {
           id: receiptId,
           workflowStatus: FuelEntryWorkflowStatus.submitted,
@@ -584,8 +597,26 @@ export class FuelReceiptReviewService {
                 // Ret, yakit niyeti kilidini SERBEST BIRAKIR: fis kesinlesmedi.
                 fuelingIntentSettledKey: null,
               },
-      }),
-    );
+      });
+
+      /**
+       * Telematik mutabakati (Faz 11) — ONAY ILE AYNI TRANSACTION'DA.
+       *
+       * Burada telematik OKUNMUYOR: yalnizca `pending` bir satir yaziliyor.
+       * Bu yuzden telematik/analiz tarafi tamamen coksede onay yine basarili
+       * olur; is kaybolmaz, beklemede kalir. Transaction disinda "unut-gitsin"
+       * bir cagri yapsaydik, surec o anda yeniden baslarsa analiz hic
+       * olusmazdi ve bunu kimse fark etmezdi.
+       */
+      const enqueued =
+        input.kind === 'approve' && updated.count > 0
+          ? await this.reconciliation.enqueueWithin(tx, receiptId)
+          : false;
+
+      return { claimed: updated, enqueued };
+    });
+
+    const claimed = outcome.claimed;
 
     if (claimed.count === 0) {
       const current = await this.prisma.fleetFuelEntry.findFirst({
@@ -608,6 +639,17 @@ export class FuelReceiptReviewService {
     }
 
     await this.recordReview(userId, receiptId, input, before);
+    if (outcome.enqueued) {
+      // Transaction ZATEN COMMIT OLDU. Buradaki bir hata onayi geri almaz ama
+      // istemciye 500 olarak doner ve muhasebeci onayin gecmedigini sanip
+      // tekrar dener. Denetim kaydinin eksik kalmasi, onayin belirsiz
+      // gorunmesinden iyidir.
+      try {
+        await this.reconciliation.logEnqueued(userId, receiptId);
+      } catch (error) {
+        this.logger.warn(`fuel reconciliation audit failed for ${receiptId}: ${error}`);
+      }
+    }
     return { receipt: await this.detail(receiptId), changed: true };
   }
 

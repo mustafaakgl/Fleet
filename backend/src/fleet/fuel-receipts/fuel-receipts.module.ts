@@ -4,6 +4,7 @@ import { NotificationsModule } from '../../notifications/notifications.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { StorageModule } from '../../storage/storage.module';
 import { FleetModule } from '../fleet.module';
+import { FuelReconciliationModule } from '../fuel-reconciliation/fuel-reconciliation.module';
 import { FuelStationsModule } from '../fuel-stations/fuel-stations.module';
 import { AzureDocumentIntelligenceFuelReceiptOcrProvider } from './azure-document-intelligence-fuel-receipt-ocr.provider';
 import { resolveAzureDocumentIntelligenceConfig } from './azure-document-intelligence.config';
@@ -27,7 +28,16 @@ import { MockFuelReceiptOcrProvider } from './mock-fuel-receipt-ocr.provider';
  * yakit uyumlulugu mantigi kopyalanmadi, tek yerde duruyor.
  */
 @Module({
-  imports: [PrismaModule, AuditModule, NotificationsModule, StorageModule, FleetModule, FuelStationsModule],
+  imports: [
+    PrismaModule,
+    AuditModule,
+    NotificationsModule,
+    StorageModule,
+    FleetModule,
+    FuelStationsModule,
+    // Faz 11: onay, analiz kaydini KENDI transaction'inda yaratiyor.
+    FuelReconciliationModule,
+  ],
   controllers: [
     FuelReceiptDriverController,
     // Muhasebe incelemesi AYNI modulde: ayni canonical kayit uzerinde
