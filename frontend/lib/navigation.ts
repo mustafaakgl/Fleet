@@ -381,6 +381,19 @@ const PAYROLL_ITEM: NavItem = {
  * operasyon. Menude gorunmesi YETKI DEGILDIR: asil kisit sunucudaki
  * `OPERATIONAL_ROLES` guard'i ve hedef bazli rol kontrolu.
  */
+/**
+ * Tasima siparisleri (Faz 15).
+ *
+ * ROL: `OPERATIONAL_ROLES` — surucu ve musteri disarida. Ticari ve operasyonel
+ * bir alan oldugu icin gunluk isler grubunda; menude gorunmek YETKI DEGIL,
+ * asil kisit sunucudaki guard ve alan bazli finans maskesi.
+ */
+const TRANSPORT_ORDERS_ITEM: NavItem = {
+  href: '/transport-orders',
+  labelKey: 'nav.transportOrders',
+  icon: ClipboardList,
+};
+
 const DOCUMENT_INBOX_ITEM: NavItem = {
   href: '/automation/inbox',
   labelKey: 'nav.automation.inbox',
@@ -436,6 +449,7 @@ export function getNavigationForRole(role: Role): NavGroup[] {
       if (role === 'office' || role === 'accounting') {
         heuteGroup.items.push(DOCUMENT_INBOX_ITEM);
       }
+      heuteGroup.items.push(TRANSPORT_ORDERS_ITEM);
     }
   }
 

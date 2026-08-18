@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { AssignmentsModule } from '../assignments/assignments.module';
 import { AuditModule } from '../audit/audit.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { TransportOrdersController } from './transport-orders.controller';
 import { TransportOrdersService } from './transport-orders.service';
 
 /**
@@ -11,7 +13,8 @@ import { TransportOrdersService } from './transport-orders.service';
  * ikinci bir gorev olusturma yolu acilmaz.
  */
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [PrismaModule, AuditModule, AssignmentsModule],
+  controllers: [TransportOrdersController],
   providers: [TransportOrdersService],
   exports: [TransportOrdersService],
 })

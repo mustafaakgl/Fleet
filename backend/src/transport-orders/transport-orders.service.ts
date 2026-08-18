@@ -1119,6 +1119,167 @@ export class TransportOrdersService {
     };
   }
 
+  // -------------------------------------------------------------------------
+  // Operasyon bagi
+  // -------------------------------------------------------------------------
+
+  /**
+   * Kiracinin taban para birimi.
+   *
+   * EUR SABIT DEGIL: finansal yetkisi olmayan bir kullanici siparis actiginda
+   * para birimini SECEMEZ (bkz. order-field-security) ve sunucu kiracinin
+   * yapilandirilmis tabanini kullanir. Kodda sabit `EUR` yazmak, tek bir
+   * kiraciyi butun kuruluma dayatmak olurdu.
+   */
+  async tenantBaseCurrency(): Promise<string> {
+    const tenant = await this.prisma.tenant.findFirst({ select: { baseCurrency: true } });
+    return tenant?.baseCurrency ?? 'EUR';
+  }
+
+  /**
+   * Siparisten gorev DILIMI olusturur.
+   *
+   * GOREV MEVCUT SERVISTEN GECER: bu metot `Assignment` kaydini kendisi
+   * YAZMAZ, cagiran taraf `AssignmentsService.create`i kullanir ve burada
+   * yalnizca siparis bagi kurulur. Ikinci bir gorev olusturma yolu acmak,
+   * ehliyet/arac uygunluk kapilarini atlamanin yolu olurdu.
+   *
+   * IDEMPOTENT — DOGAL ANAHTAR: ayni (siparis, kalem, surucu, arac, gun)
+   * icin ZATEN bir gorev varsa yenisi acilmaz, var olan doner.
+   */
+  async findExistingSlice(input: {
+    transportOrderId: string;
+    consignmentId: string | null;
+    driverId: string;
+    vehicleId: string;
+    workDate: Date;
+  }): Promise<{ id: string } | null> {
+    const start = new Date(input.workDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return this.prisma.assignment.findFirst({
+      where: {
+        transportOrderId: input.transportOrderId,
+        consignmentId: input.consignmentId,
+        driverId: input.driverId,
+        vehicleId: input.vehicleId,
+        workDate: { gte: start, lt: end },
+        status: { not: 'cancelled' },
+      },
+      select: { id: true },
+    });
+  }
+
+  /** Yeni gorevi siparise baglar ve URETILDIGI revizyonu isaretler. */
+  async attachAssignment(
+    userId: string,
+    orderId: string,
+    assignmentId: string,
+    consignmentId: string | null,
+  ): Promise<void> {
+    const order = await this.prisma.transportOrder.findFirst({
+      where: { id: orderId },
+      select: { id: true, currentRevision: true, companyId: true },
+    });
+    if (!order) {
+      throw new NotFoundException({ code: 'transport_order_not_found' });
+    }
+
+    if (consignmentId) {
+      const consignment = await this.prisma.consignment.findFirst({
+        where: { id: consignmentId, transportOrderId: orderId },
+        select: { id: true },
+      });
+      if (!consignment) {
+        throw new BadRequestException({ code: 'transport_order_consignment_not_found' });
+      }
+    }
+
+    // BIR GOREV YALNIZ BIR SIPARISE AIT OLABILIR: baskasina bagliysa
+    // sessizce tasinmaz.
+    const assignment = await this.prisma.assignment.findFirst({
+      where: { id: assignmentId },
+      select: { id: true, transportOrderId: true },
+    });
+    if (!assignment) {
+      throw new BadRequestException({ code: 'transport_order_assignment_not_found' });
+    }
+    if (assignment.transportOrderId && assignment.transportOrderId !== orderId) {
+      throw new ConflictException({
+        code: 'transport_order_assignment_already_linked',
+        transportOrderId: assignment.transportOrderId,
+      });
+    }
+
+    await this.prisma.assignment.updateMany({
+      where: { id: assignmentId },
+      data: {
+        transportOrderId: orderId,
+        consignmentId,
+        // Planin URETILDIGI revizyon. Siparis degisince geride kalir ve
+        // arayuz "guncel siparisten farkli" uyarisi gosterir.
+        sourceRevision: order.currentRevision,
+      },
+    });
+
+    await this.audit.logAction({
+      actorUserId: userId,
+      action: 'transport_order.assignment_linked',
+      entityType: 'TransportOrder',
+      entityId: orderId,
+      summary: 'Auftrag mit Transportauftrag verknüpft',
+      metadata: {
+        transportOrderId: orderId,
+        assignmentId,
+        consignmentId,
+        sourceRevision: order.currentRevision,
+      },
+    });
+  }
+
+  /** Siparisin musterisi — gorev taslagi ayni musteriye acilmali. */
+  async companyOf(orderId: string): Promise<{ companyId: string; currentRevision: number }> {
+    const order = await this.prisma.transportOrder.findFirst({
+      where: { id: orderId },
+      select: { companyId: true, currentRevision: true, status: true },
+    });
+    if (!order) {
+      throw new NotFoundException({ code: 'transport_order_not_found' });
+    }
+    if (order.status === TransportOrderStatus.cancelled) {
+      throw new ConflictException({ code: 'transport_order_cancelled' });
+    }
+    return { companyId: order.companyId, currentRevision: order.currentRevision };
+  }
+
+  async revisions(orderId: string): Promise<unknown[]> {
+    const rows = await this.prisma.transportOrderRevision.findMany({
+      where: { transportOrderId: orderId },
+      orderBy: { revisionNumber: 'desc' },
+      select: {
+        id: true,
+        revisionNumber: true,
+        status: true,
+        snapshot: true,
+        changedFields: true,
+        source: true,
+        sourceVersion: true,
+        createdAt: true,
+        createdById: true,
+        decidedAt: true,
+        decidedById: true,
+        rejectionReason: true,
+      },
+    });
+    return rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      decidedAt: isoDate(row.decidedAt),
+    }));
+  }
+
   private async replaceConsignments(
     tx: Prisma.TransactionClient,
     orderId: string,

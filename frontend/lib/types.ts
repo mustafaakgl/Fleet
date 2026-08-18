@@ -3785,3 +3785,142 @@ export interface IntakeRouteResult {
   /** Tekrarlanan istek: ikinci kayit URETILMEDI. */
   alreadyRouted: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Faz 15 — Ticari taşıma siparişleri
+// ---------------------------------------------------------------------------
+
+export type TransportOrderStatus = 'draft' | 'confirmed' | 'cancelled';
+export type TransportOrderBillingMode = 'on_order_completion' | 'per_delivery';
+export type AdrStatus = 'yes' | 'no' | 'unknown';
+
+/** TURETILIR, saklanmaz. Ticari durumla KARISTIRILMAZ. */
+export type FulfillmentStatus =
+  | 'unplanned'
+  | 'partially_planned'
+  | 'planned'
+  | 'in_progress'
+  | 'partially_completed'
+  | 'completed';
+
+export type TransportOrderRevisionStatus = 'applied' | 'pending_review' | 'rejected';
+
+export interface OrderFieldChange {
+  field: string;
+  before: string | number | boolean | null;
+  after: string | number | boolean | null;
+  /** Finansal alan ve rolun gorme yetkisi yok. */
+  masked?: boolean;
+}
+
+export interface TransportOrderRevision {
+  id: string;
+  revisionNumber: number;
+  status: TransportOrderRevisionStatus;
+  changedFields: OrderFieldChange[] | null;
+  source: string;
+  createdAt: string;
+  decidedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export interface OrderConsignment {
+  id: string;
+  sequence: number;
+  pickupAddress: string;
+  pickupWindowStart: string | null;
+  pickupWindowEnd: string | null;
+  deliveryAddress: string;
+  deliveryWindowStart: string | null;
+  deliveryWindowEnd: string | null;
+  cargoDescription: string;
+  quantity: string | null;
+  unit: string | null;
+  weightKg: string | null;
+  volumeM3: string | null;
+  palletCount: number | null;
+  adrStatus: AdrStatus;
+  temperatureMinC: string | null;
+  temperatureMaxC: string | null;
+  shipperReference: string | null;
+  consigneeReference: string | null;
+}
+
+export interface OrderAssignmentLink {
+  id: string;
+  status: string;
+  consignmentId: string | null;
+  sourceRevision: number | null;
+  workDate: string;
+  driverId: string;
+  vehicleId: string;
+  /** Finansal — office icin `null`. */
+  expectedDailyRevenue: string | null;
+  /** ESKI revizyondan uretilmis; otomatik degistirilmez, ISARETLENIR. */
+  staleAgainstOrder: boolean;
+}
+
+/** POD baglanana kadar (Faz 18) `verified` DIYE BIR DEGER YOK. */
+export interface OrderBillingAssessment {
+  readiness: 'not_ready' | 'unknown';
+  reason: 'order_not_confirmed' | 'order_cancelled' | 'delivery_not_verified' | 'no_completed_slice';
+  candidateAssignmentIds: string[];
+  deliveryVerificationAvailable: boolean;
+}
+
+export interface OrderRevenueAllocation {
+  contracted: number | null;
+  allocated: number;
+  remaining: number | null;
+  overAllocated: boolean;
+  assignmentCount: number;
+  assignmentsWithoutRevenue: number;
+}
+
+export interface TransportOrderRow {
+  id: string;
+  orderNumber: string;
+  externalReference: string | null;
+  company: { id: string; name: string };
+  orderDate: string;
+  status: TransportOrderStatus;
+  /** Finansal — office icin `null`. */
+  billingMode: TransportOrderBillingMode | null;
+  currency: string | null;
+  contractedRevenue: string | null;
+  currentRevision: number;
+  consignmentCount: number;
+  assignmentCount: number;
+  fulfillment: FulfillmentStatus;
+  billing: OrderBillingAssessment;
+  staleAssignmentCount: number;
+  updatedAt: string;
+  financialFieldsMasked?: boolean;
+}
+
+export interface TransportOrderDetail extends Omit<TransportOrderRow, 'consignmentCount' | 'assignmentCount' | 'staleAssignmentCount'> {
+  notes: string | null;
+  source: string;
+  revenueAllocation: OrderRevenueAllocation | null;
+  consignments: OrderConsignment[];
+  assignments: OrderAssignmentLink[];
+  revisions: TransportOrderRevision[];
+  cancellation: {
+    category: string | null;
+    note: string | null;
+    cancelledAt: string | null;
+    cancelledById: string | null;
+  } | null;
+  createdAt: string;
+}
+
+export interface CancellationImpact {
+  assignmentCount: number;
+  plannedAssignmentCount: number;
+  activeAssignmentCount: number;
+  releasedTourCount: number;
+  requiresConfirmation: boolean;
+  assignmentIds: string[];
+  tourIds: string[];
+  fulfillment: FulfillmentStatus;
+}

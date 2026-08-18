@@ -3928,3 +3928,123 @@ export const documentInboxApi = {
       })
       .then((r) => r.data),
 };
+
+/**
+ * TICARI TASIMA SIPARISLERI (Faz 15).
+ *
+ * Finansal alanlar SUNUCUDA maskeleniyor: `contractedRevenue` `null` geldiginde
+ * bu "girilmemis" degil "gorme yetkiniz yok" olabilir — `financialFieldsMasked`
+ * ikisini ayirir.
+ */
+export const transportOrdersApi = {
+  list: (
+    params: {
+      status?: import('./types').TransportOrderStatus;
+      companyId?: string;
+      from?: string;
+      to?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<{
+        rows: import('./types').TransportOrderRow[];
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+      }>('/transport-orders', { params, signal })
+      .then((r) => r.data),
+
+  detail: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').TransportOrderDetail>(`/transport-orders/${id}`, { signal })
+      .then((r) => r.data),
+
+  revisions: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').TransportOrderRevision[]>(`/transport-orders/${id}/revisions`, { signal })
+      .then((r) => r.data),
+
+  create: (body: Record<string, unknown>) =>
+    api
+      .post<import('./types').TransportOrderDetail>('/transport-orders', body)
+      .then((r) => r.data),
+
+  /** Draft'ta dogrudan uygulanir; onaylanmis sipariste ONERI acar. */
+  amend: (id: string, body: Record<string, unknown>) =>
+    api
+      .post<import('./types').TransportOrderDetail>(`/transport-orders/${id}/amendments`, body)
+      .then((r) => r.data),
+
+  approveAmendment: (id: string, revisionId: string, expectedUpdatedAt: string) =>
+    api
+      .post<import('./types').TransportOrderDetail>(
+        `/transport-orders/${id}/amendments/${revisionId}/approve`,
+        { expectedUpdatedAt },
+      )
+      .then((r) => r.data),
+
+  rejectAmendment: (id: string, revisionId: string, reason: string) =>
+    api
+      .post<import('./types').TransportOrderDetail>(
+        `/transport-orders/${id}/amendments/${revisionId}/reject`,
+        { reason },
+      )
+      .then((r) => r.data),
+
+  confirm: (id: string, expectedUpdatedAt: string) =>
+    api
+      .post<import('./types').TransportOrderDetail>(`/transport-orders/${id}/confirm`, {
+        expectedUpdatedAt,
+      })
+      .then((r) => r.data),
+
+  /** Iptalin etkisi — YAZMADAN once gosterilir. */
+  cancellationImpact: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').CancellationImpact>(`/transport-orders/${id}/cancellation-impact`, {
+        signal,
+      })
+      .then((r) => r.data),
+
+  cancel: (
+    id: string,
+    body: {
+      expectedUpdatedAt: string;
+      category: string;
+      note?: string;
+      acknowledgeImpact?: boolean;
+    },
+  ) =>
+    api
+      .post<import('./types').TransportOrderDetail>(`/transport-orders/${id}/cancel`, body)
+      .then((r) => r.data),
+
+  /** Gorev MEVCUT Assignment servisi uzerinden aciliyor. IDEMPOTENT. */
+  createAssignment: (
+    id: string,
+    body: {
+      driverId: string;
+      vehicleId: string;
+      workDate: string;
+      consignmentId?: string;
+      startTime?: string;
+      endTime?: string;
+      expectedDailyRevenue?: number;
+    },
+  ) =>
+    api
+      .post<{ assignmentId: string; created: boolean }>(`/transport-orders/${id}/assignments`, body)
+      .then((r) => r.data),
+
+  linkAssignment: (id: string, assignmentId: string, consignmentId?: string) =>
+    api
+      .post<import('./types').TransportOrderDetail>(`/transport-orders/${id}/assignments/link`, {
+        assignmentId,
+        consignmentId,
+      })
+      .then((r) => r.data),
+};

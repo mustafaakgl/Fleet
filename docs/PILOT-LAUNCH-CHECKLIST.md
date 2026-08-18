@@ -311,6 +311,8 @@ Detayı: `docs/GUNLUK-AKIS-DENETIMI.md`
 | **G4** | **Konum için hukuki dayanak "onay"** | Alman iş hukukunda tartışmalı — avukat görüşü gerekir |
 | **G5** | **Karantina akışı test edilmiyor** | Bozuk paket geldiğinde ne olduğu bilinmiyor |
 | **G6** | **Gerçek yük testi yok** | 100+ cihazlı pilotta davranış bilinmiyor |
+| **G7** | **HEIC/HEIF fotoğraf desteği yok** | iPhone varsayılan formatı; belge gelen kutusu (Faz 14) turu **tanıyıp açık bir hata veriyor** ama açamıyor. Doğrulanmış bir decoder yok — `sharp`ın libheif desteği derleme seçeneğine bağlı ve garanti değil. Pilot öncesi karar: (a) libheif'li bir sharp build doğrulanıp test yazılır, (b) kullanıcılara iPhone kamerasını "En Uyumlu"ya almaları söylenir, ya da (c) sunucu tarafı dönüştürme eklenir. |
+| **G8** | **E2E smoke/tacho borcu** | Playwright tam süitinde ~40 test kırmızı. **Faz 14 ile ölçüldü ve regresyon olmadığı baseline ile doğrulandı** (baseline 11 failed / 5 passed, Faz 14 ile 10 failed / 6 passed aynı alt süitte). Sebep kod değil ortam: tacho/telematik seed verisi yok ve süit `--no-deps` ile çalıştığı için auth setup projesi atlanıyor. Pilot öncesi karar: seed'ler CI'ya bağlanmalı ve süit `setup` bağımlılığıyla çalıştırılmalı; aksi halde gerçek bir regresyon bu gürültünün içinde görünmez. |
 
 ## Tankbeleg-OCR (Azure Document Intelligence) — Faz 10
 
