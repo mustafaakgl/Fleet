@@ -17,6 +17,15 @@ export const FINANCIAL_ROLES: UserRole[] = ['admin', 'boss', 'accounting'];
  * FINANCIAL_ROLES'te kaliyor.
  */
 export const INVOICING_ROLES: UserRole[] = [...FINANCIAL_ROLES, 'office'];
+/**
+ * Ordivan otomasyonu (Faz 12): connector ekrani ve oneri kuyrugu.
+ *
+ * `admin` + `boss`. Accounting ve office BILINCLI OLARAK DISARIDA: bu ekran
+ * bir makineye kiraci capinda yetki veren enrollment kodu uretiyor ve ajan
+ * onerilerini onayliyor. Yetki devri kararidir, gunluk operasyon degil.
+ */
+export const AUTOMATION_ROLES: UserRole[] = ['admin', 'boss'];
+
 export const ADMIN_ONLY_ROLES: UserRole[] = ['admin'];
 export const CSV_IMPORT_ROLES: UserRole[] = ['admin', 'office'];
 

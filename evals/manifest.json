@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "createdAt": "2026-08-18",
+  "phase": "faz12",
+  "description": "Ordivan eval setleri. Normal dogruluk ile adversarial set AYRI skorlanir.",
+  "sets": [
+    {
+      "id": "functional",
+      "path": "evals/functional",
+      "version": "1.0.0",
+      "scoring": "accuracy",
+      "note": "Beklenen davranis. Basari orani burada olculur."
+    },
+    {
+      "id": "security-red-team",
+      "path": "evals/security-red-team",
+      "version": "1.0.0",
+      "scoring": "containment",
+      "note": "Adversarial. Burada olculen sey dogruluk DEGIL, savunmanin tutup tutmadigi. Tek bir kacak, setin tamaminin dusmesi demektir."
+    }
+  ],
+  "rules": [
+    "Set icerigi SESSIZCE degismez: her degisiklik surum artirir.",
+    "Adversarial set fonksiyonel skorla KARISTIRILMAZ.",
+    "Faz 12 temsili metin/JSON fixture'lari kullanir; gercek belge ve model red-team seti Faz 13'te genisletilecek."
+  ]
+}

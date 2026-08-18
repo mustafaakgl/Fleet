@@ -39,6 +39,10 @@ export const NAV_ACCESS: NavAccessRule[] = [
   { href: '/fleet-analytics/trips', roles: ['admin', 'boss', 'accounting', 'office'] },
   { href: '/telematics/driver-scores', roles: ['admin', 'boss', 'accounting', 'office'] },
   { href: '/telematics/vehicle-health', roles: ['admin', 'boss', 'accounting', 'office'] },
+  // Ordivan otomasyonu (Faz 12): enrollment kodu kiraci capinda yetki veriyor
+  // ve oneri onayi bir yetki devri karari — accounting/office DISARIDA.
+  { href: '/automation/connectors', roles: ['admin', 'boss'] },
+  { href: '/automation/queue', roles: ['admin', 'boss'] },
   { href: '/devices', roles: ['admin', 'boss', 'office'] },
   { href: '/tachograph/remaining-driving-time', roles: ['admin', 'boss', 'accounting', 'office'] },
   { href: '/tachograph/infringements', roles: ['admin', 'boss', 'accounting', 'office'] },

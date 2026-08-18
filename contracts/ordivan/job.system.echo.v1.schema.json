@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fleet.local/contracts/ordivan/job.system.echo.v1.schema.json",
+  "title": "job.system.echo.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "type": "string",
+      "maxLength": 500
+    }
+  },
+  "required": [
+    "message"
+  ]
+}

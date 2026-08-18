@@ -1,0 +1,34 @@
+[
+  {
+    "id": "echo-basic",
+    "jobType": "system.echo",
+    "proposalType": "system.echo_result",
+    "schemaVersion": 1,
+    "payload": { "echoed": "hallo fleet" },
+    "expect": "accepted"
+  },
+  {
+    "id": "classification-invoice",
+    "jobType": "document.mock_classification",
+    "proposalType": "document.classification",
+    "schemaVersion": 1,
+    "payload": { "documentKind": "invoice", "confidence": 0.94, "pageCount": 2 },
+    "expect": "accepted"
+  },
+  {
+    "id": "classification-fuel-receipt",
+    "jobType": "document.mock_classification",
+    "proposalType": "document.classification",
+    "schemaVersion": 1,
+    "payload": { "documentKind": "fuel_receipt", "confidence": 0.61 },
+    "expect": "accepted"
+  },
+  {
+    "id": "classification-optional-fields",
+    "jobType": "document.mock_classification",
+    "proposalType": "document.classification",
+    "schemaVersion": 1,
+    "payload": { "documentKind": "other", "confidence": 0.5, "issuedAt": "2026-08-01" },
+    "expect": "accepted"
+  }
+]

@@ -2,13 +2,16 @@ import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
   Bell,
+  Bot,
   Building2,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
+  Inbox,
   Clock,
   Cpu,
   CreditCard,
+  Plug,
   Droplets,
   Euro,
   FileText,
@@ -368,6 +371,11 @@ const PAYROLL_ITEM: NavItem = {
   icon: Wallet,
 };
 
+const AUTOMATION_SECTION_ITEMS: NavItem[] = [
+  { href: '/automation/queue', labelKey: 'nav.automation.queue', icon: Inbox },
+  { href: '/automation/connectors', labelKey: 'nav.automation.connectors', icon: Plug },
+];
+
 const GETTING_STARTED_ITEM: NavItem = {
   href: '/getting-started',
   labelKey: 'nav.gettingStarted',
@@ -414,6 +422,14 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         verwaltungGroup.items.unshift(GETTING_STARTED_ITEM);
         verwaltungGroup.items.push(PRIVACY_ITEM, IMPORT_ITEM);
       }
+      // Ordivan yalnizca admin/boss: makineye yetki veren ve ajan onerisini
+      // onaylayan ekranlar gunluk operasyon degil, yetki devri.
+      verwaltungGroup.items.push({
+        id: 'automation',
+        labelKey: 'nav.automation',
+        icon: Bot,
+        items: AUTOMATION_SECTION_ITEMS,
+      } as NavSection);
       verwaltungGroup.items.push(AUDIT_ITEM);
     }
   }

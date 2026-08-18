@@ -573,6 +573,157 @@ export interface FuelReceiptQueueResponse {
 }
 
 /* ---------------------------------------------------------------------------
+ * Ordivan otomasyonu ve connector (Faz 12)
+ * ------------------------------------------------------------------------- */
+
+export type OrdivanConnectorMode = 'disabled' | 'mock' | 'local';
+
+export type ProtocolCompatibility =
+  | 'ok'
+  | 'connector_too_old'
+  | 'connector_too_new'
+  | 'unknown';
+
+export interface OrdivanConnector {
+  id: string;
+  displayName: string;
+  status: 'pending_enrollment' | 'active' | 'revoked';
+  /** Turetilir, saklanmaz: heartbeat kesilince kendiliginden false olur. */
+  online: boolean;
+  lastHeartbeatAt: string | null;
+  capabilities: string[];
+  connectorVersion: string | null;
+  protocolVersion: string | null;
+  protocolCompatibility: ProtocolCompatibility;
+  platform: string | null;
+  architecture: string | null;
+  /** Anahtarin yalnizca ilk birkac karakteri — ozet ya da anahtar DEGIL. */
+  credentialPrefix: string | null;
+  credentialIssuedAt: string | null;
+  credentialRotatedAt: string | null;
+  credentialRevokedAt: string | null;
+  enrolledAt: string | null;
+}
+
+export interface OrdivanConnectorList {
+  mode: OrdivanConnectorMode;
+  protocol: { current: number; minimumSupported: number };
+  connectors: OrdivanConnector[];
+}
+
+/** Uc durumlu kontrol — `unknown` ASLA "sorun yok" demek degildir. */
+export interface AutomationCheck {
+  code: string;
+  status: 'verified' | 'failed' | 'unknown';
+  messageKey: string;
+  messageParams?: Record<string, string | number>;
+  evidence?: Record<string, string | number | boolean | null>;
+  dataAt?: string;
+  unknownReason?: string;
+}
+
+export interface AutomationCheckSummary {
+  total: number;
+  verified: number;
+  failed: number;
+  unknown: number;
+  allVerified: boolean;
+  hasUnknown: boolean;
+}
+
+export type AutomationProposalStatus =
+  | 'pending_review'
+  | 'approved'
+  | 'rejected'
+  | 'expired';
+
+export type AutomationRejectionCategory =
+  | 'incorrect_match'
+  | 'incorrect_value'
+  | 'duplicate'
+  | 'insufficient_evidence'
+  | 'unsafe_or_untrusted'
+  | 'other';
+
+export type AutomationCorrectionCategory =
+  | 'accepted_as_is'
+  | 'value_corrected'
+  | 'field_added'
+  | 'field_removed'
+  | 'rejected_entirely';
+
+export interface AutomationProposalRow {
+  id: string;
+  proposalType: string;
+  status: AutomationProposalStatus;
+  jobId: string;
+  jobType: string;
+  lowConfidenceFields: string[];
+  checkSummary: AutomationCheckSummary;
+  decision: 'approved' | 'rejected' | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationApprovalTask {
+  id: string;
+  sequence: number;
+  status: 'open' | 'decided' | 'closed_expired';
+  assignedRole: string | null;
+  assignedUserId: string | null;
+  openedAt: string | null;
+  decision: 'approved' | 'rejected' | null;
+  rejectionCategory: AutomationRejectionCategory | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  reviewDurationMs: number | null;
+  changedFieldCount: number;
+  criticalLowConfidenceVerified: boolean;
+  decidedBy: { id: string; fullName: string } | null;
+}
+
+export interface AutomationProposalDetail {
+  id: string;
+  proposalType: string;
+  schemaVersion: number;
+  status: AutomationProposalStatus;
+  payload: Record<string, unknown>;
+  confidence: Record<string, number> | null;
+  evidence: Record<string, unknown> | null;
+  checks: AutomationCheck[];
+  checkSummary: AutomationCheckSummary;
+  lowConfidenceFields: string[];
+  lowConfidenceThreshold: number;
+  job: { id: string; jobType: string; schemaVersion: number };
+  /** Denetlenebilir yetki izi: hangi connector, hangi arac setiyle. */
+  agentRun: {
+    id: string;
+    attempt: number;
+    toolset: string[];
+    capabilities: string[];
+    credentialScope: string[];
+    connectorVersion: string | null;
+    protocolVersion: string | null;
+    modelVersion: string | null;
+    promptVersion: string | null;
+    connector: { id: string; displayName: string };
+  } | null;
+  approvalTasks: AutomationApprovalTask[];
+  approvalTask: AutomationApprovalTask | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationReviewMetrics {
+  decided: number;
+  fastDecisions: number;
+  withChanges: number;
+  criticalVerified: number;
+}
+
+/* ---------------------------------------------------------------------------
  * Yakit fisi / telematik mutabakati (Faz 11)
  * ------------------------------------------------------------------------- */
 

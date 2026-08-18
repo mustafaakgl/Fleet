@@ -1,0 +1,127 @@
+# URETILEN DOSYA — ELLE DUZENLEMEYIN.
+# Kaynak: backend/src/ordivan/core/job-type-registry.ts + ordivan.config.ts
+# Yeniden uretmek icin: npm --prefix backend run ordivan:contract
+# Drift testi: backend/src/ordivan/core/contract-drift.spec.ts
+openapi: "3.0.3"
+info:
+  title: "Ordivan Connector Protocol"
+  version: "1.0.0"
+  description: "Connector protokolu. BU DOSYA URETILIR — kaynak backend/src/ordivan/core/job-type-registry.ts. Elle duzenlemeyin; contract-drift.spec.ts kirilir."
+servers:
+  -
+    url: "/api/v1"
+components:
+  securitySchemes:
+    connectorCredential:
+      type: "apiKey"
+      in: "header"
+      name: "x-ordivan-credential"
+      description: "Connector anahtari. Duz metin DB de saklanmaz; kiraci yalnizca bu anahtarin bagli oldugu kayittan cozulur."
+paths:
+  /ordivan/connector/enroll:
+    post:
+      summary: "Enrollment kodu karsiliginda kalici anahtar. Anahtar BIR KEZ doner."
+      description: "Kimlik dogrulamasi kodun kendisidir. Kod tek kullanimlik ve kisa omurludur. Gecersiz, suresi dolmus ve kullanilmis kod AYNI cevabi alir."
+      responses:
+        200:
+          description: "Anahtar uretildi"
+        401:
+          description: "ordivan_enrollment_invalid"
+  /ordivan/connector/heartbeat:
+    post:
+      summary: "Canlilik ve surum bildirimi"
+      security:
+        -
+          connectorCredential:
+            []
+      responses:
+        200:
+          description: "Alindi"
+  /ordivan/connector/jobs/lease:
+    post:
+      summary: "Uygun bir isi kirala"
+      description: "Yalnizca ayni kiracinin ve connector yeteneklerine uyan isleri doner. Ayni isi iki connector ayni anda alamaz. Arac seti SUNUCUDAN gelir."
+      security:
+        -
+          connectorCredential:
+            []
+      responses:
+        200:
+          description: "Kiralanan is ya da null"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  job:
+                    nullable: true
+                    type: "object"
+                    properties:
+                      jobId:
+                        type: "string"
+                      jobType:
+                        type: "string"
+                        enum:
+                          - "system.echo"
+                          - "document.mock_classification"
+                      schemaVersion:
+                        type: "integer"
+                      payload:
+                        type: "object"
+                      attempt:
+                        type: "integer"
+                      leaseToken:
+                        type: "string"
+                      leaseExpiresAt:
+                        type: "string"
+                        format: "date-time"
+                      toolset:
+                        type: "array"
+                        items:
+                          type: "string"
+                      allowedProposalTypes:
+                        type: "array"
+                        items:
+                          type: "string"
+                      protocolVersion:
+                        type: "integer"
+  /ordivan/connector/jobs/{id}/running:
+    post:
+      summary: "Is calistirilmaya baslandi"
+      security:
+        -
+          connectorCredential:
+            []
+      responses:
+        200:
+          description: "Guncellendi"
+        409:
+          description: "ordivan_lease_not_current"
+  /ordivan/connector/jobs/{id}/complete:
+    post:
+      summary: "Sonuc ve oneri"
+      description: "IDEMPOTENT: ayni leaseToken ile tekrar cagrildiginda yeni oneri uretilmez. BAYAT deneme reddedilir."
+      security:
+        -
+          connectorCredential:
+            []
+      responses:
+        200:
+          description: "Oneri yazildi"
+        400:
+          description: "ordivan_proposal_invalid | ordivan_check_contract_violation"
+        409:
+          description: "ordivan_lease_not_current"
+  /ordivan/connector/jobs/{id}/fail:
+    post:
+      summary: "Hata sinifi bildirimi"
+      description: "Deneme siniri dolduysa is dead-letter olur; otomatik tekrar yoktur."
+      security:
+        -
+          connectorCredential:
+            []
+      responses:
+        200:
+          description: "Kaydedildi"
+        409:
+          description: "ordivan_lease_not_current"

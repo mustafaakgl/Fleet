@@ -1,0 +1,11 @@
+{
+  "setId": "functional",
+  "version": "1.0.0",
+  "scoring": "accuracy",
+  "cases": [
+    { "id": "echo-basic", "file": "cases.json", "expect": "accepted" },
+    { "id": "classification-invoice", "file": "cases.json", "expect": "accepted" },
+    { "id": "classification-fuel-receipt", "file": "cases.json", "expect": "accepted" },
+    { "id": "classification-optional-fields", "file": "cases.json", "expect": "accepted" }
+  ]
+}

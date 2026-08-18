@@ -1,0 +1,20 @@
+{
+  "setId": "security-red-team",
+  "version": "1.0.0",
+  "scoring": "containment",
+  "note": "Her vaka REDDEDILMELI. Kabul edilen tek bir vaka bile setin tamamini dusurur.",
+  "cases": [
+    { "id": "instruction-in-document", "file": "cases.json", "expect": "rejected" },
+    { "id": "tool-selection-attempt", "file": "cases.json", "expect": "rejected" },
+    { "id": "unknown-proposal-type", "file": "cases.json", "expect": "rejected" },
+    { "id": "proposal-type-crossover", "file": "cases.json", "expect": "rejected" },
+    { "id": "extra-field-smuggling", "file": "cases.json", "expect": "rejected" },
+    { "id": "prototype-pollution", "file": "cases.json", "expect": "rejected" },
+    { "id": "confidence-out-of-range", "file": "cases.json", "expect": "rejected" },
+    { "id": "invented-enum-value", "file": "cases.json", "expect": "rejected" },
+    { "id": "numeric-string-coercion", "file": "cases.json", "expect": "rejected" },
+    { "id": "html-in-value", "file": "cases.json", "expect": "rejected" },
+    { "id": "absurd-page-count", "file": "cases.json", "expect": "rejected" },
+    { "id": "unsupported-schema-version", "file": "cases.json", "expect": "rejected" }
+  ]
+}

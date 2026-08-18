@@ -1,0 +1,45 @@
+{
+  "contractVersion": "1.0.0",
+  "protocol": {
+    "current": 1,
+    "minimumSupported": 1
+  },
+  "jobTypes": [
+    {
+      "jobType": "system.echo",
+      "requiredCapability": "system.echo",
+      "schemaVersions": [
+        1
+      ],
+      "allowedProposalTypes": [
+        "system.echo_result"
+      ],
+      "toolset": []
+    },
+    {
+      "jobType": "document.mock_classification",
+      "requiredCapability": "document.classification",
+      "schemaVersions": [
+        1
+      ],
+      "allowedProposalTypes": [
+        "document.classification"
+      ],
+      "toolset": []
+    }
+  ],
+  "proposalTypes": [
+    {
+      "proposalType": "system.echo_result",
+      "schemaVersions": [
+        1
+      ]
+    },
+    {
+      "proposalType": "document.classification",
+      "schemaVersions": [
+        1
+      ]
+    }
+  ]
+}

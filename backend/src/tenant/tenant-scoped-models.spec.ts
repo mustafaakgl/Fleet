@@ -80,4 +80,24 @@ describe('TENANT_SCOPED_MODELS', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('VehicleFuelLevelSample'), true);
     assert.equal(TENANT_SCOPED_MODELS.has('FuelReconciliation'), true);
   });
+
+  /**
+   * Faz 12. Bu alti model bir kiracinin BELGELERINI, is kuyrugunu ve makine
+   * kimligini tasiyor. Kayit unutulursa Prisma uzantisi kiraci filtresini hic
+   * uygulamaz: sorgu hata vermez, yalnizca baska filolarin verisini de doner.
+   */
+  it('includes the Ordivan automation models', () => {
+    const models = [
+      'OrdivanConnector',
+      'AutomationJob',
+      'AgentRun',
+      'AutomationProposal',
+      'ApprovalTask',
+      'AutomationCorrectionEvent',
+    ];
+
+    for (const model of models) {
+      assert.equal(TENANT_SCOPED_MODELS.has(model), true, `${model} must be tenant scoped`);
+    }
+  });
 });

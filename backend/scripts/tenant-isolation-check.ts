@@ -640,6 +640,58 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.fuelReconciliation.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.fuelReconciliation.count()),
       }),
+      // Connector kimligi. Sizmasi, baska bir firmanin makinesine is
+      // verilebilmesi demekti — kiraci siniri BURADA baslar.
+      verifyTenantScopedModel({
+        label: 'OrdivanConnector', tenantA, tenantB,
+        unscopedCountA: () => base.ordivanConnector.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.ordivanConnector.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.ordivanConnector.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.ordivanConnector.count()),
+      }),
+      // Is kuyrugu. Sizmasi, baska bir kiracinin belgesinin islenmek uzere
+      // yanlis makineye gitmesi olurdu.
+      verifyTenantScopedModel({
+        label: 'AutomationJob', tenantA, tenantB,
+        unscopedCountA: () => base.automationJob.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.automationJob.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.automationJob.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.automationJob.count()),
+      }),
+      // Kosu izi — hangi connector neyi hangi yetkiyle calistirdi.
+      verifyTenantScopedModel({
+        label: 'AgentRun', tenantA, tenantB,
+        unscopedCountA: () => base.agentRun.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.agentRun.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.agentRun.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.agentRun.count()),
+      }),
+      // Oneri govdesi. Belgeden okunmus degerleri tasiyor; kiraci asmasi en
+      // agir sizinti turlerinden biri.
+      verifyTenantScopedModel({
+        label: 'AutomationProposal', tenantA, tenantB,
+        unscopedCountA: () => base.automationProposal.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.automationProposal.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.automationProposal.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.automationProposal.count()),
+      }),
+      // Insan kararlari ve inceleme metrikleri.
+      verifyTenantScopedModel({
+        label: 'ApprovalTask', tenantA, tenantB,
+        unscopedCountA: () => base.approvalTask.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.approvalTask.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.approvalTask.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.approvalTask.count()),
+      }),
+      // Duzeltme analitigi. Deger tasimasa da hangi alanlarin duzeltildigi
+      // rakip bir firma icin anlamli bilgidir.
+      verifyTenantScopedModel({
+        label: 'AutomationCorrectionEvent', tenantA, tenantB,
+        unscopedCountA: () => base.automationCorrectionEvent.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.automationCorrectionEvent.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.automationCorrectionEvent.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.automationCorrectionEvent.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

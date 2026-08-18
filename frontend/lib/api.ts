@@ -697,6 +697,99 @@ export const fuelReconciliationApi = {
       .then((r) => r.data),
 };
 
+/**
+ * Ordivan otomasyonu (Faz 12).
+ *
+ * ROL: uclar `AUTOMATION_ROLES` (admin, boss) ile korunuyor. Duz metin
+ * anahtar YALNIZCA uretildigi cagrinin yanitinda gelir; liste ucu ne anahtari
+ * ne ozetini tasir.
+ */
+export const ordivanApi = {
+  listConnectors: (signal?: AbortSignal) =>
+    api
+      .get<import('./types').OrdivanConnectorList>('/ordivan/connectors', { signal })
+      .then((r) => r.data),
+
+  /** Tek kullanimlik, kisa omurlu kod. Yanit BIR KEZ gorunur. */
+  createEnrollment: (body: { displayName: string; capabilities: string[] }) =>
+    api
+      .post<{ connectorId: string; enrollmentCode: string; expiresAt: string }>(
+        '/ordivan/connectors/enrollments',
+        body,
+      )
+      .then((r) => r.data),
+
+  rotateCredential: (connectorId: string) =>
+    api
+      .post<{ credential: string; credentialPrefix: string }>(
+        `/ordivan/connectors/${connectorId}/rotate`,
+        {},
+      )
+      .then((r) => r.data),
+
+  revokeConnector: (connectorId: string) =>
+    api
+      .post<{ revoked: boolean }>(`/ordivan/connectors/${connectorId}/revoke`, {})
+      .then((r) => r.data),
+
+  listProposals: (
+    params: { status?: import('./types').AutomationProposalStatus; page?: number; pageSize?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<{
+        rows: import('./types').AutomationProposalRow[];
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+      }>('/ordivan/automation/proposals', { params, signal })
+      .then((r) => r.data),
+
+  proposalDetail: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').AutomationProposalDetail>(
+        `/ordivan/automation/proposals/${id}`,
+        { signal },
+      )
+      .then((r) => r.data),
+
+  reviewMetrics: (signal?: AbortSignal) =>
+    api
+      .get<import('./types').AutomationReviewMetrics>('/ordivan/automation/proposals/metrics', {
+        signal,
+      })
+      .then((r) => r.data),
+
+  /**
+   * Karar. Aciklama KOSULLU zorunlu (bkz. lib/ordivan-view). Sunucu son
+   * merci: arayuz yanilirsa istek 400 doner.
+   */
+  decideProposal: (
+    id: string,
+    body: {
+      expectedUpdatedAt: string;
+      decision: 'approved' | 'rejected';
+      note?: string;
+      rejectionCategory?: import('./types').AutomationRejectionCategory;
+      corrections?: Array<{
+        fieldName: string;
+        fieldType: string;
+        changed: boolean;
+        category: import('./types').AutomationCorrectionCategory;
+        criticalLowConfidence?: boolean;
+        verifiedByReviewer?: boolean;
+      }>;
+    },
+  ) =>
+    api
+      .post<{ proposal: import('./types').AutomationProposalDetail; changed: boolean }>(
+        `/ordivan/automation/proposals/${id}/decide`,
+        body,
+      )
+      .then((r) => r.data),
+};
+
 /** Kiraci temel para birimi ayari (Faz 7.1 ucu, Faz 8 arayuzu). */
 export const tenantSettingsApi = {
   getCurrency: (signal?: AbortSignal) =>

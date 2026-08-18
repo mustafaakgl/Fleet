@@ -1052,6 +1052,12 @@ model Tenant {
   vehicleTelemetryLatest     VehicleTelemetryLatest[]
   vehicleFuelLevelSamples    VehicleFuelLevelSample[]
   fuelReconciliations        FuelReconciliation[]
+  ordivanConnectors          OrdivanConnector[]
+  automationJobs             AutomationJob[]
+  agentRuns                  AgentRun[]
+  automationProposals        AutomationProposal[]
+  approvalTasks              ApprovalTask[]
+  automationCorrectionEvents AutomationCorrectionEvent[]
   vehicleDtcs                VehicleDtc[]
   tachoProviderCredentials   TachoProviderCredential[]
   dddFiles                   DddFile[]
@@ -1218,6 +1224,10 @@ model User {
   createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
   reviewedFuelEntries             FleetFuelEntry[]            @relation("FuelEntryReviewedBy")
   reviewedFuelReconciliations     FuelReconciliation[]        @relation("FuelReconciliationReviewedBy")
+  enrolledOrdivanConnectors       OrdivanConnector[]          @relation("OrdivanConnectorCreatedBy")
+  createdAutomationJobs           AutomationJob[]             @relation("AutomationJobCreatedBy")
+  decidedApprovalTasks            ApprovalTask[]              @relation("ApprovalTaskDecidedBy")
+  assignedApprovalTasks           ApprovalTask[]              @relation("ApprovalTaskAssignedTo")
   reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
@@ -4270,4 +4280,454 @@ model TachoDownloadSchedule {
   @@index([vehicleId])
   @@index([lastFulfilledDddFileId])
   @@map("tacho_download_schedules")
+}
+
+/**
+ * ===========================================================================
+ * Ordivan otomasyonu ve connector temeli (Faz 12)
+ * TASARIM SINIRI: bu katman Fleet'in domain kayitlarina HIC YAZMAZ. Ciktisi
+ * yalnizca bir ONERI (`AutomationProposal`) ve insanin verdigi karardir.
+ * Onay bir Assignment, Tour, ServiceRecord ya da fatura URETMEZ.
+ * ===========================================================================
+ */
+
+/// Connector'in yasam dongusu.
+enum OrdivanConnectorStatus {
+  /// Enrollment kodu uretildi, connector heniz kaydolmadi.
+  pending_enrollment
+  active
+  /// Iptal edildi. Kayit SILINMEZ: hangi connector ne zaman is aldi sorusunun
+  /// cevabi denetimde kalmali.
+  revoked
+}
+
+/// Is yasam dongusu.
+enum AutomationJobStatus {
+  queued
+  /// Bir connector kiraladi ama heniz calistirmaya baslamadi.
+  leased
+  running
+  completed
+  failed
+  cancelled
+  /// Deneme siniri doldu. Otomatik tekrar YOK; insan bakmali.
+  dead_letter
+}
+
+enum AgentRunStatus {
+  running
+  completed
+  failed
+}
+
+/// Oneri yasam dongusu.
+enum AutomationProposalStatus {
+  pending_review
+  approved
+  rejected
+  /// Suresi doldu. Sessizce onaylanmis SAYILMAZ.
+  expired
+}
+
+/// Insanin verdigi karar.
+enum ApprovalDecision {
+  approved
+  rejected
+}
+
+/// Onay gorevinin durumu.
+enum ApprovalTaskStatus {
+  open
+  decided
+  /// Oneri suresi doldugu icin kapatildi. Karar VERILMEDI — bu, sessizce
+  /// onaylanmis saymaktan tamamen farkli bir sonuc.
+  closed_expired
+}
+
+/**
+ * RED SEBEBI — sayilabilir olmali.
+ * "Neden reddedildi" sorusunun cevabi serbest metinden okunamaz. Bu kategori
+ * ajanin kalite sinyalidir: hangi hata turu yogunlasiyor, hangi prompt/model
+ * hangi sebeple duzeltiliyor.
+ */
+enum AutomationRejectionCategory {
+  /// Oneri yanlis kayda/varliga baglanmis.
+  incorrect_match
+  /// Baglanti dogru ama deger yanlis.
+  incorrect_value
+  duplicate
+  /// Karar verecek kanit yok.
+  insufficient_evidence
+  /// Icerik guvenilmez ya da manipulasyon suphesi tasiyor.
+  unsafe_or_untrusted
+  /// Digerlerine girmiyor — ACIKLAMA ZORUNLU.
+  other
+}
+
+/**
+ * EVRENSEL UC DURUMLU KONTROL SEMANTIGI.
+ * `unknown` HICBIR YERDE `verified` ya da "sorun yok" anlamina gelmez. Bir
+ * kontrol calistirilamadiysa bunu soylemek zorundayiz; sessizce gecmek,
+ * kontrol edilmis izlenimi verir. Bu enum butun gelecek ajanlarin ortak
+ * sozlesmesi (bkz. automation-check.contract.ts).
+ */
+enum AutomationCheckStatus {
+  verified
+  failed
+  unknown
+}
+
+/// Insanin oneriye ne yaptigi — SAYILABILIR olmali ki "kac oneri gercekten
+/// duzeltildi" sorusu serbest metinden degil veriden cevaplanabilsin.
+enum AutomationCorrectionCategory {
+  /// Alan oldugu gibi kabul edildi.
+  accepted_as_is
+  /// Degeri insan degistirdi.
+  value_corrected
+  /// Ajanin hic uretmedigi alani insan ekledi.
+  field_added
+  /// Ajanin urettigi alani insan kaldirdi.
+  field_removed
+  /// Oneri butunuyle reddedildi.
+  rejected_entirely
+}
+
+/**
+ * Bir kiracinin makinesinde calisan Ordivan connector'u.
+ * KIMLIK MODELI: connector kendi kiracisini ya da rolunu SECEMEZ. Enrollment
+ * kodu tek kullanimlik ve kisa omurlu; kod hangi kiraciya aitse connector da
+ * o kiraciya kilitlenir. Bu yuzden `tenantId` istemciden ASLA alinmaz.
+ * SECRET DB'DE DUZ METIN DURMAZ: yalnizca SHA-256 ozeti ve gosterim icin
+ * kirilmis bir onek saklanir. Duz metin yalnizca uretildigi ANDA, bir kez
+ * doner (bkz. refresh-token.service.ts ile ayni desen).
+ */
+model OrdivanConnector {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Insanin ekranda tanidigi ad ("Buro-PC", "Werkstatt-Laptop").
+  displayName String
+  status      OrdivanConnectorStatus @default(pending_enrollment)
+
+  /// --- Enrollment (tek kullanimlik, kisa omurlu) ---
+  /// Kodun KENDISI degil ozeti. Kod da bir secret'tir.
+  enrollmentCodeHash  String    @unique
+  enrollmentExpiresAt DateTime
+  /// Doluysa kod KULLANILMISTIR ve bir daha kabul edilmez.
+  enrolledAt          DateTime?
+
+  /// --- Credential ---
+  credentialHash      String?   @unique
+  /// Yalnizca ekranda "hangi anahtar" ayrimi icin ilk birkac karakter.
+  credentialPrefix    String?
+  credentialIssuedAt  DateTime?
+  credentialRotatedAt DateTime?
+  credentialRevokedAt DateTime?
+
+  /**
+   * Bu connector'in alabilecegi is turleri.
+   * ARAC DEGIL, IS TURU: connector'a "genel SQL", "shell" ya da "keyfi HTTP"
+   * gibi bir yetenek VERILEMEZ. Liste job type registry ile dogrulanir.
+   */
+  capabilities String[]
+
+  /// --- Surum ve uyumluluk (connector kendisi bildirir) ---
+  connectorVersion String?
+  protocolVersion  String?
+  platform         String?
+  architecture     String?
+
+  lastHeartbeatAt DateTime?
+
+  createdById String
+  createdBy   User     @relation("OrdivanConnectorCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs AutomationJob[]
+  runs AgentRun[]
+
+  @@unique([tenantId, displayName])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("ordivan_connectors")
+}
+
+/**
+ * Connector'a verilecek is.
+ * KIRALAMA (lease) MODELI: is bir connector'a suresi belli bir sure icin
+ * verilir. Sure dolarsa is geri kuyruga duser ve `attempt` artar. Eski
+ * denemenin gec gelen sonucu YENISINI EZEMEZ — her deneme kendi
+ * `leaseToken`ini tasir ve tamamlama bu token'la dogrulanir.
+ */
+model AutomationJob {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Registry'de tanimli olmayan bir tur kabul EDILMEZ.
+  jobType       String
+  /// Payload bu surumun semasiyla dogrulanir.
+  schemaVersion Int    @default(1)
+  payload       Json
+
+  /// Isi alabilmek icin gereken yetenek. Connector'da yoksa is verilmez.
+  requiredCapability String
+
+  status AutomationJobStatus @default(queued)
+
+  /// --- Kiralama ---
+  leasedByConnectorId String?
+  leasedByConnector   OrdivanConnector? @relation(fields: [leasedByConnectorId], references: [id], onDelete: SetNull)
+  leasedAt            DateTime?
+  leaseExpiresAt      DateTime?
+  /// Aktif denemenin kimligi. Tamamlama/hata bildirimi bunu tasimak zorunda;
+  /// eslesmiyorsa BAYAT bir denemedir ve sessizce reddedilir.
+  leaseToken          String?
+
+  attempt     Int @default(0)
+  maxAttempts Int @default(3)
+
+  completedAt    DateTime?
+  failedAt       DateTime?
+  deadLetteredAt DateTime?
+  /// Teknik hata SINIFI, saglayici mesaji degil.
+  failureClass   String?
+
+  createdById String?
+  createdBy   User?    @relation("AutomationJobCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  runs      AgentRun[]
+  proposals AutomationProposal[]
+
+  @@index([tenantId])
+  /// Kiralama sorgusunun canonical yolu: kiraci + durum + en eski once.
+  @@index([tenantId, status, createdAt])
+  @@index([leasedByConnectorId])
+  @@index([status, leaseExpiresAt])
+  @@map("automation_jobs")
+}
+
+/**
+ * Tek bir DENEME. Is yeniden kiralandiginda yeni bir run acilir.
+ * NEDEN AYRI KAYIT: "bu sonucu hangi connector, hangi yetki kapsamiyla, hangi
+ * arac setiyle uretti" sorusunun cevabi isin ustune yazilsaydi ikinci deneme
+ * birincinin izini silerdi.
+ */
+model AgentRun {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  jobId       String
+  job         AutomationJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  connectorId String
+  connector   OrdivanConnector @relation(fields: [connectorId], references: [id], onDelete: Restrict)
+
+  attempt Int
+  status  AgentRunStatus @default(running)
+
+  /// --- Denetlenebilir yetki izi ---
+  /// Bu kosuda GECERLI olan kapsam, yetenek ve arac seti. Sonradan connector
+  /// yetkisi degisse bile bu kosunun neyle calistigi degismez.
+  credentialScope String[]
+  capabilities    String[]
+  toolset         String[]
+
+  connectorVersion String?
+  protocolVersion  String?
+
+  /// Uretim tarafinin surumleri — duzeltme analizinin karsilastirma ekseni.
+  modelVersion  String?
+  promptVersion String?
+  schemaVersion Int?
+
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  failureClass String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  proposals AutomationProposal[]
+
+  /// Bir is icin ayni deneme numarasi iki kez acilamaz.
+  @@unique([jobId, attempt])
+  @@index([tenantId])
+  @@index([connectorId, startedAt])
+  @@map("agent_runs")
+}
+
+/**
+ * Ajanin URETTIGI ONERI. Bir domain kaydi DEGILDIR.
+ * `payload` runtime sema dogrulamasindan gecmis, beklenmeyen alanlari
+ * REDDEDILMIS veridir. Ham model metni buraya girmez.
+ */
+model AutomationProposal {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  jobId      String
+  job        AutomationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  agentRunId String
+  agentRun   AgentRun      @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  /// Whitelist'te olmayan bir tur kabul EDILMEZ.
+  proposalType  String
+  schemaVersion Int    @default(1)
+
+  status AutomationProposalStatus @default(pending_review)
+
+  /// Dogrulanmis oneri govdesi.
+  payload    Json
+  /// Alan basina guven skoru: { alan: 0..1 }.
+  confidence Json?
+  /// Kanit: neyin nereden geldigi. Ham belge/OCR metni KOPYALANMAZ.
+  evidence   Json?
+  /**
+   * Uc durumlu kontroller: [{ code, status, dataAt, reason }].
+   * `unknown` burada da "sorun yok" DEMEK DEGILDIR.
+   */
+  checks     Json?
+
+  /// Suresi dolan oneri otomatik onaylanmaz, `expired` olur.
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// 1:n — gelecekte cok adimli onaya (ornegin once ofis, sonra muhasebe)
+  /// izin vermek icin. FAZ 12'DE tek gorev olusturuluyor; iliskiyi simdiden
+  /// 1:n yapmak, ileride veri tasimadan adim eklenebilmesi demek.
+  approvalTasks    ApprovalTask[]
+  correctionEvents AutomationCorrectionEvent[]
+
+  @@index([tenantId])
+  @@index([tenantId, status, createdAt])
+  @@index([jobId])
+  @@map("automation_proposals")
+}
+
+/**
+ * Insanin is kalemi — inceleme metriklerinin tasiyicisi.
+ * NEDEN ONERIDEN AYRI: oneri makinenin ciktisi, bu kayit insanin davranisi.
+ * Ikisini tek satirda birlestirmek, "ne kadar surede karar verildi" gibi
+ * olculeri onerinin her guncellenmesinde bulaniklastirirdi.
+ * OLCUM AMACI RUBBER-STAMPING RISKI. Gizli fare/klavye takibi YOK: yalnizca
+ * acilis ani, karar ani ve degistirilen alan sayisi tutulur.
+ */
+model ApprovalTask {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  proposalId String
+  proposal   AutomationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  /// Cok adimli onayda adimin sirasi. Faz 12'de her zaman 1.
+  sequence Int                @default(1)
+  status   ApprovalTaskStatus @default(open)
+
+  /// --- Atama ---
+  /// Gorev bir ROLE ya da belirli bir KULLANICIYA atanabilir. Ikisi de bossa
+  /// yetkili herkes gorur (Faz 12'nin davranisi).
+  assignedRole   String?
+  assignedUserId String?
+  assignedUser   User?   @relation("ApprovalTaskAssignedTo", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  /// Oneri ilk kez ACILDIGI an. Karar suresinin baslangici bu.
+  openedAt DateTime?
+
+  decision          ApprovalDecision?
+  decidedById       String?
+  decidedBy         User?                        @relation("ApprovalTaskDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt         DateTime?
+  /**
+   * Insan aciklamasi. HTML olarak RENDER EDILMEZ.
+   * NORMAL ONAYDA OPSIYONEL: her rutin onay icin metin istemek, insanlari
+   * anlamsiz doldurmaya iter ve gercekten aciklama gereken yerde de ayni
+   * refleksle "ok" yazilir. Zorunluluk yalnizca karar gercekten aciklama
+   * gerektirdiginde devreye giriyor (bkz. automation-proposal.service).
+   */
+  decisionNote      String?
+  /// Red sebebi — reddederken ZORUNLU.
+  rejectionCategory AutomationRejectionCategory?
+
+  /// openedAt -> decidedAt farki. Turetilebilir ama raporun her satir icin
+  /// hesap yapmamasi icin yaziliyor.
+  reviewDurationMs              Int?
+  /// Insanin gercekten degistirdigi alan sayisi.
+  changedFieldCount             Int     @default(0)
+  /// Kritik ve dusuk guvenli alanlarin insan tarafindan dogrulanip
+  /// dogrulanmadigi — rubber-stamping'in en dogrudan gostergesi.
+  criticalLowConfidenceVerified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  correctionEvents AutomationCorrectionEvent[]
+
+  /// Ayni oneride ayni sira iki kez acilamaz.
+  @@unique([proposalId, sequence])
+  @@index([tenantId])
+  @@index([tenantId, decidedAt])
+  @@index([proposalId])
+  @@index([tenantId, status])
+  @@map("approval_tasks")
+}
+
+/**
+ * Insanin bir ALAN uzerinde ne yaptigi.
+ * HASSAS DEGER TASIMAZ. Belgeden okunan tutar, ad, plaka gibi degerler burada
+ * TEKRARLANMAZ: bu tablo analitik icin var ve kisisel/mali veriyi ikinci bir
+ * yere kopyalamak, silme ve saklama politikasini iki katina cikarirdi. Degerin
+ * kendisi gerekiyorsa `proposalId` uzerinden onerinin kendisine gidilir.
+ */
+model AutomationCorrectionEvent {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  proposalId     String
+  proposal       AutomationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  approvalTaskId String
+  approvalTask   ApprovalTask       @relation(fields: [approvalTaskId], references: [id], onDelete: Cascade)
+
+  /// Alanin ADI ve TURU — degeri degil.
+  fieldName String
+  fieldType String
+
+  changed           Boolean
+  category          AutomationCorrectionCategory
+  /// Red sebebi — yalnizca reddedilen onerilerde dolu.
+  rejectionCategory AutomationRejectionCategory?
+
+  /// Ajanin bu alan icin bildirdigi guven (0..1). Duzeltmelerin dusuk guvenli
+  /// alanlarda yogunlasip yogunlasmadigi buradan olculur.
+  previousConfidence Decimal? @db.Decimal(4, 3)
+
+  /// Kritik ve dusuk guvenli bir alanin insan tarafindan dogrulanip
+  /// dogrulanmadigi.
+  criticalLowConfidence Boolean @default(false)
+  verifiedByReviewer    Boolean @default(false)
+
+  /// Uretim tarafinin surumleri — "hangi prompt/model daha az duzeltiliyor".
+  modelVersion  String?
+  promptVersion String?
+  schemaVersion Int?
+
+  /// Bu alanin karar aninda gecen inceleme suresi (gorev duzeyinde).
+  reviewDurationMs Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([proposalId])
+  @@index([approvalTaskId])
+  @@index([tenantId, category, createdAt])
+  @@map("automation_correction_events")
 }

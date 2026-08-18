@@ -9,6 +9,7 @@ describe('Swagger/OpenAPI bootstrap', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalFuelStationProvider = process.env.FUEL_STATION_PROVIDER;
   const originalFuelReceiptOcrProvider = process.env.FUEL_RECEIPT_OCR_PROVIDER;
+  const originalOrdivanMode = process.env.ORDIVAN_CONNECTOR_MODE;
   let app: NestExpressApplication | null = null;
   let baseUrl = '';
 
@@ -40,6 +41,11 @@ describe('Swagger/OpenAPI bootstrap', () => {
     // olabilir ve bu dosya uygulamayi NODE_ENV=production ile kaldirdigi icin
     // acikca gecersiz kilinmali.
     process.env.FUEL_RECEIPT_OCR_PROVIDER = 'disabled';
+    // Ordivan da ayni kurali tasiyor: `mock` uretimde ACILISTA reddediliyor.
+    // Bu dosya uygulamayi bilincli olarak NODE_ENV=production ile ayaga
+    // kaldirdigi icin, gelistirici makinesindeki `mock` ayari burayi
+    // dusururdu — sahte saglayicilarla AYNI sekilde notrlestiriliyor.
+    process.env.ORDIVAN_CONNECTOR_MODE = 'disabled';
   });
 
   after(async () => {
@@ -69,6 +75,12 @@ describe('Swagger/OpenAPI bootstrap', () => {
       delete process.env.FUEL_RECEIPT_OCR_PROVIDER;
     } else {
       process.env.FUEL_RECEIPT_OCR_PROVIDER = originalFuelReceiptOcrProvider;
+    }
+
+    if (originalOrdivanMode === undefined) {
+      delete process.env.ORDIVAN_CONNECTOR_MODE;
+    } else {
+      process.env.ORDIVAN_CONNECTOR_MODE = originalOrdivanMode;
     }
   });
 
