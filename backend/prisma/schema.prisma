@@ -1062,6 +1062,9 @@ model Tenant {
   documentIntakes            DocumentIntake[]
   intakeDocuments            IntakeDocument[]
   intakeDocumentRoutings     IntakeDocumentRouting[]
+  transportOrders            TransportOrder[]
+  consignments               Consignment[]
+  transportOrderRevisions    TransportOrderRevision[]
   vehicleDtcs                VehicleDtc[]
   tachoProviderCredentials   TachoProviderCredential[]
   dddFiles                   DddFile[]
@@ -1237,6 +1240,11 @@ model User {
   assignedIntakeDocuments         IntakeDocument[]            @relation("IntakeDocumentAssignedTo")
   decidedIntakeDocuments          IntakeDocument[]            @relation("IntakeDocumentDecidedBy")
   routedIntakeDocuments           IntakeDocumentRouting[]     @relation("IntakeDocumentRoutedBy")
+  createdTransportOrders          TransportOrder[]            @relation("TransportOrderCreatedBy")
+  confirmedTransportOrders        TransportOrder[]            @relation("TransportOrderConfirmedBy")
+  cancelledTransportOrders        TransportOrder[]            @relation("TransportOrderCancelledBy")
+  createdOrderRevisions           TransportOrderRevision[]    @relation("TransportOrderRevisionCreatedBy")
+  decidedOrderRevisions           TransportOrderRevision[]    @relation("TransportOrderRevisionDecidedBy")
   reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
@@ -1665,6 +1673,7 @@ model Company {
   rateCards         RateCard[]
   invoices          Invoice[]
   locations         Location[]
+  transportOrders   TransportOrder[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, datevDebtorNumber])
@@ -1741,6 +1750,8 @@ model Location {
   deliveryAssignments Assignment[] @relation("AssignmentDeliveryLocation")
   tourDepots          Tour[]       @relation("TourDepot")
   tourStops           TourStop[]   @relation("TourStopLocation")
+  consignmentPickups   Consignment[] @relation("ConsignmentPickupLocation")
+  consignmentDeliveries Consignment[] @relation("ConsignmentDeliveryLocation")
 
   @@unique([tenantId, normalizedHash])
   @@index([tenantId])
@@ -1914,8 +1925,43 @@ model Assignment {
   startTime            String?
   endTime              String?
   routeName            String?
+  /**
+   * OPERASYON DILIMINE AYRILAN GELIR (Faz 15'te anlami netlesti).
+   *
+   * Faz 15 bu alanin YANINA ikinci bir gelir alani ACMADI: aynı anlamda iki
+   * alan, iki farkli toplam demektir. Siparis geliri `TransportOrder`da,
+   * dilime ayrilan pay burada.
+   *
+   * PARA BIRIMI ALANI YOK: bagli oldugu siparisin para biriminden, siparis
+   * yoksa `Tenant.baseCurrency`den cozulur. Ayri bir alan, siparisle
+   * celisebilen bir tutar uretirdi.
+   */
   expectedDailyRevenue Decimal?         @db.Decimal(10, 2)
   status               AssignmentStatus @default(planned)
+
+  /**
+   * --- Faz 15: TICARI SIPARIS BAGI (hepsi NULLABLE) ---
+   *
+   * NULLABLE KALMAK ZORUNDA: bugunku kayitlarin hicbirinin siparisi yok ve
+   * sofor talebinden (`TransportRequest`) dogan isler bir musteri siparisine
+   * ait olmayabilir. Eski kayitlar UYDURMA siparislere BAGLANMAZ.
+   *
+   * Bir Assignment YALNIZ BIR siparise ait olabilir. Bolunmus siparis birden
+   * fazla Assignment uretir; aktarma gerekiyorsa tek Assignment birden fazla
+   * tura baglanmaz, ayri operasyon dilimleri kullanilir.
+   */
+  transportOrderId String?
+  transportOrder   TransportOrder? @relation(fields: [transportOrderId], references: [id], onDelete: SetNull)
+  consignmentId    String?
+  consignment      Consignment?    @relation(fields: [consignmentId], references: [id], onDelete: SetNull)
+  /**
+   * Planin URETILDIGI siparis revizyonu.
+   *
+   * Siparis degistiginde bu alan GERIDE KALIR ve arayuz "guncel siparisten
+   * farkli" uyarisi gosterir. Otomatik guncellenmez: yola cikmis bir gorevi
+   * sessizce degistirmek, sofora haber vermeden isini degistirmektir.
+   */
+  sourceRevision   Int?
   notes                String?
   createdById          String
   createdAt            DateTime         @default(now())
@@ -1945,6 +1991,8 @@ model Assignment {
   @@index([driverId, workDate])
   @@index([vehicleId, workDate])
   @@index([companyId, workDate])
+  @@index([transportOrderId])
+  @@index([consignmentId])
 }
 
 model RateCard {
@@ -5079,4 +5127,278 @@ model IntakeDocumentRouting {
   @@index([tenantId])
   @@index([tenantId, destination, createdAt])
   @@map("intake_document_routings")
+}
+
+// ============================================================================
+// FAZ 15 — CANONICAL TRANSPORT ORDER
+// ============================================================================
+
+/// Ticari yasam dongusu. OPERASYON DURUMU DEGIL: bir sipariş `confirmed` iken
+/// hic planlanmamis olabilir. Ikisini karistirmak, "onaylandi" ile "yola cikti"
+/// arasindaki farki yok eder.
+enum TransportOrderStatus {
+  draft
+  confirmed
+  /// Silinmez. Iptal bir OLAYDIR ve gecmisi korunur.
+  cancelled
+}
+
+/// Faturalamanin neye dayandigi.
+enum TransportOrderBillingMode {
+  /// Butun gerekli teslimatlar dogrulanmadan fatura hazir DEGIL.
+  on_order_completion
+  /// Yalnizca dogrulanmis dilim fatura adayi olur.
+  per_delivery
+}
+
+/**
+ * Siparişin nereden geldigi.
+ *
+ * Faz 15'te tek deger: `manual`. Faz 16'da e-posta/ajan kaynaklari eklenecek —
+ * ama o kaynaklar da siparişi DOGRUDAN guncelleyemeyecek, yalnizca
+ * `pending_review` bir revizyon onerebilecek.
+ */
+enum TransportOrderSource {
+  manual
+}
+
+/**
+ * Tehlikeli madde durumu.
+ *
+ * `unknown` HICBIR YERDE guvenli ya da uygun sayilmaz: "bilmiyorum" ile "hayir"
+ * arasindaki fark, yanlis araca yuklenen bir ADR sevkiyati kadar buyuk.
+ */
+enum AdrStatus {
+  yes
+  no
+  unknown
+}
+
+enum TransportOrderRevisionStatus {
+  /// Ana kayda UYGULANMIS revizyon.
+  applied
+  /// Onaylanmis siparişte yapilan degisiklik onerisi. Ana kayit DEGISMEDI.
+  pending_review
+  /// Reddedildi. Ana kayit DEGISMEDI ve oneri gecmiste kalir.
+  rejected
+}
+
+/// Iptal sebebi — serbest metinden degil sayilabilir bir kategoriden.
+enum TransportOrderCancellationCategory {
+  customer_cancelled
+  duplicate_order
+  created_in_error
+  no_capacity
+  price_disagreement
+  other
+}
+
+/**
+ * MUSTERIDEN GELEN TICARI SIPARIS (Faz 15).
+ *
+ * `TransportRequest` ILE KARISTIRILMAZ: o bir SOFOR talebidir (iç planlama),
+ * bu bir MUSTERI siparisi. Ikinci bir siparis modeli kurulmadi; ikisi farkli
+ * gercekleri temsil ediyor (bkz. docs/ordivan-domain-mapping.md).
+ *
+ * OPERASYONA `Assignment` UZERINDEN BAGLANIR. `Tour` ile dogrudan bagi YOKTUR
+ * ve `TourStop.transportOrderId` BILINCLI OLARAK EKLENMEDI: siparis-tur
+ * iliskisi `Assignment` uzerinden zaten turetilebiliyor ve ikinci bir yol
+ * acmak, "bu durak hangi siparise ait" sorusunu iki kaynaktan cevaplanabilir
+ * hale getirirdi.
+ */
+model TransportOrder {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Musteri. Repodaki canonical musteri kaydi `Company`.
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  /// Kiraci icinde benzersiz siparis numarasi.
+  orderNumber String
+  /// Musterinin KENDI referansi. Bizim numaramiz degil; musteriyle yazisirken
+  /// kullanilan sey bu.
+  externalReference String?
+
+  /**
+   * DUPLICATE TASIYICI.
+   *
+   * `{companyId}:{externalReference}` — yalnizca referans doluysa ve siparis
+   * IPTAL EDILMEMISSE yaziliyor; aksi halde `null`. Tekillik uygulamada degil
+   * VERITABANINDA: ayni referansi iki istek ayni anda gonderdiginde uygulama
+   * kontrolu yarisi kaybeder. Repodaki `fuelingIntentSettledKey` ile ayni
+   * desen.
+   *
+   * Iptal edilen siparis referansi SERBEST BIRAKIR: musteri ayni referansla
+   * yeniden siparis verebilmeli.
+   */
+  duplicateKey String?
+
+  orderDate DateTime
+
+  /// Para birimi ZORUNLU ve EUR VARSAYILMAZ.
+  currency String
+  /// Sozlesme geliri. API'de STRING olarak doner — float yuvarlamasi bir
+  /// sozlesme tutarini sessizce degistirmemeli.
+  contractedRevenue Decimal? @db.Decimal(12, 2)
+
+  billingMode TransportOrderBillingMode @default(on_order_completion)
+  status      TransportOrderStatus     @default(draft)
+  source      TransportOrderSource     @default(manual)
+
+  /// Guncel revizyon numarasi. `TransportOrderRevision` ile birlikte artar.
+  currentRevision Int @default(1)
+
+  notes String?
+
+  confirmedAt   DateTime?
+  confirmedById String?
+  confirmedBy   User?     @relation("TransportOrderConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  /// --- Iptal. Kayit SILINMEZ. ---
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancelledBy          User?                              @relation("TransportOrderCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancellationCategory TransportOrderCancellationCategory?
+  cancellationNote     String?
+
+  createdById String
+  createdBy   User     @relation("TransportOrderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  /// OPTIMISTIC CONCURRENCY tasiyicisi — repodaki canonical desen
+  /// (`expectedUpdatedAt + kosullu updateMany`, bkz. automation-proposal.service).
+  updatedAt   DateTime @updatedAt
+
+  consignments Consignment[]
+  assignments  Assignment[]
+  revisions    TransportOrderRevision[]
+
+  @@unique([tenantId, orderNumber])
+  /// Kiraci ICINDE tekil. Kiracilar arasinda ayni referans CAKISABILIR ve sizmaz.
+  @@unique([tenantId, duplicateKey])
+  @@index([tenantId])
+  @@index([tenantId, status, orderDate])
+  @@index([tenantId, companyId, orderDate])
+  @@map("transport_orders")
+}
+
+/**
+ * SIPARISIN TASIMA KALEMI (Faz 15).
+ *
+ * Bir siparis bir ya da birden fazla kalem icerir. Bolunmus siparis birden
+ * fazla `Assignment` uretir; kalem bunun ticari karsiligi.
+ */
+model Consignment {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  transportOrderId String
+  transportOrder   TransportOrder @relation(fields: [transportOrderId], references: [id], onDelete: Cascade)
+
+  /// Siparis icindeki sira. Kullaniciya gosterilen numara.
+  sequence Int
+
+  /// --- Yukleme ---
+  pickupAddress     String
+  pickupLocationId  String?
+  pickupLocation    Location? @relation("ConsignmentPickupLocation", fields: [pickupLocationId], references: [id], onDelete: SetNull)
+  pickupWindowStart DateTime?
+  pickupWindowEnd   DateTime?
+
+  /// --- Bosaltma ---
+  deliveryAddress     String
+  deliveryLocationId  String?
+  deliveryLocation    Location? @relation("ConsignmentDeliveryLocation", fields: [deliveryLocationId], references: [id], onDelete: SetNull)
+  deliveryWindowStart DateTime?
+  deliveryWindowEnd   DateTime?
+
+  cargoDescription String
+  /// Miktar ve birim. Birim SERBEST metin degil ama repoda canonical bir
+  /// birim enum'u yok; kisa metin olarak tutuluyor.
+  quantity Decimal? @db.Decimal(12, 3)
+  unit     String?
+
+  weightKg    Decimal? @db.Decimal(12, 2)
+  volumeM3    Decimal? @db.Decimal(12, 3)
+  palletCount Int?
+
+  /// `unknown` GUVENLI SAYILMAZ — planlama ekrani bunu acikca isaretler.
+  adrStatus AdrStatus @default(unknown)
+
+  /// Sicaklik araligi — yalnizca gerekiyorsa dolu.
+  temperatureMinC Decimal? @db.Decimal(5, 2)
+  temperatureMaxC Decimal? @db.Decimal(5, 2)
+
+  shipperReference  String?
+  consigneeReference String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments Assignment[]
+
+  @@unique([transportOrderId, sequence])
+  @@index([tenantId])
+  @@index([transportOrderId])
+  @@map("consignments")
+}
+
+/**
+ * SIPARIS REVIZYONU — APPEND-ONLY (Faz 15).
+ *
+ * ESKI REVIZYON HICBIR ZAMAN YENIDEN YAZILMAZ. Her olusturma/degisiklik
+ * degismez bir anlik goruntu birakir; "musteri ne zaman ne istedi" sorusunun
+ * cevabi bu tabloda durur.
+ *
+ * ONAYLANMIS SIPARISTE degisiklik once `pending_review` olur ve ana kayit
+ * DEGISMEZ. Kullanici eski/yeni degerleri karsilastirir; onay uygulanir, red
+ * ana kaydi degistirmez.
+ *
+ * AJAN CIKTISI (Faz 16) BU KAPIDAN GECER: doğrudan siparişi guncelleyemez,
+ * yalnizca `pending_review` bir revizyon onerebilir.
+ */
+model TransportOrderRevision {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  transportOrderId String
+  transportOrder   TransportOrder @relation(fields: [transportOrderId], references: [id], onDelete: Cascade)
+
+  /// Siparis kapsaminda DETERMINISTIK artar. Tekillik veritabaninda:
+  /// eszamanli iki revizyon ayni numarayi ALAMAZ.
+  revisionNumber Int
+
+  status TransportOrderRevisionStatus @default(applied)
+
+  /**
+   * DEGISMEZ anlik goruntu: siparisin ve kalemlerinin o andaki hali.
+   * Yazildiktan sonra hicbir akista guncellenmez.
+   */
+  snapshot Json
+
+  /// Neyin degistigi: [{ field, before, after }]. Kullanici karsilastirmasi
+  /// bunun uzerinden yapiliyor — arayuzun iki snapshot'i diff'lemesi gerekmiyor.
+  changedFields Json?
+
+  /// Faz 16 icin: uretimin kaynagi ve surumu.
+  source        TransportOrderSource @default(manual)
+  sourceVersion String?
+
+  createdById String?
+  createdBy   User?    @relation("TransportOrderRevisionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  decidedById     String?
+  decidedBy       User?     @relation("TransportOrderRevisionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt       DateTime?
+  rejectionReason String?
+
+  @@unique([transportOrderId, revisionNumber])
+  @@index([tenantId])
+  @@index([transportOrderId, createdAt])
+  @@index([tenantId, status])
+  @@map("transport_order_revisions")
 }

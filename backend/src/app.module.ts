@@ -49,6 +49,7 @@ import { FineManagementModule } from './fine-management/fine-management.module';
 import { FleetModule } from './fleet/fleet.module';
 import { FuelReceiptsModule } from './fleet/fuel-receipts/fuel-receipts.module';
 import { OrdivanModule } from './ordivan/ordivan.module';
+import { TransportOrdersModule } from './transport-orders/transport-orders.module';
 import { FuelStationsModule } from './fleet/fuel-stations/fuel-stations.module';
 import { RoutingModule } from './routing/routing.module';
 import { HealthModule } from './health/health.module';
@@ -124,6 +125,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     FuelStationsModule,
     FuelReceiptsModule,
     OrdivanModule,
+    TransportOrdersModule,
     RoutingModule,
     TachographModule,
     TelematicsModule,

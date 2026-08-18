@@ -16,6 +16,10 @@ işaretli:
 > **Kapı:** Aşağıdaki beş sorunun tamamı `confirmed` ya da açıkça onaylanmış bir
 > `provisional` hâline gelmeden **Faz 15 başlayamaz**. Faz 12 bu dokümanı
 > üretir; onaylamaz.
+>
+> **Durum (Faz 15):** Kapı **açıldı**. 4. bölümdeki üç `open` alt soru karara
+> bağlandı ve `TourStop.transportOrderId` önerisi reddedildi — gerekçeler
+> bölümün içinde. Beş sorunun tamamı artık `confirmed`.
 
 Faz 12 kapsamında **hiçbir modeli migrate etmiyor, `TransportOrder`
 oluşturmuyoruz.** Buradaki her şey okumadır.
@@ -108,50 +112,86 @@ degismez."*
 
 ## 4) Gelecekteki `TransportOrder` bunlarla nasıl ilişkilenecek?
 
-**Karar: `provisional` — `TransportOrder n:m Tour` doğru varsayım; ve bu
-ilişkinin taşıyıcısı ZATEN VAR: `TourStop`.**
+**Karar: `confirmed` (Faz 15) — `TransportOrder` ticari sipariştir; operasyona
+`Assignment` üzerinden bağlanır. `Tour` ile **doğrudan** bir bağı yoktur.**
 
-En önemli tespit şu: **n:m bağlantı kaydı sıfırdan tasarlanmayacak, çünkü
-`TourStop` bugün tam olarak o işi `Assignment` için yapıyor.**
+Faz 12 bu bölümü `provisional` bırakmış ve `TourStop`'a `transportOrderId`
+eklemeyi önermişti. **Faz 15 bu öneriyi reddetti.** Gerekçe aşağıda.
+
+### Kavramların kesin karşılığı
+
+| Kavram | Anlamı |
+|---|---|
+| `TransportOrder` | **Müşteriden gelen ticari sipariş.** Ticari gerçek. |
+| `Assignment` | Siparişin **günlük/operasyonel çalışma dilimi**. |
+| `Tour` | Birden fazla `Assignment`'ı taşıyan **araç rotası**. |
+
+### İlişkiler
 
 ```
-Assignment 1 ──< TourStop >── 1 Tour
+TransportOrder 1 ──< Assignment 1 ──< TourStop >── 1 Tour
 ```
 
-- `TourStop.assignmentId String?` (`onDelete: SetNull`, `@@index([assignmentId])`)
-- Bir `Assignment` birden çok `TourStop`'a bağlanabilir → **bir iş birden çok
-  tura bölünebilir**.
-- Bir `Tour` birden çok `TourStop` taşır, her biri farklı `Assignment`'tan
-  olabilir → **bir tur birden çok iş taşıyabilir**.
+- `TransportOrder → Assignment`: **1:n**. Bir sipariş birden çok güne/dilime
+  bölünür; her dilim bir `Assignment`'tır.
+- Bir `Assignment` **yalnız bir** `TransportOrder`'a ait olabilir.
+- Mevcut `TourStop.assignmentId` bağlantısı **korunur** ve tek yol olarak kalır.
 
-Yani spec'in istediği n:m semantiği **kavramsal olarak zaten uygulanmış**;
-eksik olan tek şey bağlanan tarafın `Assignment` yerine `TransportOrder` olması.
+### `TourStop.transportOrderId` EKLENMİYOR
 
-Spec, bağlantı kaydının "tahsis edilen yük, ağırlık, gelir/maliyet payı veya
-segment bilgisi" taşımasını istiyor. `TourStop`'un bugünkü hâli bunun
-çoğunu **zaten taşıyor**:
+Ayrı bir Order–Tour link tablosu da açılmıyor. Sebep: sipariş ile tur arasındaki
+ilişki `Assignment` üzerinden **zaten türetilebiliyor**. İkinci bir yol açmak,
+"bu durak hangi siparişe ait" sorusunu iki farklı kaynaktan cevaplanabilir hâle
+getirir ve ikisi kaçınılmaz olarak birbirinden ayrışır. Bir gerçeğin iki yeri
+olduğunda, hangisinin doğru olduğunu söyleyen bir kural gerekir — ve o kural
+hiçbir zaman yazılmaz.
 
-| Spec'in istediği | `TourStop`'ta karşılığı | Durum |
-|---|---|---|
-| tahsis edilen yük | `weightKg`, `volumeM3` | ✅ var |
-| segment bilgisi | `sequence`, `legDistanceKm`, `legDurationMin`, `legShape` | ✅ var |
-| zaman penceresi | `windowStart`, `windowEnd`, `serviceMinutes` | ✅ var |
-| gelir/maliyet payı | — | ❌ yok (bugün `Assignment.expectedDailyRevenue` gün düzeyinde) |
+Aktarma (transshipment) gerekiyorsa **tek bir `Assignment` birden fazla tura
+bağlanmaz**; ayrı operasyon dilimleri (ayrı `Assignment`'lar) kullanılır.
 
-**Önerilen yön (`provisional`, Faz 15'te karara bağlanacak):**
-`TourStop`'a `assignmentId`'nin **yanına** `transportOrderId String?` eklemek;
-`Assignment` yolunu kırmadan yaşatmak. Ayrı bir `TransportOrderTourLink` tablosu
-açmak, aynı gerçeği iki yerde tutar ve "hangi durak hangi siparişe ait" sorusunu
-iki farklı yoldan cevaplanabilir hâle getirir.
+### Gelir nerede durur — `confirmed`
 
-**`open` kalan alt sorular** (insan kararı gerekli):
+> Faz 12'nin `open` sorusu: *"Gelir/maliyet payı durak düzeyinde mi tutulacak?"*
 
-- `open` — Gelir/maliyet payı durak düzeyinde mi tutulacak, yoksa sipariş
-  düzeyinde kalıp faturalamaya mı bırakılacak?
-- `open` — Bir sipariş birden çok tura bölündüğünde faturalama hangi kaydı
-  esas alacak: sipariş mi, duraklar mı?
-- `open` — `Assignment` uzun vadede `TransportOrder`'ın bir *günlük dilimi*
-  hâline mi gelecek, yoksa ikisi paralel mi yaşayacak?
+- **Sipariş geliri** `TransportOrder`'da (sözleşme tutarı + para birimi).
+- **Operasyon dilimine ayrılan gelir** `Assignment`'ta — ve bunun için **yeni
+  alan açılmadı**: mevcut `Assignment.expectedDailyRevenue` bu anlamı zaten
+  taşıyor. Aynı anlamda ikinci bir alan, iki farklı toplam demektir.
+- `Assignment` üzerinde ayrı bir `currency` alanı **yok**: para birimi bağlı
+  olduğu siparişten, sipariş yoksa `Tenant.baseCurrency`'den çözülür. İkinci bir
+  para birimi alanı, siparişle çelişebilen bir tutar üretirdi.
+- **`TourStop`'a gelir ya da maliyet payı KOPYALANMAZ.** Gerçek maliyet zaten
+  yakıt (`FleetFuelEntry`), servis (`ServiceRecord`), ceza (`Fine`) ve
+  trip (`FleetTrip`) kayıtlarından hesaplanıyor. Duraklara kopyalanan bir pay,
+  bu kayıtlar değiştiğinde sessizce yanlışa dönerdi.
+
+### Faturalama neye dayanır — `confirmed`
+
+> Faz 12'nin `open` sorusu: *"Sipariş birden çok tura bölündüğünde faturalama
+> hangi kaydı esas alacak?"*
+
+**Tur tamamlanmasına DEĞİL**, doğrulanmış teslimat / `Assignment` kapsamına.
+Bir turun bitmesi, o turdaki her işin müşteriye teslim edildiği anlamına
+gelmez. Faturalanabilirliğin dayanağı `Assignment` düzeyindeki teslimat
+gerçeğidir.
+
+Tekillik için **yeni bir model kurulmadı**: `InvoiceAssignmentClaim`
+(`assignmentId @unique`) bugün zaten "bir `Assignment` en fazla bir kez
+faturalanır" garantisini veritabanında veriyor.
+
+### `Assignment`'ın uzun vadeli yeri — `confirmed`
+
+> Faz 12'nin `open` sorusu: *"`Assignment` `TransportOrder`'ın günlük dilimi mi
+> olacak, yoksa ikisi paralel mi yaşayacak?"*
+
+`Assignment` siparişin **operasyonel dilimidir** — ama paralel de yaşar:
+`transportOrderId` **nullable** kalır. Sebep: bugünkü kayıtların hiçbirinin
+siparişi yok ve şoför talebinden (`TransportRequest`) doğan işler bir müşteri
+siparişine ait olmayabilir. **Eski `Assignment`'lar uydurma siparişlere
+bağlanmaz**; `null` ile çalışmaya devam ederler.
+
+`TransportRequest`'in 1. bölümdeki doğrulanmış anlamı **değişmedi**: iç planlama
+talebi olarak kalır ve ikinci bir sipariş modeli hâline getirilmez.
 
 ---
 
@@ -180,3 +220,12 @@ yalnızca `AutomationProposal`'ın durumunu değiştirir ve bir
 
 Gerçek domain yazımı, yukarıdaki `open` maddeleri kapandıktan sonra ele
 alınacaktır.
+
+## Faz 15'in bu dokümana getirdiği değişiklik
+
+4. bölümdeki üç `open` alt soru `confirmed` oldu ve `TourStop.transportOrderId`
+önerisi **reddedildi**. Faz 15 bu kararlara dayanarak `TransportOrder`,
+`Consignment` ve sipariş revizyonlarını kuruyor; `Assignment`'a **yalnız
+nullable** bağlantı alanları ekliyor. Ordivan, e-posta okuma ve AI extraction bu
+fazın kapsamında **değil** — ajan çıktısı ileride de siparişi doğrudan
+güncelleyemeyecek, yalnızca `pending_review` bir revizyon önerebilecek.

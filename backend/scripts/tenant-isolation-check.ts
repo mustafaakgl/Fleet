@@ -717,6 +717,31 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.intakeDocumentRouting.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.intakeDocumentRouting.count()),
       }),
+      // Faz 15 — ticari siparis. Sizmasi, bir kiracinin musteri sozlesme
+      // tutarlarini baska bir kiraciya acmak olurdu.
+      verifyTenantScopedModel({
+        label: 'TransportOrder', tenantA, tenantB,
+        unscopedCountA: () => base.transportOrder.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.transportOrder.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.transportOrder.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.transportOrder.count()),
+      }),
+      // Tasima kalemleri — adres, yuk ve referanslar.
+      verifyTenantScopedModel({
+        label: 'Consignment', tenantA, tenantB,
+        unscopedCountA: () => base.consignment.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.consignment.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.consignment.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.consignment.count()),
+      }),
+      // Revizyon gecmisi — musterinin ne zaman ne istedigi.
+      verifyTenantScopedModel({
+        label: 'TransportOrderRevision', tenantA, tenantB,
+        unscopedCountA: () => base.transportOrderRevision.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.transportOrderRevision.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.transportOrderRevision.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.transportOrderRevision.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');
