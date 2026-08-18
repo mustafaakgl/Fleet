@@ -13,6 +13,7 @@ import type { TelemetryIngestJobPayload, TelemetryRecordPayload } from './teleme
 import { TelematicsTripBuilderService } from './telematics-trip-builder.service';
 import { TelematicsAlarmService } from './telematics-alarm.service';
 import { TELEMATICS_THRESHOLDS } from './telematics-thresholds';
+import { FUEL_LEVEL_SAMPLE_CAPTURE } from '../fleet/fuel-reconciliation/core/fuel-reconciliation-config';
 
 const TRACKABLE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
   AssignmentStatus.planned,
@@ -24,6 +25,14 @@ const TRACKABLE_ASSIGNMENT_STATUSES: AssignmentStatus[] = [
 export class TelemetryIngestService {
   private readonly logger = new Logger(TelemetryIngestService.name);
   private readonly lastSpeedKphByVehicle = new Map<string, number>();
+  /**
+   * Arac basina EN SON YAZILAN yakit ornegi.
+   *
+   * Bellekte: her cerceve icin bir SELECT atmamak icin. Kaybolmasi zararsiz
+   * — surec yeniden basladiginda ilk cerceve icin bir kez veritabanina
+   * bakilir, sonrasi yine bellekten yurur.
+   */
+  private readonly lastFuelSampleByVehicle = new Map<string, { ms: number; pct: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -111,6 +120,8 @@ export class TelemetryIngestService {
           data: { driverId, ...locationData },
         });
       }
+
+      await this.captureFuelLevelSample(tx, job, record, recordedAt);
 
       const existingTelemetry = await tx.vehicleTelemetryLatest.findUnique({
         where: { vehicleId: job.vehicleId },
@@ -346,6 +357,82 @@ export class TelemetryIngestService {
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
     return { start, end };
+  }
+
+  /**
+   * Yakit seviyesi zaman serisini besler (Faz 11).
+   *
+   * NEDEN GEREKLI: `VehicleTelemetryLatest` her cerceve ile uzerine yaziliyor.
+   * Yakit fisi mutabakati ise "fis saatinde depo ne kadardi" diye soruyor —
+   * bu sorunun cevabi tek satirlik bir "son durum" tablosunda YOK.
+   *
+   * NEDEN SEYRELTILMIS: her cerceveyi saklamak cihaz basina gunde on binlerce
+   * satir demekti. Iki kapi acik: sessiz donemde duzenli arayla bir taban
+   * serisi, VE seviye sicradiginda (dolum) aninda bir satir. Ikincisi
+   * olmasaydi seyreltme tam da olcmek istedigimiz olayi kacirabilirdi.
+   *
+   * ASLA KUYRUGU DUSURMEZ: bu yazim, cercevenin geri kalanini isleyen
+   * transaction'in icinde ama `skipDuplicates` ile — ayni cihaz zamani iki kez
+   * gelirse ikinci satir sessizce atlanir, cerceve yine islenir.
+   */
+  private async captureFuelLevelSample(
+    tx: Prisma.TransactionClient,
+    job: TelemetryIngestJobPayload,
+    record: TelemetryRecordPayload,
+    recordedAt: Date,
+  ): Promise<void> {
+    const pct = record.fuelLevelPct;
+    if (pct === undefined || pct === null || !Number.isFinite(pct)) {
+      // Bu cihazda/aracta yakit verisi yok. Sifir YAZILMAZ: eksik veriyi
+      // olculmus bir deger gibi kaydetmek, mutabakatta sahte bir dususe
+      // donusurdu.
+      return;
+    }
+
+    const ms = recordedAt.getTime();
+    let previous = this.lastFuelSampleByVehicle.get(job.vehicleId);
+
+    if (!previous) {
+      const stored = await tx.vehicleFuelLevelSample.findFirst({
+        where: { vehicleId: job.vehicleId },
+        orderBy: { recordedAt: 'desc' },
+        select: { recordedAt: true, fuelLevelPct: true },
+      });
+      if (stored) {
+        previous = { ms: stored.recordedAt.getTime(), pct: Number(stored.fuelLevelPct) };
+        this.lastFuelSampleByVehicle.set(job.vehicleId, previous);
+      }
+    }
+
+    const dueByInterval =
+      !previous || ms - previous.ms >= FUEL_LEVEL_SAMPLE_CAPTURE.minIntervalMs;
+    const dueByChange =
+      !!previous && Math.abs(pct - previous.pct) >= FUEL_LEVEL_SAMPLE_CAPTURE.minDeltaPct;
+
+    if (!dueByInterval && !dueByChange) {
+      return;
+    }
+
+    const written = await tx.vehicleFuelLevelSample.createMany({
+      data: [
+        {
+          tenantId: job.tenantId,
+          vehicleId: job.vehicleId,
+          recordedAt,
+          fuelLevelPct: new Prisma.Decimal(pct),
+          ignition: record.ignition ?? false,
+          odometerKm: this.toDecimalOrNull(record.odometerKm),
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    // Bellekteki isaret yalnizca GERCEKTEN yazildiginda ve yalnizca ileri
+    // giderken guncellenir: gec gelen eski bir paket, taze isareti geri
+    // cekip seyreltmeyi bozmasin.
+    if (written.count > 0 && (!previous || ms > previous.ms)) {
+      this.lastFuelSampleByVehicle.set(job.vehicleId, { ms, pct });
+    }
   }
 
   private toDecimalOrNull(value?: number): Prisma.Decimal | null {
