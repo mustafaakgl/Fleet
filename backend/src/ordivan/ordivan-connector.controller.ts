@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   HttpCode,
@@ -8,8 +9,12 @@ import {
   Post,
   Res,
   ServiceUnavailableException,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { DocumentIntakeSource } from '@prisma/client';
 import type { Response } from 'express';
 import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
@@ -26,6 +31,10 @@ import {
   FailJobDto,
   LeaseTokenDto,
 } from './dto/ordivan.dto';
+import { connectorHasCapability } from './core/job-type-registry';
+import { MAX_INTAKE_FILE_BYTES } from './core/intake-file';
+import { DocumentIntakeService } from './document-intake.service';
+import { ConnectorIntakeUploadDto } from './dto/document-inbox.dto';
 import { ConnectorCredentialGuard } from './guards/connector-credential.guard';
 import { OrdivanConnectorService, type AuthenticatedConnector } from './ordivan-connector.service';
 import {
@@ -55,6 +64,7 @@ export class OrdivanConnectorController {
     private readonly connectors: OrdivanConnectorService,
     private readonly jobs: AutomationJobService,
     private readonly documents: AutomationDocumentService,
+    private readonly intake: DocumentIntakeService,
   ) {}
 
   /**
@@ -153,6 +163,44 @@ export class OrdivanConnectorController {
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.fileName)}"`);
     createReadStream(join(AUTOMATION_DOCUMENT_UPLOAD_ABSOLUTE_DIR, file.storedFileName)).pipe(res);
+  }
+
+  /**
+   * BELGE YUKLEME (Faz 14) — tarayici connector'i.
+   *
+   * YETENEK KONTROLU: connector'da `document.intake.upload@v1` YOKSA uc
+   * kapalidir. Is alma yetkisi olan bir connector otomatikman yukleme de
+   * yapamaz ve tersi de gecerli — yetkiler ayri.
+   *
+   * KISA OMURLU OTURUM: yukleme, connector'in KENDI kimlik dogrulamasiyla
+   * yapilir (`ConnectorCredentialGuard`); ayri, uzun omurlu bir yukleme
+   * anahtari URETILMEZ.
+   *
+   * IDEMPOTENCY: ag koptugunda tarayici ayni belgeyi yeniden gonderir.
+   * `idempotencyKey` kiraci icinde tekil oldugu icin ikinci gonderim YENI
+   * GIRDI ACMAZ — var olani doner.
+   *
+   * KIRACIYI ISTEMCI BELIRLEMEZ: `tenantId` yalnizca guard'in cozdugu
+   * connector kaydindan gelir. Yerel klasor yolu, bilgisayar kullanici adi ve
+   * cihaz verisi bu ucun govdesinde YOKTUR ve istenmez.
+   */
+  @Post('intake/uploads')
+  @UseGuards(ConnectorCredentialGuard)
+  @UseInterceptors(FileInterceptor('document', { limits: { fileSize: MAX_INTAKE_FILE_BYTES } }))
+  @HttpCode(201)
+  async intakeUpload(
+    @CurrentConnector() connector: AuthenticatedConnector,
+    @UploadedFile()
+    file: { buffer: Buffer; size: number; originalname?: string; mimetype?: string } | undefined,
+    @Body() dto: ConnectorIntakeUploadDto,
+  ) {
+    if (!connectorHasCapability(connector.capabilities, 'document.intake.upload@v1')) {
+      throw new ForbiddenException({ code: 'ordivan_capability_missing' });
+    }
+    return this.intake.upload({ kind: 'connector', connectorId: connector.connectorId }, file, {
+      source: DocumentIntakeSource.connector,
+      idempotencyKey: dto.idempotencyKey,
+    });
   }
 
   @Post('jobs/:id/fail')

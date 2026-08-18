@@ -3651,3 +3651,137 @@ export interface SelectFuelingIntentResult {
   outcome: 'created' | 'replaced' | 'unchanged';
   replacedIntentId: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Faz 14 — Belge gelen kutusu
+// ---------------------------------------------------------------------------
+
+/** Registry ile dogrulanan SURUMLU anahtar. Serbest metin DEGIL. */
+export type DocumentTypeKey =
+  | 'service_invoice@v1'
+  | 'vehicle_inspection@v1'
+  | 'vehicle_insurance@v1'
+  | 'traffic_fine@v1'
+  | 'fuel_receipt@v1'
+  | 'unknown@v1';
+
+export type IntakeDocumentStatus =
+  | 'classifying'
+  | 'needs_review'
+  | 'needs_domain_review'
+  | 'routed'
+  | 'rejected'
+  | 'failed';
+
+export type DocumentIntakeSource = 'web' | 'mobile' | 'connector';
+
+export type IntakeVehicleMatchStatus = 'verified' | 'failed' | 'unknown';
+
+export interface IntakeDocumentCandidates {
+  plateNumbers: string[];
+  vins: string[];
+  dates: string[];
+  amounts: number[];
+}
+
+/** "Onaylandiginda ne olacak?" — ekran ve sunucu AYNI kaynaktan okur. */
+export interface IntakeRoutingPlan {
+  typeKey: DocumentTypeKey;
+  destination: string | null;
+  createsEntityType: string | null;
+  /** Hedefin KENDI incelemesine giriyor mu (onaylanmis kayit DEGIL). */
+  entersOwnReviewQueue: boolean;
+  offersReminder: boolean;
+  reminderAvailable: boolean;
+  canRoute: boolean;
+  blockedBy: Array<
+    | 'type_unknown'
+    | 'role_not_allowed'
+    | 'vehicle_required'
+    | 'vehicle_match_failed'
+    | 'driver_required'
+    | 'already_routed'
+  >;
+}
+
+export interface IntakeDocumentRow {
+  id: string;
+  typeKey: string;
+  subtype: string | null;
+  status: IntakeDocumentStatus;
+  pageFrom: number;
+  pageTo: number;
+  confidence: number | null;
+  vehicleId: string | null;
+  vehicleMatchStatus: IntakeVehicleMatchStatus;
+  driverId: string | null;
+  assignedUserId: string | null;
+  /** Ajanin ILK ciktisi — degismez. */
+  proposed: {
+    typeKey: string;
+    subtype: string | null;
+    pageFrom: number;
+    pageTo: number;
+    confidence: number | null;
+  };
+  corrected: boolean;
+  evidence: unknown;
+  candidates: IntakeDocumentCandidates | null;
+  checks: AutomationCheck[];
+  routing: {
+    destination: string;
+    entityType: string;
+    entityId: string;
+    secondaryEntityType: string | null;
+    secondaryEntityId: string | null;
+  } | null;
+  rejectionReason: string | null;
+  domainReviewReason: string | null;
+  createdAt: string;
+  intake: {
+    id: string;
+    source: DocumentIntakeSource;
+    status: string;
+    pageCount: number;
+    createdAt: string;
+  };
+}
+
+export interface IntakeDocumentDetail extends Omit<IntakeDocumentRow, 'intake'> {
+  decidedAt: string | null;
+  intake: {
+    id: string;
+    source: DocumentIntakeSource;
+    status: string;
+    pageCount: number;
+    classifierVersion: string | null;
+    createdAt: string;
+    document: {
+      id: string;
+      originalName: string;
+      mimeType: string;
+      fileSize: number;
+      /** YETKILI akis. Ham depolama yolu ASLA gelmez. */
+      fileDownloadPath: string;
+    };
+  };
+  plan: IntakeRoutingPlan;
+}
+
+export interface IntakeUploadResult {
+  intakeId: string;
+  /** Ayni dosya daha once yuklenmisti — yeni girdi ACILMADI. */
+  duplicate: boolean;
+  documents: IntakeDocumentRow[];
+}
+
+export interface IntakeRouteResult {
+  documentId: string;
+  destination: string;
+  entityType: string;
+  entityId: string;
+  secondaryEntityType: string | null;
+  secondaryEntityId: string | null;
+  /** Tekrarlanan istek: ikinci kayit URETILMEDI. */
+  alreadyRouted: boolean;
+}

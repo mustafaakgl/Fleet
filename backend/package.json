@@ -25,7 +25,8 @@
     "verify:all": "tsc -p tsconfig.json --noEmit && npm test && node scripts/codec8-sim.mjs --scenario normal --seed 42 | node scripts/verify-tacho-telematics.mjs && ts-node --transpile-only scripts/tenant-isolation-check.ts",
     "test": "node ../scripts/run-tests.mjs",
     "ordivan:mock-worker": "node scripts/ordivan-mock-worker.mjs",
-    "ordivan:contract": "ts-node --transpile-only scripts/ordivan-export-contract.ts"
+    "ordivan:contract": "ts-node --transpile-only scripts/ordivan-export-contract.ts",
+    "ordivan:mock-scanner": "node scripts/ordivan-mock-scanner.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1062.0",

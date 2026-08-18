@@ -1,7 +1,7 @@
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "createdAt": "2026-08-18",
-  "phase": "faz12",
+  "phase": "faz14",
   "description": "Ordivan eval setleri. Normal dogruluk ile adversarial set AYRI skorlanir.",
   "sets": [
     {
@@ -24,11 +24,19 @@
       "version": "1.0.0",
       "scoring": "field_accuracy",
       "note": "Faz 13. Sentetik PDF'ler script ile uretiliyor; gercek musteri belgesi repoya girmez. Dogruluk iddiasi icin dondurulmus gercek golden dataset sart."
+    },
+    {
+      "id": "document-inbox-classification-v1",
+      "path": "evals/document-inbox-classification-v1",
+      "version": "1.0.0",
+      "scoring": "classification_accuracy",
+      "note": "Faz 14. Tur, sayfa bolme, arac eslestirme ve hedef dogrulugu olculuyor; injection seti AYRI skorlaniyor. Fixture'lar sentetik ve make-fixtures.mjs ile deterministik uretiliyor — gercek dogruluk iddiasi DEGILDIR."
     }
   ],
   "rules": [
     "Set icerigi SESSIZCE degismez: her degisiklik surum artirir.",
     "Adversarial set fonksiyonel skorla KARISTIRILMAZ.",
-    "Faz 12 temsili metin/JSON fixture'lari kullanir; gercek belge ve model red-team seti Faz 13'te genisletilecek."
+    "Faz 12 temsili metin/JSON fixture'lari kullanir; gercek belge ve model red-team seti Faz 13'te genisletilecek.",
+    "Faz 14 belge gelen kutusu seti fixture'lari DISKTEN okuyor: dosya okuma yolundaki bir kirilma bu sette gorunur."
   ]
 }

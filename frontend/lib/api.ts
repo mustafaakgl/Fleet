@@ -3817,3 +3817,114 @@ export const toursApi = {
 };
 
 export default api;
+
+/**
+ * BELGE GELEN KUTUSU (Faz 14).
+ *
+ * Istemci hicbir cagrida `tenantId`, tur, guven skoru ya da hedef modul
+ * DAYATAMAZ. Tur bir ONERIDIR; duzeltme ayri bir uc, yonlendirme ayri bir
+ * uctur ve rol kontrolu her ikisinde de SUNUCUDA yapilir.
+ */
+export const documentInboxApi = {
+  /** Web ve mobil (kamera) yukleme. `source` yalnizca raporlama icin. */
+  upload: (file: File, source: 'web' | 'mobile' = 'web') => {
+    const form = new FormData();
+    form.append('document', file);
+    form.append('source', source);
+    return api
+      .post<import('./types').IntakeUploadResult>('/ordivan/inbox/uploads', form)
+      .then((r) => r.data);
+  },
+
+  list: (
+    params: {
+      source?: import('./types').DocumentIntakeSource;
+      status?: import('./types').IntakeDocumentStatus;
+      typeKey?: string;
+      vehicleId?: string;
+      assignedUserId?: string;
+      from?: string;
+      to?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<{
+        rows: import('./types').IntakeDocumentRow[];
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+      }>('/ordivan/inbox/documents', { params, signal })
+      .then((r) => r.data),
+
+  detail: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').IntakeDocumentDetail>(`/ordivan/inbox/documents/${id}`, { signal })
+      .then((r) => r.data),
+
+  /** Tur, alt tur, arac, surucu ve atama duzeltmesi. */
+  correct: (
+    id: string,
+    body: {
+      typeKey?: string;
+      subtype?: string | null;
+      vehicleId?: string | null;
+      driverId?: string | null;
+      assignedUserId?: string | null;
+    },
+  ) =>
+    api
+      .post<import('./types').IntakeDocumentRow>(`/ordivan/inbox/documents/${id}/correct`, body)
+      .then((r) => r.data),
+
+  reject: (id: string, reason: string) =>
+    api
+      .post<import('./types').IntakeDocumentRow>(`/ordivan/inbox/documents/${id}/reject`, { reason })
+      .then((r) => r.data),
+
+  /** Yonlendirme — MEVCUT surece devir. Hedefi sunucu bilir. */
+  route: (
+    id: string,
+    body: {
+      fuelReceipt?: {
+        enteredAt: string;
+        liters: number;
+        totalCost: number;
+        currency: string;
+        odometerKm?: number;
+      };
+      vehicleDocument?: {
+        documentType: string;
+        expiryDate?: string | null;
+        createReminder?: boolean;
+        notifyBeforeDays?: number;
+      };
+      fine?: {
+        violationAt: string;
+        violationLocation: string;
+        violationType: string;
+        violationCategory: 'speed' | 'parking' | 'red_light' | 'distance' | 'other';
+        amount?: number;
+        currency?: string;
+        paymentDueDate?: string | null;
+      };
+    },
+  ) =>
+    api
+      .post<import('./types').IntakeRouteResult>(`/ordivan/inbox/documents/${id}/route`, body)
+      .then((r) => r.data),
+
+  /** Bolme ve birlestirme AYNI uc: gonderilen bolumleme yenisidir. */
+  resegment: (
+    intakeId: string,
+    segments: Array<{ pageFrom: number; pageTo: number; typeKey?: string }>,
+  ) =>
+    api
+      .post<import('./types').IntakeDocumentRow[]>(`/ordivan/inbox/intakes/${intakeId}/resegment`, {
+        segments,
+      })
+      .then((r) => r.data),
+};

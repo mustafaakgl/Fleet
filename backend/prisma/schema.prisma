@@ -1372,6 +1372,7 @@ model Driver {
   payrollDays             PayrollDay[]
   payrollEntries          PayrollEntry[]
   fuelingIntents          FuelingIntent[]
+  intakeDocuments         IntakeDocument[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -4116,8 +4117,11 @@ model AutomationDocument {
   originalName   String
   fileSize       Int
 
-  uploadedById String
-  uploadedBy   User     @relation("AutomationDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  /// Web/mobil yuklemede kullanici. Connector (tarayici) yuklemesinde YOK:
+  /// bir makinenin arkasinda o an bir insan olmayabilir ve olmayan kullaniciyi
+  /// uydurmak, denetimde sahte bir sorumlu yaratirdi.
+  uploadedById String?
+  uploadedBy   User?    @relation("AutomationDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
 
   jobs    AutomationJob[]
@@ -4933,10 +4937,17 @@ model DocumentIntake {
 
   /// Kiraci ICINDE tekil. Kiracilar arasinda anahtar CAKISABILIR ve sizmaz.
   @@unique([tenantId, idempotencyKey])
+  /**
+   * BIR BLOB = BIR GIRDI.
+   *
+   * Tekillik uygulamada degil VERITABANINDA: iki istek ayni dosyayi AYNI ANDA
+   * yukledigi zaman ikisi de "bu hash yok" gorur ve ikisi de yazmaya calisir.
+   * Uygulama kontrolu bu yarisi kaybeder; bu kisit kaybetmez.
+   */
+  @@unique([artifactId])
   @@index([tenantId])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, source, createdAt])
-  @@index([artifactId])
   @@map("document_intakes")
 }
 
@@ -4994,6 +5005,11 @@ model IntakeDocument {
   vehicle           Vehicle?                  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   vehicleMatchStatus IntakeVehicleMatchStatus @default(unknown)
 
+  /// Yakit fisi icin ZORUNLU: `FleetFuelEntry.driverId` NOT NULL. Belgeden
+  /// surucu OKUNMAZ — insan seciyor. Secilmediyse belge `needs_domain_review`.
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
   assignedUserId String?
   assignedUser   User?   @relation("IntakeDocumentAssignedTo", fields: [assignedUserId], references: [id], onDelete: SetNull)
 
@@ -5015,6 +5031,7 @@ model IntakeDocument {
   @@index([tenantId, typeKey, createdAt])
   @@index([intakeId])
   @@index([vehicleId])
+  @@index([driverId])
   @@index([assignedUserId])
   @@map("intake_documents")
 }

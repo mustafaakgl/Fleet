@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
+  FileStack,
   Inbox,
   Clock,
   Cpu,
@@ -371,7 +372,23 @@ const PAYROLL_ITEM: NavItem = {
   icon: Wallet,
 };
 
+/**
+ * Belge gelen kutusu (Faz 14).
+ *
+ * ROL: admin, boss, office, accounting — MEVCUT domain yetkilerinden turetildi.
+ * Ordivan bolumunun geri kalanindan AYRI duruyor cunku o bolum admin/boss'a
+ * ozel (makineye yetki veren enrollment ekrani); gelen kutusu ise gunluk
+ * operasyon. Menude gorunmesi YETKI DEGILDIR: asil kisit sunucudaki
+ * `OPERATIONAL_ROLES` guard'i ve hedef bazli rol kontrolu.
+ */
+const DOCUMENT_INBOX_ITEM: NavItem = {
+  href: '/automation/inbox',
+  labelKey: 'nav.automation.inbox',
+  icon: FileStack,
+};
+
 const AUTOMATION_SECTION_ITEMS: NavItem[] = [
+  DOCUMENT_INBOX_ITEM,
   { href: '/automation/queue', labelKey: 'nav.automation.queue', icon: Inbox },
   { href: '/automation/connectors', labelKey: 'nav.automation.connectors', icon: Plug },
 ];
@@ -412,6 +429,13 @@ export function getNavigationForRole(role: Role): NavGroup[] {
               : [INVOICING_ITEM, PAYROLL_ITEM],
       };
       heuteGroup.items.push(billingSection);
+
+      // Office ve accounting Ordivan bolumunu GORMUYOR (o bolum admin/boss'a
+      // ozel), ama gelen kutusu onlarin gunluk isi. Ayri eklenmesinin sebebi
+      // bu — Ordivan bolumunu bu rollere acmak, enrollment ekranini da acardi.
+      if (role === 'office' || role === 'accounting') {
+        heuteGroup.items.push(DOCUMENT_INBOX_ITEM);
+      }
     }
   }
 

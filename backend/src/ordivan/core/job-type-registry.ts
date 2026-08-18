@@ -225,17 +225,53 @@ export function validateProposal(
   return validateObject(payload, spec);
 }
 
+/**
+ * ISE BAGLI OLMAYAN YETENEKLER (Faz 14).
+ *
+ * `document.intake.upload@v1`: tarayici connector'i Fleet'e BELGE YUKLEYEBILIR.
+ * Bu bir is turu DEGIL — connector kuyruktan bir sey almiyor, tek yonlu icerik
+ * gonderiyor. Ayri tutulmasinin sebebi: yukleme yetkisi olan bir connector'in
+ * otomatikman is de alabilmesi, tarayiciya gereksiz genislikte yetki verirdi.
+ *
+ * SURUMLU: yukleme oturumunun sozlesmesi degisirse `@v2` acilir ve eski
+ * connector'lar sessizce yeni davranisa gecmez.
+ *
+ * BURADA DA GENEL ARAC YOK: `sql`, `shell`, `http` bu listeye de giremez —
+ * `FORBIDDEN_TOOLS` testi ikisini birden tariyor.
+ */
+export const NON_JOB_CAPABILITIES = ['document.intake.upload@v1'] as const;
+export type NonJobCapability = (typeof NON_JOB_CAPABILITIES)[number];
+
+/** Connector'a verilebilecek BUTUN yetenekler. */
+export function knownCapabilities(): Set<string> {
+  return new Set<string>([
+    ...Object.values(JOB_TYPE_REGISTRY).map((definition) => definition.requiredCapability),
+    ...NON_JOB_CAPABILITIES,
+  ]);
+}
+
 /** Connector'in bildirdigi yeteneklerden YALNIZCA taninanlari kabul eder. */
 export function sanitizeCapabilities(requested: unknown): string[] {
   if (!Array.isArray(requested)) {
     return [];
   }
-  const known = new Set(
-    Object.values(JOB_TYPE_REGISTRY).map((definition) => definition.requiredCapability),
-  );
+  const known = knownCapabilities();
   return [...new Set(requested.filter((item): item is string => typeof item === 'string'))].filter(
     (item) => known.has(item),
   );
+}
+
+/**
+ * Connector bu yetenege sahip mi.
+ *
+ * Yetenek listesi ENROLLMENT'ta belirlenir ve connector kendi istegiyle
+ * genisletemez; bu kontrol yalnizca kayittaki listeye bakar.
+ */
+export function connectorHasCapability(
+  capabilities: readonly string[],
+  required: string,
+): boolean {
+  return capabilities.includes(required);
 }
 
 /** Bir is turunun arac seti — connector'in istegine gore DEGISMEZ. */

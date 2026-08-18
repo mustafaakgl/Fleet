@@ -31,6 +31,16 @@ import {
   extractCandidates,
   normalizeText,
 } from './mock-ordivan-classifier';
+import {
+  FORBIDDEN_TOOLS,
+  JOB_TYPE_REGISTRY,
+  NON_JOB_CAPABILITIES,
+  connectorHasCapability,
+  knownCapabilities,
+  sanitizeCapabilities,
+} from './job-type-registry';
+import { resolveIntakeVehicle } from './intake-vehicle-match';
+import { buildRoutingPlan } from './intake-routing-plan';
 import { matchVehicle } from './service-invoice';
 import { SchemaValidationError } from './schema-validation';
 
@@ -514,5 +524,181 @@ describe('PDF metin cikarimi — GUVENSIZ veri', () => {
 
   it('normalizasyon umlaut ve aksandan bagimsiz', () => {
     assert.equal(normalizeText('Bußgeldbescheid Prüfbericht'), 'bussgeldbescheid prufbericht');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Connector yetenekleri
+// ---------------------------------------------------------------------------
+
+describe('Connector yetenekleri — yukleme ise BAGLI DEGIL', () => {
+  it('yukleme yetenegi SURUMLU', () => {
+    assert.ok(NON_JOB_CAPABILITIES.includes('document.intake.upload@v1'));
+    for (const capability of NON_JOB_CAPABILITIES) {
+      assert.match(capability, /@v\d+$/);
+    }
+  });
+
+  it('GENEL ARAC hicbir listeye giremez — is turleri ve yukleme yetenekleri', () => {
+    const everything = [
+      ...Object.values(JOB_TYPE_REGISTRY).flatMap((definition) => [...definition.toolset]),
+      ...NON_JOB_CAPABILITIES,
+      ...knownCapabilities(),
+    ].map((item) => item.toLowerCase());
+
+    for (const forbidden of FORBIDDEN_TOOLS) {
+      assert.ok(!everything.includes(forbidden), `${forbidden} bir yetenek/arac olarak eklenmis`);
+    }
+  });
+
+  it('taninmayan yetenek SESSIZCE DUSURULUR — uydurulmus yetkiye donusmez', () => {
+    const sanitized = sanitizeCapabilities([
+      'document.intake.upload@v1',
+      'sql',
+      'shell',
+      'document.intake.upload',
+      'tenant.admin',
+    ]);
+    assert.deepEqual(sanitized, ['document.intake.upload@v1']);
+  });
+
+  it('yukleme yetkisi IS ALMA yetkisi vermez ve tersi', () => {
+    assert.equal(connectorHasCapability(['document.intake.upload@v1'], 'system.echo'), false);
+    assert.equal(
+      connectorHasCapability(['system.echo'], 'document.intake.upload@v1'),
+      false,
+    );
+    assert.equal(
+      connectorHasCapability(['document.intake.upload@v1'], 'document.intake.upload@v1'),
+      true,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Adaylardan araca
+// ---------------------------------------------------------------------------
+
+describe('Adaylardan araca — karar SUNUCUDA', () => {
+  const fleet = [
+    { id: 'veh-1', plateNumber: 'DU-AB 123', vin: 'WDB9066571S123456' },
+    { id: 'veh-2', plateNumber: 'DU-CD 456', vin: 'WDB9066571S999999' },
+  ];
+
+  it('tek plaka adayi araca cozulur', () => {
+    const result = resolveIntakeVehicle(fleet, { plateNumbers: ['DU-AB 123'], vins: [] });
+    assert.equal(result.vehicleId, 'veh-1');
+    assert.equal(result.ambiguous, false);
+  });
+
+  it('FARKLI araclara cozulen adaylar `unknown` — karar insanin', () => {
+    const result = resolveIntakeVehicle(fleet, {
+      plateNumbers: ['DU-AB 123', 'DU-CD 456'],
+      vins: [],
+    });
+    assert.equal(result.status, 'unknown');
+    assert.equal(result.vehicleId, null);
+    assert.equal(result.ambiguous, true);
+    assert.equal(result.candidateIds.length, 2);
+  });
+
+  it('VIN plakadan ONCE gelir', () => {
+    const result = resolveIntakeVehicle(fleet, {
+      plateNumbers: ['DU-AB 123'],
+      vins: ['WDB9066571S123456'],
+    });
+    assert.equal(result.matchedBy, 'vin');
+  });
+
+  it('VIN ve plaka CELISIYORSA `failed`', () => {
+    const result = resolveIntakeVehicle(fleet, {
+      plateNumbers: ['DU-CD 456'],
+      vins: ['WDB9066571S123456'],
+    });
+    assert.equal(result.status, 'failed');
+    assert.equal(result.reason, 'vin_and_plate_disagree');
+  });
+
+  it('tanimlayici yoksa sebep AYRI', () => {
+    assert.equal(
+      resolveIntakeVehicle(fleet, { plateNumbers: [], vins: [] }).reason,
+      'no_vehicle_identifier',
+    );
+    assert.equal(
+      resolveIntakeVehicle(fleet, { plateNumbers: ['XX-YY 999'], vins: [] }).reason,
+      'no_matching_vehicle',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Onaylandiginda ne olacak?"
+// ---------------------------------------------------------------------------
+
+describe('Yonlendirme plani — ekran ve sunucu AYNI kaynaktan', () => {
+  const base = {
+    role: 'admin',
+    vehicleId: 'veh-1',
+    vehicleMatchStatus: 'verified' as const,
+    checks: [],
+    alreadyRouted: false,
+  };
+
+  it('yakit fisi KENDI inceleme kuyruguna girer', () => {
+    const plan = buildRoutingPlan({ ...base, typeKey: 'fuel_receipt@v1', driverId: 'drv-1' });
+    assert.equal(plan.createsEntityType, 'FleetFuelEntry');
+    assert.equal(plan.entersOwnReviewQueue, true);
+    assert.equal(plan.canRoute, true);
+  });
+
+  it('servis faturasi Faz 13 dongusune girer', () => {
+    const plan = buildRoutingPlan({ ...base, typeKey: 'service_invoice@v1' });
+    assert.equal(plan.createsEntityType, 'AutomationJob');
+    assert.equal(plan.entersOwnReviewQueue, true);
+  });
+
+  it('ceza dogrudan canonical kayit — kendi incelemesi yok', () => {
+    const plan = buildRoutingPlan({ ...base, role: 'office', typeKey: 'traffic_fine@v1' });
+    assert.equal(plan.createsEntityType, 'Fine');
+    assert.equal(plan.entersOwnReviewQueue, false);
+  });
+
+  it('tarih guvenilmezse hatirlatma ONERILMEZ', () => {
+    const unreliable = buildRoutingPlan({
+      ...base,
+      role: 'office',
+      typeKey: 'vehicle_inspection@v1',
+    });
+    assert.equal(unreliable.reminderAvailable, false);
+
+    const reliable = buildRoutingPlan({
+      ...base,
+      role: 'office',
+      typeKey: 'vehicle_inspection@v1',
+      checks: [
+        { code: 'document_date_present', status: 'verified', messageKey: 'x' },
+      ],
+    });
+    assert.equal(reliable.reminderAvailable, true);
+  });
+
+  it('engeller SEBEPLERIYLE donuyor — ekran neyi eksik oldugunu soyleyebilsin', () => {
+    const plan = buildRoutingPlan({
+      ...base,
+      role: 'accounting',
+      typeKey: 'fuel_receipt@v1',
+      vehicleId: null,
+      driverId: null,
+    });
+    assert.equal(plan.canRoute, false);
+    assert.deepEqual(plan.blockedBy.sort(), ['driver_required', 'vehicle_required']);
+  });
+
+  it('`unknown` tur hicbir rolde yonlendirilemez', () => {
+    for (const role of ['admin', 'boss', 'office', 'accounting']) {
+      const plan = buildRoutingPlan({ ...base, role, typeKey: 'unknown@v1' });
+      assert.equal(plan.canRoute, false);
+      assert.deepEqual(plan.blockedBy, ['type_unknown']);
+    }
   });
 });

@@ -5,6 +5,9 @@ import { AutomationDocumentService } from './automation-document.service';
 import { AutomationJobService } from './automation-job.service';
 import { AutomationProposalService } from './automation-proposal.service';
 import { AutomationQueueController } from './automation-queue.controller';
+import { DocumentInboxController } from './document-inbox.controller';
+import { DocumentIntakeService } from './document-intake.service';
+import { IntakeRoutingService } from './intake-routing.service';
 import { OrdivanAdminController } from './ordivan-admin.controller';
 import { OrdivanConnectorController } from './ordivan-connector.controller';
 import { OrdivanConnectorService } from './ordivan-connector.service';
@@ -20,12 +23,20 @@ import { resolveOrdivanMode } from './ordivan.config';
  */
 @Module({
   imports: [PrismaModule, AuditModule],
-  controllers: [OrdivanAdminController, OrdivanConnectorController, AutomationQueueController],
+  controllers: [
+    OrdivanAdminController,
+    OrdivanConnectorController,
+    AutomationQueueController,
+    // Faz 14 — belge gelen kutusu.
+    DocumentInboxController,
+  ],
   providers: [
     OrdivanConnectorService,
     AutomationDocumentService,
     AutomationJobService,
     AutomationProposalService,
+    DocumentIntakeService,
+    IntakeRoutingService,
     OrdivanScheduler,
     {
       provide: 'ORDIVAN_MODE',
@@ -37,6 +48,8 @@ import { resolveOrdivanMode } from './ordivan.config';
     AutomationDocumentService,
     AutomationJobService,
     AutomationProposalService,
+    DocumentIntakeService,
+    IntakeRoutingService,
   ],
 })
 export class OrdivanModule {}
