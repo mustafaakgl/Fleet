@@ -45,6 +45,8 @@ export const TENANT_SCOPED_MODELS = new Set([
   'FleetMaintenanceRule',
   'Device',
   'VehicleTelemetryLatest',
+  'VehicleFuelLevelSample',
+  'FuelReconciliation',
   'VehicleDtc',
   'MessageAttachment',
   'MessageTranslation',

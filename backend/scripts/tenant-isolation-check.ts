@@ -620,6 +620,26 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.breakCandidate.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.breakCandidate.count()),
       }),
+      // Yakit seviyesi ornekleri. Sizmasi, bir kiracinin araclarinin ne zaman
+      // depo doldurdugunu ve seviyelerinin nasil seyrettigini digerine
+      // gostermek olurdu — yani filo hareketinin dolayli izi.
+      verifyTenantScopedModel({
+        label: 'VehicleFuelLevelSample', tenantA, tenantB,
+        unscopedCountA: () => base.vehicleFuelLevelSample.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.vehicleFuelLevelSample.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.vehicleFuelLevelSample.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.vehicleFuelLevelSample.count()),
+      }),
+      // Yakit mutabakati. Kiraciyi asmasi EN AGIR sizinti turlerinden biri:
+      // satir hem risk degerlendirmesini hem de muhasebenin inceleme notunu
+      // tasiyor — yani baska bir firmanin personeli hakkindaki supheyi.
+      verifyTenantScopedModel({
+        label: 'FuelReconciliation', tenantA, tenantB,
+        unscopedCountA: () => base.fuelReconciliation.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.fuelReconciliation.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.fuelReconciliation.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.fuelReconciliation.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

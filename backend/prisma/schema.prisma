@@ -1050,6 +1050,8 @@ model Tenant {
   fleetMaintenanceRules      FleetMaintenanceRule[]
   devices                    Device[]
   vehicleTelemetryLatest     VehicleTelemetryLatest[]
+  vehicleFuelLevelSamples    VehicleFuelLevelSample[]
+  fuelReconciliations        FuelReconciliation[]
   vehicleDtcs                VehicleDtc[]
   tachoProviderCredentials   TachoProviderCredential[]
   dddFiles                   DddFile[]
@@ -1215,6 +1217,7 @@ model User {
   recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
   createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
   reviewedFuelEntries             FleetFuelEntry[]            @relation("FuelEntryReviewedBy")
+  reviewedFuelReconciliations     FuelReconciliation[]        @relation("FuelReconciliationReviewedBy")
   reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
@@ -1437,6 +1440,14 @@ model Vehicle {
   photoUrl                String?
   notes                   String?
   avgConsumptionLPer100Km Decimal?        @db.Decimal(6, 2)
+  /// Toplam KULLANILABILIR depo hacmi. Cift depolu cekicide iki deponun
+  /// TOPLAMI yazilir: telematik yuzdesi tek bir seviye olarak geliyor ve
+  /// yuzde -> litre cevrimi ancak toplam kapasiteyle anlamli.
+  ///
+  /// Opsiyonel ve bilincli olarak geri doldurulmuyor: bilinmeyen kapasiteye
+  /// tahmin yazmak, yakit mutabakatinda OLCULMUS gibi gorunen uydurma bir
+  /// litre farki uretirdi. Bos ise kapasite kurallari HIC CALISMAZ.
+  fuelTankCapacityLiters  Decimal?        @db.Decimal(7, 2)
   initialOdometerKm       Decimal?        @db.Decimal(12, 3)
   odometerCorrectedKm     Decimal?        @db.Decimal(12, 3)
   odometerCorrectedAt     DateTime?
@@ -1465,6 +1476,7 @@ model Vehicle {
   fleetMaintenanceRules   FleetMaintenanceRule[]
   devices                 Device[]
   telemetryLatest         VehicleTelemetryLatest?
+  fuelLevelSamples        VehicleFuelLevelSample[]
   dtcs                    VehicleDtc[]
   dddFiles                DddFile[]
   tachoActivities         TachoActivity[]
@@ -1512,6 +1524,44 @@ model VehicleTelemetryLatest {
 
   @@index([tenantId])
   @@map("vehicle_telemetry_latest")
+}
+
+/// Telematikten gelen YAKIT SEVIYESI zaman serisi.
+///
+/// NEDEN AYRI BIR TABLO: `VehicleTelemetryLatest` her cerceve ile UZERINE
+/// YAZILIYOR — yani "fis saatinde depo ne kadardi" sorusunun veritabaninda
+/// bir cevabi yoktu. Yakit fisi mutabakati tam olarak bu soruyu soruyor.
+///
+/// SEYRELTILEREK yaziliyor (bkz. FUEL_LEVEL_SAMPLE_MIN_INTERVAL_MS /
+/// _MIN_DELTA_PCT): her cerceveyi saklamak, cihaz basina saniyede bir satir
+/// demekti ve tasima degeri olmayan bir gurultuyu kalici hale getirirdi.
+/// Seviye ATLADIGINDA (yakit alimi) kayit her halukarda dusuyor.
+///
+/// GECMISE DONUK VERI YOK: bu tablo ancak devreye alindiktan SONRAKI fisler
+/// icin doludur. Eski fislerin analizi bu yuzden `insufficient_data` kalir ve
+/// uydurma bir karsilastirma URETILMEZ.
+model VehicleFuelLevelSample {
+  id           String   @id @default(cuid())
+  tenantId     String   @default("default-tenant")
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  /// CIHAZ zamani (paketin kendi damgasi), sunucunun aldigi an degil.
+  recordedAt   DateTime
+  fuelLevelPct Decimal  @db.Decimal(5, 2)
+  /// Kontak durumu: yakit alimi cogunlukla kontak KAPALIYKEN olur ve bazi
+  /// araclarda seviye yalnizca kontak aciklandiginda guncellenir.
+  ignition     Boolean  @default(false)
+  odometerKm   Decimal? @db.Decimal(12, 3)
+  createdAt    DateTime @default(now())
+
+  /// Ayni cihaz zamani iki kez gelirse (tekrar gonderim) ikinci satir
+  /// yazilmaz — cihaz tekrarlari sahte bir "seviye degisimi" uretmesin.
+  @@unique([vehicleId, recordedAt])
+  @@index([tenantId])
+  /// Saklama suresi temizligi bu indeksten yururuyor.
+  @@index([recordedAt])
+  @@map("vehicle_fuel_level_samples")
 }
 
 model VehicleDtc {
@@ -3794,14 +3844,19 @@ model FleetFuelEntry {
   /// Bu kayit tersine cevrildiyse iliskisi burada. VARLIGI kaydin muhasebe
   /// acisindan ETKISIZ oldugunu soyler; `workflowStatus` `approved` olarak
   /// KALIR cunku onayin gercekten yasandigi bir olay ve silinmemeli.
-  reversal              FleetFuelEntryReversal? @relation("FuelEntryReversalOriginal")
+  reversal     FleetFuelEntryReversal? @relation("FuelEntryReversalOriginal")
   /// Bu kayit bir ters kaydin DUZELTILMIS KOPYASI ise iliskisi burada.
-  correctionOf          FleetFuelEntryReversal? @relation("FuelEntryReversalReplacement")
+  correctionOf FleetFuelEntryReversal? @relation("FuelEntryReversalReplacement")
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Restrict)
 
   fuelCardTransactions FuelCardTransaction[]
+
+  /// --- Telematik mutabakati (Faz 11) ---
+  /// Fis basina EN FAZLA BIR analiz. Analiz maliyeti DEGISTIRMEZ; yalnizca
+  /// ayni fise bakan ayri bir okuma.
+  reconciliation FuelReconciliation?
 
   @@unique([tenantId, receiptFileHash])
   @@unique([tenantId, fuelingIntentSettledKey])
@@ -3858,7 +3913,7 @@ model FleetFuelEntryReversal {
   /// Islemi yapan muhasebeci. Kullanici silinirse ters kayit KALIR: denetim
   /// izi, aktoru artik cozulemese bile kaybolmamali.
   reversedById String?
-  reversedBy   User?   @relation("FuelEntryReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+  reversedBy   User?    @relation("FuelEntryReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
   reversedAt   DateTime
 
   createdAt DateTime @default(now())
@@ -3880,6 +3935,119 @@ enum FuelEntryReversalReason {
   incorrect_date
   wrong_or_unreadable_document
   other
+}
+
+/// Mutabakat HESABININ teknik durumu. Risk seviyesiyle karistirilmamali:
+/// hesap basarisiz olsa bile fis onayli kalir ve maliyete girer.
+enum FuelReconciliationStatus {
+  /// Fis onaylandi, hesap heniz calismadi. Onay isleminin AYNI transaction'i
+  /// bu satiri yaziyor — telematik servisi ayakta olmasa bile is kaybolmaz.
+  pending
+  calculated
+  /// Hesap tekrar tekrar basarisiz oldu. Kullaniciya teknik hata degil,
+  /// "kontrol edilemedi" bilgisi gosterilir.
+  failed
+}
+
+/// Mutabakat SONUCU.
+///
+/// SUCLAMA YOK: "hirsizlik" / "dolandiricilik" gibi bir deger BILINCLI OLARAK
+/// bu listede yok. En agir sonuc bile yalnizca "insan baksin" der.
+enum FuelReconciliationRiskLevel {
+  /// Karar verecek veri yok (telematik yakit verisi yok, ornek yetersiz,
+  /// kapasite bilinmiyor...). Sessiz gecmek DEGIL, acikca "veri yok" demek.
+  insufficient_data
+  normal
+  review_required
+  high_attention
+}
+
+/// Incelemenin acik/kapali durumu. Muhasebe kapattiktan sonra gec gelen
+/// telematik verisi kaydi SESSIZCE YENIDEN ACMAZ.
+enum FuelReconciliationReviewState {
+  open
+  closed
+}
+
+/// Muhasebenin karari — sayilabilir olmasi sart: "kac inceleme gercekten
+/// duplicate cikti" sorusunun cevabi serbest metinden okunamaz.
+enum FuelReconciliationReviewOutcome {
+  valid
+  corrected
+  duplicate
+  needs_investigation
+}
+
+/// ONAYLI bir yakit fisinin telematik/konum/arac verisiyle karsilastirilmasi.
+///
+/// NEDEN AYRI MODEL: `FleetFuelEntry` maliyetin canonical kaydi olarak
+/// KALIYOR. Analiz onun bir OKUMASI; tutari, durumu ya da onayi degistirmez.
+/// Analiz alanlarini fise gomseydik, algoritma her degistiginde maliyet
+/// kaydinin `updatedAt`i degisir ve muhasebenin optimistic concurrency
+/// kontrolu (updatedAt + updateMany) durup dururken cakisma uretirdi.
+///
+/// FIS BASINA TEK SATIR: `fuelEntryId` tekil. Yeniden hesaplama ayni satiri
+/// gunceller, gecmis satir birikmez — "hangi sonuc gecerli" sorusunun tek
+/// cevabi olsun.
+model FuelReconciliation {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// `@unique` TEK BASINA 1-1 iliskinin Prisma tarafindaki sarti; asagidaki
+  /// `@@unique([tenantId, fuelEntryId])` ise kiraci sinirini VERITABANINDA
+  /// tasiyor. Ikisi birlikte duruyor cunku ilki olmadan iliski kurulamiyor,
+  /// ikincisi olmadan tekillik kiraci bagimsiz kaliyordu.
+  fuelEntryId String         @unique
+  fuelEntry   FleetFuelEntry @relation(fields: [fuelEntryId], references: [id], onDelete: Cascade)
+
+  status    FuelReconciliationStatus    @default(pending)
+  riskLevel FuelReconciliationRiskLevel @default(insufficient_data)
+  /// Kurallarin agirlik toplami. TEK BASINA gosterilmez: kullaniciya kurallar
+  /// ve aciklamalari gider, puan yalnizca siralama icindir.
+  riskScore Int                         @default(0)
+
+  /// Tetiklenen kurallar: [{ code, severity, weight, values }]. `code`
+  /// cevirinin anahtari — sunucu KULLANICI DILINDE metin uretmiyor.
+  signals     Json?
+  /// Neyin eksik oldugu ve kac ornek kullanildigi. Arayuz "neden karar
+  /// verilemedi"yi bundan yaziyor.
+  dataQuality Json?
+  /// Kurallarin kullandigi NORMALIZE degerler (litre, yuzde, mesafe, dakika).
+  /// Ham telematik paketleri, GPS izi ve fis icerigi BURAYA KOPYALANMAZ.
+  evidence    Json?
+
+  /// Kural setinin surumu. Esikler degistiginde eski satirin hangi kurallarla
+  /// uretildigi kaybolmasin.
+  algorithmVersion Int       @default(1)
+  calculatedAt     DateTime?
+  /// Son yeniden hesaplama ani (gec gelen telematik verisi).
+  recalculatedAt   DateTime?
+  /// Teknik hata SINIFI, saglayici mesaji degil.
+  failureClass     String?
+  attemptCount     Int       @default(0)
+  /// `high_attention` bildirimi bir kez gider. Yeniden hesaplama ayni sonucu
+  /// verdiginde ikinci bildirim URETILMEZ.
+  notifiedAt       DateTime?
+
+  reviewState   FuelReconciliationReviewState    @default(open)
+  reviewOutcome FuelReconciliationReviewOutcome?
+  reviewedById  String?
+  reviewedBy    User?                            @relation("FuelReconciliationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  /// Zorunlu insan aciklamasi. HTML olarak RENDER EDILMEZ.
+  reviewNote    String?
+  reviewedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, fuelEntryId])
+  @@index([tenantId])
+  /// Worker'in kuyrugu: bekleyen hesaplar.
+  @@index([tenantId, status])
+  /// Muhasebe listesi: risk + acik/kapali.
+  @@index([tenantId, riskLevel, reviewState])
+  @@map("fuel_reconciliations")
 }
 
 model FuelCardImportBatch {

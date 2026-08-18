@@ -70,4 +70,14 @@ describe('TENANT_SCOPED_MODELS', () => {
       assert.equal(TENANT_SCOPED_MODELS.has(model), true, `${model} must be tenant scoped`);
     }
   });
+
+  /**
+   * Faz 11. Bu iki modelin kaydi UNUTULURSA Prisma uzantisi kiraci filtresini
+   * HIC uygulamaz ve sorgular sessizce butun filolara acilir — hata vermez,
+   * yalnizca fazla veri doner. Bu yuzden kayit testle sabitleniyor.
+   */
+  it('includes the fuel reconciliation models', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('VehicleFuelLevelSample'), true);
+    assert.equal(TENANT_SCOPED_MODELS.has('FuelReconciliation'), true);
+  });
 });
