@@ -14,12 +14,19 @@ import { SchemaValidationError, validateObject, type ObjectSpec } from './schema
  */
 
 /** Faz 12'de yalnizca bu iki is turu var. */
-export const JOB_TYPES = ['system.echo', 'document.mock_classification'] as const;
+export const JOB_TYPES = [
+  'system.echo',
+  'document.mock_classification',
+  /** Faz 13 — servis faturasi cikarimi. */
+  'document.service_invoice.extract',
+] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
 export const PROPOSAL_TYPES = [
   'system.echo_result',
   'document.classification',
+  /** Faz 13 — servis kaydi TASLAGI. Bir ServiceRecord DEGILDIR. */
+  'service_invoice.draft',
 ] as const;
 export type ProposalType = (typeof PROPOSAL_TYPES)[number];
 
@@ -82,6 +89,25 @@ export const JOB_TYPE_REGISTRY: Record<JobType, JobTypeDefinition> = {
     allowedProposalTypes: ['document.classification'],
     toolset: [],
   },
+  'document.service_invoice.extract': {
+    jobType: 'document.service_invoice.extract',
+    requiredCapability: 'document.service_invoice.extract',
+    schemaVersions: {
+      1: {
+        /**
+         * Belge KIMLIGI — icerigi degil. Belge metni is kaydina GIRMEZ:
+         * kuyruk kaydinda duran her sey loglara ve denetime sizabilir.
+         */
+        documentId: { type: 'string', required: true, maxLength: 64 },
+        originalName: { type: 'string', required: false, maxLength: 255 },
+        contentLength: { type: 'integer', required: false, min: 0, max: 50_000_000 },
+      },
+    },
+    allowedProposalTypes: ['service_invoice.draft'],
+    // Arac seciminde bile arac YOK: eslestirme SUNUCUDA, deterministik
+    // kurallarla yapiliyor (bkz. vehicle-match.ts).
+    toolset: [],
+  },
 };
 
 /** Oneri govdelerinin semasi — surum bazinda. */
@@ -89,6 +115,42 @@ export const PROPOSAL_SCHEMAS: Record<ProposalType, Record<number, ObjectSpec>> 
   'system.echo_result': {
     1: {
       echoed: { type: 'string', required: true, maxLength: 500 },
+    },
+  },
+  'service_invoice.draft': {
+    1: {
+      /** --- Atolye / tedarikci --- */
+      vendorName: { type: 'string', required: true, maxLength: 200 },
+      invoiceNumber: { type: 'string', required: false, maxLength: 80 },
+      /** --- Tarihler: ISO 'YYYY-MM-DD' --- */
+      invoiceDate: { type: 'string', required: false, maxLength: 10 },
+      serviceDate: { type: 'string', required: false, maxLength: 10 },
+      /** --- Arac ipuclari. AJAN ARAC SECMEZ; bunlar yalnizca aday. --- */
+      plateNumber: { type: 'string', required: false, maxLength: 20 },
+      vin: { type: 'string', required: false, maxLength: 20 },
+      mileageKm: { type: 'integer', required: false, min: 0, max: 3_000_000 },
+      /**
+       * Para birimi. EUR VARSAYILMAZ: eksikse alan bos kalir ve kontrol
+       * `unknown` doner (bkz. service-invoice-checks.ts).
+       */
+      currency: { type: 'string', required: false, maxLength: 3 },
+      /** --- Tutarlar. Makul aralik: tek bir servis faturasi. --- */
+      netAmount: { type: 'number', required: false, min: 0, max: 1_000_000 },
+      taxAmount: { type: 'number', required: false, min: 0, max: 1_000_000 },
+      grossAmount: { type: 'number', required: false, min: 0, max: 1_000_000 },
+      serviceDescription: { type: 'string', required: false, maxLength: 500 },
+      /** Fatura satirlari — onerinin icinde KORUNUYOR (paralel model yok). */
+      lineItems: {
+        type: 'array',
+        required: false,
+        maxItems: 50,
+        items: {
+          description: { type: 'string', required: true, maxLength: 300 },
+          quantity: { type: 'number', required: false, min: 0, max: 100_000 },
+          unitPrice: { type: 'number', required: false, min: 0, max: 1_000_000 },
+          totalPrice: { type: 'number', required: false, min: 0, max: 1_000_000 },
+        },
+      },
     },
   },
   'document.classification': {

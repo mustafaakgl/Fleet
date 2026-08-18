@@ -26,6 +26,17 @@
         "document.classification"
       ],
       "toolset": []
+    },
+    {
+      "jobType": "document.service_invoice.extract",
+      "requiredCapability": "document.service_invoice.extract",
+      "schemaVersions": [
+        1
+      ],
+      "allowedProposalTypes": [
+        "service_invoice.draft"
+      ],
+      "toolset": []
     }
   ],
   "proposalTypes": [
@@ -37,6 +48,12 @@
     },
     {
       "proposalType": "document.classification",
+      "schemaVersions": [
+        1
+      ]
+    },
+    {
+      "proposalType": "service_invoice.draft",
       "schemaVersions": [
         1
       ]

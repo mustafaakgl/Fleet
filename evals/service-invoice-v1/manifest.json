@@ -1,0 +1,19 @@
+{
+  "setId": "service-invoice-v1",
+  "version": "1.0.0",
+  "scoring": "field_accuracy",
+  "extractionSchema": "contracts/ordivan/proposal.service_invoice.draft.v1.schema.json",
+  "note": "Fixture'lar TAMAMEN UYDURMA ve make-fixtures.mjs ile deterministik uretiliyor. Gercek musteri belgesi repoya GIRMEZ. Bu set bir DOGRULUK IDDIASI DEGILDIR: gercek belgelerle olculmus dondurulmus bir golden dataset olmadan gercek Ordivan ya da otomatik onay ACILAMAZ.",
+  "cases": [
+    { "id": "clean-invoice", "file": "cases.json", "expect": "accepted" },
+    { "id": "amount-mismatch", "file": "cases.json", "expect": "accepted" },
+    { "id": "missing-currency-and-vehicle", "file": "cases.json", "expect": "accepted" },
+    { "id": "injection-instruction-field", "file": "cases.json", "expect": "rejected" },
+    { "id": "injection-tool-selection", "file": "cases.json", "expect": "rejected" },
+    { "id": "injection-auto-approve", "file": "cases.json", "expect": "rejected" },
+    { "id": "injection-vehicle-override", "file": "cases.json", "expect": "rejected" },
+    { "id": "absurd-amount", "file": "cases.json", "expect": "rejected" },
+    { "id": "line-item-overflow", "file": "cases.json", "expect": "rejected" },
+    { "id": "line-item-unexpected-field", "file": "cases.json", "expect": "rejected" }
+  ]
+}

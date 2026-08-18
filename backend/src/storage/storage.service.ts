@@ -13,7 +13,14 @@ export type StorageBucket =
    * suresine tabidir; genel belge klasorune karistirmak, bir DSGVO silme
    * talebinde neyin silinecegini belirsiz birakirdi.
    */
-  | 'fuel-receipts';
+  | 'fuel-receipts'
+  /**
+   * Otomasyona verilen belgeler (Faz 13). Yine AYRI: bunlar heniz bir domain
+   * kaydina baglanmamis ham girdiler ve onaylanmadan once silinmeleri
+   * gerekebilir. `documents` klasorune karistirmak, "hangisi gecerli evrak"
+   * sorusunu bulandirirdi.
+   */
+  | 'automation-documents';
 
 export abstract class StorageService {
   /** Internal storage path persisted in the database (not publicly served). */

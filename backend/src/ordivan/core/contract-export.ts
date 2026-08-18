@@ -42,6 +42,14 @@ function fieldToJsonSchema(field: FieldSpec): JsonSchema {
       return { type: 'boolean' };
     case 'enum':
       return { type: 'string', enum: [...(field.values ?? [])] };
+    case 'array':
+      return {
+        type: 'array',
+        maxItems: field.maxItems,
+        items: field.items
+          ? objectSpecToJsonSchema(field.items, 'item')
+          : { type: 'object' },
+      };
   }
 }
 

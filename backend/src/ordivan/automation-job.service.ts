@@ -19,6 +19,11 @@ import {
   type JobType,
 } from './core/job-type-registry';
 import { SchemaValidationError } from './core/schema-validation';
+import {
+  buildServiceInvoiceChecks,
+  matchVehicle,
+  type ServiceInvoiceDraft,
+} from './core/service-invoice';
 import type { AuthenticatedConnector } from './ordivan-connector.service';
 import { CURRENT_PROTOCOL_VERSION, PROPOSAL_REVIEW_TTL_MS } from './ordivan.config';
 
@@ -67,7 +72,13 @@ export class AutomationJobService {
 
   async createJob(
     actorUserId: string | null,
-    input: { jobType: string; schemaVersion?: number; payload: unknown },
+    input: {
+      jobType: string;
+      schemaVersion?: number;
+      payload: unknown;
+      /** Isin uzerinde calisacagi belge (Faz 13). SUNUCUDAN gelir. */
+      documentId?: string;
+    },
   ): Promise<{ id: string; jobType: string; status: string }> {
     const schemaVersion = input.schemaVersion ?? 1;
 
@@ -93,6 +104,7 @@ export class AutomationJobService {
         requiredCapability: definition.requiredCapability,
         status: AutomationJobStatus.queued,
         createdById: actorUserId,
+        documentId: input.documentId ?? null,
       },
       select: { id: true, jobType: true, status: true },
     });
@@ -339,7 +351,41 @@ export class AutomationJobService {
       });
     }
 
-    const checks = input.checks ?? [];
+    let checks = input.checks ?? [];
+    let evidence: Record<string, unknown> = input.evidence ?? {};
+
+    /**
+     * SERVIS FATURASI: arac eslestirmesini ve kontrolleri SUNUCU yapar.
+     *
+     * Connector'in gonderdigi kontroller bilgi amaclidir; araci SECEN taraf
+     * asla ajan olamaz. Ajanin ciktisi yalnizca bir ADAY metnidir (plaka/VIN)
+     * ve eslestirme deterministik kurallarla, kiraci kapsaminda burada
+     * yapiliyor.
+     */
+    if (input.proposalType === 'service_invoice.draft') {
+      const draft = payload as ServiceInvoiceDraft;
+      const vehicles = await this.prisma.vehicle.findMany({
+        where: { deletedAt: null },
+        select: { id: true, plateNumber: true, vin: true },
+        take: 5_000,
+      });
+      const vehicleMatch = matchVehicle(vehicles, {
+        vin: draft.vin ?? null,
+        plateNumber: draft.plateNumber ?? null,
+      });
+      checks = buildServiceInvoiceChecks({ draft, vehicleMatch });
+      evidence = {
+        ...evidence,
+        vehicleMatch: {
+          status: vehicleMatch.status,
+          vehicleId: vehicleMatch.vehicleId,
+          matchedBy: vehicleMatch.matchedBy,
+          reason: vehicleMatch.reason,
+          candidateIds: vehicleMatch.candidateIds,
+        },
+      };
+    }
+
     try {
       // Gerekcesiz `unknown` kabul edilmez.
       assertValidChecks(checks);
@@ -387,7 +433,7 @@ export class AutomationJobService {
         status: AutomationProposalStatus.pending_review,
         payload: payload as Prisma.InputJsonValue,
         confidence: (input.confidence ?? {}) as Prisma.InputJsonValue,
-        evidence: (input.evidence ?? {}) as Prisma.InputJsonValue,
+        evidence: evidence as Prisma.InputJsonValue,
         checks: checks as unknown as Prisma.InputJsonValue,
         // SURE SUNUCUDAN: connector ne gonderirse gondersin okunmuyor.
         expiresAt: new Date(now.getTime() + PROPOSAL_REVIEW_TTL_MS),

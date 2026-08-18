@@ -161,6 +161,75 @@ function classifyDocument(documentName) {
       { documentKind: 'other', confidence: 0.42 };
 }
 
+/**
+ * Servis faturasi fixture'i — DETERMINISTIK.
+ *
+ * Hicbir AI/OCR yok. Sonuc dosya ADINDAN sabit kurallarla turetiliyor, yani
+ * ayni dosya her zaman ayni sonucu veriyor ve test bir modelin gunune bagli
+ * degil.
+ *
+ * ARAC SECILMIYOR: cikti yalnizca plaka/VIN ADAYI tasiyor. Hangi aracin
+ * kastedildigine SUNUCU karar veriyor (deterministik eslestirme).
+ */
+const SERVICE_INVOICE_FIXTURES = [
+  {
+    match: 'werkstatt-nord',
+    payload: {
+      vendorName: 'Werkstatt Nord GmbH',
+      invoiceNumber: 'RE-2026-0815',
+      invoiceDate: '2026-08-12',
+      serviceDate: '2026-08-10',
+      plateNumber: 'DU-AB 123',
+      vin: 'WDB9634031L123456',
+      mileageKm: 412000,
+      currency: 'EUR',
+      netAmount: 1000,
+      taxAmount: 190,
+      grossAmount: 1190,
+      serviceDescription: 'Inspektion und Bremsenwechsel',
+      lineItems: [
+        { description: 'Inspektion', quantity: 1, unitPrice: 400, totalPrice: 400 },
+        { description: 'Bremsbelaege vorne', quantity: 2, unitPrice: 300, totalPrice: 600 },
+      ],
+    },
+    confidence: { vendorName: 0.97, serviceDate: 0.95, grossAmount: 0.96, vin: 0.93, currency: 0.99 },
+  },
+  {
+    // Tutari tutmayan fatura: net + vergi brute UYMUYOR.
+    match: 'summenfehler',
+    payload: {
+      vendorName: 'Reifen Sued',
+      invoiceNumber: 'RE-2026-0999',
+      serviceDate: '2026-08-11',
+      plateNumber: 'DU-CD 456',
+      currency: 'EUR',
+      netAmount: 500,
+      taxAmount: 95,
+      grossAmount: 700,
+      serviceDescription: 'Reifenwechsel',
+    },
+    confidence: { vendorName: 0.9, grossAmount: 0.55, currency: 0.98 },
+  },
+  {
+    // Para birimi ve arac tanimlayicisi OKUNAMADI — uydurulmuyor.
+    match: 'unklar',
+    payload: {
+      vendorName: 'Freie Werkstatt',
+      serviceDate: '2026-08-09',
+      netAmount: 210,
+      serviceDescription: 'Oelwechsel',
+    },
+    confidence: { vendorName: 0.72, serviceDate: 0.61, netAmount: 0.58 },
+  },
+];
+
+function extractServiceInvoice(originalName) {
+  const name = String(originalName ?? '').toLowerCase();
+  const hit = SERVICE_INVOICE_FIXTURES.find((fixture) => name.includes(fixture.match));
+  // Eslesme yoksa ILK fixture: deterministik bir taban sonuc.
+  return hit ?? SERVICE_INVOICE_FIXTURES[0];
+}
+
 function buildResult(job) {
   if (job.jobType === 'system.echo') {
     return {
@@ -176,6 +245,21 @@ function buildResult(job) {
           messageKey: 'automation.checks.echo_roundtrip.verified',
         },
       ],
+    };
+  }
+
+  if (job.jobType === 'document.service_invoice.extract') {
+    const fixture = extractServiceInvoice(job.payload?.originalName);
+    return {
+      proposalType: 'service_invoice.draft',
+      proposalSchemaVersion: 1,
+      payload: fixture.payload,
+      confidence: fixture.confidence,
+      // Belge METNI evidence'a KOPYALANMIYOR; yalnizca neyin nereden geldigi.
+      evidence: { source: 'mock_fixture', documentId: job.payload?.documentId ?? null },
+      // Kontroller SUNUCUDA uretiliyor (arac eslestirmesi dahil); worker
+      // burada kendi kontrolunu gondermiyor.
+      checks: [],
     };
   }
 
@@ -281,6 +365,29 @@ async function main() {
       body: { leaseToken: job.leaseToken },
       credential,
     });
+
+    // Belgeli isler icin belgeyi indir — bu yol yalnizca LEASE ALDIGI is icin
+    // acik. Icerik okunmuyor (mock deterministik); indirme, protokolun
+    // gercekten calistigini kanitliyor.
+    if (job.jobType === 'document.service_invoice.extract') {
+      const response = await fetch(
+        `${API_BASE}/ordivan/connector/jobs/${job.jobId}/document`,
+        {
+          headers: {
+            'x-ordivan-credential': credential,
+            'x-ordivan-lease-token': job.leaseToken,
+          },
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`document download failed: ${response.status}`);
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.subarray(0, 5).toString('ascii') !== '%PDF-') {
+        throw new Error('document is not a PDF');
+      }
+      console.log(`[ordivan-mock] document downloaded bytes=${bytes.length}`);
+    }
 
     const result = buildResult(job);
     if (!result) {

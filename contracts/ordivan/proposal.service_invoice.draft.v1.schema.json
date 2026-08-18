@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fleet.local/contracts/ordivan/proposal.service_invoice.draft.v1.schema.json",
+  "title": "proposal.service_invoice.draft.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "vendorName": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "invoiceNumber": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "invoiceDate": {
+      "type": "string",
+      "maxLength": 10
+    },
+    "serviceDate": {
+      "type": "string",
+      "maxLength": 10
+    },
+    "plateNumber": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "vin": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "mileageKm": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3000000
+    },
+    "currency": {
+      "type": "string",
+      "maxLength": 3
+    },
+    "netAmount": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "taxAmount": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "grossAmount": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "serviceDescription": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "lineItems": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://fleet.local/contracts/ordivan/item.schema.json",
+        "title": "item",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "totalPrice": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000
+          }
+        },
+        "required": [
+          "description"
+        ]
+      }
+    }
+  },
+  "required": [
+    "vendorName"
+  ]
+}

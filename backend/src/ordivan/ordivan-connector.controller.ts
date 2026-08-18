@@ -1,12 +1,20 @@
 import {
   Body,
   Controller,
+  Get,
+  Headers,
   HttpCode,
   Param,
   Post,
+  Res,
   ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { createReadStream } from 'node:fs';
+import { join } from 'node:path';
+import { AUTOMATION_DOCUMENT_UPLOAD_ABSOLUTE_DIR } from '../storage/local-storage.service';
+import { AutomationDocumentService } from './automation-document.service';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
 import { AutomationJobService } from './automation-job.service';
@@ -46,6 +54,7 @@ export class OrdivanConnectorController {
   constructor(
     private readonly connectors: OrdivanConnectorService,
     private readonly jobs: AutomationJobService,
+    private readonly documents: AutomationDocumentService,
   ) {}
 
   /**
@@ -123,6 +132,27 @@ export class OrdivanConnectorController {
     @Body() dto: CompleteJobDto,
   ) {
     return this.jobs.completeJob(connector, id, dto);
+  }
+
+  /**
+   * Isin belgesini indirir (Faz 13).
+   *
+   * YALNIZCA LEASE ALDIGI IS: is kimligi, kiralayan connector ve GUNCEL
+   * `leaseToken` birlikte dogrulaniyor. Bu olmasaydi gecerli bir anahtar,
+   * kiracinin butun belgelerini indirmeye yeterdi.
+   */
+  @Get('jobs/:id/document')
+  @UseGuards(ConnectorCredentialGuard)
+  async jobDocument(
+    @CurrentConnector() connector: AuthenticatedConnector,
+    @Param('id') id: string,
+    @Headers('x-ordivan-lease-token') leaseToken: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.documents.resolveFileForConnector(connector, id, leaseToken ?? '');
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.fileName)}"`);
+    createReadStream(join(AUTOMATION_DOCUMENT_UPLOAD_ABSOLUTE_DIR, file.storedFileName)).pipe(res);
   }
 
   @Post('jobs/:id/fail')

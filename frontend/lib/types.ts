@@ -711,9 +711,62 @@ export interface AutomationProposalDetail {
   } | null;
   approvalTasks: AutomationApprovalTask[];
   approvalTask: AutomationApprovalTask | null;
+  /** Faz 13 — yetkili onizleme; ham depolama yolu YOK. */
+  document?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    fileSize: number;
+    fileDownloadPath: string;
+  } | null;
+  /** Onay sonucu olusan CANONICAL kayit. */
+  serviceRecord?: {
+    id: string;
+    vehicleId: string;
+    date: string;
+    costAmount: number;
+    currency: string;
+  } | null;
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Faz 13 — otomasyona verilen belge. Depolama yolu ISTEMCIYE GELMEZ. */
+export interface AutomationDocumentView {
+  id: string;
+  kind: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt: string;
+  fileDownloadPath: string;
+  jobId: string | null;
+  duplicate: boolean;
+}
+
+export type ServiceInvoiceCostBasis = 'net' | 'gross';
+
+/** Servis faturasi taslagi — bir ServiceRecord DEGILDIR. */
+export interface ServiceInvoiceDraft {
+  vendorName?: string | null;
+  invoiceNumber?: string | null;
+  invoiceDate?: string | null;
+  serviceDate?: string | null;
+  plateNumber?: string | null;
+  vin?: string | null;
+  mileageKm?: number | null;
+  currency?: string | null;
+  netAmount?: number | null;
+  taxAmount?: number | null;
+  grossAmount?: number | null;
+  serviceDescription?: string | null;
+  lineItems?: Array<{
+    description: string;
+    quantity?: number;
+    unitPrice?: number;
+    totalPrice?: number;
+  }>;
 }
 
 export interface AutomationReviewMetrics {

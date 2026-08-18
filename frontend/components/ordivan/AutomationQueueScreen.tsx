@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, HelpCircle, Inbox, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileText, HelpCircle, Inbox, Loader2, Upload, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,10 @@ import {
   type FieldReviewState,
   type Tone,
 } from '@/lib/ordivan-view';
+import {
+  ServiceInvoiceFinalization,
+  type ServiceInvoiceConfirmation,
+} from './ServiceInvoiceFinalization';
 import type {
   AutomationProposalDetail,
   AutomationProposalRow,
@@ -92,6 +96,9 @@ export function AutomationQueueScreen() {
   const [note, setNote] = useState('');
   const [rejectionCategory, setRejectionCategory] = useState<AutomationRejectionCategory | ''>('');
   const [busy, setBusy] = useState(false);
+  const [confirmation, setConfirmation] = useState<ServiceInvoiceConfirmation | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadNoticeKey, setUploadNoticeKey] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -132,6 +139,7 @@ export function AutomationQueueScreen() {
     setVerifiedFields({});
     setNote('');
     setRejectionCategory('');
+    setConfirmation(null);
     void ordivanApi
       .proposalDetail(openId)
       .then(setDetail)
@@ -146,6 +154,44 @@ export function AutomationQueueScreen() {
           isCriticalField(detail.proposalType, fieldName) && isLowConfidence(detail, fieldName),
       }))
     : [];
+
+  const isServiceInvoice = detail?.proposalType === 'service_invoice.draft';
+
+  /**
+   * Servis faturasi onayinda eksiksiz olmasi gereken alanlar.
+   *
+   * ARAC ZORUNLU: eslestirme belirsizse kullanici secmeden onay verilemez.
+   * PARA BIRIMI ZORUNLU: EUR varsayilmiyor.
+   */
+  const serviceInvoiceReady =
+    !isServiceInvoice ||
+    (!!confirmation &&
+      confirmation.vehicleId.length > 0 &&
+      confirmation.currency.trim().length === 3 &&
+      confirmation.serviceDate.length > 0 &&
+      confirmation.repairCompany.trim().length > 0 &&
+      confirmation.serviceType.trim().length > 0 &&
+      confirmation.costAmount > 0);
+
+  const uploadInvoice = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadNoticeKey(null);
+    setErrorKey(null);
+    try {
+      const uploaded = await ordivanApi.uploadServiceInvoice(file);
+      setUploadNoticeKey(
+        uploaded.duplicate
+          ? 'automation.upload.duplicate'
+          : 'automation.upload.accepted',
+      );
+      await load();
+    } catch {
+      setErrorKey('automation.upload.failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const decide = async (decision: 'approved' | 'rejected') => {
     if (!detail) return;
@@ -166,6 +212,10 @@ export function AutomationQueueScreen() {
           criticalLowConfidence: field.criticalLowConfidence,
           verifiedByReviewer: verifiedFields[field.fieldName] ?? false,
         })),
+        // Servis faturasi onayinda INSANIN onayladigi degerler gidiyor.
+        ...(isServiceInvoice && decision === 'approved' && confirmation
+          ? { serviceInvoice: confirmation }
+          : {}),
       });
       setOpenId(null);
       await load();
@@ -193,6 +243,28 @@ export function AutomationQueueScreen() {
           <span>{t('automation.metrics.criticalVerified', { count: metrics.criticalVerified })}</span>
         </div>
       ) : null}
+
+      {/* Servis faturasi yukleme (Faz 13) — yalnizca gercek PDF. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
+        <label className="flex items-center gap-2 text-sm" htmlFor="service-invoice-upload">
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          {t('automation.upload.label')}
+        </label>
+        <input
+          id="service-invoice-upload"
+          type="file"
+          accept="application/pdf"
+          disabled={uploading}
+          className="text-xs"
+          onChange={(event) => void uploadInvoice(event.target.files?.[0])}
+          data-testid="automation-upload-input"
+        />
+        {uploadNoticeKey ? (
+          <span className="text-xs text-muted-foreground" data-testid="automation-upload-notice">
+            {t(uploadNoticeKey)}
+          </span>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -278,6 +350,20 @@ export function AutomationQueueScreen() {
               {t('common.close')}
             </Button>
           </div>
+
+          {/* Yetkili PDF onizlemesi — ham depolama yolu istemcide YOK. */}
+          {detail.document ? (
+            <a
+              href={detail.document.fileDownloadPath}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-xs underline"
+              data-testid="automation-document-link"
+            >
+              <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+              {detail.document.originalName}
+            </a>
+          ) : null}
 
           {/* Alanlar: dusuk guven VURGULU, kritik olan ayrica isaretli. */}
           <div className="space-y-2" data-testid="automation-fields">
@@ -381,6 +467,15 @@ export function AutomationQueueScreen() {
             </p>
           ) : null}
 
+          {/* Servis faturasi: arac ve kaydedilecek tutar KULLANICININ karari. */}
+          {isServiceInvoice ? (
+            <ServiceInvoiceFinalization
+              detail={detail}
+              value={confirmation}
+              onChange={setConfirmation}
+            />
+          ) : null}
+
           {detail.status === 'pending_review' ? (
             <div className="space-y-2 border-t pt-2" data-testid="automation-decision-form">
               <label className="block text-xs font-medium" htmlFor="automation-rejection">
@@ -424,6 +519,7 @@ export function AutomationQueueScreen() {
                   disabled={
                     busy ||
                     !!rejectionCategory ||
+                    !serviceInvoiceReady ||
                     !canSubmitDecision({ decision: 'approved', note, fields: fieldStates })
                   }
                   onClick={() => decide('approved')}

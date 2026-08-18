@@ -64,6 +64,7 @@ paths:
                         enum:
                           - "system.echo"
                           - "document.mock_classification"
+                          - "document.service_invoice.extract"
                       schemaVersion:
                         type: "integer"
                       payload:

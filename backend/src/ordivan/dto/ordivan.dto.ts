@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsNumber,
   IsISO8601,
   IsInt,
   IsObject,
@@ -245,6 +246,56 @@ export class CorrectionEventDto {
 }
 
 /**
+ * Servis faturasi onayinda INSANIN onayladigi degerler (Faz 13).
+ *
+ * Ajanin urettigi taslak degil, kullanicinin ekranda gordugu ve kabul ettigi
+ * degerler kaydediliyor. `costBasis` ZORUNLU: `ServiceRecord.costAmount`in net
+ * mi brut mu oldugu repoda acik olmadigi icin karar sessizce verilmiyor.
+ */
+export class ServiceInvoiceFinalizationDto {
+  @IsString()
+  @Length(1, 64)
+  vehicleId!: string;
+
+  @IsEnum(['net', 'gross'] as unknown as object)
+  costBasis!: 'net' | 'gross';
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1_000_000)
+  costAmount!: number;
+
+  /** EUR VARSAYILMIYOR — zorunlu. */
+  @IsString()
+  @Length(3, 3)
+  currency!: string;
+
+  @IsISO8601()
+  serviceDate!: string;
+
+  @IsString()
+  @Length(1, 200)
+  repairCompany!: string;
+
+  @IsString()
+  @Length(1, 120)
+  serviceType!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(3_000_000)
+  mileageKm?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 1000)
+  notes?: string;
+}
+
+/**
  * Karar.
  *
  * ACIKLAMA KOSULLU ZORUNLU (bkz. core/review-policy): rutin onayda opsiyonel,
@@ -274,4 +325,10 @@ export class DecideProposalDto {
   @ValidateNested({ each: true })
   @Type(() => CorrectionEventDto)
   corrections?: CorrectionEventDto[];
+
+  /** Servis faturasi onayinda ZORUNLU (serviste dogrulaniyor). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ServiceInvoiceFinalizationDto)
+  serviceInvoice?: ServiceInvoiceFinalizationDto;
 }

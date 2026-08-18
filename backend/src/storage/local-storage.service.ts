@@ -26,6 +26,18 @@ export const PAYROLL_EXPORT_UPLOAD_RELATIVE_DIR = join('uploads', 'payroll-expor
 export const PAYROLL_EXPORT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), PAYROLL_EXPORT_UPLOAD_RELATIVE_DIR);
 
 // Yakit fisleri mali belgedir; genel `documents` klasoruyle karistirilmiyor.
+/**
+ * Otomasyona verilen belgeler (Faz 13).
+ *
+ * Fis yuklemeleriyle AYNI desen: dosya adi sunucuda uretiliyor, istemcinin
+ * gonderdigi ad yalnizca gosterim icin saklaniyor. Yol API'ye cikmiyor.
+ */
+export const AUTOMATION_DOCUMENT_UPLOAD_RELATIVE_DIR = join('uploads', 'automation-documents');
+export const AUTOMATION_DOCUMENT_UPLOAD_ABSOLUTE_DIR = join(
+  process.cwd(),
+  AUTOMATION_DOCUMENT_UPLOAD_RELATIVE_DIR,
+);
+
 export const FUEL_RECEIPT_UPLOAD_RELATIVE_DIR = join('uploads', 'fuel-receipts');
 export const FUEL_RECEIPT_UPLOAD_ABSOLUTE_DIR = join(process.cwd(), FUEL_RECEIPT_UPLOAD_RELATIVE_DIR);
 
@@ -40,6 +52,7 @@ const UPLOAD_ABSOLUTE_DIRS: Record<StorageBucket, string> = {
   'datev-exports': DATEV_EXPORT_UPLOAD_ABSOLUTE_DIR,
   'payroll-exports': PAYROLL_EXPORT_UPLOAD_ABSOLUTE_DIR,
   'fuel-receipts': FUEL_RECEIPT_UPLOAD_ABSOLUTE_DIR,
+  'automation-documents': AUTOMATION_DOCUMENT_UPLOAD_ABSOLUTE_DIR,
 };
 
 export function uploadAbsoluteDirForBucket(bucket: StorageBucket): string {

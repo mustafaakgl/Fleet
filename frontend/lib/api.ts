@@ -762,6 +762,23 @@ export const ordivanApi = {
       .then((r) => r.data),
 
   /**
+   * Servis faturasi yukleme (Faz 13).
+   *
+   * Yalnizca GERCEK PDF; tur sunucuda ilk baytlardan dogrulaniyor. Ayni dosya
+   * ikinci kez yuklenirse yeni is ACILMAZ (`duplicate: true`).
+   */
+  uploadServiceInvoice: (file: File) => {
+    const form = new FormData();
+    form.append('document', file);
+    return api
+      .post<import('./types').AutomationDocumentView>(
+        '/ordivan/automation/documents/service-invoice',
+        form,
+      )
+      .then((r) => r.data);
+  },
+
+  /**
    * Karar. Aciklama KOSULLU zorunlu (bkz. lib/ordivan-view). Sunucu son
    * merci: arayuz yanilirsa istek 400 doner.
    */
@@ -780,6 +797,18 @@ export const ordivanApi = {
         criticalLowConfidence?: boolean;
         verifiedByReviewer?: boolean;
       }>;
+      /** Servis faturasi onayinda ZORUNLU: insanin onayladigi degerler. */
+      serviceInvoice?: {
+        vehicleId: string;
+        costBasis: import('./types').ServiceInvoiceCostBasis;
+        costAmount: number;
+        currency: string;
+        serviceDate: string;
+        repairCompany: string;
+        serviceType: string;
+        mileageKm?: number;
+        notes?: string;
+      };
     },
   ) =>
     api

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AutomationDocumentService } from './automation-document.service';
 import { AutomationJobService } from './automation-job.service';
 import { AutomationProposalService } from './automation-proposal.service';
 import { AutomationQueueController } from './automation-queue.controller';
@@ -22,6 +23,7 @@ import { resolveOrdivanMode } from './ordivan.config';
   controllers: [OrdivanAdminController, OrdivanConnectorController, AutomationQueueController],
   providers: [
     OrdivanConnectorService,
+    AutomationDocumentService,
     AutomationJobService,
     AutomationProposalService,
     OrdivanScheduler,
@@ -30,6 +32,11 @@ import { resolveOrdivanMode } from './ordivan.config';
       useFactory: () => resolveOrdivanMode(),
     },
   ],
-  exports: [OrdivanConnectorService, AutomationJobService, AutomationProposalService],
+  exports: [
+    OrdivanConnectorService,
+    AutomationDocumentService,
+    AutomationJobService,
+    AutomationProposalService,
+  ],
 })
 export class OrdivanModule {}

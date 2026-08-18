@@ -12,7 +12,7 @@
  * degistirmeyi denemesini sessiz birakirdi.
  */
 
-export type FieldType = 'string' | 'number' | 'integer' | 'boolean' | 'enum';
+export type FieldType = 'string' | 'number' | 'integer' | 'boolean' | 'enum' | 'array';
 
 export interface FieldSpec {
   type: FieldType;
@@ -24,6 +24,14 @@ export interface FieldSpec {
   max?: number;
   /** enum icin */
   values?: readonly string[];
+  /**
+   * array icin: her elemanin semasi ve EN FAZLA kac eleman.
+   *
+   * `maxItems` ZORUNLU sayilir: sinirsiz dizi, tek bir istekle bellegi ve
+   * veritabanini doldurmanin en kolay yoludur.
+   */
+  items?: ObjectSpec;
+  maxItems?: number;
 }
 
 export type ObjectSpec = Record<string, FieldSpec>;
@@ -122,6 +130,29 @@ export function validateObject(value: unknown, spec: ObjectSpec): Record<string,
           throw new SchemaValidationError('not_in_enum', key);
         }
         result[key] = raw;
+        break;
+      }
+      case 'array': {
+        if (!Array.isArray(raw)) {
+          throw new SchemaValidationError('wrong_type', key);
+        }
+        const maxItems = field.maxItems ?? 0;
+        if (raw.length > maxItems) {
+          throw new SchemaValidationError('too_many_items', key);
+        }
+        if (!field.items) {
+          throw new SchemaValidationError('array_without_item_spec', key);
+        }
+        // Her eleman AYNI kurallardan geciyor: beklenmeyen alan dizinin
+        // icinde de reddediliyor.
+        result[key] = raw.map((item, index) => {
+          try {
+            return validateObject(item, field.items!);
+          } catch (error) {
+            const reason = error instanceof SchemaValidationError ? error.reason : 'invalid';
+            throw new SchemaValidationError(reason, `${key}[${index}]`);
+          }
+        });
         break;
       }
     }

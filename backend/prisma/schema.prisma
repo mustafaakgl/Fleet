@@ -1058,6 +1058,7 @@ model Tenant {
   automationProposals        AutomationProposal[]
   approvalTasks              ApprovalTask[]
   automationCorrectionEvents AutomationCorrectionEvent[]
+  automationDocuments        AutomationDocument[]
   vehicleDtcs                VehicleDtc[]
   tachoProviderCredentials   TachoProviderCredential[]
   dddFiles                   DddFile[]
@@ -1228,6 +1229,7 @@ model User {
   createdAutomationJobs           AutomationJob[]             @relation("AutomationJobCreatedBy")
   decidedApprovalTasks            ApprovalTask[]              @relation("ApprovalTaskDecidedBy")
   assignedApprovalTasks           ApprovalTask[]              @relation("ApprovalTaskAssignedTo")
+  uploadedAutomationDocuments     AutomationDocument[]        @relation("AutomationDocumentUploadedBy")
   reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
@@ -3202,6 +3204,10 @@ model ServiceRecord {
   driver        Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
   linkedDefects Defect[]
 
+  /// Bu kayit bir otomasyon onerisinden dogduysa bagi (Faz 13). Elle girilen
+  /// kayitlarda bos — model degismedi, yalnizca iz eklendi.
+  automationProposal AutomationProposal? @relation("ServiceRecordFromProposal")
+
   @@index([tenantId])
   @@index([vehicleId, date])
   @@index([driverId, date])
@@ -4060,6 +4066,52 @@ model FuelReconciliation {
   @@map("fuel_reconciliations")
 }
 
+/// Otomasyona giren belgenin turu. Faz 13'te YALNIZCA servis faturasi.
+enum AutomationDocumentKind {
+  service_invoice
+}
+
+/**
+ * Otomasyona verilen belge (Faz 13).
+ * NEDEN DAR BIR MODEL: repodaki `Document` kaydi surucu/arac evraki icin
+ * tasarlanmis (kategori, son kullanma, sahiplik) ve otomasyonun ihtiyaci
+ * bunlarin hicbiri degil. Var olani zorlamak, iki farkli isi tek tabloda
+ * bulandirirdi. Bu model bilincli olarak DAR: Faz 14'te belge turleri
+ * genisledikce buyuyecek.
+ * DOSYA YOLU DISARI CIKMAZ: `storedFileName` yalnizca sunucu tarafinda
+ * kullaniliyor; API yaniti ve loglar bu alani ICERMEZ.
+ */
+model AutomationDocument {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  kind AutomationDocumentKind @default(service_invoice)
+
+  /// SHA-256. Ayni kiraci icinde birebir ayni dosya iki kez yuklenemez —
+  /// ikinci yukleme yeni is acmaz, var olan belgeyi doner.
+  fileHash String
+
+  /// Diskteki ad. API'ye ASLA cikmaz.
+  storedFileName String
+  mimeType       String
+  originalName   String
+  fileSize       Int
+
+  uploadedById String
+  uploadedBy   User     @relation("AutomationDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+
+  jobs AutomationJob[]
+
+  /// Kiraci ICINDE tekil: baska bir kiracinin ayni dosyayi yuklemesi
+  /// engellenmez ve varligi da sizdirilmaz.
+  @@unique([tenantId, fileHash])
+  @@index([tenantId])
+  @@index([tenantId, kind, createdAt])
+  @@map("automation_documents")
+}
+
 model FuelCardImportBatch {
   id               String   @id @default(cuid())
   tenantId         String   @default("default-tenant")
@@ -4495,6 +4547,11 @@ model AutomationJob {
   /// Teknik hata SINIFI, saglayici mesaji degil.
   failureClass   String?
 
+  /// Isin uzerinde calistigi belge (Faz 13). Her isin belgesi olmak zorunda
+  /// DEGIL: `system.echo` gibi turler belgesiz calisir.
+  documentId String?
+  document   AutomationDocument? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
   createdById String?
   createdBy   User?    @relation("AutomationJobCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
@@ -4508,6 +4565,7 @@ model AutomationJob {
   @@index([tenantId, status, createdAt])
   @@index([leasedByConnectorId])
   @@index([status, leaseExpiresAt])
+  @@index([documentId])
   @@map("automation_jobs")
 }
 
@@ -4596,6 +4654,18 @@ model AutomationProposal {
 
   /// Suresi dolan oneri otomatik onaylanmaz, `expired` olur.
   expiresAt DateTime?
+
+  /**
+   * Onay sonucu olusan CANONICAL kayit (Faz 13).
+   * `@unique`: bir oneri EN FAZLA BIR ServiceRecord uretebilir ve bir
+   * ServiceRecord en fazla bir oneriye ait olabilir. Tekrarlanan ya da
+   * eszamanli onayin ikinci bir maliyet satiri yaratmasi VERITABANINDA
+   * imkansiz — uygulama kontrolu tek basina yeterli olmazdi.
+   * PARALEL MODEL YOK: olusan kayit repodaki `ServiceRecord`; bu alan yalnizca
+   * izlenebilirlik bagi.
+   */
+  resultServiceRecordId String?        @unique
+  resultServiceRecord   ServiceRecord? @relation("ServiceRecordFromProposal", fields: [resultServiceRecordId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

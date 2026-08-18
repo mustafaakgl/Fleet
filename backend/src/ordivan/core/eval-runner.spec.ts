@@ -49,7 +49,15 @@ describe('evals — surum ve manifest butunlugu', () => {
     );
     assert.match(root.version, /^\d+\.\d+\.\d+$/);
     const ids = root.sets.map((set) => set.id).sort();
-    assert.deepEqual(ids, ['functional', 'security-red-team']);
+    // Faz 12'nin iki seti KAYBOLAMAZ; sonraki fazlar set EKLEYEBILIR
+    // (Faz 13: service-invoice-v1). Bu yuzden "iceriyor" diye bakiliyor,
+    // "tam olarak bunlar" diye degil.
+    assert.ok(ids.includes('functional'), 'functional seti kayboldu');
+    assert.ok(ids.includes('security-red-team'), 'security-red-team seti kayboldu');
+    for (const set of root.sets) {
+      assert.match(set.version, /^\d+\.\d+\.\d+$/, `${set.id} surumsuz`);
+      assert.ok(set.scoring, `${set.id} skorlama bicimi yok`);
+    }
 
     // Adversarial set fonksiyonel skorla KARISTIRILMAZ.
     const redTeam = root.sets.find((set) => set.id === 'security-red-team')!;

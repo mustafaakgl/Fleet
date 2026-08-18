@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+
 import {
   ApprovalDecision,
   ApprovalTaskStatus,
@@ -16,6 +17,11 @@ import {
   resolveNoteRequirement,
   type ReviewFieldState,
 } from './core/review-policy';
+import type { ServiceInvoiceDraft } from './core/service-invoice';
+import {
+  buildServiceRecordData,
+  type ServiceInvoiceFinalization,
+} from './service-invoice-approval';
 
 /** Bu esigin altindaki guven "dusuk" sayilir. */
 export const LOW_CONFIDENCE = 0.7;
@@ -161,7 +167,19 @@ export class AutomationProposalService {
         expiresAt: true,
         createdAt: true,
         updatedAt: true,
-        job: { select: { id: true, jobType: true, schemaVersion: true } },
+        resultServiceRecordId: true,
+        resultServiceRecord: {
+          select: { id: true, vehicleId: true, date: true, costAmount: true, currency: true },
+        },
+        job: {
+          select: {
+            id: true,
+            jobType: true,
+            schemaVersion: true,
+            // Belgenin KIMLIGI ve adi; depolama yolu YOK.
+            document: { select: { id: true, originalName: true, mimeType: true, fileSize: true } },
+          },
+        },
         agentRun: {
           select: {
             id: true,
@@ -225,7 +243,27 @@ export class AutomationProposalService {
       checkSummary: summarizeChecks(checks),
       lowConfidenceFields: this.lowConfidenceFields(row.confidence),
       lowConfidenceThreshold: LOW_CONFIDENCE,
-      job: row.job,
+      job: { id: row.job.id, jobType: row.job.jobType, schemaVersion: row.job.schemaVersion },
+      // Yetkili onizleme yolu; ham depolama yolu istemciye ASLA verilmiyor.
+      document: row.job.document
+        ? {
+            id: row.job.document.id,
+            originalName: row.job.document.originalName,
+            mimeType: row.job.document.mimeType,
+            fileSize: row.job.document.fileSize,
+            fileDownloadPath: `/ordivan/automation/documents/${row.job.document.id}/file`,
+          }
+        : null,
+      /** Onay sonucu olusan CANONICAL kayit — izlenebilirlik bagi. */
+      serviceRecord: row.resultServiceRecord
+        ? {
+            id: row.resultServiceRecord.id,
+            vehicleId: row.resultServiceRecord.vehicleId,
+            date: row.resultServiceRecord.date.toISOString(),
+            costAmount: Number(row.resultServiceRecord.costAmount),
+            currency: row.resultServiceRecord.currency,
+          }
+        : null,
       // Denetlenebilir yetki izi — hangi connector, hangi arac setiyle.
       agentRun: row.agentRun,
       // 1:n — arayuz adim listesini de gorebiliyor; Faz 12'de tek eleman.
@@ -263,6 +301,8 @@ export class AutomationProposalService {
       note?: string;
       rejectionCategory?: AutomationRejectionCategory;
       corrections?: CorrectionInput[];
+      /** Faz 13 — servis faturasi onayinda INSANIN onayladigi degerler. */
+      serviceInvoice?: ServiceInvoiceFinalization;
     },
   ): Promise<{ proposal: Record<string, unknown>; changed: boolean }> {
     const note = input.note?.trim() ?? '';
@@ -275,6 +315,8 @@ export class AutomationProposalService {
         proposalType: true,
         confidence: true,
         expiresAt: true,
+        payload: true,
+        resultServiceRecordId: true,
         approvalTasks: {
           orderBy: { sequence: 'asc' },
           select: { id: true, sequence: true, status: true, openedAt: true, decision: true },
@@ -343,17 +385,72 @@ export class AutomationProposalService {
       throw new ConflictException({ code: 'ordivan_proposal_review_conflict' });
     }
 
+    /**
+     * SERVIS FATURASI ONAYI (Faz 13).
+     *
+     * Kayit, durum degisikligiyle AYNI TRANSACTION'da olusuyor. Ayri olsaydi
+     * onay yazilip kayit yazilmadan surec olebilir ve elimizde "onaylandi ama
+     * maliyeti yok" bir oneri kalirdi.
+     */
+    const isServiceInvoice =
+      before.proposalType === 'service_invoice.draft' &&
+      input.decision === ApprovalDecision.approved;
+
+    let finalization: ReturnType<typeof buildServiceRecordData> | null = null;
+    if (isServiceInvoice) {
+      if (!input.serviceInvoice) {
+        throw new BadRequestException({ code: 'service_invoice_confirmation_required' });
+      }
+      // ARAC KIRACI ICINDE COZULMEK ZORUNDA: istemcinin gonderdigi kimlik
+      // baska bir filonun araci olamaz.
+      const vehicle = await this.prisma.vehicle.findFirst({
+        where: { id: input.serviceInvoice.vehicleId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!vehicle) {
+        throw new BadRequestException({ code: 'service_invoice_vehicle_required' });
+      }
+      finalization = buildServiceRecordData(
+        input.serviceInvoice,
+        (before.payload ?? {}) as ServiceInvoiceDraft,
+      );
+    }
+
     const now = new Date();
-    const claimed = await this.prisma.automationProposal.updateMany({
-      where: {
-        id: proposalId,
-        status: AutomationProposalStatus.pending_review,
-        updatedAt: expected,
-      },
-      data: { status: target },
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.automationProposal.updateMany({
+        where: {
+          id: proposalId,
+          status: AutomationProposalStatus.pending_review,
+          updatedAt: expected,
+        },
+        data: { status: target },
+      });
+
+      if (claimed.count === 0) {
+        return { claimed: 0, serviceRecordId: null as string | null };
+      }
+
+      if (!finalization) {
+        return { claimed: 1, serviceRecordId: null as string | null };
+      }
+
+      const record = await tx.serviceRecord.create({
+        data: finalization.data,
+        select: { id: true },
+      });
+
+      // `resultServiceRecordId` TEKIL: ikinci bir kayit baglanamaz. Kosul
+      // ayrica `null` — yaris durumunda ikinci yazim sessizce duser.
+      await tx.automationProposal.updateMany({
+        where: { id: proposalId, resultServiceRecordId: null },
+        data: { resultServiceRecordId: record.id },
+      });
+
+      return { claimed: 1, serviceRecordId: record.id };
     });
 
-    if (claimed.count === 0) {
+    if (outcome.claimed === 0) {
       throw new ConflictException({ code: 'ordivan_proposal_review_conflict' });
     }
 
@@ -440,6 +537,15 @@ export class AutomationProposalService {
         reviewDurationMs,
         lowConfidenceFieldCount: lowConfidence.length,
         criticalLowConfidenceVerified: criticalVerified,
+        // Faz 13: hangi tutar tabani secildi ve kayit olustu mu — DEGERIN
+        // KENDISI degil, kararin kaydi.
+        ...(finalization
+          ? {
+              serviceRecordId: outcome.serviceRecordId,
+              costBasis: input.serviceInvoice?.costBasis ?? null,
+              amountDiffersFromExtraction: finalization.amountDiffersFromExtraction,
+            }
+          : {}),
         // Rubber-stamping SINYALI — hukum degil.
         fastDecision: reviewDurationMs < RUBBER_STAMP_THRESHOLD_MS,
       },
