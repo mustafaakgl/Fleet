@@ -49,6 +49,10 @@ function toClientVehicle(row: VehicleWithCurrentDriver) {
         }
       : null,
     photo_url: row.photoUrl ? `/vehicles/${row.id}/photo` : undefined,
+    // Telematik mutabakati (Faz 11) icin toplam depo hacmi. Decimal ->
+    // number: istemci sayiyi bicimlendiriyor, uzerinde hesap yapmiyor.
+    fuel_tank_capacity_liters:
+      row.fuelTankCapacityLiters === null ? null : Number(row.fuelTankCapacityLiters),
     created_at: row.createdAt.toISOString(),
   };
 }
@@ -298,6 +302,7 @@ export class VehiclesService {
               : undefined,
             notes: dto.notes,
             photoUrl: dto.photo_url,
+            fuelTankCapacityLiters: dto.fuel_tank_capacity_liters,
           },
           include: currentDriverInclude,
         });
@@ -355,6 +360,12 @@ export class VehiclesService {
     }
     if (dto.notes !== undefined) data.notes = dto.notes;
     if (dto.photo_url !== undefined) data.photoUrl = dto.photo_url || null;
+    if (dto.fuel_tank_capacity_liters !== undefined) {
+      // Bos gonderim ALANI TEMIZLER: yanlis girilmis bir kapasiteyi geri
+      // almanin yolu olmali. Kapasite yoksa mutabakatin kapasite kurallari
+      // hic calismaz — yanlis bir deger ise sahte litre farki uretirdi.
+      data.fuelTankCapacityLiters = dto.fuel_tank_capacity_liters ?? null;
+    }
 
     const updated = await this.prisma.vehicle.update({
       where: { id },

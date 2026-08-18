@@ -1,4 +1,16 @@
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Max,
+  Min,
+  MinLength,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { VehicleStatus } from '@prisma/client';
 
 export class CreateVehicleDto {
@@ -59,4 +71,19 @@ export class CreateVehicleDto {
   @IsOptional()
   @IsString()
   photo_url?: string;
+
+  /**
+   * Toplam KULLANILABILIR depo hacmi (litre). Cift depolu cekicide iki
+   * deponun TOPLAMI — telematik yuzdesi tek bir seviye olarak geliyor ve
+   * yuzde -> litre cevrimi ancak toplam kapasiteyle anlamli (Faz 11).
+   *
+   * Bos birakilabilir: bilinmeyen kapasiteye tahmin yazmak, yakit
+   * mutabakatinda olculmus gibi gorunen uydurma bir litre farki uretirdi.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(5000)
+  fuel_tank_capacity_liters?: number;
 }
