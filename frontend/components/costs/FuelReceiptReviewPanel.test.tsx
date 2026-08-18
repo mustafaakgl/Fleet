@@ -90,6 +90,7 @@ function detail(overrides: Record<string, unknown> = {}): FuelReceiptReviewDetai
     ...queueRow(),
     reversal: null,
     correctionOf: null,
+    reconciliation: null,
     stationAddress: 'Hafenstraße 12',
     receiptNumber: 'RG-1',
     pricePerLiter: 1.719,

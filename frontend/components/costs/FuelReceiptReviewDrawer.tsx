@@ -10,6 +10,7 @@ import { extractApiErrorCode } from '@/lib/fuel-station-view';
 import { canReverse, reasonLabelKey, statusBadge } from '@/lib/fuel-reversal-view';
 import { FuelReceiptReversalDialog } from './FuelReceiptReversalDialog';
 import { FuelReceiptCorrectionForm } from './FuelReceiptCorrectionForm';
+import { FuelReconciliationPanel } from './FuelReconciliationPanel';
 import { formatFleetCurrency } from '@/lib/locale-format';
 import { cn } from '@/lib/utils';
 import type { FuelReceiptReviewDetail } from '@/lib/types';
@@ -400,6 +401,18 @@ export function FuelReceiptReviewDrawer({
                 })}
               </p>
             ) : null}
+
+            {/* Telematik kontrolu (Faz 11) — KARARDAN ONCE gorulmeli.
+                Fis onaylanmadan once analiz baslamadigi icin bu panel
+                yalnizca onayli kayitlarda dolu; oncesinde hic cizilmiyor. */}
+            <FuelReconciliationPanel
+              panel={detail.reconciliation}
+              onReviewed={(updated) =>
+                setDetail((current) =>
+                  current ? { ...current, reconciliation: updated } : current,
+                )
+              }
+            />
 
             {/* Zaman cizelgesi */}
             <dl className="grid grid-cols-2 gap-2 rounded-md border p-3 text-xs" data-testid="review-timeline">

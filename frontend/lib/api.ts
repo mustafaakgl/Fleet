@@ -634,6 +634,69 @@ export const fuelReceiptReviewApi = {
       .then((r) => r.data),
 };
 
+/**
+ * Yakit fisi / telematik mutabakati (Faz 11).
+ *
+ * ROL: uc tarafinda FINANCIAL_ROLES ile korunuyor. Ofis ve surucu bu
+ * fonksiyonlari cagirsa 403 alir — menuyu gizlemek tek basina guvenlik degil.
+ */
+export const fuelReconciliationApi = {
+  list: (
+    params: {
+      riskLevel?: import('./types').FuelReconciliationRiskLevel;
+      reviewState?: 'open' | 'closed';
+      vehicleId?: string;
+      from?: string;
+      to?: string;
+      page?: number;
+      pageSize?: number;
+      sort?: 'risk' | 'newest' | 'oldest';
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<import('./types').FuelReconciliationQueueResponse>('/fleet/fuel-reconciliations', {
+        params,
+        signal,
+      })
+      .then((r) => r.data),
+
+  /** Arac maliyetleri ekranindaki "kontrol bekleyen" rakami. */
+  summary: (vehicleId?: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').FuelReconciliationSummary>('/fleet/fuel-reconciliations/summary', {
+        params: vehicleId ? { vehicleId } : undefined,
+        signal,
+      })
+      .then((r) => r.data),
+
+  detail: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').FuelReconciliationPanel>(`/fleet/fuel-reconciliations/${id}`, {
+        signal,
+      })
+      .then((r) => r.data),
+
+  /**
+   * Inceleme karari. `expectedUpdatedAt` ZORUNLU: iki muhasebeci ayni kaydi
+   * ayni anda farkli sonuclarla kapatamasin.
+   */
+  review: (
+    id: string,
+    payload: {
+      expectedUpdatedAt: string;
+      outcome: import('./types').FuelReconciliationReviewOutcome;
+      note: string;
+    },
+  ) =>
+    api
+      .post<{
+        reconciliation: import('./types').FuelReconciliationPanel;
+        changed: boolean;
+      }>(`/fleet/fuel-reconciliations/${id}/review`, payload)
+      .then((r) => r.data),
+};
+
 /** Kiraci temel para birimi ayari (Faz 7.1 ucu, Faz 8 arayuzu). */
 export const tenantSettingsApi = {
   getCurrency: (signal?: AbortSignal) =>

@@ -233,6 +233,11 @@ export interface Vehicle {
   registration_expiry_date?: string;
   current_driver?: Pick<Driver, 'id' | 'first_name' | 'last_name'> | null;
   photo_url?: string;
+  /**
+   * Toplam kullanilabilir depo hacmi (litre). `null` = kayitli degil ve
+   * telematik kontrolunun miktar kurallari calismaz.
+   */
+  fuel_tank_capacity_liters?: number | null;
   created_at?: string;
 }
 
@@ -567,6 +572,121 @@ export interface FuelReceiptQueueResponse {
   summary: { pendingCount: number; oldestWaitingDays: number | null };
 }
 
+/* ---------------------------------------------------------------------------
+ * Yakit fisi / telematik mutabakati (Faz 11)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Mutabakat sonucu.
+ *
+ * SUCLAMA YOK: "hirsizlik"/"dolandiricilik" karsiligi bilincli olarak yok.
+ * En agir sonuc bile yalnizca "insan baksin" der.
+ */
+export type FuelReconciliationRiskLevel =
+  | 'insufficient_data'
+  | 'normal'
+  | 'review_required'
+  | 'high_attention';
+
+export type FuelReconciliationReviewOutcome =
+  | 'valid'
+  | 'corrected'
+  | 'duplicate'
+  | 'needs_investigation';
+
+export interface FuelReconciliationSignal {
+  /** Ceviri anahtari — sunucu kullanici diline metin URETMIYOR. */
+  code: string;
+  severity: 'strong' | 'moderate';
+  group: string;
+  weight: number;
+  values: Record<string, number | string | null>;
+}
+
+export interface FuelReconciliationDataQuality {
+  evaluatedRules: string[];
+  skippedRules: Array<{ code: string; reason: string }>;
+  fuelLevelSamplesBefore: number;
+  fuelLevelSamplesAfter: number;
+  hasTankCapacity: boolean;
+  hasStationLocation: boolean;
+  hasPositions: boolean;
+  hasFreshPriceSnapshot: boolean;
+  missing: string[];
+}
+
+export interface FuelReconciliationEvidence {
+  receiptLiters: number | null;
+  observedIncreaseLiters: number | null;
+  observedIncreasePct: number | null;
+  absoluteDifferenceLiters: number | null;
+  percentageDifference: number | null;
+  tankCapacityLiters: number | null;
+  levelRiseAt: string | null;
+  receiptToRiseMinutes: number | null;
+  stationDistanceMeters: number | null;
+  closestPositionAt: string | null;
+  quotedPricePerLitre: number | null;
+  receiptPricePerLiter: number | null;
+  priceDeviationRatio: number | null;
+  distanceSincePreviousReceiptKm: number | null;
+  expectedLitersFromDistance: number | null;
+  duplicateCandidateId: string | null;
+}
+
+export interface FuelReconciliationPanel {
+  id: string;
+  fuelEntryId: string;
+  status: 'pending' | 'calculated' | 'failed';
+  riskLevel: FuelReconciliationRiskLevel;
+  riskScore: number;
+  signals: FuelReconciliationSignal[];
+  dataQuality: FuelReconciliationDataQuality | null;
+  evidence: FuelReconciliationEvidence | null;
+  algorithmVersion: number;
+  calculatedAt: string | null;
+  recalculatedAt: string | null;
+  review: {
+    state: 'open' | 'closed';
+    outcome: FuelReconciliationReviewOutcome | null;
+    note: string | null;
+    reviewedAt: string | null;
+    reviewedBy: { id: string; name: string } | null;
+  };
+  updatedAt: string;
+}
+
+export interface FuelReconciliationRow {
+  id: string;
+  fuelEntryId: string;
+  riskLevel: FuelReconciliationRiskLevel;
+  riskScore: number;
+  reviewState: 'open' | 'closed';
+  reviewOutcome: FuelReconciliationReviewOutcome | null;
+  signalCodes: string[];
+  vehicle: { id: string; plateNumber: string };
+  purchasedAt: string;
+  liters: number | null;
+  fuelGrossAmount: number | null;
+  currency: string;
+  calculatedAt: string | null;
+  updatedAt: string;
+}
+
+export interface FuelReconciliationQueueResponse {
+  rows: FuelReconciliationRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  summary: { openCount: number; highAttentionCount: number };
+}
+
+export interface FuelReconciliationSummary {
+  openCount: number;
+  highAttentionCount: number;
+}
+
 export interface FuelReceiptReviewDetail {
   id: string;
   workflowStatus: FuelEntryWorkflowStatus;
@@ -624,6 +744,11 @@ export interface FuelReceiptReviewDetail {
     reviewedAt: string | null;
     rejectedAt: string | null;
   };
+  /**
+   * Telematik kontrolu (Faz 11). `null` = fis heniz onaylanmadi; analiz
+   * YALNIZCA onaydan sonra basliyor.
+   */
+  reconciliation: FuelReconciliationPanel | null;
   review: {
     reviewedBy: { id: string; name: string } | null;
     accountingNote: string | null;

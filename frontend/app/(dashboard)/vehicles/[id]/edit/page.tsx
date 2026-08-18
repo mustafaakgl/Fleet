@@ -30,6 +30,12 @@ const schema = z.object({
   insurance_expiry_date: z.string().optional(),
   registration_expiry_date: z.string().optional(),
   notes: z.string().optional(),
+  // Telematik kontrolu (Faz 11) icin gereken toplam depo hacmi. Bos
+  // birakilabilir: uydurma bir kapasite, mutabakatta olculmus gibi
+  // gorunen sahte bir litre farki uretirdi.
+  fuel_tank_capacity_liters: z
+    .union([z.string().length(0), z.coerce.number().positive().max(5000)])
+    .optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -110,6 +116,7 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
           insurance_expiry_date: '',
           registration_expiry_date: '',
           notes: '',
+          fuel_tank_capacity_liters: v.fuel_tank_capacity_liters ?? undefined,
         });
       })
       .catch(() => setNotFound(true))
@@ -221,6 +228,17 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
             </div>
             <Field label={t('form.notes')} error={t(errors.notes?.message ?? '')}>
               <Input {...register('notes')} />
+            </Field>
+            {/* Depo hacmi (Faz 11). Yazma hakki sunucuda RequiresWrite ile
+                korunuyor — muhasebe bu formu acsa bile kaydedemez. */}
+            <Field
+              label={t('vehicles.fuelTankCapacity')}
+              error={t(errors.fuel_tank_capacity_liters?.message ?? '')}
+            >
+              <Input type="number" step="0.01" min="0" {...register('fuel_tank_capacity_liters')} />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('vehicles.fuelTankCapacityHint')}
+              </p>
             </Field>
           </CardContent>
         </Card>

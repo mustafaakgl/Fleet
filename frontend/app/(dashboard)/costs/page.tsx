@@ -26,6 +26,7 @@ import {
 import { CostDashboard } from '@/components/costs/CostDashboard';
 import { escapeCsvCell } from '@/lib/cost-dashboard-view';
 import { FuelReceiptReviewPanel } from '@/components/costs/FuelReceiptReviewPanel';
+import { FuelReconciliationQueue } from '@/components/costs/FuelReconciliationQueue';
 import type { VehicleCostsResponse } from '@/lib/types';
 import { formatFleetCurrency } from '@/lib/locale-format';
 
@@ -95,9 +96,11 @@ function CostsPageContent() {
    * bir sey kazanmadan riske atardi.
    */
   const tabParam = searchParams.get('tab');
-  const [tab, setTab] = useState<'dashboard' | 'summary' | 'receipts'>(
+  const [tab, setTab] = useState<'dashboard' | 'summary' | 'receipts' | 'reconciliation'>(
     // Drill-down baglantisi dogrudan dogru sekmeyi aciyor.
-    tabParam === 'receipts' || tabParam === 'summary' ? tabParam : 'dashboard',
+    tabParam === 'receipts' || tabParam === 'summary' || tabParam === 'reconciliation'
+      ? tabParam
+      : 'dashboard',
   );
 
   /** Drill-down filtresi — yalnizca fis sekmesi icin anlamli. */
@@ -183,7 +186,7 @@ function CostsPageContent() {
 
       {/* Araclar > Arac maliyetleri altinda iki sekme. Rota AYNI kaliyor. */}
       <div className="flex flex-wrap gap-2" role="tablist">
-        {(['dashboard', 'summary', 'receipts'] as const).map((key) => (
+        {(['dashboard', 'summary', 'receipts', 'reconciliation'] as const).map((key) => (
           <Button
             key={key}
             type="button"
@@ -205,6 +208,14 @@ function CostsPageContent() {
 
       {tab === 'dashboard' ? <CostDashboard /> : null}
       {tab === 'receipts' ? <FuelReceiptReviewPanel filter={receiptFilter} /> : null}
+      {/* Telematik mutabakati (Faz 11) — AYRI sekme. Fis kuyruguna
+          karistirmadi: o kuyruk "karar bekleyen" fisleri gosteriyor, bu
+          liste ise ZATEN ONAYLANMIS fislerin kontrolu. Ikisini tek listede
+          birlestirmek, muhasebenin "simdi ne yapmam gerekiyor" sorusunu
+          bulaniklastirirdi. */}
+      {tab === 'reconciliation' ? (
+        <FuelReconciliationQueue vehicleId={receiptFilter?.vehicleId} />
+      ) : null}
 
       {tab === 'summary' && !loading && error ? (
         <EmptyState
