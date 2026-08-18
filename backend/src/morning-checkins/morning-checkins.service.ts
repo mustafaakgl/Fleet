@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateMorningCheckinDto } from './dto/create-morning-checkin.dto';
 import { UpdateMorningCheckinDto } from './dto/update-morning-checkin.dto';
 import { dedupeDriverDayAssignments } from '../assignments/assignment-dedupe';
+import { resolveAssignmentCurrency } from '../common/utils/revenue-currency';
 
 type MorningCheckinWithDriver = MorningCheckin & {
   driver: { id: string; firstName: string; lastName: string };
@@ -243,8 +244,11 @@ export class MorningCheckinsService {
         });
       } else {
         created = true;
+        // Bagimsiz gorev: kiracinin temel para birimi. Sabit `EUR` YOK.
+        const tenant = await tx.tenant.findFirst({ select: { baseCurrency: true } });
         assignment = await tx.assignment.create({
           data: {
+            currency: resolveAssignmentCurrency({ tenantBaseCurrency: tenant?.baseCurrency }),
             driverId: checkin.driverId,
             vehicleId: vehicle.id,
             companyId: company.id,

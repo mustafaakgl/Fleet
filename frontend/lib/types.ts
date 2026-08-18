@@ -3856,6 +3856,13 @@ export interface OrderAssignmentLink {
   vehicleId: string;
   /** Finansal — office icin `null`. */
   expectedDailyRevenue: string | null;
+  /**
+   * Gorevin KENDI para birimi — olusturma aninda donduruldu.
+   *
+   * Siparisin para biriminden FARKLI olabilir: siparis EUR→TRY degistiyse
+   * eski gorev EUR kalir. Finansal alan oldugu icin office'te `null`.
+   */
+  currency: string | null;
   /** ESKI revizyondan uretilmis; otomatik degistirilmez, ISARETLENIR. */
   staleAgainstOrder: boolean;
 }
@@ -3870,11 +3877,18 @@ export interface OrderBillingAssessment {
 
 export interface OrderRevenueAllocation {
   contracted: number | null;
+  /** YALNIZCA siparisin para birimindeki gorevlerin toplami. */
   allocated: number;
+  currency: string;
   remaining: number | null;
   overAllocated: boolean;
   assignmentCount: number;
   assignmentsWithoutRevenue: number;
+  /**
+   * Siparisin para biriminde OLMAYAN gorevler — toplama KATILMADI.
+   * FX uydurulmuyor; ayri kirilimda gosteriliyor.
+   */
+  unconvertedByCurrency: Array<{ currency: string; amount: number; count: number }>;
 }
 
 export interface TransportOrderRow {

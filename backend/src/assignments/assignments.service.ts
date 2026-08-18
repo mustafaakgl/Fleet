@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CompanyEmailsService } from '../company-emails/company-emails.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
+import { resolveAssignmentCurrency } from '../common/utils/revenue-currency';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { AssignmentTransitionTarget } from './dto/transition-assignment.dto';
@@ -496,6 +497,9 @@ export class AssignmentsService {
               cargoOwner: row.cargoOwner,
               pickupAddress: row.pickupAddress,
               deliveryAddress: row.deliveryAddress,
+              // KOPYALANAN gorevin para birimi de kopyalanir: kopya, orijinalin
+              // tutarini tasiyorsa para birimini de tasimali.
+              currency: row.currency,
               workDate: toDate,
               startTime: row.startTime,
               endTime: row.endTime,
@@ -572,6 +576,20 @@ export class AssignmentsService {
     const expectedDailyRevenue =
       dto.expected_daily_revenue ?? toDecimalNumber(company?.defaultDailyRevenue ?? null) ?? undefined;
 
+    /**
+     * PARA BIRIMI OLUSTURMA ANINDA DONDURULUR.
+     *
+     * Siparisten uretilen gorevde cagiran taraf (transport-orders controller)
+     * siparisin O ANDAKI para birimini gonderiyor; sonraki amendment bu degeri
+     * DEGISTIRMEZ. Bagimsiz gorevde kiracinin tabani kullaniliyor — kodda
+     * sabit `EUR` YOK.
+     */
+    const tenant = await this.prisma.tenant.findFirst({ select: { baseCurrency: true } });
+    const currency = resolveAssignmentCurrency({
+      orderCurrency: dto.currency,
+      tenantBaseCurrency: tenant?.baseCurrency,
+    });
+
     const created = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const startTime = this.normalizeTime(dto.start_time);
       const endTime = this.normalizeTime(dto.end_time);
@@ -622,7 +640,10 @@ export class AssignmentsService {
           startTime,
           endTime,
           routeName: dto.route_name,
+          // TUTAR VE PARA BIRIMI AYNI TRANSACTION'DA: ikisinin ayri yazilmasi,
+          // arada bir okumanin yanlis para biriminde tutar gormesi demekti.
           expectedDailyRevenue,
+          currency,
           status: AssignmentStatus.planned,
           notes: dto.notes,
           createdById: currentUserId,

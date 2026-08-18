@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { CompanyEmailsService } from '../company-emails/company-emails.service';
 import { DriverNotifyService } from '../notifications/driver-notify.service';
 import { OperationalNotifyService } from '../notifications/operational-notify.service';
+import { resolveAssignmentCurrency } from '../common/utils/revenue-currency';
 
 type DayRange = {
   start: Date;
@@ -292,8 +293,12 @@ export class TransportRequestsService {
         };
       }
 
+      // Sofor talebinden dogan gorev bir musteri siparisine ait degil:
+      // kiracinin temel para birimi kullaniliyor.
+      const tenant = await tx.tenant.findFirst({ select: { baseCurrency: true } });
       const assignment = await tx.assignment.create({
         data: {
+          currency: resolveAssignmentCurrency({ tenantBaseCurrency: tenant?.baseCurrency }),
           driverId: request.driverId,
           vehicleId: request.vehicleId,
           companyId: request.companyId,

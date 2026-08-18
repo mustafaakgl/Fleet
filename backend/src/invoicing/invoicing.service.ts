@@ -21,6 +21,11 @@ import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
 import { invoiceDeliveryMail, type InvoiceServiceRow } from '../mail/mail-templates';
 import { MailService, type MailAttachment, type SendMailResult } from '../mail/mail.service';
+import {
+  DEFAULT_BASE_CURRENCY,
+  matchesBaseCurrency,
+  normalizeCurrency,
+} from '../common/utils/currency';
 import { PrismaService } from '../prisma/prisma.service';
 import { DatevExportStorageService } from '../storage/datev-export-storage.service';
 import { InvoiceDocumentStorageService } from '../storage/invoice-document-storage.service';
@@ -287,6 +292,14 @@ export class InvoicingService {
   }
 
   async listUninvoiced(from?: string, to?: string) {
+    // Toplama tek para biriminde anlamli: temel para birimi disindaki
+    // gorevler oneri listesine GIRMEZ ve ayrica sayilir.
+    const tenantForCurrency = await this.prisma.tenant.findFirst({
+      select: { baseCurrency: true },
+    });
+    const baseCurrency =
+      normalizeCurrency(tenantForCurrency?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
+    let excludedByCurrency = 0;
     const start = from ? normalizeDay(from, 'from') : undefined;
     const endInclusive = to ? normalizeDay(to, 'to') : undefined;
     if (start && endInclusive && endInclusive < start) {
@@ -313,6 +326,7 @@ export class InvoicingService {
         pickupAddress: true,
         deliveryAddress: true,
         expectedDailyRevenue: true,
+        currency: true,
         company: {
           select: {
             id: true,
@@ -348,6 +362,13 @@ export class InvoicingService {
     >();
 
     for (const assignment of assignments) {
+      // FARKLI PARA BIRIMI TOPLAMA GIRMEZ: `suggestedNetCents` tek bir
+      // para biriminde bir rakam ve karisik para birimlerini toplamak onu
+      // sessizce anlamsiz kilardi. Kayit atlaniyor, silinmiyor.
+      if (!matchesBaseCurrency(assignment.currency, baseCurrency)) {
+        excludedByCurrency += 1;
+        continue;
+      }
       const amount =
         decimalEuroToCents(assignment.expectedDailyRevenue) ??
         decimalEuroToCents(assignment.company.defaultDailyRevenue);
@@ -383,6 +404,14 @@ export class InvoicingService {
    * They never reach the uninvoiced list, so without this view the revenue silently disappears.
    */
   async listOpenOverdue(asOf?: string) {
+    // Toplama tek para biriminde anlamli: temel para birimi disindaki
+    // gorevler oneri listesine GIRMEZ ve ayrica sayilir.
+    const tenantForCurrency = await this.prisma.tenant.findFirst({
+      select: { baseCurrency: true },
+    });
+    const baseCurrency =
+      normalizeCurrency(tenantForCurrency?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
+    let excludedByCurrency = 0;
     const today = normalizeDay(asOf ?? new Date(), 'asOf');
 
     const assignments = await this.prisma.assignment.findMany({
@@ -398,6 +427,7 @@ export class InvoicingService {
         cargoName: true,
         routeName: true,
         expectedDailyRevenue: true,
+        currency: true,
         driver: { select: { id: true, firstName: true, lastName: true } },
         company: {
           select: { id: true, name: true, defaultDailyRevenue: true },
@@ -431,6 +461,10 @@ export class InvoicingService {
     let totalPotentialNetCents = 0;
 
     for (const assignment of assignments) {
+      if (!matchesBaseCurrency(assignment.currency, baseCurrency)) {
+        excludedByCurrency += 1;
+        continue;
+      }
       const amount =
         decimalEuroToCents(assignment.expectedDailyRevenue) ??
         decimalEuroToCents(assignment.company.defaultDailyRevenue);
@@ -478,6 +512,18 @@ export class InvoicingService {
   }
 
   async createDraft(dto: CreateInvoiceDraftDto, actorUserId: string) {
+    /**
+     * Faturanin para birimi KIRACININ TABANI.
+     *
+     * `Invoice.currency` semada `EUR` varsayilanliydi; TRY tabanli bir
+     * kiracinin faturasi sessizce `EUR` yaziyordu. Taban acikca yaziliyor ve
+     * gorevler bu para birimine karsi dogrulaniyor.
+     */
+    const tenantForInvoice = await this.prisma.tenant.findFirst({
+      select: { baseCurrency: true },
+    });
+    const invoiceCurrency =
+      normalizeCurrency(tenantForInvoice?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
     if (dto.assignmentIds.length === 0 && dto.manualLines.length === 0) {
       throw new BadRequestException('At least one assignment or manual line is required');
     }
@@ -514,6 +560,7 @@ export class InvoicingService {
               pickupAddress: true,
               deliveryAddress: true,
               expectedDailyRevenue: true,
+              currency: true,
               invoiceClaim: { select: { id: true } },
               company: { select: { defaultDailyRevenue: true } },
               vehicle: { select: { plateNumber: true } },
@@ -547,6 +594,22 @@ export class InvoicingService {
     );
 
     const assignmentLines = assignments.map((assignment, index) => {
+      /**
+       * PARA BIRIMI UYUSMAZLIGI SESSIZCE GECILMEZ.
+       *
+       * `Invoice.currency` tek bir para birimi tasiyor. Baska para birimindeki
+       * bir gorevi bu faturaya koymak, tutari kur uydurarak cevirmek demektir.
+       * Kullanici ya gorevi cikarir ya da o para biriminde ayri bir fatura
+       * keser — ikisi de bilincli bir karar; sessiz donusum degil.
+       */
+      if (!matchesBaseCurrency(assignment.currency, invoiceCurrency)) {
+        throw new BadRequestException({
+          code: 'invoice_assignment_currency_mismatch',
+          assignmentId: assignment.id,
+          assignmentCurrency: assignment.currency,
+          invoiceCurrency,
+        });
+      }
       const unitPriceCents =
         decimalEuroToCents(assignment.expectedDailyRevenue) ??
         decimalEuroToCents(assignment.company.defaultDailyRevenue);
@@ -605,6 +668,7 @@ export class InvoicingService {
       const created = await tx.invoice.create({
         data: {
           companyId: company.id,
+          currency: invoiceCurrency,
           invoiceDate,
           servicePeriodStart,
           servicePeriodEnd,

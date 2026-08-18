@@ -49,6 +49,18 @@ export class CreateAssignmentDto {
    * Doluysa sunucu adresi yeniden aramaz — kesin koordinat zaten kayitli.
    * Bos ise (elle yazma, ice aktarma) eski cozumleme yolu isler.
    */
+  /**
+   * Gelirin para birimi — YALNIZCA siparis yolundan doluyor.
+   *
+   * Bos ise kiracinin `baseCurrency`si kullanilir. Istemcinin serbestce
+   * gonderdigi bir deger DEGIL: `transport-orders` controller'i siparisin
+   * o andaki para birimini geciyor ve finansal rol kontrolu orada yapiliyor.
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z]{3}$/)
+  currency?: string;
+
   @IsOptional()
   @IsString()
   pickup_location_id?: string;

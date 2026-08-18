@@ -378,6 +378,7 @@ export class CostDashboardService {
           vehicleId: true,
           workDate: true,
           expectedDailyRevenue: true,
+          currency: true,
           company: { select: { defaultDailyRevenue: true } },
         },
       }),
@@ -442,6 +443,17 @@ export class CostDashboardService {
     for (const row of assignmentRows) {
       const revenue = row.expectedDailyRevenue ?? row.company?.defaultDailyRevenue ?? null;
       if (revenue === null) continue;
+      // GELIR DE KORUNUYOR: yakit/servis/ceza icin var olan kural buraya da
+      // uygulaniyor. Onceden gelir KOSULSUZ ekleniyordu ve TRY tabanli bir
+      // gorev EUR toplamina sessizce giriyordu.
+      if (!matchesBaseCurrency(row.currency, baseCurrency)) {
+        const currency = normalizeCurrency(row.currency) ?? baseCurrency;
+        const bucket = unconverted.get(currency) ?? { amount: ZERO, count: 0 };
+        bucket.amount = bucket.amount.plus(revenue);
+        bucket.count += 1;
+        unconverted.set(currency, bucket);
+        continue;
+      }
       addMoney('revenue', row.vehicleId, row.workDate, revenue);
     }
 

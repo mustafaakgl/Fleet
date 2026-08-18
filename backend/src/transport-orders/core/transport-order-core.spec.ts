@@ -280,9 +280,10 @@ describe('Gelir tahsisi IZLENEBILIR', () => {
   it('tahsis toplami ve kalan hesaplanir', () => {
     const result = allocateRevenue({
       contractedRevenue: 1000,
+      currency: 'EUR',
       assignments: [
-        { status: 'planned', expectedDailyRevenue: 400 },
-        { status: 'planned', expectedDailyRevenue: 350 },
+        { status: 'planned', expectedDailyRevenue: 400, currency: 'EUR' },
+        { status: 'planned', expectedDailyRevenue: 350, currency: 'EUR' },
       ],
     });
     assert.equal(result.allocated, 750);
@@ -293,7 +294,8 @@ describe('Gelir tahsisi IZLENEBILIR', () => {
   it('ASIM isaretlenir', () => {
     const result = allocateRevenue({
       contractedRevenue: 500,
-      assignments: [{ status: 'planned', expectedDailyRevenue: 600 }],
+      currency: 'EUR',
+      assignments: [{ status: 'planned', expectedDailyRevenue: 600, currency: 'EUR' }],
     });
     assert.equal(result.overAllocated, true);
     assert.equal(result.remaining, -100);
@@ -302,9 +304,10 @@ describe('Gelir tahsisi IZLENEBILIR', () => {
   it('gelir GIRILMEMIS gorevler ayrica sayilir — 0 ile bos ayni sey degil', () => {
     const result = allocateRevenue({
       contractedRevenue: 1000,
+      currency: 'EUR',
       assignments: [
-        { status: 'planned', expectedDailyRevenue: null },
-        { status: 'planned', expectedDailyRevenue: 0 },
+        { status: 'planned', expectedDailyRevenue: null, currency: 'EUR' },
+        { status: 'planned', expectedDailyRevenue: 0, currency: 'EUR' },
       ],
     });
     assert.equal(result.assignmentsWithoutRevenue, 1);
@@ -314,7 +317,8 @@ describe('Gelir tahsisi IZLENEBILIR', () => {
   it('sozlesme tutari yoksa kalan `null` — uydurulmaz', () => {
     const result = allocateRevenue({
       contractedRevenue: null,
-      assignments: [{ status: 'planned', expectedDailyRevenue: 100 }],
+      currency: 'EUR',
+      assignments: [{ status: 'planned', expectedDailyRevenue: 100, currency: 'EUR' }],
     });
     assert.equal(result.remaining, null);
     assert.equal(result.overAllocated, false);
@@ -323,7 +327,8 @@ describe('Gelir tahsisi IZLENEBILIR', () => {
   it('iptal edilmis gorevler tahsise girmez', () => {
     const result = allocateRevenue({
       contractedRevenue: 1000,
-      assignments: [{ status: 'cancelled', expectedDailyRevenue: 900 }],
+      currency: 'EUR',
+      assignments: [{ status: 'cancelled', expectedDailyRevenue: 900, currency: 'EUR' }],
     });
     assert.equal(result.allocated, 0);
     assert.equal(result.assignmentCount, 0);

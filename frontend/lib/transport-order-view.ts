@@ -129,7 +129,22 @@ export function changeConsignmentIndex(field: string): number | null {
 /** Gelir tahsisi uyari veriyor mu. */
 export function revenueNeedsAttention(allocation: OrderRevenueAllocation | null): boolean {
   if (!allocation) return false;
-  return allocation.overAllocated || allocation.assignmentsWithoutRevenue > 0;
+  return (
+    allocation.overAllocated ||
+    allocation.assignmentsWithoutRevenue > 0 ||
+    // Baska para biriminde kalmis gorev de dikkat ister: toplamda GORUNMUYOR.
+    allocation.unconvertedByCurrency.length > 0
+  );
+}
+
+/**
+ * Toplama girmemis para birimleri var mi.
+ *
+ * Arayuz bunu GIZLEMEZ: "1.200 EUR toplama girmedi" demek, kullaniciyi eksik
+ * bir rakamla birakmaktan iyidir.
+ */
+export function hasUnconvertedRevenue(allocation: OrderRevenueAllocation | null): boolean {
+  return (allocation?.unconvertedByCurrency.length ?? 0) > 0;
 }
 
 /** `unknown` ADR GUVENLI SAYILMAZ — listede ve detayda isaretlenir. */

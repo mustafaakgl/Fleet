@@ -121,6 +121,7 @@ const ORDER_INCLUDE = {
       consignmentId: true,
       sourceRevision: true,
       expectedDailyRevenue: true,
+      currency: true,
       workDate: true,
       driverId: true,
       vehicleId: true,
@@ -478,6 +479,9 @@ export class TransportOrdersService {
       driverId: item.driverId,
       vehicleId: item.vehicleId,
       expectedDailyRevenue: decimalToString(item.expectedDailyRevenue),
+      // Tutarla BIRLIKTE doner: tutari para birimi olmadan gostermek,
+      // okuyanin kendi varsayimini yapmasina davetiye.
+      currency: item.currency,
       // ESKI REVIZYONDAN URETILMIS gorev — otomatik duzeltilmez, ISARETLENIR.
       staleAgainstOrder: isStaleAgainstOrder(item, order.currentRevision),
     }));
@@ -504,9 +508,13 @@ export class TransportOrdersService {
 
     const revenue = allocateRevenue({
       contractedRevenue: decimalToNumber(order.contractedRevenue),
+      currency: order.currency,
       assignments: order.assignments.map((item) => ({
         status: item.status,
         expectedDailyRevenue: decimalToNumber(item.expectedDailyRevenue),
+        // Gorevin KENDI para birimi — siparisinki degil. Ikisi ayrilabilir:
+        // siparis EUR→TRY degistiyse eski gorev EUR kalir.
+        currency: item.currency,
       })),
     });
 

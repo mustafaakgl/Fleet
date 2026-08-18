@@ -21,8 +21,14 @@ export const FINANCIAL_ORDER_FIELDS = [
   'revenueAllocation',
 ] as const;
 
-/** Gorev duzeyinde gizlenen alanlar. */
-const FINANCIAL_ASSIGNMENT_FIELDS = ['expectedDailyRevenue'] as const;
+/**
+ * Gorev duzeyinde gizlenen alanlar.
+ *
+ * `currency` de finansal: tutar gizlenip para birimi gosterilseydi, okuyan
+ * kisi filonun hangi para biriminde calistigini yine ogrenirdi — ve daha
+ * kotusu, tutarin "girilmemis" oldugunu sanabilirdi.
+ */
+const FINANCIAL_ASSIGNMENT_FIELDS = ['expectedDailyRevenue', 'currency'] as const;
 
 export function canSeeOrderFinancials(role: string | null | undefined): boolean {
   return canViewFinancialFields(role ?? '');

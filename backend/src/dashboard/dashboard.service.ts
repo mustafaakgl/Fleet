@@ -68,13 +68,40 @@ export class DashboardService {
     return { start, end };
   }
 
-  private assignmentRevenue(row: {
-    expectedDailyRevenue?: unknown;
-    company?: { defaultDailyRevenue?: unknown } | null;
-  }): number {
+  /**
+   * Gorevin gelirini TEK kisitlama noktasindan gecirir.
+   *
+   * `baseCurrency` ZORUNLU bir parametre ve bilincli: bu dosya bes ayri yerde
+   * gelir topluyor. Kural her cagri yerine ayri yazilsaydi, biri
+   * guncellenmediginde toplam sessizce yanlis olurdu. Zorunlu parametre,
+   * tsc'nin her cagriyi karar vermeye zorlamasi demek.
+   *
+   * TEMEL PARA BIRIMI DISINDAKI GOREV `0` DONER — toplama KATILMAZ. Yakit,
+   * servis ve ceza icin bu dosyada ZATEN var olan `matchesBaseCurrency`
+   * korumasi gelirde YOKTU; denetimde ortaya cikan acik buydu.
+   * `100 EUR + 500 TRY = 600` anlamsizdir ve guvenilir bir kur altyapisi
+   * olmadan donusturmek kur uydurmaktir.
+   */
+  private assignmentRevenue(
+    row: {
+      expectedDailyRevenue?: unknown;
+      currency?: string | null;
+      company?: { defaultDailyRevenue?: unknown } | null;
+    },
+    baseCurrency: string,
+  ): number {
+    if (!matchesBaseCurrency(row.currency, baseCurrency)) {
+      return 0;
+    }
     const expected = this.toCurrencyNumber(row.expectedDailyRevenue);
     if (expected > 0) return expected;
     return this.toCurrencyNumber(row.company?.defaultDailyRevenue);
+  }
+
+  /** Kiracinin temel para birimi — toplama kurallarinin ekseni. */
+  private async baseCurrencyOf(): Promise<string> {
+    const tenant = await this.prisma.tenant.findFirst({ select: { baseCurrency: true } });
+    return normalizeCurrency(tenant?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
   }
 
   private toDateKey(date: Date): string {
@@ -564,6 +591,9 @@ export class DashboardService {
   }
 
   async getRevenueAnalytics(date: Date, currentUserRole?: UserRole | string) {
+    // Toplama kurallarinin ekseni: temel para birimi disindaki gelir
+    // toplama KATILMAZ (bkz. assignmentRevenue).
+    const baseCurrency = await this.baseCurrencyOf();
     if (!this.canViewFinancials(currentUserRole)) {
       return null;
     }
@@ -581,7 +611,10 @@ export class DashboardService {
         },
       });
 
-      return rows.reduce((sum: number, row: any) => sum + this.assignmentRevenue(row), 0);
+      return rows.reduce(
+        (sum: number, row: any) => sum + this.assignmentRevenue(row, baseCurrency),
+        0,
+      );
     };
 
     const day = this.getDayRange(date);
@@ -627,7 +660,7 @@ export class DashboardService {
     const byCompanyMap = new Map<string, { companyId: string; companyName: string; assignments: number; revenue: number }>();
     for (const row of dayRows) {
       const companyId = row.company.id;
-      const increment = this.assignmentRevenue(row);
+      const increment = this.assignmentRevenue(row, baseCurrency);
       const existing = byCompanyMap.get(companyId);
       if (existing) {
         existing.assignments += 1;
@@ -661,6 +694,9 @@ export class DashboardService {
     to?: string,
     currentUserRole?: UserRole | string,
   ) {
+    // Toplama kurallarinin ekseni: temel para birimi disindaki gelir
+    // toplama KATILMAZ (bkz. assignmentRevenue).
+    const baseCurrency = await this.baseCurrencyOf();
     if (!this.canViewFinancials(currentUserRole)) {
       return null;
     }
@@ -695,6 +731,7 @@ export class DashboardService {
       },
       select: {
         expectedDailyRevenue: true,
+        currency: true,
         company: {
           select: { id: true, name: true, defaultDailyRevenue: true },
         },
@@ -716,7 +753,7 @@ export class DashboardService {
     let assignmentsWithoutRevenue = 0;
 
     for (const row of rows) {
-      const revenue = this.assignmentRevenue(row);
+      const revenue = this.assignmentRevenue(row, baseCurrency);
       totalRevenue += revenue;
       if (revenue <= 0) {
         assignmentsWithoutRevenue += 1;
@@ -751,6 +788,9 @@ export class DashboardService {
   }
 
   async getChartAnalytics(date: Date, currentUserRole?: UserRole | string) {
+    // Toplama kurallarinin ekseni: temel para birimi disindaki gelir
+    // toplama KATILMAZ (bkz. assignmentRevenue).
+    const baseCurrency = await this.baseCurrencyOf();
     if (!this.canViewFinancials(currentUserRole)) {
       return null;
     }
@@ -776,6 +816,7 @@ export class DashboardService {
         select: {
           workDate: true,
           expectedDailyRevenue: true,
+          currency: true,
           company: { select: { defaultDailyRevenue: true } },
         },
       }),
@@ -798,7 +839,7 @@ export class DashboardService {
       const workDate = new Date(row.workDate);
       const dayKey = this.toDateKey(workDate);
       const monthKey = this.toMonthKey(workDate);
-      const revenue = this.assignmentRevenue(row);
+      const revenue = this.assignmentRevenue(row, baseCurrency);
       if (dailyRevenueMap.has(dayKey)) {
         dailyRevenueMap.set(dayKey, (dailyRevenueMap.get(dayKey) ?? 0) + revenue);
       }
@@ -1186,6 +1227,7 @@ export class DashboardService {
         select: {
           vehicleId: true,
           expectedDailyRevenue: true,
+          currency: true,
           company: { select: { defaultDailyRevenue: true } },
         },
       }),
@@ -1263,7 +1305,7 @@ export class DashboardService {
     }
     for (const row of assignments) {
       const agg = aggFor(row.vehicleId);
-      agg.revenue += this.assignmentRevenue(row);
+      agg.revenue += this.assignmentRevenue(row, baseCurrency);
       agg.assignmentCount += 1;
     }
 

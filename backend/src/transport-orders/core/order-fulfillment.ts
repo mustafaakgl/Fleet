@@ -1,3 +1,6 @@
+import { DEFAULT_BASE_CURRENCY, normalizeCurrency } from '../../common/utils/currency';
+import { splitByBaseCurrency } from '../../common/utils/revenue-currency';
+
 /**
  * FULFILLMENT — TURETILIR, SAKLANMAZ (Faz 15) — SAF mantik.
  *
@@ -158,7 +161,10 @@ export function assessBilling(input: BillingInput): BillingAssessment {
  */
 export interface RevenueAllocation {
   contracted: number | null;
+  /** YALNIZCA siparisin para birimindeki gorevlerin toplami. */
   allocated: number;
+  /** Toplamin para birimi — siparisin para birimi. */
+  currency: string;
   /** `contracted - allocated`. Sozlesme tutari yoksa `null`. */
   remaining: number | null;
   /** Tahsis sozlesme tutarini ASIYOR mu — arayuz bunu isaretler. */
@@ -166,14 +172,35 @@ export interface RevenueAllocation {
   assignmentCount: number;
   /** Gelir girilmemis gorev sayisi — "0" ile "bos" ayri seylerdir. */
   assignmentsWithoutRevenue: number;
+  /**
+   * SIPARISIN para biriminde OLMAYAN gorevler — toplama KATILMADI.
+   *
+   * Siparisin para birimi sonradan degistiyse (EUR→TRY amendment) eski
+   * gorevler eski para biriminde KALIR ve buraya duser. Onlari toplama
+   * katmak, `1200 EUR + 1200 TRY = 2400` gibi anlamsiz bir rakam uretirdi.
+   */
+  unconvertedByCurrency: Array<{ currency: string; amount: number; count: number }>;
 }
 
 export function allocateRevenue(input: {
   contractedRevenue: number | null;
-  assignments: Array<{ status: string; expectedDailyRevenue: number | null }>;
+  /** Siparisin para birimi — karsilastirmanin ekseni. */
+  currency: string;
+  assignments: Array<{
+    status: string;
+    expectedDailyRevenue: number | null;
+    currency: string | null;
+  }>;
 }): RevenueAllocation {
   const live = input.assignments.filter((item) => item.status !== 'cancelled');
-  const withRevenue = live.filter((item) => item.expectedDailyRevenue !== null);
+
+  // PARA BIRIMI ESLESMEYENLER TOPLAMA GIRMEZ. FX uydurulmuyor.
+  const split = splitByBaseCurrency(live, input.currency, (item) => ({
+    currency: item.currency,
+    amount: item.expectedDailyRevenue,
+  }));
+
+  const withRevenue = split.included.filter((item) => item.expectedDailyRevenue !== null);
   const allocated = withRevenue.reduce(
     (total, item) => total + (item.expectedDailyRevenue ?? 0),
     0,
@@ -183,13 +210,17 @@ export function allocateRevenue(input: {
   return {
     contracted: input.contractedRevenue,
     allocated: rounded,
+    currency: normalizeCurrency(input.currency) ?? DEFAULT_BASE_CURRENCY,
     remaining:
       input.contractedRevenue === null
         ? null
         : Number((input.contractedRevenue - rounded).toFixed(2)),
     overAllocated: input.contractedRevenue !== null && rounded > input.contractedRevenue + 0.005,
     assignmentCount: live.length,
-    assignmentsWithoutRevenue: live.length - withRevenue.length,
+    // Gelirsiz sayimi YALNIZCA ayni para birimindekiler uzerinden: baska para
+    // birimindeki bir gorev "gelirsiz" degil, "toplanamaz".
+    assignmentsWithoutRevenue: split.included.length - withRevenue.length,
+    unconvertedByCurrency: split.unconvertedByCurrency,
   };
 }
 

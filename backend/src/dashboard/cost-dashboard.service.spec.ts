@@ -33,7 +33,12 @@ interface Seed {
   service?: Array<{ vehicleId: string; date: string; costAmount: number; currency?: string }>;
   fines?: Array<{ vehicleId: string; violationAt: string; amount: number; currency?: string }>;
   trips?: Array<{ vehicleId: string; startedAt: string; distanceKm: number | null; status?: FleetTripStatus }>;
-  assignments?: Array<{ vehicleId: string; workDate: string; expectedDailyRevenue: number | null }>;
+  assignments?: Array<{
+    vehicleId: string;
+    workDate: string;
+    expectedDailyRevenue: number | null;
+    currency?: string;
+  }>;
   baseCurrency?: string;
 }
 
@@ -152,6 +157,8 @@ function build(seed: Seed = {}) {
             workDate: new Date(row.workDate),
             expectedDailyRevenue:
               row.expectedDailyRevenue === null ? null : d(row.expectedDailyRevenue),
+            // Gercek semadaki NOT NULL alan. Verilmezse tabana ait sayilir.
+            currency: row.currency ?? 'EUR',
             company: null,
           }));
       },
@@ -485,6 +492,37 @@ describe('cost dashboard — currency and revenue', () => {
     assert.equal(result.summary.revenue!.current, '500.00');
     assert.equal(result.summary.margin!.current, '400.00');
     assert.equal(result.vehicleRanking[0]!.margin, '400.00');
+  });
+
+  it('TEMEL PARA BIRIMI DISINDAKI gelir toplama GIRMEZ', async () => {
+    /**
+     * Denetimin acigi: yakit, servis ve ceza icin `matchesBaseCurrency`
+     * korumasi vardi; GELIR korumasizdi ve TRY tutarlar EUR toplamina
+     * sessizce giriyordu.
+     */
+    const { service } = build({
+      fuel: [{ vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 }],
+      assignments: [
+        { vehicleId: 'v1', workDate: '2026-06-10T00:00:00Z', expectedDailyRevenue: 500 },
+        {
+          vehicleId: 'v1',
+          workDate: '2026-06-11T00:00:00Z',
+          expectedDailyRevenue: 45000,
+          currency: 'TRY',
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    // 500 EUR; 45.000 TRY GIRMEDI.
+    assert.equal(result.summary.revenue!.current, '500.00');
+    assert.notEqual(result.summary.revenue!.current, '45500.00');
+
+    // SILINMEDI: ayri kirilimda duruyor.
+    const bucket = result.unconvertedByCurrency.find((row) => row.currency === 'TRY');
+    assert.ok(bucket, 'TRY kaydi kirilimda yok');
+    assert.equal(bucket!.entryCount, 1);
+    assert.ok(result.dataQuality.excludedUnconvertedEntries >= 1);
   });
 
   it('returns null revenue when no assignment carries one', async () => {

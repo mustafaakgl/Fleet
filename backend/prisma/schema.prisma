@@ -1932,11 +1932,39 @@ model Assignment {
    * alan, iki farkli toplam demektir. Siparis geliri `TransportOrder`da,
    * dilime ayrilan pay burada.
    *
-   * PARA BIRIMI ALANI YOK: bagli oldugu siparisin para biriminden, siparis
-   * yoksa `Tenant.baseCurrency`den cozulur. Ayri bir alan, siparisle
-   * celisebilen bir tutar uretirdi.
+   * PARA BIRIMI `currency` ALANINDA — bkz. asagisi.
    */
   expectedDailyRevenue Decimal?         @db.Decimal(10, 2)
+
+  /**
+   * GELIRIN PARA BIRIMI — OLUSTURULDUGU ANDA DONDURULUR.
+   *
+   * Faz 15 bu alani bilincli olarak ACMAMISTI: para birimi bagli oldugu
+   * siparisten cozulur denmisti. O tasarim IKI YERDE kirildi ve denetimde
+   * ortaya cikti:
+   *
+   *   1. Siparisin para birimi sonradan degistiginde (EUR→TRY amendment)
+   *      ESKI gorevin tutari sessizce yeni para biriminde okunur hale
+   *      geliyordu. 1.200 EUR'luk bir is, hicbir sey yazilmadan 1.200 TRY
+   *      oluyordu.
+   *   2. Toplama alan hicbir tuketici (dashboard, maliyet paneli, fatura
+   *      onerisi) siparise bakmiyor — dogrudan `expectedDailyRevenue`
+   *      topluyordu. `FleetFuelEntry`, `ServiceRecord` ve `Fine` icin var olan
+   *      `matchesBaseCurrency` korumasi burada YOKTU cunku korunacak bir alan
+   *      yoktu.
+   *
+   * KAYNAK: siparisten uretilen gorev, uretildigi ANDAKI siparis
+   * revizyonunun para birimini alir ve sonraki amendment bunu DEGISTIRMEZ.
+   * Bagimsiz gorev kiracinin `baseCurrency`sini alir. Tutar ve para birimi
+   * AYNI transaction'da yaziliyor — ikisinin ayri yazilmasi, arada bir
+   * okumanin yanlis para biriminde tutar gormesi demekti.
+   *
+   * VARSAYILAN YOK: veritabani `EUR` yazsaydi, TRY tabanli bir kiracinin
+   * gorevleri sessizce yanlis para biriminde acilirdi. NOT NULL olmasi da
+   * bilincli — Prisma tipleri her olusturma yolunu karar vermeye zorluyor.
+   */
+  currency             String
+
   status               AssignmentStatus @default(planned)
 
   /**
@@ -1993,6 +2021,8 @@ model Assignment {
   @@index([companyId, workDate])
   @@index([transportOrderId])
   @@index([consignmentId])
+  /// Toplama sorgulari kiraci + para birimi uzerinden suzuyor.
+  @@index([tenantId, currency])
 }
 
 model RateCard {

@@ -489,7 +489,10 @@ test.describe.serial('Belge gelen kutusu', () => {
         headers: officeAuth,
         data: {
           vehicleDocument: {
-            documentType: 'HU-Bericht',
+            // `Reminder` (targetType, targetId, reminderType, title, dueDate,
+            // notifyBeforeDays) uzerinde TEKIL. Sabit tarih kullanmak, testi
+            // ayni veritabaninda IKINCI kez calistirilamaz yapiyordu.
+            documentType: `HU-Bericht ${Date.now()}`,
             expiryDate: '2027-09-04',
             createReminder: true,
             notifyBeforeDays: 30,

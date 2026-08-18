@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   adrNeedsAttention,
+  hasUnconvertedRevenue,
   amendActionKey,
   billingIsBlocking,
   billingLabelKey,
@@ -100,20 +101,24 @@ describe('gelir tahsisi uyarisi', () => {
       revenueNeedsAttention({
         contracted: 100,
         allocated: 150,
+        currency: 'EUR',
         remaining: -50,
         overAllocated: true,
         assignmentCount: 1,
         assignmentsWithoutRevenue: 0,
+        unconvertedByCurrency: [],
       }),
     ).toBe(true);
     expect(
       revenueNeedsAttention({
         contracted: 100,
         allocated: 50,
+        currency: 'EUR',
         remaining: 50,
         overAllocated: false,
         assignmentCount: 2,
         assignmentsWithoutRevenue: 1,
+        unconvertedByCurrency: [],
       }),
     ).toBe(true);
   });
@@ -123,10 +128,12 @@ describe('gelir tahsisi uyarisi', () => {
       revenueNeedsAttention({
         contracted: 100,
         allocated: 100,
+        currency: 'EUR',
         remaining: 0,
         overAllocated: false,
         assignmentCount: 1,
         assignmentsWithoutRevenue: 0,
+        unconvertedByCurrency: [],
       }),
     ).toBe(false);
   });
@@ -228,5 +235,32 @@ describe('iptal formu', () => {
         acknowledged: true,
       }),
     ).toBe(true);
+  });
+});
+
+describe('toplama girmemis para birimleri', () => {
+  const withUnconverted = {
+    contracted: 2400,
+    allocated: 1200,
+    currency: 'EUR',
+    remaining: 1200,
+    overAllocated: false,
+    assignmentCount: 2,
+    assignmentsWithoutRevenue: 0,
+    unconvertedByCurrency: [{ currency: 'TRY', amount: 45000, count: 1 }],
+  };
+
+  it('GIZLENMEZ — kullanici eksik rakamla birakilmaz', () => {
+    expect(hasUnconvertedRevenue(withUnconverted)).toBe(true);
+    // Dikkat gerektiren durum sayilir.
+    expect(revenueNeedsAttention(withUnconverted)).toBe(true);
+  });
+
+  it('hepsi ayni para birimindeyse uyari yok', () => {
+    expect(hasUnconvertedRevenue({ ...withUnconverted, unconvertedByCurrency: [] })).toBe(false);
+  });
+
+  it('maskeliyse (null) uyari yok', () => {
+    expect(hasUnconvertedRevenue(null)).toBe(false);
   });
 });

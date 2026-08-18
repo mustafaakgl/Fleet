@@ -49,6 +49,8 @@ function assignment(overrides: Record<string, unknown> = {}) {
     pickupAddress: 'Berlin',
     deliveryAddress: 'Hamburg',
     expectedDailyRevenue: new Prisma.Decimal('1000.00'),
+    // Gercek semadaki NOT NULL alan: gorevin KENDI para birimi.
+    currency: 'EUR',
     invoiceClaim: null,
     company: { defaultDailyRevenue: new Prisma.Decimal('900.00') },
     vehicle: { plateNumber: 'B-FL 1234' },
@@ -56,11 +58,14 @@ function assignment(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function draftPrisma(assignments: object[]) {
+function draftPrisma(assignments: object[], baseCurrency = 'EUR') {
   return {
     company: { findUnique: async () => company },
     tenantBillingProfile: { findFirst: async () => null },
     assignment: { findMany: async () => assignments },
+    // Faturanin para birimi kiracinin TABANINDAN cozuluyor; sema
+    // varsayilaninin sessizce `EUR` yazmasi denetimde kapatildi.
+    tenant: { findFirst: async () => ({ baseCurrency }) },
   };
 }
 
@@ -145,6 +150,47 @@ describe('InvoicingService draft safety', () => {
         'user-a',
       ),
       RangeError,
+    );
+  });
+});
+
+describe('InvoicingService para birimi guvenligi', () => {
+  it('BASKA para birimindeki gorev faturaya SESSIZCE girmez', async () => {
+    const service = createService(
+      draftPrisma([assignment({ currency: 'TRY' })], 'EUR'),
+    );
+
+    await assert.rejects(
+      service.createDraft(baseDraft, 'user-a'),
+      (error: unknown) => {
+        assert.ok(error instanceof BadRequestException);
+        const body = (error as BadRequestException).getResponse() as Record<string, unknown>;
+        // Kur uydurup cevirmek yerine ACIK hata: kullanici ya gorevi cikarir
+        // ya da o para biriminde ayri fatura keser.
+        assert.equal(body.code, 'invoice_assignment_currency_mismatch');
+        assert.equal(body.assignmentCurrency, 'TRY');
+        assert.equal(body.invoiceCurrency, 'EUR');
+        return true;
+      },
+    );
+  });
+
+  it('TRY tabanli kiracida TRY gorev kabul edilir', async () => {
+    const service = createService(
+      draftPrisma([assignment({ currency: 'TRY' })], 'TRY'),
+    );
+    // Para birimi uyusuyor: artik reddedilmiyor (baska bir sebeple duserse
+    // o da bu testin konusu degil, mismatch olmadigi kanitlanmis olur).
+    await assert.doesNotReject(
+      service
+        .createDraft(baseDraft, 'user-a')
+        .catch((error: unknown) => {
+          const body =
+            error instanceof BadRequestException
+              ? ((error as BadRequestException).getResponse() as Record<string, unknown>)
+              : {};
+          assert.notEqual(body.code, 'invoice_assignment_currency_mismatch');
+        }),
     );
   });
 });
