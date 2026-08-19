@@ -3938,3 +3938,128 @@ export interface CancellationImpact {
   tourIds: string[];
   fulfillment: FulfillmentStatus;
 }
+
+// ============================================================================
+// FAZ 16 — SIPARIS GELEN KUTUSU
+// ============================================================================
+
+export type OrderIntakeChannel = 'web_eml' | 'web_pdf' | 'connector_mailbox';
+export type OrderIntakeMessageStatus =
+  | 'extracting'
+  | 'needs_review'
+  | 'settled'
+  | 'rejected'
+  | 'failed';
+export type OrderIntakeIntent = 'new_order' | 'amendment' | 'cancellation' | 'unknown';
+export type OrderIntakeFinancialContent = 'yes' | 'no' | 'unknown';
+
+export interface OrderIntakeReviewSummary {
+  id: string;
+  status: 'open' | 'approved' | 'rejected' | 'expired';
+  proposedIntent: OrderIntakeIntent;
+  resolvedIntent: OrderIntakeIntent | null;
+  companyMatchStatus: string;
+  orderMatchStatus: string;
+  possibleDuplicate: boolean;
+  matchedCompany: { id: string; name: string } | null;
+}
+
+export interface OrderIntakeMessageRow {
+  id: string;
+  channel: OrderIntakeChannel;
+  status: OrderIntakeMessageStatus;
+  /** Finansal icerik tasiyan mesajda operasyon rolu icin `null`. */
+  subject: string | null;
+  bodyPreview: string | null;
+  subjectMasked?: boolean;
+  fromAddress: string | null;
+  fromDisplayName: string | null;
+  mailbox: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  attachmentCount: number;
+  containsFinancialData: OrderIntakeFinancialContent;
+  rawDocumentAvailable: boolean;
+  review: OrderIntakeReviewSummary | null;
+}
+
+export interface OrderIntakeEvidenceEntry {
+  field: string;
+  source: string;
+  /** Finansal snippet operasyon rolunde `null` doner. */
+  snippet: string | null;
+  financial: boolean;
+  masked?: boolean;
+}
+
+export interface OrderIntakeAttachmentRow {
+  id: string;
+  fileName: string;
+  declaredMimeType: string | null;
+  byteSize: number;
+  /** `intake_file_*` reddi. `null` = kabul edildi. */
+  rejectionCode: string | null;
+  intakeId: string | null;
+}
+
+export interface OrderIntakeTask {
+  sequence: number;
+  status: 'open' | 'decided' | 'closed_expired';
+  decision: 'approved' | 'rejected' | null;
+  assignedRole: string | null;
+  decidedAt: string | null;
+}
+
+export interface OrderIntakeOrderRef {
+  id: string;
+  orderNumber: string;
+  status: string;
+  updatedAt?: string;
+}
+
+export interface OrderIntakeMessageDetail extends OrderIntakeMessageRow {
+  inReplyTo: string | null;
+  failureClass: string | null;
+  /** SANITIZE EDILMIS govde. Ham HTML sunucudan hic donmez. */
+  bodyHtml: string | null;
+  bodyText: string | null;
+  attachments: OrderIntakeAttachmentRow[];
+  review:
+    | (OrderIntakeReviewSummary & {
+        companyCandidates: { ids: string[]; reason: string } | null;
+        orderCandidates: { ids: string[]; reason: string; requiresOrderSelection: boolean } | null;
+        duplicateOfOrder: OrderIntakeOrderRef | null;
+        rejectionReason: string | null;
+        selectedCompany: { id: string; name: string } | null;
+        matchedOrder: OrderIntakeOrderRef | null;
+        selectedOrder: OrderIntakeOrderRef | null;
+        tasks: OrderIntakeTask[];
+        resultTransportOrderId: string | null;
+        resultTransportOrderRevisionId: string | null;
+      })
+    | null;
+  proposed: {
+    id: string;
+    payload: Record<string, unknown>;
+    confidence: Record<string, number> | null;
+    evidence: { entries: OrderIntakeEvidenceEntry[]; extractorVersion?: string } | null;
+    checks: Array<{ code: string; status: 'verified' | 'failed' | 'unknown'; messageKey: string }>;
+  } | null;
+}
+
+export interface OrderIntakeConsignmentDraft {
+  pickupAddress: string;
+  deliveryAddress: string;
+  cargoDescription: string;
+  weightKg?: number | null;
+  palletCount?: number | null;
+  adrStatus?: 'yes' | 'no' | 'unknown';
+}
+
+export interface OrderIntakeApproveResult {
+  reviewId: string;
+  intent: string;
+  transportOrderId: string | null;
+  revisionId: string | null;
+  cancellationImpact: Record<string, unknown> | null;
+}

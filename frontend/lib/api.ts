@@ -4048,3 +4048,86 @@ export const transportOrdersApi = {
       })
       .then((r) => r.data),
 };
+
+
+/**
+ * SIPARIS GELEN KUTUSU (Faz 16).
+ *
+ * Maskeleme SUNUCUDA yapiliyor: burada gizlenen hicbir sey yok, gelen ne ise o
+ * gosteriliyor. Ekranda gizlemek, ayni ucu `curl` ile cagiran birine hicbir sey
+ * yapmazdi.
+ */
+export const orderIntakeApi = {
+  /** `.eml` ya da tasima emri PDF'i. Kanali SUNUCU ilk baytlardan belirler. */
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api
+      .post<{ messageId: string; duplicate: boolean }>('/order-intake/uploads', form)
+      .then((r) => r.data);
+  },
+
+  list: (
+    params: {
+      intent?: import('./types').OrderIntakeIntent;
+      status?: import('./types').OrderIntakeMessageStatus;
+      take?: number;
+      skip?: number;
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<{ items: import('./types').OrderIntakeMessageRow[]; total: number }>(
+        '/order-intake/messages',
+        { params, signal },
+      )
+      .then((r) => r.data),
+
+  detail: (messageId: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').OrderIntakeMessageDetail>(`/order-intake/messages/${messageId}`, {
+        signal,
+      })
+      .then((r) => r.data),
+
+  /** Operasyonel (1) ya da finansal (2) inceleme gorevi. */
+  decideTask: (reviewId: string, sequence: number, decision: 'approved' | 'rejected', note?: string) =>
+    api
+      .post<{ sequence: number; decision: string }>(
+        `/order-intake/reviews/${reviewId}/tasks/${sequence}`,
+        { decision, note },
+      )
+      .then((r) => r.data),
+
+  approve: (
+    reviewId: string,
+    body: {
+      intent: 'new_order' | 'amendment' | 'cancellation';
+      companyId?: string;
+      orderId?: string;
+      expectedUpdatedAt?: string;
+      values?: Record<string, unknown>;
+      consignments?: import('./types').OrderIntakeConsignmentDraft[];
+      acknowledgeDuplicate?: boolean;
+    },
+  ) =>
+    api
+      .post<import('./types').OrderIntakeApproveResult>(
+        `/order-intake/reviews/${reviewId}/approve`,
+        body,
+      )
+      .then((r) => r.data),
+
+  reject: (reviewId: string, reason: string) =>
+    api
+      .post<{ reviewId: string }>(`/order-intake/reviews/${reviewId}/reject`, { reason })
+      .then((r) => r.data),
+
+  /** Iptal etkisi — YALNIZCA onizleme, hicbir sey degismez. */
+  cancellationImpact: (reviewId: string, signal?: AbortSignal) =>
+    api
+      .get<Record<string, unknown>>(`/order-intake/reviews/${reviewId}/cancellation-impact`, {
+        signal,
+      })
+      .then((r) => r.data),
+};
