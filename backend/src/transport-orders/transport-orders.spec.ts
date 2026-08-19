@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { assertAgentCannotApplyDirectly, revisionStatusFor } from './core/order-revision';
 import { TransportOrdersService } from './transport-orders.service';
 
 type Row = Record<string, unknown>;
@@ -483,18 +484,34 @@ describe('Revizyon — APPEND-ONLY', () => {
     );
   });
 
-  it('AJAN kaynagi dogrudan UYGULAYAMAZ', async () => {
+  it('AJAN kaynagi TASLAKTA da dogrudan UYGULAYAMAZ — insan onayina duser', async () => {
+    // Siparis TASLAK: manuel bir degisiklik burada dogrudan `applied` olurdu.
+    // Ajan kaynagi olunca OLMUYOR.
     const ctx = build();
-    await assert.rejects(
-      ctx.service.amend(
-        'user-office',
-        'order-1',
-        expectedOf(ctx),
-        { notes: 'ajandan' },
-        'email_agent' as never,
-      ),
+    await ctx.service.amend(
+      'user-office',
+      'order-1',
+      expectedOf(ctx),
+      { notes: 'ajandan' },
+      'email_agent' as never,
+    );
+
+    const revision = ctx.revisions[ctx.revisions.length - 1]!;
+    assert.equal(revision.status, 'pending_review');
+    assert.equal(revision.source, 'email_agent');
+    // ANA KAYIT DEGISMEDI: bekleyen revizyon onaylanana kadar notlar eski.
+    assert.notEqual(ctx.orders[0]!.notes, 'ajandan');
+  });
+
+  it('ajan kaynakli `applied` bir revizyon KURULAMAZ — kapi hala yerinde', () => {
+    // Yukaridaki davranis degisikligi kapiyi GEVSETMIYOR: birisi durumu elle
+    // `applied` yapmaya kalkarsa bu hala bir hata.
+    assert.throws(
+      () => assertAgentCannotApplyDirectly('email_agent', 'applied'),
       /non_manual_revision_must_be_pending_review/,
     );
+    assert.equal(revisionStatusFor('draft', 'email_agent'), 'pending_review');
+    assert.equal(revisionStatusFor('draft', 'manual'), 'applied');
   });
 });
 

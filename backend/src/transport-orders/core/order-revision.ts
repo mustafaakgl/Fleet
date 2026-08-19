@@ -148,7 +148,24 @@ export type RevisionStatus = 'applied' | 'pending_review' | 'rejected';
  * Draft'ta degisiklik DOGRUDAN uygulanir — musteri henuz bir sey onaylamadi.
  * Onaylanmis sipariste degisiklik once ONERI olur ve ana kayit DEGISMEZ.
  */
-export function revisionStatusFor(orderStatus: 'draft' | 'confirmed' | 'cancelled'): RevisionStatus {
+export function revisionStatusFor(
+  orderStatus: 'draft' | 'confirmed' | 'cancelled',
+  /**
+   * Revizyonun KAYNAGI (Faz 16).
+   *
+   * MANUEL OLMAYAN KAYNAK DAIMA `pending_review`, siparis TASLAK olsa bile.
+   *
+   * Kaynagi hesaba katmasaydik, taslak bir siparise gelen ajan onerisi
+   * `applied` olarak acilmak isterdi ve asagidaki kapi onu bir hataya
+   * cevirirdi — yani e-postadan gelen degisiklik taslak siparislerde HIC
+   * calismazdi. Dogru davranis onu reddetmek degil, insan onayina koymak:
+   * "ajan siparisi dogrudan guncelledi" durumu yine hic olusmuyor.
+   */
+  source: string = 'manual',
+): RevisionStatus {
+  if (source !== 'manual') {
+    return 'pending_review';
+  }
   return orderStatus === 'confirmed' ? 'pending_review' : 'applied';
 }
 

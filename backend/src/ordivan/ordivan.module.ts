@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
+import { TransportOrdersModule } from '../transport-orders/transport-orders.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AutomationDocumentService } from './automation-document.service';
 import { AutomationJobService } from './automation-job.service';
@@ -9,6 +10,7 @@ import { DocumentInboxController } from './document-inbox.controller';
 import { DocumentIntakeService } from './document-intake.service';
 import { IntakeRoutingService } from './intake-routing.service';
 import { OrderIntakeContentService } from './order-intake-content.service';
+import { OrderIntakeDecisionService } from './order-intake-decision.service';
 import { OrderIntakeService } from './order-intake.service';
 import { OrdivanAdminController } from './ordivan-admin.controller';
 import { OrdivanConnectorController } from './ordivan-connector.controller';
@@ -24,7 +26,7 @@ import { resolveOrdivanMode } from './ordivan.config';
  * tehlikeli basarisizlik bicimi olurdu.
  */
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [PrismaModule, AuditModule, TransportOrdersModule],
   controllers: [
     OrdivanAdminController,
     OrdivanConnectorController,
@@ -42,6 +44,7 @@ import { resolveOrdivanMode } from './ordivan.config';
     // Faz 16 — siparis gelen kutusu.
     OrderIntakeContentService,
     OrderIntakeService,
+    OrderIntakeDecisionService,
     OrdivanScheduler,
     {
       provide: 'ORDIVAN_MODE',
@@ -57,6 +60,7 @@ import { resolveOrdivanMode } from './ordivan.config';
     IntakeRoutingService,
     OrderIntakeContentService,
     OrderIntakeService,
+    OrderIntakeDecisionService,
   ],
 })
 export class OrdivanModule {}

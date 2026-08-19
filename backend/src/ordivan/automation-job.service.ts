@@ -26,6 +26,7 @@ import {
   type ServiceInvoiceDraft,
 } from './core/service-invoice';
 import { extractTransportOrder } from './core/order-intake-extract';
+import { planReviewTasks } from './core/order-intake-approval';
 import {
   findDuplicateOrder,
   matchCompany,
@@ -489,14 +490,32 @@ export class AutomationJobService {
       select: { id: true },
     });
 
-    // Insan is kalemi oneriyle birlikte aciliyor. Iliski 1:n; Faz 12'de
-    // yalnizca ilk adim (sequence 1) olusturuluyor.
-    await this.prisma.approvalTask.create({
-      data: { proposalId: proposal.id, sequence: 1 },
-    });
-
     if (input.proposalType === 'transport_order.extraction') {
+      /**
+       * FAZ 16 — 1:n ONAY. Faz 12 iliskiyi tam bu gun icin 1:n birakmisti.
+       *
+       * Operasyonel gorev daima; finansal gorev YALNIZCA tutar varsa ya da
+       * belgenin finansal veri tasidigi biliniyor/BILINMIYORSA. Gereksiz
+       * finans adimi acmak, muhasebeyi bos gorevlerle doldurur ve gercek
+       * incelemenin degerini dusurur.
+       */
+      const plan = planReviewTasks({
+        hasRevenue: payload.revenueAmount !== undefined,
+        containsFinancialData: await this.financialFlagOf(job.payload),
+      });
+      await this.prisma.approvalTask.createMany({
+        data: plan.map((task) => ({
+          proposalId: proposal.id,
+          sequence: task.sequence,
+          assignedRole: task.assignedRole,
+        })),
+      });
       await this.openOrderIntakeReview(proposal.id, job.payload, payload);
+    } else {
+      // Insan is kalemi oneriyle birlikte aciliyor. Faz 12'de tek adim.
+      await this.prisma.approvalTask.create({
+        data: { proposalId: proposal.id, sequence: 1 },
+      });
     }
 
     await this.audit.logAction({
@@ -516,6 +535,22 @@ export class AutomationJobService {
     });
 
     return { jobId, proposalId: proposal.id, repeated: false };
+  }
+
+  /**
+   * Mesajin finansal veri tasiyip tasimadigi.
+   *
+   * `unknown` GUVENLI SAYILMAZ: bilmiyorsak finansal inceleme ACILIR.
+   */
+  private async financialFlagOf(
+    jobPayload: Prisma.JsonValue | null,
+  ): Promise<'yes' | 'no' | 'unknown'> {
+    const messageId = String((jobPayload as Record<string, unknown> | null)?.messageId ?? '');
+    const message = await this.prisma.orderIntakeMessage.findFirst({
+      where: { id: messageId },
+      select: { containsFinancialData: true },
+    });
+    return message?.containsFinancialData ?? 'unknown';
   }
 
   /**

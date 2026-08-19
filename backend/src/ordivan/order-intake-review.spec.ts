@@ -51,12 +51,16 @@ const ORDERS: Row[] = [
   },
 ];
 
-function build(options: { fromAddress?: string | null } = {}) {
+function build(
+  options: { fromAddress?: string | null; containsFinancialData?: 'yes' | 'no' | 'unknown' } = {},
+) {
   const reviews: Row[] = [];
   const messages: Row[] = [
     {
       id: 'msg-1',
       fromAddress: options.fromAddress === undefined ? 'dispo@muster.example' : options.fromAddress,
+      // Finansal gorevin acilip acilmadigini belirler; `no` = yalnizca operasyonel.
+      containsFinancialData: options.containsFinancialData ?? 'no',
       subject: 'Transportauftrag',
       bodyText: 'Ladestelle: Duisburg',
       status: 'extracting',
@@ -117,6 +121,11 @@ function build(options: { fromAddress?: string | null } = {}) {
         const row = { id: `task-${(seq += 1)}`, ...data };
         approvalTasks.push(row);
         return row;
+      },
+      // Faz 16'da gorevler 1:n olarak TOPLU aciliyor.
+      async createMany({ data }: { data: Row[] }) {
+        for (const item of data) approvalTasks.push({ id: `task-${(seq += 1)}`, ...item });
+        return { count: data.length };
       },
     },
     orderIntakeMessage: {
@@ -298,5 +307,26 @@ describe('Inceleme acilisi — durum ve degismezlik', () => {
     // Yalnizca inceleme ve onay gorevi olustu; canonical kayda dokunulmadi.
     assert.equal(harness.reviews.length, 1);
     assert.equal(harness.approvalTasks.length, 1);
+  });
+});
+
+describe('Inceleme acilisi — 1:n onay gorevleri', () => {
+  it('fiyatsiz mesajda YALNIZCA operasyonel gorev aciliyor', async () => {
+    const harness = build({ containsFinancialData: 'no' });
+    await complete(harness, { intent: 'new_order' });
+    assert.deepEqual(harness.approvalTasks.map((task) => task.sequence), [1]);
+  });
+
+  it('tutar varsa finansal gorev de aciliyor', async () => {
+    const harness = build({ containsFinancialData: 'no' });
+    await complete(harness, { intent: 'new_order', revenueAmount: 1250, currency: 'EUR' });
+    assert.deepEqual(harness.approvalTasks.map((task) => task.sequence), [1, 2]);
+    assert.equal(harness.approvalTasks[1]!.assignedRole, 'accounting');
+  });
+
+  it('`unknown` finansal isaret finansal gorevi ACIYOR — guvenli sayilmiyor', async () => {
+    const harness = build({ containsFinancialData: 'unknown' });
+    await complete(harness, { intent: 'new_order' });
+    assert.equal(harness.approvalTasks.length, 2);
   });
 });

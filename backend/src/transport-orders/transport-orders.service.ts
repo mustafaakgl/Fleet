@@ -278,7 +278,17 @@ export class TransportOrdersService {
     return `${companyId}:${externalReference}`;
   }
 
-  async createDraft(userId: string, input: CreateOrderInput): Promise<Record<string, unknown>> {
+  async createDraft(
+    userId: string,
+    input: CreateOrderInput,
+    /**
+     * Kaydin KAYNAGI (Faz 16). Varsayilan `manual`.
+     *
+     * `email_agent` yalnizca "bu satirin arkasinda bir ajan onerisi var" der;
+     * kaydin kendisi yine DRAFT olarak aciliyor ve otomatik onaylanmiyor.
+     */
+    source: TransportOrderSource = TransportOrderSource.manual,
+  ): Promise<Record<string, unknown>> {
     const orderDate = new Date(input.orderDate);
     if (Number.isNaN(orderDate.getTime())) {
       throw new BadRequestException({ code: 'transport_order_order_date_invalid' });
@@ -342,7 +352,7 @@ export class TransportOrdersService {
                 : new Prisma.Decimal(input.contractedRevenue.toFixed(2)),
             billingMode: input.billingMode ?? TransportOrderBillingMode.on_order_completion,
             status: TransportOrderStatus.draft,
-            source: TransportOrderSource.manual,
+            source,
             currentRevision: 1,
             notes: input.notes?.trim() || null,
             createdById: userId,
@@ -366,10 +376,20 @@ export class TransportOrdersService {
           data: {
             transportOrderId: created.id,
             revisionNumber: 1,
+            /**
+             * DOGUM REVIZYONU `applied` — ajan kaynagi icin de.
+             *
+             * AJAN KAPISI BURADA GECERLI DEGIL ve bu bir istisna degil, kapinin
+             * KONUSU: kapi "var olan bir siparisi ajan dogrudan degistiremez"
+             * diyor. Burada degistirilen bir siparis YOK — kayit, insanin
+             * incelemeyi onaylamasi uzerine TASLAK olarak DOGUYOR. Taslagi
+             * `pending_review` bir revizyonla acmak, hicbir zaman uygulanmamis
+             * bir siparis gecmisi uretirdi.
+             */
             status: TransportOrderRevisionStatus.applied,
             snapshot: this.snapshotOf(full) as unknown as Prisma.InputJsonValue,
             changedFields: [] as unknown as Prisma.InputJsonValue,
-            source: TransportOrderSource.manual,
+            source,
             createdById: userId,
           },
         });
@@ -737,7 +757,7 @@ export class TransportOrdersService {
       throw new BadRequestException({ code: 'transport_order_no_changes' });
     }
 
-    const status = revisionStatusFor(order.status);
+    const status = revisionStatusFor(order.status, source);
     // AJAN KAPISI: manuel olmayan kaynak dogrudan UYGULAYAMAZ.
     assertAgentCannotApplyDirectly(source, status);
 
