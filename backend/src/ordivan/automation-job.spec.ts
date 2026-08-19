@@ -116,7 +116,22 @@ function build(options: { jobs?: Row[] } = {}) {
   const prisma = { ...client, unscoped: client };
   const audit = { logAction: async (entry: Row) => { audits.push(entry); return {}; } };
 
-  const service = new AutomationJobService(prisma as never, audit as never);
+  /**
+   * Faz 16 icerik okuyucusu: bu sette tasima emri isi YOK, bu yuzden hicbir
+   * zaman cagrilmiyor. Yine de acikca veriliyor — sessiz bir `undefined`,
+   * ileride bir tasima emri testi eklendiginde anlasilmaz bir hataya donusurdu.
+   */
+  const orderIntakeContent = {
+    contentForExtraction: async () => {
+      throw new Error('bu sette tasima emri isi yok');
+    },
+  };
+
+  const service = new AutomationJobService(
+    prisma as never,
+    audit as never,
+    orderIntakeContent as never,
+  );
   return { service, jobs, runs, proposals, approvalTasks, audits };
 }
 

@@ -93,9 +93,11 @@ interface Harness {
   artifacts: Row[];
   audits: Row[];
   uploads: Array<{ size: number; originalname?: string }>;
+  jobs: Row[];
 }
 
-function build(options: { uploadFails?: string } = {}): Harness {
+function build(options: { uploadFails?: string; jobFails?: boolean } = {}): Harness {
+  const jobs: Row[] = [];
   const messages: Row[] = [];
   const attachments: Row[] = [];
   const artifacts: Row[] = [];
@@ -122,6 +124,15 @@ function build(options: { uploadFails?: string } = {}): Harness {
         const row = { id: `msg-${(seq += 1)}`, ...data };
         messages.push(row);
         return row;
+      },
+      async updateMany({ where, data }: { where: Row; data: Row }) {
+        let count = 0;
+        for (const row of messages) {
+          if (row.id !== where.id) continue;
+          Object.assign(row, data);
+          count += 1;
+        }
+        return { count };
       },
     },
     orderIntakeAttachment: {
@@ -177,13 +188,23 @@ function build(options: { uploadFails?: string } = {}): Harness {
     },
   };
 
+  const jobService = {
+    async createJob(_actor: unknown, input: Row) {
+      if (options.jobFails) throw new Error('queue down');
+      const row = { id: `job-${(seq += 1)}`, ...input };
+      jobs.push(row);
+      return { id: String(row.id), jobType: String(input.jobType), status: 'queued' };
+    },
+  };
+
   const service = new OrderIntakeService(
     prisma as unknown as ConstructorParameters<typeof OrderIntakeService>[0],
     audit as unknown as ConstructorParameters<typeof OrderIntakeService>[1],
     documentIntake as unknown as ConstructorParameters<typeof OrderIntakeService>[2],
+    jobService as unknown as ConstructorParameters<typeof OrderIntakeService>[3],
   );
 
-  return { service, messages, attachments, artifacts, audits, uploads };
+  return { service, messages, attachments, artifacts, audits, uploads, jobs };
 }
 
 const USER = { kind: 'user', userId: 'user-1' } as const;
@@ -471,5 +492,64 @@ describe('Denetim kaydi guvensiz metin TASIMAZ', () => {
     const metadata = harness.audits[0]!.metadata as Row;
     assert.equal(metadata.channel, 'web_eml');
     assert.equal(metadata.attachmentCount, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cikarim isi
+// ---------------------------------------------------------------------------
+
+describe('Cikarim isi', () => {
+  it('is kuyruga giriyor ve payload ICERIK TASIMIYOR', async () => {
+    const harness = build();
+    await harness.service.ingest(USER, {
+      channel: 'web_eml',
+      raw: buildEml({
+        subject: 'GIZLI KONU',
+        body: 'GIZLI GOVDE',
+        attachments: [{ name: 'auftrag.pdf', content: MINIMAL_PDF }],
+      }),
+    });
+
+    assert.equal(harness.jobs.length, 1);
+    const job = harness.jobs[0]!;
+    assert.equal(job.jobType, 'transport_order.extract');
+
+    const payload = job.payload as Row;
+    assert.equal(typeof payload.messageId, 'string');
+    // Konu, govde ve dosya adi kuyruk kaydinda YOK.
+    const serialized = JSON.stringify(payload);
+    for (const secret of ['GIZLI KONU', 'GIZLI GOVDE', 'auftrag.pdf']) {
+      assert.equal(serialized.includes(secret), false, secret);
+    }
+    // Yalnizca kabul edilen eklerin KIMLIKLERI tasiniyor.
+    assert.equal((payload.attachmentIntakeIds as Row[]).length, 1);
+  });
+
+  it('reddedilen ek is payload`ina GIRMIYOR', async () => {
+    const harness = build({ uploadFails: 'intake_file_encrypted' });
+    await harness.service.ingest(USER, {
+      channel: 'web_eml',
+      raw: buildEml({ attachments: [{ name: 'gizli.pdf', content: MINIMAL_PDF }] }),
+    });
+    assert.equal('attachmentIntakeIds' in (harness.jobs[0]!.payload as Row), false);
+  });
+
+  it('is acilamazsa MESAJ KAYBOLMUYOR — `failed` isaretleniyor', async () => {
+    const harness = build({ jobFails: true });
+    const result = await harness.service.ingest(USER, { channel: 'web_eml', raw: buildEml() });
+
+    assert.equal(result.duplicate, false);
+    assert.equal(harness.messages.length, 1);
+    assert.equal(harness.messages[0]!.status, 'failed');
+    assert.equal(harness.messages[0]!.failureClass, 'extraction_job_not_queued');
+  });
+
+  it('tekrar gonderilen mesaj IKINCI bir is ACMIYOR', async () => {
+    const harness = build();
+    const raw = buildEml();
+    await harness.service.ingest(USER, { channel: 'web_eml', raw });
+    await harness.service.ingest(USER, { channel: 'web_eml', raw });
+    assert.equal(harness.jobs.length, 1);
   });
 });

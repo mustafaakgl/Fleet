@@ -8,6 +8,7 @@ import { AutomationQueueController } from './automation-queue.controller';
 import { DocumentInboxController } from './document-inbox.controller';
 import { DocumentIntakeService } from './document-intake.service';
 import { IntakeRoutingService } from './intake-routing.service';
+import { OrderIntakeContentService } from './order-intake-content.service';
 import { OrderIntakeService } from './order-intake.service';
 import { OrdivanAdminController } from './ordivan-admin.controller';
 import { OrdivanConnectorController } from './ordivan-connector.controller';
@@ -39,6 +40,7 @@ import { resolveOrdivanMode } from './ordivan.config';
     DocumentIntakeService,
     IntakeRoutingService,
     // Faz 16 — siparis gelen kutusu.
+    OrderIntakeContentService,
     OrderIntakeService,
     OrdivanScheduler,
     {
@@ -53,6 +55,7 @@ import { resolveOrdivanMode } from './ordivan.config';
     AutomationProposalService,
     DocumentIntakeService,
     IntakeRoutingService,
+    OrderIntakeContentService,
     OrderIntakeService,
   ],
 })

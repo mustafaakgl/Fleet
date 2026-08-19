@@ -21,6 +21,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { extractOrderPayload } from './order-intake-mock-extract.mjs';
 
 const API_BASE =
   process.env.FLEET_API_BASE_URL?.trim() || 'http://127.0.0.1:3000/api/v1';
@@ -230,6 +231,22 @@ function extractServiceInvoice(originalName) {
   return hit ?? SERVICE_INVOICE_FIXTURES[0];
 }
 
+function buildOrderExtraction(content, job) {
+  const { payload, confidence, entries } = extractOrderPayload(content);
+  return {
+    proposalType: 'transport_order.extraction',
+    proposalSchemaVersion: 1,
+    payload,
+    confidence,
+    // Kanit neyin NEREDEN geldigini tasiyor. Kontrolleri worker URETMIYOR:
+    // sunucu onlari saklanan icerikten kendisi uretiyor, cunku
+    // `order_instructions_detected` bir guvenlik sinyali ve ele gecirilmis
+    // bir worker "enjeksiyon yok" diyebilirdi.
+    evidence: { source: 'mock_order_extraction', messageId: job.payload?.messageId ?? null, entries },
+    checks: [],
+  };
+}
+
 function buildResult(job) {
   if (job.jobType === 'system.echo') {
     return {
@@ -389,7 +406,22 @@ async function main() {
       console.log(`[ordivan-mock] document downloaded bytes=${bytes.length}`);
     }
 
-    const result = buildResult(job);
+    let result = buildResult(job);
+
+    // TASIMA EMRI: icerik IS PAYLOAD'INDA DEGIL, ayri ve yetkilendirilmis bir
+    // uctan cekiliyor. Kuyruk kaydinda guvensiz e-posta govdesi durmuyor.
+    if (job.jobType === 'transport_order.extract') {
+      const response = await fetch(
+        `${API_BASE}/ordivan/connector/order-intake/messages/${job.payload?.messageId}/content`,
+        { headers: { 'x-ordivan-credential': credential } },
+      );
+      if (!response.ok) {
+        throw new Error(`order intake content fetch failed: ${response.status}`);
+      }
+      result = buildOrderExtraction(await response.json(), job);
+      console.log(`[ordivan-mock] order intake extracted intent=${result.payload.intent}`);
+    }
+
     if (!result) {
       await call(`/ordivan/connector/jobs/${job.jobId}/fail`, {
         body: { leaseToken: job.leaseToken, failureClass: 'unsupported_job_type' },

@@ -34,6 +34,7 @@ import {
 } from './dto/ordivan.dto';
 import { connectorHasCapability } from './core/job-type-registry';
 import { MAX_INTAKE_FILE_BYTES } from './core/intake-file';
+import { OrderIntakeContentService } from './order-intake-content.service';
 import { MAX_ORDER_INTAKE_BYTES, OrderIntakeService } from './order-intake.service';
 import { DocumentIntakeService } from './document-intake.service';
 import { ConnectorIntakeUploadDto, ConnectorOrderIntakeMessageDto } from './dto/document-inbox.dto';
@@ -68,6 +69,7 @@ export class OrdivanConnectorController {
     private readonly documents: AutomationDocumentService,
     private readonly intake: DocumentIntakeService,
     private readonly orderIntake: OrderIntakeService,
+    private readonly orderIntakeContent: OrderIntakeContentService,
   ) {}
 
   /**
@@ -249,6 +251,31 @@ export class OrdivanConnectorController {
         mailbox: dto.mailbox,
       },
     );
+  }
+
+  /**
+   * CIKARIM ICIN MESAJ ICERIGI (Faz 16).
+   *
+   * NEDEN AYRI UC: is payload'i icerik TASIMAZ (bkz. order-intake.service).
+   * Kuyruk kaydinda duran her sey loglara, hata raporlarina ve denetime
+   * sizabilir; guvensiz e-posta govdesini oraya kopyalamak icin hicbir sebep
+   * yok. Icerik yalnizca burada, yetenegi olan connector'a ve YALNIZ kendi
+   * kiracisinin mesaji icin aciliyor.
+   *
+   * DONEN HTML SANITIZE EDILMIS, donen metin GUVENSIZ. Worker bu metinden
+   * KONTROL uretmiyor — kontrolleri sunucu ayni icerikten kendisi uretiyor.
+   * Aksi halde ele gecirilmis bir connector "enjeksiyon yok" diyebilirdi.
+   */
+  @Get('order-intake/messages/:id/content')
+  @UseGuards(ConnectorCredentialGuard)
+  async orderIntakeMessageContent(
+    @CurrentConnector() connector: AuthenticatedConnector,
+    @Param('id') messageId: string,
+  ) {
+    if (!connectorHasCapability(connector.capabilities, 'transport_order.extract@v1')) {
+      throw new ForbiddenException({ code: 'ordivan_capability_missing' });
+    }
+    return this.orderIntakeContent.contentForExtraction(messageId);
   }
 
   @Post('jobs/:id/fail')

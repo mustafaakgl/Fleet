@@ -14,6 +14,7 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AUTOMATION_DOCUMENT_UPLOAD_ABSOLUTE_DIR } from '../storage/local-storage.service';
 import { sanitizeReceiptFileName } from '../fleet/fuel-receipts/core/receipt-file.util';
+import { AutomationJobService } from './automation-job.service';
 import { DocumentIntakeService, type IntakeActor } from './document-intake.service';
 import { extractUnsafeText, inspectIntakeFile, IntakeFileError } from './core/intake-file';
 import { parseEml, type EmlAttachment } from './core/order-intake-eml';
@@ -95,6 +96,7 @@ export class OrderIntakeService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly documentIntake: DocumentIntakeService,
+    private readonly jobs: AutomationJobService,
   ) {}
 
   /**
@@ -280,7 +282,47 @@ export class OrderIntakeService {
       },
     });
 
+    await this.enqueueExtraction(message.id, outcomes);
+
     return { messageId: message.id, duplicate: false, attachments: outcomes };
+  }
+
+  /**
+   * Cikarim isini kuyruga koyar.
+   *
+   * PAYLOAD ICERIK TASIMAZ — yalnizca MESAJ KIMLIGI ve kabul edilen eklerin
+   * kimlikleri. Konu ve govde kuyruk kaydina girseydi, is kaydini okuyabilen
+   * her sey (loglar, hata raporlari, denetim) guvensiz metni de okurdu.
+   * Worker icerigi ayri ve YETKILENDIRILMIS bir uctan cekiyor.
+   *
+   * IS ACILAMAZSA MESAJ KAYBOLMAZ: hata yutuluyor ve mesaj `failed`
+   * isaretleniyor. Kuyruk sorunu yuzunden gelen bir siparisin hic
+   * gorunmemesi, en kotu basarisizlik bicimi olurdu.
+   */
+  private async enqueueExtraction(messageId: string, outcomes: AttachmentOutcome[]): Promise<void> {
+    const accepted = outcomes
+      .filter((outcome) => outcome.intakeId !== null)
+      .map((outcome) => ({ id: outcome.intakeId! }));
+
+    try {
+      await this.jobs.createJob(null, {
+        jobType: 'transport_order.extract',
+        schemaVersion: 1,
+        payload: {
+          messageId,
+          ...(accepted.length > 0 ? { attachmentIntakeIds: accepted } : {}),
+        },
+      });
+    } catch {
+      await this.prisma.orderIntakeMessage.updateMany({
+        where: { id: messageId },
+        data: {
+          status: OrderIntakeMessageStatus.failed,
+          // Teknik hata SINIFI, saglayici mesaji degil.
+          failureClass: 'extraction_job_not_queued',
+        },
+      });
+    }
   }
 
   /** Faz 14 hata sinifini cikarir; baska bir hata ise `null` doner. */

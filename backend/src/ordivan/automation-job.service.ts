@@ -24,6 +24,8 @@ import {
   matchVehicle,
   type ServiceInvoiceDraft,
 } from './core/service-invoice';
+import { extractTransportOrder } from './core/order-intake-extract';
+import { OrderIntakeContentService } from './order-intake-content.service';
 import type { AuthenticatedConnector } from './ordivan-connector.service';
 import { CURRENT_PROTOCOL_VERSION, PROPOSAL_REVIEW_TTL_MS } from './ordivan.config';
 
@@ -64,6 +66,8 @@ export class AutomationJobService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    /** Faz 16 — kontroller SAKLANAN icerikten uretilir, connector'dan degil. */
+    private readonly orderIntakeContent: OrderIntakeContentService,
   ) {}
 
   // =====================================================================
@@ -298,6 +302,8 @@ export class AutomationJobService {
         leaseToken: true,
         leasedByConnectorId: true,
         attempt: true,
+        /** Faz 16 — kontrolleri uretmek icin mesaj kimligi buradan okunuyor. */
+        payload: true,
       },
     });
 
@@ -384,6 +390,34 @@ export class AutomationJobService {
           candidateIds: vehicleMatch.candidateIds,
         },
       };
+    }
+
+    /**
+     * TASIMA EMRI: KONTROLLERI SUNUCU URETIR (Faz 16).
+     *
+     * Connector'in gonderdigi kontroller BURADA TAMAMEN ATILIYOR ve sunucu
+     * ayni icerikten kendisi uretiyor. Sebep dogrudan: `order_instructions_
+     * detected` bir GUVENLIK sinyali. Connector'a birakilsaydi, ele gecirilmis
+     * ya da kandirilmis bir worker "enjeksiyon yok" diyebilir ve denemeyi
+     * incelemecinin gozunden gizleyebilirdi.
+     *
+     * Servis faturasindaki desenle ayni: ajanin ciktisi ADAY, karari SUNUCU
+     * verir.
+     */
+    if (input.proposalType === 'transport_order.extraction') {
+      const messageId = String((job.payload as Record<string, unknown> | null)?.messageId ?? '');
+      const message = await this.prisma.orderIntakeMessage.findFirst({
+        where: { id: messageId },
+        select: { id: true, subject: true, bodyText: true },
+      });
+      if (!message) {
+        throw new ConflictException({ code: 'order_intake_message_not_found' });
+      }
+      // Kontroller SAKLANAN icerikten uretiliyor — connector'in gonderdiginden
+      // degil. Ek metinleri de ayni yoldan okunuyor.
+      const content = await this.orderIntakeContent.contentForExtraction(messageId);
+      checks = extractTransportOrder(content).checks;
+      evidence = { ...evidence, checksProducedBy: 'server' };
     }
 
     try {
