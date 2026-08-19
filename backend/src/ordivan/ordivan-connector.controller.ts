@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
@@ -14,7 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { DocumentIntakeSource } from '@prisma/client';
+import { DocumentIntakeSource, OrderIntakeChannel } from '@prisma/client';
 import type { Response } from 'express';
 import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
@@ -33,8 +34,9 @@ import {
 } from './dto/ordivan.dto';
 import { connectorHasCapability } from './core/job-type-registry';
 import { MAX_INTAKE_FILE_BYTES } from './core/intake-file';
+import { MAX_ORDER_INTAKE_BYTES, OrderIntakeService } from './order-intake.service';
 import { DocumentIntakeService } from './document-intake.service';
-import { ConnectorIntakeUploadDto } from './dto/document-inbox.dto';
+import { ConnectorIntakeUploadDto, ConnectorOrderIntakeMessageDto } from './dto/document-inbox.dto';
 import { ConnectorCredentialGuard } from './guards/connector-credential.guard';
 import { OrdivanConnectorService, type AuthenticatedConnector } from './ordivan-connector.service';
 import {
@@ -65,6 +67,7 @@ export class OrdivanConnectorController {
     private readonly jobs: AutomationJobService,
     private readonly documents: AutomationDocumentService,
     private readonly intake: DocumentIntakeService,
+    private readonly orderIntake: OrderIntakeService,
   ) {}
 
   /**
@@ -201,6 +204,51 @@ export class OrdivanConnectorController {
       source: DocumentIntakeSource.connector,
       idempotencyKey: dto.idempotencyKey,
     });
+  }
+
+  /**
+   * SIPARIS MESAJI GONDERIMI (Faz 16) — mock posta connector'u.
+   *
+   * GERCEK CONNECTOR PROTOKOLU: ayni `ConnectorCredentialGuard`, ayni kimlik
+   * modeli, ayri bir yetenek. Faz 16 kendi kimlik dogrulamasini ya da kendi
+   * "posta ucunu" ACMADI — acsaydi, connector siniri iki ayri yerde tanimli
+   * olurdu ve ikisi zamanla ayrisirdi.
+   *
+   * YETENEK AYRI: `order_intake.message.push@v1`. Belge yukleyebilen bir
+   * tarayici connector'u otomatikman siparis mesaji GONDEREMEZ.
+   *
+   * KIRACIYI ISTEMCI BELIRLEMEZ: `tenantId` yalnizca guard'in cozdugu
+   * connector kaydindan gelir. Govdedeki `mailbox` bir ETIKETTIR.
+   *
+   * IDEMPOTENCY SUNUCUDA: anahtar mesajin kendisinden turetiliyor; istemci
+   * gonderemez (bkz. ConnectorOrderIntakeMessageDto).
+   */
+  @Post('order-intake/messages')
+  @UseGuards(ConnectorCredentialGuard)
+  @UseInterceptors(FileInterceptor('message', { limits: { fileSize: MAX_ORDER_INTAKE_BYTES } }))
+  @HttpCode(201)
+  async orderIntakeMessage(
+    @CurrentConnector() connector: AuthenticatedConnector,
+    @UploadedFile()
+    file: { buffer: Buffer; size: number; originalname?: string } | undefined,
+    @Body() dto: ConnectorOrderIntakeMessageDto,
+  ) {
+    if (!connectorHasCapability(connector.capabilities, 'order_intake.message.push@v1')) {
+      throw new ForbiddenException({ code: 'ordivan_capability_missing' });
+    }
+    if (!file?.buffer) {
+      throw new BadRequestException({ code: 'order_intake_file_missing' });
+    }
+    return this.orderIntake.ingest(
+      { kind: 'connector', connectorId: connector.connectorId },
+      {
+        channel: OrderIntakeChannel.connector_mailbox,
+        raw: file.buffer,
+        size: file.size,
+        fileName: file.originalname,
+        mailbox: dto.mailbox,
+      },
+    );
   }
 
   @Post('jobs/:id/fail')

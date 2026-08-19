@@ -259,3 +259,21 @@ export class ConnectorIntakeUploadDto {
   @Length(8, 200)
   idempotencyKey!: string;
 }
+
+/**
+ * MOCK POSTA CONNECTOR'UNUN MESAJ GONDERIMI (Faz 16).
+ *
+ * IDEMPOTENCY ANAHTARI ISTENMIYOR ve bu bilincli fark: Faz 14'te connector
+ * kendi yeniden denemesini isaretliyor, burada tekrar tespiti mesajin
+ * KENDISINDEN (posta kutusu + Message-ID + icerik hash) SUNUCUDA turetiliyor.
+ * Anahtari gonderene birakmak, ayni mesaji farkli anahtarlarla tekrar tekrar
+ * yollayarak ikinci bir siparis actirmanin yolu olurdu.
+ *
+ * `mailbox` YALNIZCA bir etikettir: hangi kutuya dustugunu soyler, kiraci ya
+ * da yetki BELIRLEMEZ. Kiraci daima guard'in cozdugu connector kaydindan gelir.
+ */
+export class ConnectorOrderIntakeMessageDto {
+  @IsString()
+  @Length(3, 254)
+  mailbox!: string;
+}

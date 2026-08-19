@@ -415,7 +415,20 @@ export function validateProposal(
  * BURADA DA GENEL ARAC YOK: `sql`, `shell`, `http` bu listeye de giremez —
  * `FORBIDDEN_TOOLS` testi ikisini birden tariyor.
  */
-export const NON_JOB_CAPABILITIES = ['document.intake.upload@v1'] as const;
+/**
+ * `order_intake.message.push@v1` (Faz 16): posta connector'u Fleet'e MESAJ
+ * gonderebilir. Bu da bir is turu DEGIL — connector kuyruktan bir sey almiyor,
+ * tek yonlu icerik gonderiyor.
+ *
+ * BELGE YUKLEMEDEN AYRI: bir tarayici connector'unun belge yuklemesi ile bir
+ * posta connector'unun siparis mesaji gondermesi FARKLI yetkilerdir. Tek
+ * yetenekte birlestirmek, ofisteki tarayiciya siparis akisini besleme hakki
+ * vermek olurdu.
+ */
+export const NON_JOB_CAPABILITIES = [
+  'document.intake.upload@v1',
+  'order_intake.message.push@v1',
+] as const;
 export type NonJobCapability = (typeof NON_JOB_CAPABILITIES)[number];
 
 /** Connector'a verilebilecek BUTUN yetenekler. */

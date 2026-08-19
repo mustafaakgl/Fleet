@@ -4165,6 +4165,14 @@ enum AutomationDocumentKind {
   service_invoice
   /// Faz 14 — belge gelen kutusu yuklemesi. Turu mantiksal belge belirler.
   document_intake
+  /**
+   * Faz 16 — ham `.eml` zarfi.
+   * AYRI BIR DEGER cunku bu blob bir BELGE DEGIL, bir MESAJDIR: sayfa sayisi
+   * yok, magic-byte kontrolunden gecmez ve gorunturlenmesi ayri bir yetki
+   * gerektirir (icinde fiyat olabilir). `document_intake` altina koymak,
+   * "kac belge geldi" sorusunu zarflarla sisirirdi.
+   */
+  order_intake
 }
 
 /**
