@@ -1,0 +1,20 @@
+{
+  // SEED ICIN AYRI TYPECHECK.
+  //
+  // NEDEN AYRI DOSYA: ana `tsconfig.json` `rootDir: "./src"` kullaniyor ve
+  // `prisma/`yi include'a eklemek derlemeyi kirardi. Ana yapiyi bozmadan
+  // seed'i de tam tiple denetlemenin yolu ayri bir proje dosyasi.
+  //
+  // NEDEN GEREKLI: `tsconfig.json` yalnizca `src/**/*.ts` iceriyor, yani
+  // `npx tsc -p tsconfig.json` YESILKEN seed derlenmiyor olabilir — nitekim
+  // `Assignment.currency` eklendiginde tam bu oldu ve bozukluk yalnizca
+  // `prisma db seed` calistirilinca ortaya cikti.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["prisma/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

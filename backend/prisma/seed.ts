@@ -460,7 +460,21 @@ async function upsertDevice(params: {
   });
 }
 
+/**
+ * Gorev olusturma / guncelleme.
+ *
+ * `currency` ZORUNLU ve varsayilani YOK. `Assignment.currency` semada
+ * bilincli olarak NOT NULL ve varsayilansiz: veritabani `EUR` yazsaydi,
+ * TRY tabanli bir kiracinin gorevleri sessizce yanlis para biriminde
+ * acilirdi. Prisma tipleri de tam bu yuzden her olusturma yolunu karar
+ * vermeye zorluyor — bu seed'in derlenmemesi bir hata degil, o korumanin
+ * calistiginin kanitiydi.
+ *
+ * Deger cagiran taraftan geliyor ve KIRACININ kendi `baseCurrency`si
+ * (bkz. `resolveTenantBaseCurrency`); burada sabit bir para birimi YOK.
+ */
 async function upsertAssignment(params: {
+  currency: string;
   driverId: string;
   vehicleId: string;
   companyId: string;
@@ -500,6 +514,11 @@ async function upsertAssignment(params: {
         status: params.status,
         createdById: params.createdById,
         notes: params.notes,
+        // GUNCELLEME YOLUNDA DA YAZILIYOR: seed tekrar kosuldugunda kiracinin
+        // temel para birimi degismis olabilir. Yalnizca `create`e yazsaydik,
+        // ilk kosuda acilmis gorevler eski birimde kalir ve maliyet
+        // toplamlarindan sessizce duserdi.
+        currency: params.currency,
       },
     });
   }
@@ -507,6 +526,7 @@ async function upsertAssignment(params: {
   return prisma.assignment.create({
     data: {
       tenantId: SEED_TENANT_ID,
+      currency: params.currency,
       driverId: params.driverId,
       vehicleId: params.vehicleId,
       companyId: params.companyId,
@@ -934,6 +954,34 @@ async function upsertReminder(params: {
   });
 }
 
+/**
+ * Kiracinin TEMEL para birimini veritabanindan okur.
+ *
+ * FALLBACK YOK ve bu bilincli: `?? 'EUR'` yazsaydik, kolonun bos ya da bozuk
+ * oldugu bir kiracida seed sessizce yanlis para biriminde gorev acardi —
+ * yani `Assignment.currency`nin varsayilansiz olmasinin butun amaci
+ * bosa cikardi. Deger okunamiyorsa seed DURUR.
+ */
+async function resolveTenantBaseCurrency(tenantId: string): Promise<string> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { baseCurrency: true },
+  });
+
+  if (!tenant) {
+    throw new Error(`[seed] Kiraci bulunamadi: ${tenantId}`);
+  }
+
+  const currency = tenant.baseCurrency?.trim().toUpperCase() ?? '';
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new Error(
+      `[seed] Kiracinin baseCurrency degeri gecersiz (${tenantId}): ${JSON.stringify(tenant.baseCurrency)}`,
+    );
+  }
+
+  return currency;
+}
+
 async function main(): Promise<void> {
   assertSeedAllowed();
   const seedPasswords = loadSeedPasswords();
@@ -949,6 +997,15 @@ async function main(): Promise<void> {
       language: 'de',
     },
   });
+
+  /**
+   * Kiracinin temel para birimi — gorevlere BURADAN yaziliyor.
+   *
+   * Upsert'in `update: {}` olmasi bilincli: var olan bir kiracinin
+   * `baseCurrency`si seed tarafindan EZILMEZ. Bu yuzden degeri upsert'ten
+   * SONRA okuyoruz — sabit bir varsayim yerine kaydin gercek hali.
+   */
+  const tenantBaseCurrency = await resolveTenantBaseCurrency(SEED_TENANT_ID);
 
   const today = startOfDay(new Date());
   const tomorrow = addDays(today, 1);
@@ -1863,7 +1920,7 @@ async function main(): Promise<void> {
 
   const assignmentsByKey = new Map<string, Awaited<ReturnType<typeof upsertAssignment>>>();
   for (const assignment of assignmentData) {
-    const record = await upsertAssignment(assignment);
+    const record = await upsertAssignment({ ...assignment, currency: tenantBaseCurrency });
     assignmentsByKey.set(assignment.key, record);
 
     await upsertCalendarEvent({
