@@ -10,6 +10,7 @@ import { DocumentInboxController } from './document-inbox.controller';
 import { DocumentIntakeService } from './document-intake.service';
 import { IntakeRoutingService } from './intake-routing.service';
 import { OrderIntakeContentService } from './order-intake-content.service';
+import { OrderIntakeController } from './order-intake.controller';
 import { OrderIntakeDecisionService } from './order-intake-decision.service';
 import { OrderIntakeService } from './order-intake.service';
 import { OrdivanAdminController } from './ordivan-admin.controller';
@@ -33,6 +34,8 @@ import { resolveOrdivanMode } from './ordivan.config';
     AutomationQueueController,
     // Faz 14 — belge gelen kutusu.
     DocumentInboxController,
+    // Faz 16 — siparis gelen kutusu.
+    OrderIntakeController,
   ],
   providers: [
     OrdivanConnectorService,

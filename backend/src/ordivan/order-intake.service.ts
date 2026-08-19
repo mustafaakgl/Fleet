@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AutomationDocumentKind,
   DocumentIntakeSource,
   OrderIntakeChannel,
   OrderIntakeFinancialContent,
+  OrderIntakeIntent,
   OrderIntakeMessageStatus,
   Prisma,
 } from '@prisma/client';
@@ -18,6 +19,13 @@ import { AutomationJobService } from './automation-job.service';
 import { DocumentIntakeService, type IntakeActor } from './document-intake.service';
 import { extractUnsafeText, inspectIntakeFile, IntakeFileError } from './core/intake-file';
 import { parseEml, type EmlAttachment } from './core/order-intake-eml';
+import {
+  canOpenRawDocument,
+  maskConfidence,
+  maskEvidence,
+  maskExtractionPayload,
+  maskMessageSummary,
+} from './core/order-intake-field-security';
 import {
   buildDedupeKey,
   detectFinancialContent,
@@ -414,6 +422,274 @@ export class OrderIntakeService {
     // Ek REDDEDILDI (ornegin sifreli PDF): dosya Faz 14 tarafindan hic
     // yazilmadi. Zarfi yine de sakliyoruz — incelemeci NE GELDIGINI gormeli.
     return this.storeEnvelope(actor, input, contentHash, size);
+  }
+
+  // -------------------------------------------------------------------------
+  // Okuma — MASKELEME SUNUCU YANITINDA
+  // -------------------------------------------------------------------------
+
+  /**
+   * Gelen kutusu listesi.
+   *
+   * Filtreler NIYETE gore: arayuzdeki new/amendment/cancellation/unknown
+   * sekmelerinin karsiligi. Ozet, rolune gore maskelenerek doner — konu satiri
+   * bile tutar tasiyabilir.
+   */
+  async list(
+    query: { intent?: string; status?: string; take?: number; skip?: number },
+    role: string | null | undefined,
+  ): Promise<{ items: Record<string, unknown>[]; total: number }> {
+    const take = Math.min(Math.max(query.take ?? 25, 1), 100);
+    const skip = Math.max(query.skip ?? 0, 0);
+    const where = {
+      ...(query.status ? { status: query.status as OrderIntakeMessageStatus } : {}),
+      ...(query.intent ? { review: { proposedIntent: query.intent as OrderIntakeIntent } } : {}),
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.orderIntakeMessage.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take,
+        skip,
+        select: {
+          id: true,
+          channel: true,
+          status: true,
+          subject: true,
+          fromAddress: true,
+          fromDisplayName: true,
+          mailbox: true,
+          sentAt: true,
+          createdAt: true,
+          attachmentCount: true,
+          containsFinancialData: true,
+          bodyText: true,
+          review: {
+            select: {
+              id: true,
+              proposedIntent: true,
+              resolvedIntent: true,
+              status: true,
+              companyMatchStatus: true,
+              orderMatchStatus: true,
+              possibleDuplicate: true,
+              matchedCompany: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.orderIntakeMessage.count({ where }),
+    ]);
+
+    const items = rows.map((row) =>
+      maskMessageSummary(
+        {
+          id: row.id,
+          channel: row.channel,
+          status: row.status,
+          subject: row.subject,
+          // ONIZLEME KIRPILMIS: liste ekraninda tam govde gostermenin sebebi yok.
+          bodyPreview: row.bodyText ? row.bodyText.slice(0, 160) : null,
+          fromAddress: row.fromAddress,
+          fromDisplayName: row.fromDisplayName,
+          mailbox: row.mailbox,
+          sentAt: row.sentAt,
+          createdAt: row.createdAt,
+          attachmentCount: row.attachmentCount,
+          containsFinancialData: row.containsFinancialData,
+          review: row.review,
+          rawDocumentAvailable: canOpenRawDocument(role, row.containsFinancialData),
+        },
+        role,
+      ),
+    );
+
+    return { items, total };
+  }
+
+  /**
+   * Tek bir mesajin tam gorunumu.
+   *
+   * AJANIN CIKTISI ve INSANIN KARARI AYRI donuyor: `proposed` degismez oneri,
+   * `review` sunucunun eslestirmesi ve insanin secimi. Ikisini tek nesnede
+   * birlestirmek, arayuzde "model mi dedi insan mi secti" ayrimini kaybettirirdi.
+   */
+  async detail(messageId: string, role: string | null | undefined): Promise<Record<string, unknown>> {
+    const message = await this.prisma.orderIntakeMessage.findFirst({
+      where: { id: messageId },
+      select: {
+        id: true,
+        channel: true,
+        status: true,
+        subject: true,
+        bodyText: true,
+        bodyHtml: true,
+        fromAddress: true,
+        fromDisplayName: true,
+        mailbox: true,
+        inReplyTo: true,
+        sentAt: true,
+        createdAt: true,
+        containsFinancialData: true,
+        failureClass: true,
+        attachments: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            fileName: true,
+            declaredMimeType: true,
+            byteSize: true,
+            rejectionCode: true,
+            intakeId: true,
+          },
+        },
+        review: {
+          select: {
+            id: true,
+            status: true,
+            proposedIntent: true,
+            resolvedIntent: true,
+            companyMatchStatus: true,
+            companyCandidates: true,
+            orderMatchStatus: true,
+            orderCandidates: true,
+            possibleDuplicate: true,
+            rejectionReason: true,
+            matchedCompany: { select: { id: true, name: true } },
+            selectedCompany: { select: { id: true, name: true } },
+            matchedOrder: { select: { id: true, orderNumber: true, status: true, updatedAt: true } },
+            selectedOrder: { select: { id: true, orderNumber: true, status: true, updatedAt: true } },
+            duplicateOfOrder: { select: { id: true, orderNumber: true, status: true } },
+            proposal: {
+              select: {
+                id: true,
+                payload: true,
+                confidence: true,
+                evidence: true,
+                checks: true,
+                resultTransportOrderId: true,
+                resultTransportOrderRevisionId: true,
+                approvalTasks: {
+                  orderBy: { sequence: 'asc' },
+                  select: {
+                    sequence: true,
+                    status: true,
+                    decision: true,
+                    assignedRole: true,
+                    decidedAt: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundException({ code: 'order_intake_message_not_found' });
+    }
+
+    const proposal = message.review?.proposal ?? null;
+    const summary = maskMessageSummary(
+      {
+        id: message.id,
+        channel: message.channel,
+        status: message.status,
+        subject: message.subject,
+        bodyPreview: message.bodyText ? message.bodyText.slice(0, 160) : null,
+        containsFinancialData: message.containsFinancialData,
+      },
+      role,
+    );
+
+    return {
+      ...summary,
+      fromAddress: message.fromAddress,
+      fromDisplayName: message.fromDisplayName,
+      mailbox: message.mailbox,
+      inReplyTo: message.inReplyTo,
+      sentAt: message.sentAt,
+      createdAt: message.createdAt,
+      failureClass: message.failureClass,
+      /**
+       * GUVENLI ONIZLEME: `bodyHtml` zaten sanitize edilmis olarak SAKLANIYOR
+       * (script, uzak gorsel, tiklanabilir link yok). Ham HTML hicbir zaman
+       * ne saklandi ne de doner. Fiyat tasiyan mesajda ofise govde de kapali.
+       */
+      bodyHtml: canOpenRawDocument(role, message.containsFinancialData) ? message.bodyHtml : null,
+      bodyText: canOpenRawDocument(role, message.containsFinancialData) ? message.bodyText : null,
+      rawDocumentAvailable: canOpenRawDocument(role, message.containsFinancialData),
+      attachments: message.attachments,
+      review: message.review
+        ? {
+            id: message.review.id,
+            status: message.review.status,
+            proposedIntent: message.review.proposedIntent,
+            resolvedIntent: message.review.resolvedIntent,
+            companyMatchStatus: message.review.companyMatchStatus,
+            companyCandidates: message.review.companyCandidates,
+            orderMatchStatus: message.review.orderMatchStatus,
+            orderCandidates: message.review.orderCandidates,
+            possibleDuplicate: message.review.possibleDuplicate,
+            duplicateOfOrder: message.review.duplicateOfOrder,
+            rejectionReason: message.review.rejectionReason,
+            matchedCompany: message.review.matchedCompany,
+            selectedCompany: message.review.selectedCompany,
+            matchedOrder: message.review.matchedOrder,
+            selectedOrder: message.review.selectedOrder,
+            tasks: proposal?.approvalTasks ?? [],
+            resultTransportOrderId: proposal?.resultTransportOrderId ?? null,
+            resultTransportOrderRevisionId: proposal?.resultTransportOrderRevisionId ?? null,
+          }
+        : null,
+      proposed: proposal
+        ? {
+            id: proposal.id,
+            payload: maskExtractionPayload(
+              (proposal.payload ?? {}) as Record<string, unknown>,
+              role,
+            ),
+            confidence: maskConfidence(
+              proposal.confidence as Record<string, number> | null,
+              role,
+            ),
+            evidence: maskEvidence(
+              proposal.evidence as { entries?: unknown } | null,
+              role,
+            ),
+            checks: proposal.checks,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Ham `.eml` / PDF akisi icin dosya adini cozer.
+   *
+   * ROL KONTROLU BURADA: fiyat tasiyan (ya da tasidigi BILINMEYEN) bir belge
+   * yalnizca finansal role aciliyor. Ham belge alan bazinda maskelenemez —
+   * icinde ne varsa okunur.
+   */
+  async resolveRawDocument(
+    messageId: string,
+    role: string | null | undefined,
+  ): Promise<{ storedFileName: string; mimeType: string; originalName: string }> {
+    const message = await this.prisma.orderIntakeMessage.findFirst({
+      where: { id: messageId },
+      select: {
+        containsFinancialData: true,
+        artifact: { select: { storedFileName: true, mimeType: true, originalName: true } },
+      },
+    });
+    if (!message) {
+      throw new NotFoundException({ code: 'order_intake_message_not_found' });
+    }
+    if (!canOpenRawDocument(role, message.containsFinancialData)) {
+      throw new ForbiddenException({ code: 'order_intake_raw_document_forbidden' });
+    }
+    return message.artifact;
   }
 
   private async attachmentsOf(messageId: string): Promise<AttachmentOutcome[]> {
