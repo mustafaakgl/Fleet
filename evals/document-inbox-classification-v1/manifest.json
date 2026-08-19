@@ -1,6 +1,6 @@
 {
   "setId": "document-inbox-classification-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "createdAt": "2026-08-19",
   "phase": "faz14",
   "scoring": "classification_accuracy",
@@ -10,7 +10,7 @@
     "destinations": "backend/src/ordivan/core/document-type-registry.ts#DOCUMENT_DESTINATIONS",
     "checkContract": "contracts/ordivan/check.v1.schema.json"
   },
-  "note": "Fixture'lar TAMAMEN SENTETIK ve make-fixtures.mjs ile deterministik uretiliyor. Gercek musteri belgesi repoya GIRMEZ. Bu set BIR DOGRULUK IDDIASI DEGILDIR: sentetik metin uzerinde olculen oran, gercek taranmis belgelerdeki performans hakkinda HICBIR SEY soylemez. Gercek Ordivan ya da otomatik yonlendirme, dondurulmus gercek bir golden dataset olmadan ACILAMAZ.",
+  "note": "Fixture'lar TAMAMEN SENTETIK ve make-fixtures.mjs ile deterministik uretiliyor. Gercek musteri belgesi repoya GIRMEZ. Bu set BIR DOGRULUK IDDIASI DEGILDIR: sentetik metin uzerinde olculen oran, gercek taranmis belgelerdeki performans hakkinda HICBIR SEY soylemez. Gercek Ordivan ya da otomatik yonlendirme, dondurulmus gercek bir golden dataset olmadan ACILAMAZ. SURUM 1.1.0 (faz16): registry'ye `transport_order@v1` eklendigi icin bu turun siniflandirma vakalari eklendi. Set icerigi SESSIZCE degismez — her degisiklik surum artirir. Faz 16'nin KENDI cikarim/niyet seti ayridir (`transport-order-agent-v1`); bu set yalnizca SINIFLANDIRMAYI olcer.",
   "metrics": [
     {
       "id": "type_accuracy",

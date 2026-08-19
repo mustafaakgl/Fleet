@@ -1065,6 +1065,9 @@ model Tenant {
   transportOrders            TransportOrder[]
   consignments               Consignment[]
   transportOrderRevisions    TransportOrderRevision[]
+  orderIntakeMessages        OrderIntakeMessage[]
+  orderIntakeAttachments     OrderIntakeAttachment[]
+  orderIntakeReviews         OrderIntakeReview[]
   vehicleDtcs                VehicleDtc[]
   tachoProviderCredentials   TachoProviderCredential[]
   dddFiles                   DddFile[]
@@ -1245,6 +1248,8 @@ model User {
   cancelledTransportOrders        TransportOrder[]            @relation("TransportOrderCancelledBy")
   createdOrderRevisions           TransportOrderRevision[]    @relation("TransportOrderRevisionCreatedBy")
   decidedOrderRevisions           TransportOrderRevision[]    @relation("TransportOrderRevisionDecidedBy")
+  uploadedOrderIntakeMessages     OrderIntakeMessage[]        @relation("OrderIntakeMessageUploadedBy")
+  decidedOrderIntakeReviews       OrderIntakeReview[]         @relation("OrderIntakeReviewDecidedBy")
   reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
@@ -1675,6 +1680,10 @@ model Company {
   locations         Location[]
   transportOrders   TransportOrder[]
 
+  /// Faz 16 — sunucunun eslestirdigi ve insanin sectigi gelen kutusu kayitlari.
+  matchedOrderIntakeReviews  OrderIntakeReview[] @relation("OrderIntakeReviewMatchedCompany")
+  selectedOrderIntakeReviews OrderIntakeReview[] @relation("OrderIntakeReviewSelectedCompany")
+
   @@unique([tenantId, name])
   @@unique([tenantId, datevDebtorNumber])
   @@index([tenantId])
@@ -1746,11 +1755,11 @@ model Location {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  pickupAssignments   Assignment[] @relation("AssignmentPickupLocation")
-  deliveryAssignments Assignment[] @relation("AssignmentDeliveryLocation")
-  tourDepots          Tour[]       @relation("TourDepot")
-  tourStops           TourStop[]   @relation("TourStopLocation")
-  consignmentPickups   Consignment[] @relation("ConsignmentPickupLocation")
+  pickupAssignments     Assignment[]  @relation("AssignmentPickupLocation")
+  deliveryAssignments   Assignment[]  @relation("AssignmentDeliveryLocation")
+  tourDepots            Tour[]        @relation("TourDepot")
+  tourStops             TourStop[]    @relation("TourStopLocation")
+  consignmentPickups    Consignment[] @relation("ConsignmentPickupLocation")
   consignmentDeliveries Consignment[] @relation("ConsignmentDeliveryLocation")
 
   @@unique([tenantId, normalizedHash])
@@ -1907,9 +1916,9 @@ model TourStop {
 }
 
 model Assignment {
-  id                   String           @id @default(cuid())
-  tenantId             String           @default("default-tenant")
-  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  id                   String   @id @default(cuid())
+  tenantId             String   @default("default-tenant")
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   driverId             String
   vehicleId            String
   companyId            String
@@ -1927,53 +1936,45 @@ model Assignment {
   routeName            String?
   /**
    * OPERASYON DILIMINE AYRILAN GELIR (Faz 15'te anlami netlesti).
-   *
    * Faz 15 bu alanin YANINA ikinci bir gelir alani ACMADI: aynı anlamda iki
    * alan, iki farkli toplam demektir. Siparis geliri `TransportOrder`da,
    * dilime ayrilan pay burada.
-   *
    * PARA BIRIMI `currency` ALANINDA — bkz. asagisi.
    */
-  expectedDailyRevenue Decimal?         @db.Decimal(10, 2)
+  expectedDailyRevenue Decimal? @db.Decimal(10, 2)
 
   /**
    * GELIRIN PARA BIRIMI — OLUSTURULDUGU ANDA DONDURULUR.
-   *
    * Faz 15 bu alani bilincli olarak ACMAMISTI: para birimi bagli oldugu
    * siparisten cozulur denmisti. O tasarim IKI YERDE kirildi ve denetimde
    * ortaya cikti:
-   *
-   *   1. Siparisin para birimi sonradan degistiginde (EUR→TRY amendment)
-   *      ESKI gorevin tutari sessizce yeni para biriminde okunur hale
-   *      geliyordu. 1.200 EUR'luk bir is, hicbir sey yazilmadan 1.200 TRY
-   *      oluyordu.
-   *   2. Toplama alan hicbir tuketici (dashboard, maliyet paneli, fatura
-   *      onerisi) siparise bakmiyor — dogrudan `expectedDailyRevenue`
-   *      topluyordu. `FleetFuelEntry`, `ServiceRecord` ve `Fine` icin var olan
-   *      `matchesBaseCurrency` korumasi burada YOKTU cunku korunacak bir alan
-   *      yoktu.
-   *
+   * 1. Siparisin para birimi sonradan degistiginde (EUR→TRY amendment)
+   * ESKI gorevin tutari sessizce yeni para biriminde okunur hale
+   * geliyordu. 1.200 EUR'luk bir is, hicbir sey yazilmadan 1.200 TRY
+   * oluyordu.
+   * 2. Toplama alan hicbir tuketici (dashboard, maliyet paneli, fatura
+   * onerisi) siparise bakmiyor — dogrudan `expectedDailyRevenue`
+   * topluyordu. `FleetFuelEntry`, `ServiceRecord` ve `Fine` icin var olan
+   * `matchesBaseCurrency` korumasi burada YOKTU cunku korunacak bir alan
+   * yoktu.
    * KAYNAK: siparisten uretilen gorev, uretildigi ANDAKI siparis
    * revizyonunun para birimini alir ve sonraki amendment bunu DEGISTIRMEZ.
    * Bagimsiz gorev kiracinin `baseCurrency`sini alir. Tutar ve para birimi
    * AYNI transaction'da yaziliyor — ikisinin ayri yazilmasi, arada bir
    * okumanin yanlis para biriminde tutar gormesi demekti.
-   *
    * VARSAYILAN YOK: veritabani `EUR` yazsaydi, TRY tabanli bir kiracinin
    * gorevleri sessizce yanlis para biriminde acilirdi. NOT NULL olmasi da
    * bilincli — Prisma tipleri her olusturma yolunu karar vermeye zorluyor.
    */
-  currency             String
+  currency String
 
-  status               AssignmentStatus @default(planned)
+  status AssignmentStatus @default(planned)
 
   /**
    * --- Faz 15: TICARI SIPARIS BAGI (hepsi NULLABLE) ---
-   *
    * NULLABLE KALMAK ZORUNDA: bugunku kayitlarin hicbirinin siparisi yok ve
    * sofor talebinden (`TransportRequest`) dogan isler bir musteri siparisine
    * ait olmayabilir. Eski kayitlar UYDURMA siparislere BAGLANMAZ.
-   *
    * Bir Assignment YALNIZ BIR siparise ait olabilir. Bolunmus siparis birden
    * fazla Assignment uretir; aktarma gerekiyorsa tek Assignment birden fazla
    * tura baglanmaz, ayri operasyon dilimleri kullanilir.
@@ -1984,16 +1985,15 @@ model Assignment {
   consignment      Consignment?    @relation(fields: [consignmentId], references: [id], onDelete: SetNull)
   /**
    * Planin URETILDIGI siparis revizyonu.
-   *
    * Siparis degistiginde bu alan GERIDE KALIR ve arayuz "guncel siparisten
    * farkli" uyarisi gosterir. Otomatik guncellenmez: yola cikmis bir gorevi
    * sessizce degistirmek, sofora haber vermeden isini degistirmektir.
    */
   sourceRevision   Int?
-  notes                String?
-  createdById          String
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  notes            String?
+  createdById      String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   driver           Driver                      @relation(fields: [driverId], references: [id], onDelete: Restrict)
   vehicle          Vehicle                     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
@@ -4156,7 +4156,6 @@ model FuelReconciliation {
 /// Otomasyona giren belgenin turu. Faz 13'te YALNIZCA servis faturasi.
 /**
  * Blob'un HANGI ALT SISTEME ait oldugu — belge TURU degil.
- *
  * Kapali ve kucuk bir kume oldugu icin enum kalabiliyor. Belge turleri
  * (`service_invoice@v1`, `traffic_fine@v1`, ...) buyuyen bir kume oldugu icin
  * BURAYA GIRMEZ; onlar registry ile dogrulanan surumlu anahtarlardir.
@@ -4204,6 +4203,9 @@ model AutomationDocument {
 
   jobs    AutomationJob[]
   intakes DocumentIntake[]
+
+  /// Faz 16 — ham `.eml` / siparis PDF'i bu blob'a dayanir.
+  orderIntakeMessages OrderIntakeMessage[]
 
   /// Kiraci ICINDE tekil: baska bir kiracinin ayni dosyayi yuklemesi
   /// engellenmez ve varligi da sizdirilmaz.
@@ -4604,6 +4606,9 @@ model OrdivanConnector {
   /// Faz 14 — bu tarayicidan gelen belge yuklemeleri.
   documentIntakes DocumentIntake[]
 
+  /// Faz 16 — bu connector'un posta kutusundan cekilen mesajlar.
+  orderIntakeMessages OrderIntakeMessage[]
+
   @@unique([tenantId, displayName])
   @@index([tenantId])
   @@index([tenantId, status])
@@ -4771,6 +4776,26 @@ model AutomationProposal {
   resultServiceRecordId String?        @unique
   resultServiceRecord   ServiceRecord? @relation("ServiceRecordFromProposal", fields: [resultServiceRecordId], references: [id], onDelete: SetNull)
 
+  /**
+   * FAZ 16 — AYNI DESEN, IKI YENI SONUC TURU.
+   * Bir e-posta onerisi EN FAZLA BIR sonuc uretir: ya yeni bir siparis
+   * TASLAGI (`resultTransportOrderId`) ya da mevcut siparise bir
+   * `pending_review` REVIZYON (`resultTransportOrderRevisionId`). Ikisi de
+   * `@unique`: cift tiklama ya da eszamanli iki onay ikinci bir taslak/revizyon
+   * URETEMEZ ve bu, uygulama kontrolunun degil VERITABANININ garantisi.
+   * IPTAL ICIN SONUC ALANI YOK ve bu bilincli: iptal MEVCUT siparisin
+   * durumunu degistirir, yeni bir kayit uretmez. Iptalin izi siparisin
+   * kendi `cancelledAt/cancelledById` alanlarinda ve revizyon gecmisinde durur.
+   */
+  resultTransportOrderId String?         @unique
+  resultTransportOrder   TransportOrder? @relation("TransportOrderFromProposal", fields: [resultTransportOrderId], references: [id], onDelete: SetNull)
+
+  resultTransportOrderRevisionId String?                 @unique
+  resultTransportOrderRevision   TransportOrderRevision? @relation("TransportOrderRevisionFromProposal", fields: [resultTransportOrderRevisionId], references: [id], onDelete: SetNull)
+
+  /// Faz 16 — bu oneriyi tasiyan gelen kutusu incelemesi.
+  orderIntakeReview OrderIntakeReview?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4912,7 +4937,6 @@ model AutomationCorrectionEvent {
 
 /**
  * Belgenin Fleet'e GIRDIGI kanal.
- *
  * Kapali bir kume: kanal eklemek protokol isidir, veri girisi degil. Belge
  * TURLERI aksine buyuyen bir kume oldugu icin enum DEGIL, registry ile
  * dogrulanan surumlu anahtar kullaniyor (bkz. core/document-type-registry.ts).
@@ -4962,11 +4986,9 @@ enum IntakeVehicleMatchStatus {
 
 /**
  * FIZIKSEL YUKLEME (Faz 14).
- *
  * Bir yukleme = bir dosya = bir `AutomationDocument` (blob). Blob Faz 13'ten
  * GENELLESTIRILEREK yeniden kullaniliyor; ikinci bir dosya deposu ya da ayri
  * bir servis-faturasi saklama sistemi KURULMADI.
- *
  * ORIJINAL DEGISMEZ: hash, boyut ve dosyanin kendisi bu kayittan sonra hicbir
  * akista yeniden yazilmaz. Bolme, birlestirme ve yeniden siniflandirma
  * yalnizca mantiksal belgeleri degistirir — dosya KOPYALANMAZ.
@@ -4989,7 +5011,6 @@ model DocumentIntake {
 
   /**
    * Connector yuklemesinin idempotency anahtari.
-   *
    * Tarayici ayni belgeyi aglar koptugunda yeniden gonderir. Anahtar kiraci
    * icinde tekil: ikinci gonderim YENI bir gelen kutusu girdisi ACMAZ.
    */
@@ -5013,11 +5034,13 @@ model DocumentIntake {
 
   documents IntakeDocument[]
 
+  /// Faz 16 — bu yuklemeyi ureten e-posta eki (varsa).
+  orderIntakeAttachments OrderIntakeAttachment[]
+
   /// Kiraci ICINDE tekil. Kiracilar arasinda anahtar CAKISABILIR ve sizmaz.
   @@unique([tenantId, idempotencyKey])
   /**
    * BIR BLOB = BIR GIRDI.
-   *
    * Tekillik uygulamada degil VERITABANINDA: iki istek ayni dosyayi AYNI ANDA
    * yukledigi zaman ikisi de "bu hash yok" gorur ve ikisi de yazmaya calisir.
    * Uygulama kontrolu bu yarisi kaybeder; bu kisit kaybetmez.
@@ -5031,11 +5054,9 @@ model DocumentIntake {
 
 /**
  * MANTIKSAL BELGE = ayni blob + SAYFA ARALIGI (Faz 14).
- *
  * NEDEN AYRI TABLO: taranmis bir yigin, ic ice gecmis birden fazla belge
  * tasiyabilir. Bunlari ayri dosyalara bolmek orijinalin butunlugunu ve
  * hash'ini yok ederdi. Bolme/birlestirme burada olur, DOSYAYA DOKUNULMAZ.
- *
  * AJANIN ILK CIKTISI DEGISMEZ (Faz 13 sozlesmesi): `proposed*` alanlari
  * yazildiktan sonra HICBIR akista guncellenmez. Insanin karari `typeKey`,
  * `pageFrom/pageTo` ve `vehicleId` alanlarinda durur. Ikisi ayni alanda
@@ -5079,8 +5100,8 @@ model IntakeDocument {
   /**
    * Arac SUNUCUDA cozulur: tam VIN → tam plaka. Ajan bu alani DOLDURAMAZ.
    */
-  vehicleId         String?
-  vehicle           Vehicle?                  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleId          String?
+  vehicle            Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   vehicleMatchStatus IntakeVehicleMatchStatus @default(unknown)
 
   /// Yakit fisi icin ZORUNLU: `FleetFuelEntry.driverId` NOT NULL. Belgeden
@@ -5091,11 +5112,11 @@ model IntakeDocument {
   assignedUserId String?
   assignedUser   User?   @relation("IntakeDocumentAssignedTo", fields: [assignedUserId], references: [id], onDelete: SetNull)
 
-  decidedById String?
-  decidedBy   User?     @relation("IntakeDocumentDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  decidedAt   DateTime?
+  decidedById        String?
+  decidedBy          User?     @relation("IntakeDocumentDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt          DateTime?
   /// Red sebebi — reddederken ZORUNLU, kullaniciya gosterilir.
-  rejectionReason String?
+  rejectionReason    String?
   /// `needs_domain_review` sebebi — raporda gorunur.
   domainReviewReason String?
 
@@ -5116,16 +5137,13 @@ model IntakeDocument {
 
 /**
  * YONLENDIRME — EXACTLY-ONCE (Faz 14).
- *
  * `intakeDocumentId` TEKIL: bir mantiksal belge EN FAZLA BIR canonical kayit
  * uretebilir. Bu kural uygulamada degil VERITABANINDA, cunku cift tiklama ve
  * eszamanli iki incelemeci uygulama kontrolunu gecebilir — Faz 13'teki
  * `AutomationProposal.resultServiceRecordId` ile ayni desen.
- *
  * `[tenantId, entityType, entityId]` de TEKIL: ayni canonical kayda iki farkli
  * belge baglanamaz. Ikinci bir baglanti, sessizce olusmus bir cift kaydin en
  * dogrudan isaretidir.
- *
  * PARALEL MODEL YOK: `entityType/entityId` repodaki MEVCUT kayitlari gosterir
  * (`ServiceRecord`, `FleetFuelEntry`, `Document`, `Fine`); bu tablo yalnizca
  * izlenebilirlik bagi ve tekillik tasiyicisidir.
@@ -5183,18 +5201,20 @@ enum TransportOrderBillingMode {
 
 /**
  * Siparişin nereden geldigi.
- *
- * Faz 15'te tek deger: `manual`. Faz 16'da e-posta/ajan kaynaklari eklenecek —
- * ama o kaynaklar da siparişi DOGRUDAN guncelleyemeyecek, yalnizca
- * `pending_review` bir revizyon onerebilecek.
+ * `manual`: insan siparisi elle acti.
+ * `email_agent` (Faz 16): kayit bir e-posta/PDF onerisinin INSAN ONAYINDAN
+ * gecmis sonucudur. Kaynagin kendisi hicbir sey yazmaz — bu deger yalnizca
+ * "bu satirin arkasinda bir ajan onerisi var" der ve denetimde onerinin
+ * kendisine gidilmesini saglar. Onaylanmis bir siparisi bu kaynak da
+ * DOGRUDAN guncelleyemez; yalnizca `pending_review` bir revizyon onerir.
  */
 enum TransportOrderSource {
   manual
+  email_agent
 }
 
 /**
  * Tehlikeli madde durumu.
- *
  * `unknown` HICBIR YERDE guvenli ya da uygun sayilmaz: "bilmiyorum" ile "hayir"
  * arasindaki fark, yanlis araca yuklenen bir ADR sevkiyati kadar buyuk.
  */
@@ -5225,11 +5245,9 @@ enum TransportOrderCancellationCategory {
 
 /**
  * MUSTERIDEN GELEN TICARI SIPARIS (Faz 15).
- *
  * `TransportRequest` ILE KARISTIRILMAZ: o bir SOFOR talebidir (iç planlama),
  * bu bir MUSTERI siparisi. Ikinci bir siparis modeli kurulmadi; ikisi farkli
  * gercekleri temsil ediyor (bkz. docs/ordivan-domain-mapping.md).
- *
  * OPERASYONA `Assignment` UZERINDEN BAGLANIR. `Tour` ile dogrudan bagi YOKTUR
  * ve `TourStop.transportOrderId` BILINCLI OLARAK EKLENMEDI: siparis-tur
  * iliskisi `Assignment` uzerinden zaten turetilebiliyor ve ikinci bir yol
@@ -5246,20 +5264,18 @@ model TransportOrder {
   company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
 
   /// Kiraci icinde benzersiz siparis numarasi.
-  orderNumber String
+  orderNumber       String
   /// Musterinin KENDI referansi. Bizim numaramiz degil; musteriyle yazisirken
   /// kullanilan sey bu.
   externalReference String?
 
   /**
    * DUPLICATE TASIYICI.
-   *
    * `{companyId}:{externalReference}` — yalnizca referans doluysa ve siparis
    * IPTAL EDILMEMISSE yaziliyor; aksi halde `null`. Tekillik uygulamada degil
    * VERITABANINDA: ayni referansi iki istek ayni anda gonderdiginde uygulama
    * kontrolu yarisi kaybeder. Repodaki `fuelingIntentSettledKey` ile ayni
    * desen.
-   *
    * Iptal edilen siparis referansi SERBEST BIRAKIR: musteri ayni referansla
    * yeniden siparis verebilmeli.
    */
@@ -5268,14 +5284,14 @@ model TransportOrder {
   orderDate DateTime
 
   /// Para birimi ZORUNLU ve EUR VARSAYILMAZ.
-  currency String
+  currency          String
   /// Sozlesme geliri. API'de STRING olarak doner — float yuvarlamasi bir
   /// sozlesme tutarini sessizce degistirmemeli.
   contractedRevenue Decimal? @db.Decimal(12, 2)
 
   billingMode TransportOrderBillingMode @default(on_order_completion)
-  status      TransportOrderStatus     @default(draft)
-  source      TransportOrderSource     @default(manual)
+  status      TransportOrderStatus      @default(draft)
+  source      TransportOrderSource      @default(manual)
 
   /// Guncel revizyon numarasi. `TransportOrderRevision` ile birlikte artar.
   currentRevision Int @default(1)
@@ -5289,7 +5305,7 @@ model TransportOrder {
   /// --- Iptal. Kayit SILINMEZ. ---
   cancelledAt          DateTime?
   cancelledById        String?
-  cancelledBy          User?                              @relation("TransportOrderCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledBy          User?                               @relation("TransportOrderCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   cancellationCategory TransportOrderCancellationCategory?
   cancellationNote     String?
 
@@ -5304,6 +5320,12 @@ model TransportOrder {
   assignments  Assignment[]
   revisions    TransportOrderRevision[]
 
+  /// Faz 16 — bu siparisi ureten oneri (varsa) ve ona isaret eden incelemeler.
+  fromProposal                  AutomationProposal? @relation("TransportOrderFromProposal")
+  matchedOrderIntakeReviews     OrderIntakeReview[] @relation("OrderIntakeReviewMatchedOrder")
+  selectedOrderIntakeReviews    OrderIntakeReview[] @relation("OrderIntakeReviewSelectedOrder")
+  duplicateOfOrderIntakeReviews OrderIntakeReview[] @relation("OrderIntakeReviewDuplicateOf")
+
   @@unique([tenantId, orderNumber])
   /// Kiraci ICINDE tekil. Kiracilar arasinda ayni referans CAKISABILIR ve sizmaz.
   @@unique([tenantId, duplicateKey])
@@ -5315,7 +5337,6 @@ model TransportOrder {
 
 /**
  * SIPARISIN TASIMA KALEMI (Faz 15).
- *
  * Bir siparis bir ya da birden fazla kalem icerir. Bolunmus siparis birden
  * fazla `Assignment` uretir; kalem bunun ticari karsiligi.
  */
@@ -5347,8 +5368,8 @@ model Consignment {
   cargoDescription String
   /// Miktar ve birim. Birim SERBEST metin degil ama repoda canonical bir
   /// birim enum'u yok; kisa metin olarak tutuluyor.
-  quantity Decimal? @db.Decimal(12, 3)
-  unit     String?
+  quantity         Decimal? @db.Decimal(12, 3)
+  unit             String?
 
   weightKg    Decimal? @db.Decimal(12, 2)
   volumeM3    Decimal? @db.Decimal(12, 3)
@@ -5361,7 +5382,7 @@ model Consignment {
   temperatureMinC Decimal? @db.Decimal(5, 2)
   temperatureMaxC Decimal? @db.Decimal(5, 2)
 
-  shipperReference  String?
+  shipperReference   String?
   consigneeReference String?
 
   createdAt DateTime @default(now())
@@ -5377,15 +5398,12 @@ model Consignment {
 
 /**
  * SIPARIS REVIZYONU — APPEND-ONLY (Faz 15).
- *
  * ESKI REVIZYON HICBIR ZAMAN YENIDEN YAZILMAZ. Her olusturma/degisiklik
  * degismez bir anlik goruntu birakir; "musteri ne zaman ne istedi" sorusunun
  * cevabi bu tabloda durur.
- *
  * ONAYLANMIS SIPARISTE degisiklik once `pending_review` olur ve ana kayit
  * DEGISMEZ. Kullanici eski/yeni degerleri karsilastirir; onay uygulanir, red
  * ana kaydi degistirmez.
- *
  * AJAN CIKTISI (Faz 16) BU KAPIDAN GECER: doğrudan siparişi guncelleyemez,
  * yalnizca `pending_review` bir revizyon onerebilir.
  */
@@ -5426,9 +5444,326 @@ model TransportOrderRevision {
   decidedAt       DateTime?
   rejectionReason String?
 
+  /// Faz 16 — bu revizyonu ureten oneri (varsa).
+  fromProposal AutomationProposal? @relation("TransportOrderRevisionFromProposal")
+
   @@unique([transportOrderId, revisionNumber])
   @@index([tenantId])
   @@index([transportOrderId, createdAt])
   @@index([tenantId, status])
   @@map("transport_order_revisions")
+}
+
+// ============================================================================
+// FAZ 16 — E-POSTA / PDF SIPARIS AJANI
+// ============================================================================
+
+/**
+ * MESAJIN FLEET'E GIRDIGI KANAL.
+ * Kapali bir kume — kanal eklemek protokol isidir, veri girisi degil. Gelen
+ * mesajin KENDISI bu alani secemez: kanal, istegin girdigi UCTAN belirlenir.
+ * Bir e-postanin govdesine "connector_mailbox" yazmak hicbir sey degistirmez.
+ */
+enum OrderIntakeChannel {
+  /// Web arayuzunden `.eml` yuklemesi.
+  web_eml
+  /// Web arayuzunden "tasima emri" olarak PDF yuklemesi (zarf yok).
+  web_pdf
+  /// Faz 12 connector protokolu uzerinden mock posta kutusu.
+  connector_mailbox
+}
+
+/// Gelen mesajin yasam dongusu.
+enum OrderIntakeMessageStatus {
+  /// Cikarim suruyor.
+  extracting
+  /// Insan karari bekleniyor.
+  needs_review
+  /// Karar verildi (onay ya da red).
+  settled
+  /// Guvenlik/format kontrolunden gecemedi. Kayit SILINMEZ.
+  rejected
+  /// Isleme alinamadi — teknik hata sinifi `failureClass`ta.
+  failed
+}
+
+/**
+ * MESAJIN NIYETI.
+ * `unknown` bir HATA DEGIL, gecerli bir sonuctur ve `new_order`a DUSMEZ.
+ * "Ne istedigini anlamadim" ile "yeni siparis istiyor" arasindaki fark, bir
+ * musteri adina sessizce acilmis bir siparis kadar buyuktur.
+ */
+enum OrderIntakeIntent {
+  new_order
+  amendment
+  cancellation
+  unknown
+}
+
+/**
+ * MUSTERI ESLESTIRMESININ SONUCU — SUNUCUDA belirlenir.
+ * SIRALAMA ONEMLI: musteri numarasi → tam VAT ID → kayitli tam iletisim
+ * e-postasi. Bunlarin disinda KESIN ESLESME YOKTUR.
+ * `ambiguous`: birden fazla aday var — kullanici secmeden hicbir islem
+ * yapilamaz. `unknown`: aday yok. IKISI DE "eslesti" SAYILMAZ.
+ * E-POSTA DOMAINI BU LISTEDE YOK ve bilincli: domain yalnizca ADAY uretir.
+ * `@musteri.de` adresinden yazan herkesin o musteri adina siparis
+ * degistirebilmesi, gonderen adresini taklit etmeyi yetki almaya cevirirdi.
+ */
+enum OrderIntakeCompanyMatchStatus {
+  customer_number
+  vat_id
+  contact_email
+  ambiguous
+  unknown
+}
+
+/**
+ * MEVCUT SIPARIS ESLESTIRMESININ SONUCU — SUNUCUDA belirlenir.
+ * `ambiguous`/`unknown` durumunda kullanici siparisi ELLE secer. E-posta
+ * thread'i ya da `In-Reply-To` basligi TEK BASINA siparis secmez: bir
+ * yanit zinciri, hangi siparisin degistirilecegine dair KANIT degildir.
+ */
+enum OrderIntakeOrderMatchStatus {
+  external_reference
+  order_number
+  ambiguous
+  unknown
+}
+
+/// Gelen kutusu incelemesinin durumu.
+enum OrderIntakeReviewStatus {
+  open
+  approved
+  rejected
+  /// Suresi doldu. Sessizce onaylanmis SAYILMAZ.
+  expired
+}
+
+/**
+ * MESAJ FINANSAL VERI TASIYOR MU.
+ * UC DURUMLU ve `unknown` GUVENLI SAYILMAZ: bilinmeyen bir belge, icinde
+ * fiyat OLAN bir belge gibi korunur. Tersi — "emin degilim, o halde
+ * gosterebilirim" — maskelemenin tamamini anlamsiz kilar, cunku saldirgan
+ * yalnizca tespiti sasirtmaya calisir.
+ */
+enum OrderIntakeFinancialContent {
+  yes
+  no
+  unknown
+}
+
+/**
+ * GELEN MESAJ (Faz 16).
+ * ZARFIN TAMAMI GUVENSIZ VERIDIR: `subject`, `fromAddress`, `fromDisplayName`,
+ * `externalMessageId`, govde ve ekler. Hicbiri talimat olarak yorumlanmaz,
+ * hicbiri yetki uretmez. `fromAddress` bir MUSTERIYE ESIT DEGILDIR — eslesme
+ * sunucuda, `OrderIntakeReview` uzerinde deterministik kurallarla yapilir.
+ * BLOB YENIDEN KULLANILIYOR: ham `.eml` ya da PDF, Faz 13'ten genellestirilen
+ * `AutomationDocument` icinde durur. Ikinci bir dosya deposu KURULMADI.
+ * EKLER FAZ 14'TEN GECER: her ek `DocumentIntake` olarak kaydedilir ve
+ * magic-byte / boyut / sayfa kontrollerini oradan alir. Faz 16 kendi dosya
+ * dogrulamasini YAZMAZ.
+ */
+model OrderIntakeMessage {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Ham `.eml` ya da PDF. Degismez.
+  artifactId String
+  artifact   AutomationDocument @relation(fields: [artifactId], references: [id], onDelete: Restrict)
+
+  channel OrderIntakeChannel
+  status  OrderIntakeMessageStatus @default(extracting)
+
+  // --- ZARF. HEPSI GUVENSIZ VERI, HICBIRI YETKI URETMEZ. ---
+  /// Mesajin dustugu posta kutusu — connector kanalinda dolu.
+  mailbox           String?
+  /// RFC 5322 `Message-ID`. Gonderen serbestce yazabilir; yalnizca
+  /// idempotency anahtarinin BIR parcasidir, kimlik degildir.
+  externalMessageId String?
+  /// Yanit zinciri baglantisi. SIPARIS SECMEZ — yalnizca aday uretir.
+  inReplyTo         String?
+  fromAddress       String?
+  fromDisplayName   String?
+  subject           String?
+  sentAt            DateTime?
+
+  /// Ham baytlarin SHA-256'si.
+  contentHash String
+
+  /**
+   * IDEMPOTENCY ANAHTARI — SUNUCUDA uretilir.
+   * `mailbox` + `externalMessageId` + `contentHash` uzerinden turetiliyor.
+   * Istemciden ALINMAZ: gonderenin sectigi bir anahtar, ayni mesaji farkli
+   * anahtarlarla tekrar tekrar yollayarak ikinci bir siparis actirmanin yolu
+   * olurdu.
+   * Tekillik uygulamada degil VERITABANINDA: ayni mesaj es zamanli iki kez
+   * dustugunde ikisi de "bu anahtar yok" gorur. Uygulama kontrolu bu yarisi
+   * kaybeder, kisit kaybetmez (Faz 14 `DocumentIntake` ile ayni desen).
+   */
+  dedupeKey String
+
+  /**
+   * SANITIZE EDILMIS govde.
+   * `bodyHtml` script, uzak gorsel/tracker ve otomatik link acma TEMIZLENMIS
+   * halidir; ham HTML hicbir zaman saklanmaz ve doner. `bodyText` duz metin
+   * karsiligi. Ikisi de ICERIK OLARAK hala guvensizdir — yalnizca RENDER
+   * etmesi guvenlidir.
+   */
+  bodyText String?
+  bodyHtml String?
+
+  attachmentCount Int @default(0)
+
+  /// `unknown` GUVENLI SAYILMAZ (bkz. enum).
+  containsFinancialData OrderIntakeFinancialContent @default(unknown)
+
+  /// Connector kanalinda tarayici/posta connector'u, aksi halde `null`.
+  connectorId String?
+  connector   OrdivanConnector? @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+
+  /// Web yuklemesinde kullanici, connector kanalinda `null`.
+  uploadedById String?
+  uploadedBy   User?   @relation("OrderIntakeMessageUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  /// Cikarimi ureten mock surumu — duzeltme analizinin karsilastirma ekseni.
+  extractorVersion String?
+  /// Teknik hata SINIFI, saglayici mesaji degil.
+  failureClass     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments OrderIntakeAttachment[]
+  review      OrderIntakeReview?
+
+  /// Kiraci ICINDE tekil. Kiracilar arasinda anahtar CAKISABILIR ve sizmaz.
+  @@unique([tenantId, dedupeKey])
+  @@index([tenantId])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, channel, createdAt])
+  @@map("order_intake_messages")
+}
+
+/**
+ * MESAJ EKI (Faz 16).
+ * PARALEL DOSYA SISTEMI YOK: kabul edilen her ek bir Faz 14 `DocumentIntake`
+ * olur ve butun magic-byte / boyut / sayfa / sifreli-PDF kontrollerini oradan
+ * alir. Bu tablo yalnizca "hangi ek hangi mesajdan geldi" bagini ve
+ * REDDEDILEN eklerin sebebini tasir.
+ * REDDEDILEN EK DE KAYDEDILIR: ekin sessizce yok olmasi, incelemecinin
+ * "gonderilen belge buydu" sanmasina yol acar. Reddi gorunur kilmak, eki
+ * gizlemekten durust.
+ */
+model OrderIntakeAttachment {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  messageId String
+  message   OrderIntakeMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// Kabul edilen ekin Faz 14 yuklemesi. Reddedilen ek icin `null`.
+  intakeId String?
+  intake   DocumentIntake? @relation(fields: [intakeId], references: [id], onDelete: SetNull)
+
+  /// GUVENSIZ dosya adi — yol ayraclarindan arindirilmis hali saklanir.
+  fileName         String
+  /// Gonderenin BILDIRDIGI tur. Gercek tur ilk baytlardan okunur.
+  declaredMimeType String?
+  byteSize         Int
+  contentHash      String
+
+  /// `intake_file_*` reddi. `null` = kabul edildi.
+  rejectionCode String?
+
+  createdAt DateTime @default(now())
+
+  /// Ayni mesajta birebir ayni ek iki satir ACMAZ.
+  @@unique([messageId, contentHash])
+  @@index([tenantId])
+  @@index([messageId])
+  @@map("order_intake_attachments")
+}
+
+/**
+ * GELEN KUTUSU INCELEMESI (Faz 16).
+ * NEDEN MESAJDAN AYRI: mesaj ZARFTIR (degismez gercek), bu kayit KARARDIR
+ * (niyet, eslestirme, insanin secimi). Ikisini tek satirda birlestirmek,
+ * "model ne onerdi" ile "insan ne secti" sorularini ayni alandan cevaplamak
+ * demekti — ve o alan bir kez yazildiktan sonra ikisinden hangisi oldugu
+ * belirsizlesirdi. Faz 14'teki `DocumentIntake` / `IntakeDocument` ayrimiyla
+ * ayni gerekce.
+ * AJANIN CIKTISI BURADA DEGIL: alanlar, guven skorlari ve kanit DEGISMEZ
+ * `AutomationProposal` icinde durur. Bu kayit yalnizca ona isaret eder.
+ * Insanin duzeltmeleri `AutomationCorrectionEvent` olarak yazilir.
+ * BU KAYIT HICBIR SEYI UYGULAMAZ. Onaylanmis bir siparisi degistirme ya da
+ * iptal etme yetkisi burada YOKTUR; sonuc her zaman Faz 15 servisinden gecer.
+ */
+model OrderIntakeReview {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Bir mesaj = bir inceleme.
+  messageId String             @unique
+  message   OrderIntakeMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  /// Ajanin DEGISMEZ ciktisi.
+  proposalId String             @unique
+  proposal   AutomationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  // --- AJANIN ONERISI — YAZILDIKTAN SONRA DEGISMEZ ---
+  proposedIntent           OrderIntakeIntent
+  proposedIntentConfidence Decimal?          @db.Decimal(4, 3)
+
+  // --- SUNUCUNUN DETERMINISTIK ESLESTIRMESI — AJAN DOLDURAMAZ ---
+  matchedCompanyId   String?
+  matchedCompany     Company?                      @relation("OrderIntakeReviewMatchedCompany", fields: [matchedCompanyId], references: [id], onDelete: SetNull)
+  companyMatchStatus OrderIntakeCompanyMatchStatus @default(unknown)
+  /// ADAYLAR (ornegin e-posta domaini). KESIN ESLESME DEGIL — kullanici secer.
+  companyCandidates  Json?
+
+  matchedOrderId   String?
+  matchedOrder     TransportOrder?             @relation("OrderIntakeReviewMatchedOrder", fields: [matchedOrderId], references: [id], onDelete: SetNull)
+  orderMatchStatus OrderIntakeOrderMatchStatus @default(unknown)
+  orderCandidates  Json?
+
+  /**
+   * DUPLICATE ISARETI.
+   * Ayni musteri + ayni dis referans zaten varsa, "yeni siparis" gorunen mesaj
+   * SESSIZCE ikinci bir siparis ACMAZ; burada isaretlenir ve incelemeye gider.
+   */
+  possibleDuplicate  Boolean         @default(false)
+  duplicateOfOrderId String?
+  duplicateOfOrder   TransportOrder? @relation("OrderIntakeReviewDuplicateOf", fields: [duplicateOfOrderId], references: [id], onDelete: SetNull)
+
+  // --- INSANIN KARARI ---
+  status         OrderIntakeReviewStatus @default(open)
+  /// Insanin onayladigi niyet. Ajanin onerisinden FARKLI olabilir.
+  resolvedIntent OrderIntakeIntent?
+
+  selectedCompanyId String?
+  selectedCompany   Company? @relation("OrderIntakeReviewSelectedCompany", fields: [selectedCompanyId], references: [id], onDelete: SetNull)
+
+  selectedOrderId String?
+  selectedOrder   TransportOrder? @relation("OrderIntakeReviewSelectedOrder", fields: [selectedOrderId], references: [id], onDelete: SetNull)
+
+  decidedById     String?
+  decidedBy       User?     @relation("OrderIntakeReviewDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt       DateTime?
+  /// Red sebebi — reddederken ZORUNLU.
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, proposedIntent, createdAt])
+  @@index([matchedCompanyId])
+  @@index([matchedOrderId])
+  @@map("order_intake_reviews")
 }

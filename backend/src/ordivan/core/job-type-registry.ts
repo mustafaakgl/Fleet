@@ -19,6 +19,8 @@ export const JOB_TYPES = [
   'document.mock_classification',
   /** Faz 13 — servis faturasi cikarimi. */
   'document.service_invoice.extract',
+  /** Faz 16 — e-posta/PDF'ten tasima emri alani cikarimi. */
+  'transport_order.extract',
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
@@ -27,6 +29,14 @@ export const PROPOSAL_TYPES = [
   'document.classification',
   /** Faz 13 — servis kaydi TASLAGI. Bir ServiceRecord DEGILDIR. */
   'service_invoice.draft',
+  /**
+   * Faz 16 — siparis alani cikarimi.
+   *
+   * ADI BILINCLI OLARAK `draft` DEGIL: bu ciktinin kendisi bir siparis taslagi
+   * bile degildir, yalnizca OKUNAN ALANLARDIR. Canonical `TransportOrder`
+   * taslagi insan onayindan sonra Faz 15 servisinde olusur.
+   */
+  'transport_order.extraction',
 ] as const;
 export type ProposalType = (typeof PROPOSAL_TYPES)[number];
 
@@ -108,6 +118,48 @@ export const JOB_TYPE_REGISTRY: Record<JobType, JobTypeDefinition> = {
     // kurallarla yapiliyor (bkz. vehicle-match.ts).
     toolset: [],
   },
+  'transport_order.extract': {
+    jobType: 'transport_order.extract',
+    /**
+     * SURUMLU YETENEK.
+     *
+     * `@v1` anahtarin ICINDE: cikarim sozlesmesi degistiginde `@v2` acilir ve
+     * eski connector'lar SESSIZCE yeni davranisa gecmez. Ayri bir surum alani
+     * unutulabilir, anahtar unutulamaz (bkz. `document.intake.upload@v1`).
+     */
+    requiredCapability: 'transport_order.extract@v1',
+    schemaVersions: {
+      1: {
+        /**
+         * MESAJ KIMLIGI — ICERIGI DEGIL.
+         *
+         * E-posta govdesi, konu ve PDF metni is kaydina GIRMEZ. Kuyruk
+         * kaydinda duran her sey loglara, denetime ve hata raporlarina
+         * sizabilir; guvensiz metnin oraya kopyalanmasi icin hicbir sebep yok.
+         * Worker icerigi ayri, yetkilendirilmis bir uctan alir.
+         */
+        messageId: { type: 'string', required: true, maxLength: 64 },
+        /** Kabul edilen eklerin Faz 14 yukleme kimlikleri. */
+        attachmentIntakeIds: {
+          type: 'array',
+          required: false,
+          maxItems: 20,
+          items: { id: { type: 'string', required: true, maxLength: 64 } },
+        },
+        contentLength: { type: 'integer', required: false, min: 0, max: 50_000_000 },
+      },
+    },
+    allowedProposalTypes: ['transport_order.extraction'],
+    /**
+     * ARAC YOK.
+     *
+     * Musteri ve mevcut siparis eslestirmesi SUNUCUDA, deterministik
+     * kurallarla yapiliyor (bkz. order-intake-match.ts). Ajana bir "musteri
+     * ara" araci vermek, gonderen adresini kesin eslesmeye cevirmenin ve
+     * kiraci sinirini ajanin karar verdigi bir seye donusturmenin yoluydu.
+     */
+    toolset: [],
+  },
 };
 
 /** Oneri govdelerinin semasi — surum bazinda. */
@@ -149,6 +201,130 @@ export const PROPOSAL_SCHEMAS: Record<ProposalType, Record<number, ObjectSpec>> 
           quantity: { type: 'number', required: false, min: 0, max: 100_000 },
           unitPrice: { type: 'number', required: false, min: 0, max: 1_000_000 },
           totalPrice: { type: 'number', required: false, min: 0, max: 1_000_000 },
+        },
+      },
+    },
+  },
+  /**
+   * FAZ 16 — CIKARIM SOZLESMESI.
+   *
+   * BURADA OLMAYAN ALAN YOKTUR: `validateObject` beklenmeyen alani yok
+   * saymaz, REDDEDER. Bu yuzden asagidaki liste ayni zamanda bir YASAK
+   * LISTESIDIR — sayilmayan her sey otomatik olarak disaridadir:
+   *
+   *   - `latitude`/`longitude` ve her turlu koordinat: adres metni bir
+   *     konuma ajan tarafindan cevrilemez; geocoding sunucunun isi.
+   *   - `companyId`, `vehicleId`, `driverId`, `assignmentId`, `consignmentId`:
+   *     Fleet'in ic kimlikleri. Ajanin bir kimlik YAZABILMESI, e-posta
+   *     govdesine kimlik gomen birine baska bir kiracinin kaydini
+   *     gosterebilirdi. Eslestirme SUNUCUDA yapilir.
+   *   - `status`, `confirmed`, `approved`, `cancelled`: durum ve onay sonucu.
+   *     Bir e-posta kendi kendini onaylatamaz.
+   *   - `orderNumber`: BIZIM numaramiz. Musteri kendi referansini yazar
+   *     (`externalReference`); bizim numaramizi ona yazdirmak, var olan bir
+   *     siparisi isaret etmesine izin vermek olurdu.
+   *
+   * UYDURMA YOK: eksik `timezone`, `currency`, `adr` ve tarih icin alan BOS
+   * KALIR. Hicbiri varsayilana dusmez — `unknown` ile `verified` ayni sey
+   * degildir ve makul bir tahmin, kanit degildir.
+   */
+  'transport_order.extraction': {
+    1: {
+      /**
+       * NIYET.
+       *
+       * ZORUNLU ve `unknown` GECERLI BIR CEVAP: modelin "anlamadim"
+       * diyebilmesi gerekiyor. Alan opsiyonel olsaydi, bos birakilan her mesaj
+       * sessizce bir varsayilana duserdi — ve o varsayilan ne olursa olsun
+       * yanlis olurdu.
+       */
+      intent: {
+        type: 'enum',
+        required: true,
+        values: ['new_order', 'amendment', 'cancellation', 'unknown'],
+      },
+
+      /** --- MUSTERI IPUCLARI. AJAN MUSTERI SECMEZ; bunlar yalnizca aday. --- */
+      customerName:   { type: 'string', required: false, maxLength: 200 },
+      /** Musterinin BIZDEKI numarasi (DATEV borclu numarasi metin olarak). */
+      customerNumber: { type: 'string', required: false, maxLength: 40 },
+      vatId:          { type: 'string', required: false, maxLength: 30 },
+      contactEmail:   { type: 'string', required: false, maxLength: 254 },
+      contactPhone:   { type: 'string', required: false, maxLength: 40 },
+      contactName:    { type: 'string', required: false, maxLength: 120 },
+
+      /** --- Referanslar --- */
+      /// Musterinin KENDI referansi. Bizim siparis numaramiz DEGIL.
+      externalReference: { type: 'string', required: false, maxLength: 80 },
+      /// ISO 'YYYY-MM-DD'. Okunamadiysa BOS KALIR.
+      orderDate:         { type: 'string', required: false, maxLength: 10 },
+
+      /** --- Finans. EUR VARSAYILMAZ. --- */
+      revenueAmount: { type: 'number', required: false, min: 0, max: 10_000_000 },
+      /// ISO 4217. Belgede yoksa BOS — para birimi tahmin edilmez.
+      currency:      { type: 'string', required: false, maxLength: 3 },
+      billingMode:   {
+        type: 'enum',
+        required: false,
+        values: ['on_order_completion', 'per_delivery'],
+      },
+
+      specialInstructions: { type: 'string', required: false, maxLength: 2_000 },
+
+      /**
+       * --- KALEMLER ---
+       *
+       * BIRDEN FAZLA OLABILIR: tek kaleme zorlamak, iki bosaltma noktali bir
+       * siparisi sessizce tek noktaya indirirdi.
+       */
+      consignments: {
+        type: 'array',
+        required: false,
+        maxItems: 20,
+        items: {
+          /** Adres METNI. Koordinat YOK — bkz. sozlesme basligi. */
+          pickupAddress:   { type: 'string', required: false, maxLength: 300 },
+          deliveryAddress: { type: 'string', required: false, maxLength: 300 },
+
+          /**
+           * ZAMAN PENCERESI: yerel 'YYYY-MM-DDTHH:mm', ZAMAN DILIMSIZ.
+           *
+           * NEDEN UTC DEGIL: guvensiz metinden okunan bir saati UTC'ye
+           * cevirmek, bilinmeyen bir zaman dilimini VARSAYMAK demektir. Saat
+           * oldugu gibi tasinir; donusum yalnizca `timezone` BILINIYORSA ve
+           * sunucuda yapilir.
+           */
+          pickupWindowStart:   { type: 'string', required: false, maxLength: 16 },
+          pickupWindowEnd:     { type: 'string', required: false, maxLength: 16 },
+          deliveryWindowStart: { type: 'string', required: false, maxLength: 16 },
+          deliveryWindowEnd:   { type: 'string', required: false, maxLength: 16 },
+          /// IANA adi (ornegin 'Europe/Berlin'). Belgede yoksa BOS KALIR.
+          timezone:            { type: 'string', required: false, maxLength: 64 },
+
+          cargoDescription: { type: 'string', required: false, maxLength: 500 },
+          quantity:         { type: 'number', required: false, min: 0, max: 1_000_000 },
+          /// Serbest kisa metin: repoda canonical birim enum'u YOK.
+          unit:             { type: 'string', required: false, maxLength: 20 },
+
+          weightKg:    { type: 'number', required: false, min: 0, max: 1_000_000 },
+          volumeM3:    { type: 'number', required: false, min: 0, max: 100_000 },
+          palletCount: { type: 'integer', required: false, min: 0, max: 10_000 },
+
+          /**
+           * ADR ZORUNLU ve `unknown` GECERLI.
+           *
+           * Alani opsiyonel yapsaydik, tehlikeli madde tasiyan bir siparis
+           * "belirtilmemis" diye sessizce `no` gibi islem gorebilirdi. Modeli
+           * ACIKCA soylemeye zorluyoruz; "bilmiyorum" durust bir cevaptir,
+           * bos birakmak degil.
+           */
+          adr: { type: 'enum', required: true, values: ['yes', 'no', 'unknown'] },
+
+          temperatureMinC: { type: 'number', required: false, min: -80, max: 80 },
+          temperatureMaxC: { type: 'number', required: false, min: -80, max: 80 },
+
+          shipperReference:   { type: 'string', required: false, maxLength: 80 },
+          consigneeReference: { type: 'string', required: false, maxLength: 80 },
         },
       },
     },

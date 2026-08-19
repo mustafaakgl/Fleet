@@ -52,6 +52,15 @@ const DESTINATION_ENTITY: Record<DocumentDestination, string> = {
   'fleet.fuel_entry_review': 'FleetFuelEntry',
   'vehicle.document': 'Document',
   'fine.record': 'Fine',
+  /**
+   * Faz 16 — YONLENDIRME BIR SIPARIS URETMEZ.
+   *
+   * Olusan kayit `OrderIntakeReview`: bir INCELEME. Canonical `TransportOrder`
+   * taslagi ancak insan onayindan sonra Faz 15 servisinde acilir. Buraya
+   * `TransportOrder` yazmak, belgeyi yonlendirmeyi siparis acmakla ayni sey
+   * gostermek olurdu.
+   */
+  'ordivan.transport_order': 'OrderIntakeReview',
 };
 
 /**
@@ -67,6 +76,12 @@ const HAS_OWN_REVIEW: Record<DocumentDestination, boolean> = {
   'fleet.fuel_entry_review': true,
   'vehicle.document': false,
   'fine.record': false,
+  /**
+   * Faz 16'nin KENDI inceleme dongusu var (gelen kutusu onayi + operasyonel /
+   * finansal gorevler). Gelen kutusundaki yonlendirme o incelemenin YERINE
+   * GECMEZ; yalnizca onu baslatir.
+   */
+  'ordivan.transport_order': true,
 };
 
 export interface RoutingContext {

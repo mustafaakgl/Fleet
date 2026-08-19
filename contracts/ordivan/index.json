@@ -37,6 +37,17 @@
         "service_invoice.draft"
       ],
       "toolset": []
+    },
+    {
+      "jobType": "transport_order.extract",
+      "requiredCapability": "transport_order.extract@v1",
+      "schemaVersions": [
+        1
+      ],
+      "allowedProposalTypes": [
+        "transport_order.extraction"
+      ],
+      "toolset": []
     }
   ],
   "proposalTypes": [
@@ -54,6 +65,12 @@
     },
     {
       "proposalType": "service_invoice.draft",
+      "schemaVersions": [
+        1
+      ]
+    },
+    {
+      "proposalType": "transport_order.extraction",
       "schemaVersions": [
         1
       ]

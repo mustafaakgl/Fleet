@@ -92,11 +92,31 @@ describe('Belge turu registry — surumlu anahtar, enum degil', () => {
     }
   });
 
-  it('bu fazda CMR/POD ve surucu saglik belgesi YOK', () => {
+  it('CMR/POD ve surucu saglik belgesi HALA kapsam disi', () => {
     const families = DOCUMENT_TYPE_KEYS.map((key) => DOCUMENT_TYPE_REGISTRY[key].family);
-    for (const forbidden of ['cmr', 'pod', 'transport_order', 'driver_health']) {
+    // `transport_order` FAZ 16'DA bilincli olarak eklendi ve bu listeden
+    // cikarildi; asagidaki test onun ACIK bir karar oldugunu kayda geciriyor.
+    // Digerleri kapsam disi kalmaya devam ediyor.
+    for (const forbidden of ['cmr', 'pod', 'driver_health']) {
       assert.ok(!families.includes(forbidden), `${forbidden} kapsama girmis`);
     }
+  });
+
+  /**
+   * FAZ 16 SINIRI.
+   *
+   * Tasima emri registry'ye girdi ama BIR SIPARIS URETMIYOR: hedefi bir
+   * INCELEME. Bu test, ileride birinin hedefi dogrudan `TransportOrder`a
+   * cevirmesini yakalar — o degisiklik, bir e-postanin insan onayi olmadan
+   * siparis acmasi demek olurdu.
+   */
+  it('tasima emri kapsamda ama hedefi bir INCELEME — siparis DEGIL', () => {
+    const definition = DOCUMENT_TYPE_REGISTRY['transport_order@v1'];
+    assert.equal(definition.destination, 'ordivan.transport_order');
+    // Arac SART DEGIL: siparis gelirken hangi aracin gidecegi bilinmez.
+    assert.equal(definition.requiresVehicle, false);
+    // Muhasebe operasyon plani acamaz — `transport-orders` controller'inda oldugu gibi.
+    assert.deepEqual([...definition.allowedRoles], ['admin', 'boss', 'office']);
   });
 });
 

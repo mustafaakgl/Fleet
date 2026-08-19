@@ -39,6 +39,35 @@ export const CONFIDENT_THRESHOLD = 0.7;
  * kopyalanmaz.
  */
 const TYPE_TERMS: Record<Exclude<DocumentTypeKey, 'unknown@v1'>, readonly string[]> = {
+  /**
+   * Faz 16 — tasima emri. Terimler yine KAPALI ve bizim listemizden.
+   *
+   * `auftrag` TEK BASINA yeterli degil: bir servis faturasinda da gecebilir.
+   * Bu yuzden liste tasima emrine OZGU terimlerden olusuyor (yukleme/bosaltma,
+   * gonderici/alici, kolli). Yanlis siniflandirma `unknown`a duser ve insan
+   * secer — sessizce siparis acilmaz.
+   */
+  'transport_order@v1': [
+    'transportauftrag',
+    'frachtauftrag',
+    'speditionsauftrag',
+    'ladestelle',
+    'entladestelle',
+    'abladestelle',
+    'absender',
+    'empfanger',
+    'frachtfuhrer',
+    'ladung',
+    'kolli',
+    'transport order',
+    'shipment order',
+    'consignment',
+    'pickup address',
+    'delivery address',
+    'tasima emri',
+    'yukleme adresi',
+    'bosaltma adresi',
+  ],
   'service_invoice@v1': [
     'rechnung',
     'werkstatt',

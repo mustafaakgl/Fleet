@@ -19,9 +19,17 @@ import { SchemaValidationError } from './schema-validation';
  * unutulabilir, anahtar unutulamaz.
  */
 
-/** Bu fazda islenen turler. CMR/POD, tasima emri ve surucu saglik belgesi YOK. */
+/**
+ * Islenen turler. CMR/POD ve surucu saglik belgesi HALA YOK.
+ *
+ * `transport_order@v1` FAZ 16'DA EKLENDI: musteriden gelen tasima emri.
+ * Digerlerinden ONEMLI BIR FARKI VAR — bir araca baglanmaz. Tasima emri
+ * gelirken hangi aracin gidecegi HENUZ BILINMEZ ve bir arac uydurmak,
+ * planlanmamis bir siparisi planlanmis gostermek olurdu.
+ */
 export const DOCUMENT_TYPE_KEYS = [
   'service_invoice@v1',
+  'transport_order@v1',
   'vehicle_inspection@v1',
   'vehicle_insurance@v1',
   'traffic_fine@v1',
@@ -46,6 +54,15 @@ export const DOCUMENT_DESTINATIONS = [
   'vehicle.document',
   /** Mevcut Fine sureci. */
   'fine.record',
+  /**
+   * Faz 16 — e-posta/PDF siparis ajani.
+   *
+   * HEDEF BIR KAYIT DEGIL, BIR INCELEME: bu hedefe yonlendirilen belge
+   * dogrudan `TransportOrder` URETMEZ. Gelen kutusu incelemesi acilir ve
+   * canonical taslak ancak insan onayindan sonra Faz 15 servisinden gecerek
+   * olusur.
+   */
+  'ordivan.transport_order',
 ] as const;
 export type DocumentDestination = (typeof DOCUMENT_DESTINATIONS)[number];
 
@@ -129,6 +146,30 @@ export const DOCUMENT_TYPE_REGISTRY: Record<DocumentTypeKey, DocumentTypeDefinit
     destination: 'fine.record',
     allowedRoles: OPERATIONAL_WRITE,
     requiresVehicle: true,
+    subtypes: null,
+  },
+  'transport_order@v1': {
+    typeKey: 'transport_order@v1',
+    family: 'transport_order',
+    version: 1,
+    destination: 'ordivan.transport_order',
+    /**
+     * ROL YINE TURETILDI: `transport-orders.controller` yazma uclarinda
+     * `@RequiresWrite()` kullaniyor, o da `OPERATIONAL_WRITE_ROLES` demek.
+     * Gelen kutusu bu kisiti GEVSETEMEZ — gevsetseydi, bir e-posta yollayarak
+     * siparis acmak controller'in guard'ini atlamanin yolu olurdu.
+     *
+     * MUHASEBE BURADA YOK: fiyati o inceler ama operasyon plani acamaz. Bu,
+     * `transport-orders` controller'inda ZATEN boyle.
+     */
+    allowedRoles: OPERATIONAL_WRITE,
+    /**
+     * ARAC GEREKMEZ ve bu bilincli: siparis geldiginde arac secilmemistir.
+     * `requiresVehicle: true` yazsaydik, gelen her siparis "arac eksik" diye
+     * `needs_domain_review`da beklerdi — oysa arac eksikligi bu turde bir
+     * eksiklik DEGIL, normal durum.
+     */
+    requiresVehicle: false,
     subtypes: null,
   },
   'fuel_receipt@v1': {

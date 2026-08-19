@@ -742,6 +742,31 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.transportOrderRevision.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.transportOrderRevision.count()),
       }),
+      // Faz 16 — gelen e-posta/PDF mesaji. Bir kiracinin posta kutusundaki
+      // konu, gonderen ve ek adlari digerine SIZMAMALI.
+      verifyTenantScopedModel({
+        label: 'OrderIntakeMessage', tenantA, tenantB,
+        unscopedCountA: () => base.orderIntakeMessage.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.orderIntakeMessage.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.orderIntakeMessage.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.orderIntakeMessage.count()),
+      }),
+      // Ekler — reddedilenler dahil.
+      verifyTenantScopedModel({
+        label: 'OrderIntakeAttachment', tenantA, tenantB,
+        unscopedCountA: () => base.orderIntakeAttachment.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.orderIntakeAttachment.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.orderIntakeAttachment.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.orderIntakeAttachment.count()),
+      }),
+      // Inceleme — niyet, eslesen musteri ve secilen siparis.
+      verifyTenantScopedModel({
+        label: 'OrderIntakeReview', tenantA, tenantB,
+        unscopedCountA: () => base.orderIntakeReview.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.orderIntakeReview.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.orderIntakeReview.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.orderIntakeReview.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fleet.local/contracts/ordivan/proposal.transport_order.extraction.v1.schema.json",
+  "title": "proposal.transport_order.extraction.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": [
+        "new_order",
+        "amendment",
+        "cancellation",
+        "unknown"
+      ]
+    },
+    "customerName": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "customerNumber": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "vatId": {
+      "type": "string",
+      "maxLength": 30
+    },
+    "contactEmail": {
+      "type": "string",
+      "maxLength": 254
+    },
+    "contactPhone": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "contactName": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "externalReference": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "orderDate": {
+      "type": "string",
+      "maxLength": 10
+    },
+    "revenueAmount": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10000000
+    },
+    "currency": {
+      "type": "string",
+      "maxLength": 3
+    },
+    "billingMode": {
+      "type": "string",
+      "enum": [
+        "on_order_completion",
+        "per_delivery"
+      ]
+    },
+    "specialInstructions": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "consignments": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://fleet.local/contracts/ordivan/item.schema.json",
+        "title": "item",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pickupAddress": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "deliveryAddress": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "pickupWindowStart": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "pickupWindowEnd": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "deliveryWindowStart": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "deliveryWindowEnd": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "timezone": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "cargoDescription": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "volumeM3": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "palletCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "adr": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ]
+          },
+          "temperatureMinC": {
+            "type": "number",
+            "minimum": -80,
+            "maximum": 80
+          },
+          "temperatureMaxC": {
+            "type": "number",
+            "minimum": -80,
+            "maximum": 80
+          },
+          "shipperReference": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "consigneeReference": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "adr"
+        ]
+      }
+    }
+  },
+  "required": [
+    "intent"
+  ]
+}
