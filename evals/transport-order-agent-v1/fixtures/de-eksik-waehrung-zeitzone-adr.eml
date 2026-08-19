@@ -1,0 +1,18 @@
+From: dispo@muster.example
+To: auftrag@fleet.example
+Subject: Transportauftrag ohne Angaben
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-eksik-waehrung-zeitzone-adr@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Kundennummer: 10042
+Referenz: KD-2026-0200
+Ladestelle: Koeln
+Entladestelle: Muenchen
+Ladung: Stueckgut
+Abholung um 08:00 Uhr
+Preis: 1.400,00
+--FLEET-EVAL-SINIR--

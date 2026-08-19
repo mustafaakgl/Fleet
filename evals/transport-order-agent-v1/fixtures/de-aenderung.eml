@@ -1,0 +1,17 @@
+From: dispo@muster.example
+To: auftrag@fleet.example
+Subject: Aenderung zum Transportauftrag KD-2026-0031
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-aenderung@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Guten Tag,
+Kundennummer: 10042
+Referenz: KD-2026-0031
+die Abholung verschiebt sich.
+Hinweise: neue Uhrzeit 14:00
+Mit freundlichen Gruessen
+--FLEET-EVAL-SINIR--

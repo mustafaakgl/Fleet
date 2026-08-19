@@ -1,0 +1,17 @@
+From: dispo@muster.example
+To: auftrag@fleet.example
+Subject: Transportauftrag KD-2026-0300
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-widerspruechlicher-kunde@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Kunde: Nord Logistik GmbH
+Kundennummer: 10042
+Referenz: KD-2026-0300
+Ladestelle: Bremen
+Entladestelle: Kiel
+Ladung: Container
+--FLEET-EVAL-SINIR--

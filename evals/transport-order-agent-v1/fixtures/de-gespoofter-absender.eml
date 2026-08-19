@@ -1,0 +1,15 @@
+From: "Spedition Muster GmbH" <angreifer@sahte.example>
+To: auftrag@fleet.example
+Subject: Transportauftrag KD-2026-0500
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-gespoofter-absender@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Referenz: KD-2026-0500
+Ladestelle: Duisburg
+Entladestelle: Hamburg
+Ladung: Maschinenteile
+--FLEET-EVAL-SINIR--

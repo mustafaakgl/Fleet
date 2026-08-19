@@ -1,0 +1,16 @@
+From: dispo@muster.example
+To: auftrag@fleet.example
+Subject: Stornierung des Transportauftrags KD-2026-0031
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-stornierung@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Sehr geehrte Damen und Herren,
+Kundennummer: 10042
+Referenz: KD-2026-0031
+wir muessen den Auftrag leider stornieren.
+Mit freundlichen Gruessen
+--FLEET-EVAL-SINIR--

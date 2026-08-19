@@ -1,0 +1,24 @@
+From: "Spedition Muster GmbH" <dispo@muster.example>
+To: auftrag@fleet.example
+Subject: Transportauftrag KD-2026-0010
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-neuer-auftrag@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Sehr geehrte Damen und Herren,
+Kunde: Spedition Muster GmbH
+Kundennummer: 10042
+Referenz: KD-2026-0010
+Auftragsdatum: 01.09.2026
+Ladestelle: Musterweg 3, 47051 Duisburg
+Entladestelle: Hafenstrasse 12, 20095 Hamburg
+Ladung: Maschinenteile
+Gewicht: 8400 kg
+Paletten: 12
+ADR: nein
+Frachtpreis: 1.250,00 EUR
+Mit freundlichen Gruessen
+--FLEET-EVAL-SINIR--

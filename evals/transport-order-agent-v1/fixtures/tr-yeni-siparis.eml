@@ -1,0 +1,19 @@
+From: operasyon@akgul.example
+To: auftrag@fleet.example
+Subject: Tasima emri REF-5512
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <tr-yeni-siparis@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Merhaba,
+Musteri: Akgul Nakliyat
+Referans: REF-5512
+Yukleme adresi: Ikitelli OSB, Istanbul
+Bosaltma adresi: Organize Sanayi, Bursa
+Yuk: tekstil
+Agirlik: 4200 kg
+Iyi calismalar
+--FLEET-EVAL-SINIR--

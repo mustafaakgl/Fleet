@@ -1,0 +1,14 @@
+From: unbekannt@muster.example
+To: auftrag@fleet.example
+Subject: Ihre Anfrage
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-unbekannt@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Guten Tag,
+anbei die Unterlagen zu Ihrer Anfrage.
+Mit freundlichen Gruessen
+--FLEET-EVAL-SINIR--

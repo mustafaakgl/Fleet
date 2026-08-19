@@ -1,0 +1,17 @@
+From: dispo@muster.example
+To: auftrag@fleet.example
+Subject: Transportauftrag mit zwei Sendungen
+Date: Tue, 01 Sep 2026 09:15:00 +0200
+Message-ID: <de-mehrere-sendungen@fleet-eval.example>
+Content-Type: multipart/mixed; boundary="FLEET-EVAL-SINIR"
+
+--FLEET-EVAL-SINIR
+Content-Type: text/plain; charset=utf-8
+
+Kundennummer: 10042
+Referenz: KD-2026-0400
+Ladestelle: Duisburg
+Entladestelle: Hamburg
+Ladung: Sendung A und Sendung B
+Paletten: 20
+--FLEET-EVAL-SINIR--
