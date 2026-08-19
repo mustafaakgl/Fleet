@@ -3,6 +3,7 @@ import {
   AgentRunStatus,
   AutomationJobStatus,
   AutomationProposalStatus,
+  OrderIntakeMessageStatus,
   Prisma,
 } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
@@ -25,7 +26,20 @@ import {
   type ServiceInvoiceDraft,
 } from './core/service-invoice';
 import { extractTransportOrder } from './core/order-intake-extract';
+import {
+  findDuplicateOrder,
+  matchCompany,
+  matchExistingOrder,
+  resolveIntentDecision,
+  type ResolvedIntent,
+} from './core/order-intake-match';
 import { OrderIntakeContentService } from './order-intake-content.service';
+
+/** Guvensiz cikarim degerinden METIN — baska tur geldiyse yok sayilir. */
+function asText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
 import type { AuthenticatedConnector } from './ordivan-connector.service';
 import { CURRENT_PROTOCOL_VERSION, PROPOSAL_REVIEW_TTL_MS } from './ordivan.config';
 
@@ -481,6 +495,10 @@ export class AutomationJobService {
       data: { proposalId: proposal.id, sequence: 1 },
     });
 
+    if (input.proposalType === 'transport_order.extraction') {
+      await this.openOrderIntakeReview(proposal.id, job.payload, payload);
+    }
+
     await this.audit.logAction({
       action: 'automation_job.completed',
       entityType: 'AutomationJob',
@@ -498,6 +516,103 @@ export class AutomationJobService {
     });
 
     return { jobId, proposalId: proposal.id, repeated: false };
+  }
+
+  /**
+   * GELEN KUTUSU INCELEMESINI ACAR (Faz 16).
+   *
+   * ESLESTIRME BURADA, SUNUCUDA: ajanin ciktisi yalnizca METINDIR (musteri
+   * numarasi, VAT, e-posta, referans). Hangi `Company` ya da `TransportOrder`
+   * kaydina karsilik geldigine deterministik kurallar karar veriyor ve sorgular
+   * KIRACI KAPSAMLI — ajanin bir kimlik yazabilmesi, e-posta govdesine kimlik
+   * gomen birine baska bir kaydi gosterebilirdi.
+   *
+   * HICBIR SEY UYGULANMIYOR: bu adim yalnizca inceleme kaydini aciyor.
+   * Siparis taslagi, revizyon ve iptal insan onayindan sonra Faz 15
+   * servisinden geciyor.
+   */
+  private async openOrderIntakeReview(
+    proposalId: string,
+    jobPayload: Prisma.JsonValue | null,
+    extracted: Record<string, unknown>,
+  ): Promise<void> {
+    const messageId = String((jobPayload as Record<string, unknown> | null)?.messageId ?? '');
+    const message = await this.prisma.orderIntakeMessage.findFirst({
+      where: { id: messageId },
+      select: { id: true, fromAddress: true },
+    });
+    if (!message) {
+      throw new ConflictException({ code: 'order_intake_message_not_found' });
+    }
+
+    const [companies, orders] = await Promise.all([
+      this.prisma.company.findMany({
+        select: { id: true, name: true, vatId: true, email: true, invoiceEmail: true, datevDebtorNumber: true },
+        take: 5_000,
+      }),
+      this.prisma.transportOrder.findMany({
+        select: { id: true, companyId: true, orderNumber: true, externalReference: true, status: true },
+        orderBy: { orderDate: 'desc' },
+        take: 5_000,
+      }),
+    ]);
+
+    const companyMatch = matchCompany(companies, {
+      customerNumber: asText(extracted.customerNumber),
+      vatId: asText(extracted.vatId),
+      contactEmail: asText(extracted.contactEmail),
+      // GONDEREN ADRESI TEK BASINA YETKI DEGIL: yalnizca KAYITLI bir adresle
+      // TAM esitse eslesme sayilir, aksi halde en fazla aday uretir.
+      senderAddress: message.fromAddress,
+    });
+
+    const externalReference = asText(extracted.externalReference);
+    const orderMatch = matchExistingOrder(orders, {
+      companyId: companyMatch.companyId,
+      externalReference,
+    });
+    const duplicateOrderId = findDuplicateOrder(orders, {
+      companyId: companyMatch.companyId,
+      externalReference,
+    });
+
+    const proposedIntent = (extracted.intent ?? 'unknown') as ResolvedIntent;
+    const decision = resolveIntentDecision({
+      proposedIntent,
+      companyMatch,
+      orderMatch,
+      duplicateOrderId,
+    });
+
+    await this.prisma.orderIntakeReview.create({
+      data: {
+        messageId: message.id,
+        proposalId,
+        proposedIntent: decision.intent,
+        proposedIntentConfidence: null,
+        matchedCompanyId: companyMatch.companyId,
+        companyMatchStatus: companyMatch.status,
+        // ADAYLAR kesin eslesme DEGIL — arayuz bunlari secim listesi olarak gosterir.
+        companyCandidates: {
+          ids: companyMatch.candidateIds,
+          reason: companyMatch.reason,
+        } as Prisma.InputJsonValue,
+        matchedOrderId: orderMatch.orderId,
+        orderMatchStatus: orderMatch.status,
+        orderCandidates: {
+          ids: orderMatch.candidateIds,
+          reason: orderMatch.reason,
+          requiresOrderSelection: decision.requiresOrderSelection,
+        } as Prisma.InputJsonValue,
+        possibleDuplicate: decision.possibleDuplicate,
+        duplicateOfOrderId: decision.duplicateOfOrderId,
+      },
+    });
+
+    await this.prisma.orderIntakeMessage.updateMany({
+      where: { id: message.id },
+      data: { status: OrderIntakeMessageStatus.needs_review },
+    });
   }
 
   /**
