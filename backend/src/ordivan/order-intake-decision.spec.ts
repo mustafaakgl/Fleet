@@ -5,6 +5,13 @@ import { OrderIntakeDecisionService } from './order-intake-decision.service';
 
 type Row = Record<string, unknown>;
 
+/** Bu kiracinin kayitlari. Listede OLMAYAN her kimlik "yok" sayilir. */
+const TENANT_COMPANIES: Row[] = [{ id: 'cmp-1' }, { id: 'cmp-2' }];
+const TENANT_ORDERS: Row[] = [
+  { id: 'ord-1', status: 'confirmed' },
+  { id: 'ord-iptal', status: 'cancelled' },
+];
+
 /**
  * ONAY VE DOMAIN SONUCU (Faz 16, bolum 6).
  *
@@ -150,6 +157,15 @@ function build(options: BuildOptions = {}) {
     transportOrder: {
       async count() {
         return 7;
+      },
+      // KIRACI KAPSAMLI: baska kiracinin kaydi bu sorgudan DONMEZ.
+      async findFirst({ where }: { where: Row }) {
+        return TENANT_ORDERS.find((row) => row.id === where.id) ?? null;
+      },
+    },
+    company: {
+      async findFirst({ where }: { where: Row }) {
+        return TENANT_COMPANIES.find((row) => row.id === where.id) ?? null;
       },
     },
   };
@@ -459,6 +475,101 @@ describe('Duzeltme olaylari ve red', () => {
     await harness.service.reject('user-1', 'rev-1', 'Falscher Kunde');
     assert.equal(harness.reviews[0]!.status, 'rejected');
     assert.equal(harness.proposals[0]!.status, 'rejected');
+    assert.equal(harness.calls.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Musteri / siparis secimi
+// ---------------------------------------------------------------------------
+
+describe('Secim — KIMLIK SUNUCUDA YENIDEN COZULUYOR', () => {
+  it('kiracidaki musteri secilebiliyor', async () => {
+    const harness = build();
+    const result = await harness.service.select('user-1', 'office', 'rev-1', { companyId: 'cmp-2' });
+    assert.equal(result.selectedCompanyId, 'cmp-2');
+    assert.equal(harness.reviews[0]!.selectedCompanyId, 'cmp-2');
+  });
+
+  it('BASKA KIRACININ kimligi 400 — varligi bile sizmiyor', async () => {
+    const harness = build();
+    await assert.rejects(
+      () => harness.service.select('user-1', 'office', 'rev-1', { companyId: 'cmp-baska-tenant' }),
+      (error: unknown) => error instanceof BadRequestException,
+    );
+    assert.equal(harness.reviews[0]!.selectedCompanyId, undefined);
+  });
+
+  it('UYDURMA kimlik dayatilamiyor', async () => {
+    const harness = build();
+    await assert.rejects(
+      () => harness.service.select('user-1', 'office', 'rev-1', { orderId: '../../etc/passwd' }),
+      (error: unknown) => error instanceof BadRequestException,
+    );
+  });
+
+  it('IPTAL EDILMIS siparis secilemiyor', async () => {
+    const harness = build();
+    await assert.rejects(
+      () => harness.service.select('user-1', 'office', 'rev-1', { orderId: 'ord-iptal' }),
+      (error: unknown) => error instanceof BadRequestException,
+    );
+  });
+
+  it('`null` SECIMI KALDIRIYOR', async () => {
+    const harness = build();
+    await harness.service.select('user-1', 'office', 'rev-1', { companyId: 'cmp-2' });
+    const result = await harness.service.select('user-1', 'office', 'rev-1', { companyId: null });
+    assert.equal(result.selectedCompanyId, null);
+  });
+
+  it('alan GONDERILMEZSE mevcut secim KORUNUYOR', async () => {
+    const harness = build();
+    await harness.service.select('user-1', 'office', 'rev-1', { companyId: 'cmp-2' });
+    await harness.service.select('user-1', 'office', 'rev-1', { orderId: 'ord-1' });
+    assert.equal(harness.reviews[0]!.selectedCompanyId, 'cmp-2');
+    assert.equal(harness.reviews[0]!.selectedOrderId, 'ord-1');
+  });
+
+  it('bos govde REDDEDILIYOR', async () => {
+    const harness = build();
+    await assert.rejects(
+      () => harness.service.select('user-1', 'office', 'rev-1', {}),
+      (error: unknown) => error instanceof BadRequestException,
+    );
+  });
+
+  it('MUHASEBE ve SURUCU secim yapamiyor', async () => {
+    const harness = build();
+    for (const role of ['accounting', 'driver', 'customer', null]) {
+      await assert.rejects(
+        () => harness.service.select('user-1', role, 'rev-1', { companyId: 'cmp-2' }),
+        (error: unknown) => error instanceof ForbiddenException,
+        String(role),
+      );
+    }
+  });
+
+  it('KARARA BAGLANMIS inceleme yeniden yonlendirilemiyor', async () => {
+    const harness = build({ status: 'approved' });
+    await assert.rejects(
+      () => harness.service.select('user-1', 'office', 'rev-1', { companyId: 'cmp-2' }),
+      (error: unknown) => error instanceof ConflictException,
+    );
+  });
+
+  it('ONAYDA da kimlik yeniden cozuluyor — ara adim atlanamiyor', async () => {
+    const harness = build();
+    await assert.rejects(
+      () =>
+        harness.service.approve('user-1', 'admin', 'rev-1', {
+          intent: 'new_order',
+          companyId: 'cmp-baska-tenant',
+          values: { currency: 'EUR' },
+        }),
+      (error: unknown) => error instanceof BadRequestException,
+    );
+    // Hicbir canonical kayit uretilmedi.
     assert.equal(harness.calls.length, 0);
   });
 });

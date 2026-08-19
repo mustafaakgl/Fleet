@@ -1,6 +1,6 @@
 {
   "setId": "transport-order-agent-v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "createdAt": "2026-08-19",
   "phase": "faz16",
   "scoring": "extraction_and_matching_accuracy",
@@ -12,7 +12,7 @@
     "documentTypeKeys": "backend/src/ordivan/core/document-type-registry.ts#DOCUMENT_TYPE_KEYS",
     "checkContract": "contracts/ordivan/check.v1.schema.json"
   },
-  "note": "Fixture'lar TAMAMEN SENTETIK ve make-fixtures.mjs ile DETERMINISTIK uretiliyor: ayni girdi her zaman ayni dosyayi verir. Gercek musteri e-postasi ya da tasima emri repoya GIRMEZ. BU SET BIR DOGRULUK IDDIASI DEGILDIR: metni biz yazdik ve mock cikarim tam da bu metinleri okuyacak sekilde kurulu; burada olculen oran, GERCEK bir modelin gercek musteri e-postalarindaki performansi hakkinda HICBIR SEY soylemez. Sentetik eval sonucu hicbir sunumda, teklifte ya da raporda gercek model dogrulugu olarak gosterilemez. Olculen sey SOZLESMENIN TUTUP TUTMADIGI: niyet, alanlar, eslestirme ve savunma beklenenle ayni mi. Gercek otomatik siparis acma, dondurulmus GERCEK bir golden dataset olmadan ACILAMAZ.",
+  "note": "Fixture'lar TAMAMEN SENTETIK ve make-fixtures.mjs ile DETERMINISTIK uretiliyor: ayni girdi her zaman ayni dosyayi verir. Gercek musteri e-postasi ya da tasima emri repoya GIRMEZ. BU SET BIR DOGRULUK IDDIASI DEGILDIR: metni biz yazdik ve mock cikarim tam da bu metinleri okuyacak sekilde kurulu; burada olculen oran, GERCEK bir modelin gercek musteri e-postalarindaki performansi hakkinda HICBIR SEY soylemez. Sentetik eval sonucu hicbir sunumda, teklifte ya da raporda gercek model dogrulugu olarak gosterilemez. Olculen sey SOZLESMENIN TUTUP TUTMADIGI: niyet, alanlar, eslestirme ve savunma beklenenle ayni mi. Gercek otomatik siparis acma, dondurulmus GERCEK bir golden dataset olmadan ACILAMAZ. SURUM 1.1.0 (faz16 kapanis): cikarim artik birden fazla kalem uretiyor; `de-mehrere-sendungen` iki kalem bekleyecek sekilde guncellendi. Set icerigi SESSIZCE degismez — her degisiklik surum artirir.",
   "metrics": [
     {
       "id": "intent_accuracy",

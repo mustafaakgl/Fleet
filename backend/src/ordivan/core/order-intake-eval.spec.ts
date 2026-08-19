@@ -51,6 +51,12 @@ interface EvalCase {
     absentFields?: string[];
     consignment?: Record<string, unknown>;
     consignmentCount?: number;
+    consignments?: Array<{
+      pickupContains?: string;
+      deliveryContains?: string;
+      weightKg?: number;
+      palletCount?: number;
+    }>;
     companyMatch?: { status: string; companyId: string | null };
     orderMatch?: { status: string; orderId: string | null };
     possibleDuplicate?: boolean;
@@ -213,6 +219,11 @@ describe('transport-order-agent-v1 — set butunlugu', () => {
     }
   });
 
+  it('COK KALEMLI en az bir vaka var — mock artik tek kaleme indirgemiyor', () => {
+    const multi = functional.filter((item) => (item.expect.consignmentCount ?? 0) >= 2);
+    assert.ok(multi.length >= 1, 'cok kalemli vaka yok');
+  });
+
   it('zorunlu senaryolar sette var', () => {
     const ids = new Set(cases.map((item) => item.id));
     for (const required of [
@@ -292,6 +303,20 @@ describe('transport-order-agent-v1 — fonksiyonel', () => {
           }
           assert.equal(first[field], value, field);
         }
+      }
+
+      // COK KALEMLI SIPARIS: her kalem KENDI adreslerini tasimali.
+      for (const [index, expected] of (testCase.expect.consignments ?? []).entries()) {
+        const actual = consignments[index];
+        assert.ok(actual, `kalem ${index} uretilmedi`);
+        if (expected.pickupContains) {
+          assert.match(String(actual.pickupAddress), new RegExp(expected.pickupContains));
+        }
+        if (expected.deliveryContains) {
+          assert.match(String(actual.deliveryAddress), new RegExp(expected.deliveryContains));
+        }
+        if (expected.weightKg !== undefined) assert.equal(actual.weightKg, expected.weightKg);
+        if (expected.palletCount !== undefined) assert.equal(actual.palletCount, expected.palletCount);
       }
 
       if (testCase.expect.companyMatch) {

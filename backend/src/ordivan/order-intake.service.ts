@@ -92,6 +92,14 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
+/** Aday JSON'undan kimlikleri guvenle cikarir. Bicim bozuksa BOS liste. */
+function idsOf(candidates: unknown): string[] {
+  if (typeof candidates !== 'object' || candidates === null) return [];
+  const ids = (candidates as { ids?: unknown }).ids;
+  if (!Array.isArray(ids)) return [];
+  return ids.filter((id): id is string => typeof id === 'string').slice(0, 50);
+}
+
 const FINANCIAL_CONTENT: Record<FinancialContent, OrderIntakeFinancialContent> = {
   yes: OrderIntakeFinancialContent.yes,
   no: OrderIntakeFinancialContent.no,
@@ -592,6 +600,34 @@ export class OrderIntakeService {
     }
 
     const proposal = message.review?.proposal ?? null;
+
+    /**
+     * ADAYLARI ISIMLERIYLE COZ.
+     *
+     * Sunucu adaylari KIMLIK olarak tutuyor; arayuzun secim listesi cizebilmesi
+     * icin ad gerekiyor. Cozum KIRACI KAPSAMLI: listede baska bir kiracinin
+     * kaydi varsa (olmamali) burada da GORUNMEZ — ve secim ucu zaten kimligi
+     * ayrica yeniden dogruluyor, yani liste bir yetki kaynagi DEGIL.
+     */
+    const companyCandidateIds = idsOf(message.review?.companyCandidates);
+    const orderCandidateIds = idsOf(message.review?.orderCandidates);
+
+    const [companyCandidates, orderCandidates] = await Promise.all([
+      companyCandidateIds.length > 0
+        ? this.prisma.company.findMany({
+            where: { id: { in: companyCandidateIds } },
+            select: { id: true, name: true },
+            take: 50,
+          })
+        : Promise.resolve([]),
+      orderCandidateIds.length > 0
+        ? this.prisma.transportOrder.findMany({
+            where: { id: { in: orderCandidateIds } },
+            select: { id: true, orderNumber: true, status: true, updatedAt: true },
+            take: 50,
+          })
+        : Promise.resolve([]),
+    ]);
     const summary = maskMessageSummary(
       {
         id: message.id,
@@ -630,8 +666,11 @@ export class OrderIntakeService {
             resolvedIntent: message.review.resolvedIntent,
             companyMatchStatus: message.review.companyMatchStatus,
             companyCandidates: message.review.companyCandidates,
+            /** Secim listesi icin cozulmus adaylar. */
+            companyOptions: companyCandidates,
             orderMatchStatus: message.review.orderMatchStatus,
             orderCandidates: message.review.orderCandidates,
+            orderOptions: orderCandidates,
             possibleDuplicate: message.review.possibleDuplicate,
             duplicateOfOrder: message.review.duplicateOfOrder,
             rejectionReason: message.review.rejectionReason,

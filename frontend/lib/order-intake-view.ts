@@ -126,3 +126,90 @@ export function rejectionLabelKey(code: string): string {
     ? `orderIntake.rejection.${code}`
     : 'orderIntake.rejection.generic';
 }
+
+
+// ---------------------------------------------------------------------------
+// Kalem duzenleme
+// ---------------------------------------------------------------------------
+
+import type { OrderIntakeConsignmentDraft } from './types';
+
+/** Sozlesme siniri — sunucudaki `maxItems: 20` ile AYNI. */
+export const MAX_CONSIGNMENTS = 20;
+
+/** Bos bir kalem taslagi. ADR `unknown` — sessizce `no` OLMAZ. */
+export function emptyConsignment(): OrderIntakeConsignmentDraft {
+  return { pickupAddress: '', deliveryAddress: '', cargoDescription: '', adrStatus: 'unknown' };
+}
+
+/**
+ * Ajanin onerdigi kalemleri DUZENLENEBILIR taslaga cevirir.
+ *
+ * ONERI DEGISMEZ: bu bir KOPYA. Kullanicinin duzeltmesi onerinin uzerine
+ * yazmaz; onay aninda ayri bir govde olarak gonderilir ve fark
+ * `AutomationCorrectionEvent` olarak kaydedilir.
+ */
+export function toConsignmentDrafts(payload: Record<string, unknown>): OrderIntakeConsignmentDraft[] {
+  const raw = payload.consignments;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.slice(0, MAX_CONSIGNMENTS).map((item) => {
+    const source = (item ?? {}) as Record<string, unknown>;
+    const text = (key: string): string => (typeof source[key] === 'string' ? (source[key] as string) : '');
+    const num = (key: string): number | null =>
+      typeof source[key] === 'number' ? (source[key] as number) : null;
+
+    const adr = source.adr;
+    return {
+      pickupAddress: text('pickupAddress'),
+      deliveryAddress: text('deliveryAddress'),
+      cargoDescription: text('cargoDescription'),
+      pickupWindowStart: text('pickupWindowStart') || null,
+      deliveryWindowStart: text('deliveryWindowStart') || null,
+      quantity: num('quantity'),
+      unit: text('unit') || null,
+      weightKg: num('weightKg'),
+      volumeM3: num('volumeM3'),
+      palletCount: num('palletCount'),
+      // Taninmayan bir deger `unknown`a duser — `no`ya DEGIL.
+      adrStatus: adr === 'yes' || adr === 'no' ? adr : 'unknown',
+    };
+  });
+}
+
+export interface ConsignmentValidation {
+  valid: boolean;
+  /** Eksik zorunlu alani olan kalemlerin indeksleri. */
+  incompleteIndexes: number[];
+}
+
+/**
+ * Kalemleri gondermeden once dogrular.
+ *
+ * SUNUCU DA DOGRULUYOR: bu kontrol yalnizca kullaniciya erken geri bildirim
+ * icin. Bir guvenlik siniri DEGIL — DTO ayni alanlari zorunlu tutuyor.
+ */
+export function validateConsignments(
+  drafts: readonly OrderIntakeConsignmentDraft[],
+): ConsignmentValidation {
+  const incompleteIndexes = drafts
+    .map((draft, index) =>
+      draft.pickupAddress.trim() && draft.deliveryAddress.trim() && draft.cargoDescription.trim()
+        ? -1
+        : index,
+    )
+    .filter((index) => index >= 0);
+
+  return {
+    valid: incompleteIndexes.length === 0 && drafts.length <= MAX_CONSIGNMENTS,
+    incompleteIndexes,
+  };
+}
+
+/** Bos sayisal alanlari `null`a cevirir — `0` ile BOS ayni sey degil. */
+export function toNumberOrNull(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}

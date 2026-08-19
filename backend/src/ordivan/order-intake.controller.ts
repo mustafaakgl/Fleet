@@ -31,6 +31,7 @@ import {
   DecideOrderIntakeTaskDto,
   ListOrderIntakeQueryDto,
   RejectOrderIntakeDto,
+  SelectOrderIntakeDto,
 } from './dto/order-intake.dto';
 import { OrderIntakeDecisionService } from './order-intake-decision.service';
 import { MAX_ORDER_INTAKE_BYTES, OrderIntakeService } from './order-intake.service';
@@ -158,6 +159,28 @@ export class OrderIntakeController {
       dto.decision,
       dto.note,
     );
+  }
+
+  /**
+   * Musteri / mevcut siparis secimi.
+   *
+   * `@RequiresWrite()`: hangi musteriye siparis yazilacagi bir OPERASYON
+   * kararidir; muhasebe fiyati inceler ama bunu secemez. Kimlikler serviste
+   * KIRACI KAPSAMLI olarak yeniden cozuluyor — istemci baska bir kiracinin
+   * kaydini dayatamaz.
+   */
+  @Post('reviews/:id/selection')
+  @RequiresWrite()
+  @HttpCode(200)
+  select(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: SelectOrderIntakeDto,
+  ) {
+    return this.decisions.select(request.user.id, request.user.role, id, {
+      companyId: dto.companyId,
+      orderId: dto.orderId,
+    });
   }
 
   /**

@@ -291,3 +291,67 @@ describe('Tutar ayristirma', () => {
     assert.equal(parseAmount('1,250'), 1250);
   });
 });
+
+describe('Cikarim — BIRDEN FAZLA KALEM', () => {
+  const TWO_STOPS = [
+    'Transportauftrag KD-2026-0400',
+    'Kundennummer: 10042',
+    'Referenz: KD-2026-0400',
+    'Ladestelle: Musterweg 3, 47051 Duisburg',
+    'Entladestelle: Hafenstrasse 12, 20095 Hamburg',
+    'Ladung: Maschinenteile',
+    'Gewicht: 8400 kg',
+    'Ladestelle: Ringstrasse 9, 50667 Koeln',
+    'Entladestelle: Leipziger Platz 2, 10117 Berlin',
+    'Ladung: Ersatzteile',
+    'Paletten: 6',
+  ].join('\n');
+
+  it('ayni alan tekrar edince YENI KALEM basliyor', () => {
+    const consignments = extract(TWO_STOPS).payload.consignments as Array<Record<string, unknown>>;
+    assert.equal(consignments.length, 2);
+  });
+
+  it('her kalem KENDI adreslerini tasiyor — ikinci sevkiyat kaybolmuyor', () => {
+    const consignments = extract(TWO_STOPS).payload.consignments as Array<Record<string, unknown>>;
+    assert.match(String(consignments[0]!.pickupAddress), /Duisburg/);
+    assert.match(String(consignments[0]!.deliveryAddress), /Hamburg/);
+    assert.match(String(consignments[1]!.pickupAddress), /Koeln/);
+    assert.match(String(consignments[1]!.deliveryAddress), /Berlin/);
+  });
+
+  it('kalem bazli sayilar dogru kaleme gidiyor', () => {
+    const consignments = extract(TWO_STOPS).payload.consignments as Array<Record<string, unknown>>;
+    assert.equal(consignments[0]!.weightKg, 8400);
+    assert.equal(consignments[0]!.palletCount, undefined);
+    assert.equal(consignments[1]!.palletCount, 6);
+  });
+
+  it('`Entladestelle` icindeki `ladestelle` yukleme SANILMIYOR', () => {
+    // Sinir kontrolu olmasaydi her bosaltma satiri yeni bir kalem acardi.
+    const single = extract('Ladestelle: Duisburg\nEntladestelle: Hamburg');
+    assert.equal((single.payload.consignments as unknown[]).length, 1);
+  });
+
+  it('GENEL bir ADR satiri BUTUN kalemlere uygulaniyor', () => {
+    const result = extract(`ADR: ja\n${TWO_STOPS}`);
+    const consignments = result.payload.consignments as Array<Record<string, unknown>>;
+    assert.equal(consignments.length, 2);
+    for (const consignment of consignments) assert.equal(consignment.adr, 'yes');
+  });
+
+  it('kanit her kalemi AYRI indeksle isaretliyor', () => {
+    const fields = extract(TWO_STOPS).evidence.entries.map((entry) => entry.field);
+    assert.ok(fields.includes('consignments[0].pickupAddress'));
+    assert.ok(fields.includes('consignments[1].pickupAddress'));
+  });
+
+  it('20 kalem SINIRI asilamaz — sozlesme reddetmeden once kirpiliyor', () => {
+    const many = Array.from({ length: 25 }, (_item, index) =>
+      [`Ladestelle: Stadt ${index}`, `Entladestelle: Ziel ${index}`].join('\n'),
+    ).join('\n');
+    const result = extract(many);
+    assert.equal((result.payload.consignments as unknown[]).length, 20);
+    assertContractValid(result.payload);
+  });
+});

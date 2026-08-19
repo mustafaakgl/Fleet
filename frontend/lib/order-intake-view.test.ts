@@ -11,6 +11,11 @@ import {
   operationalFields,
   rejectionLabelKey,
   taskLabelKey,
+  MAX_CONSIGNMENTS,
+  emptyConsignment,
+  toConsignmentDrafts,
+  toNumberOrNull,
+  validateConsignments,
 } from './order-intake-view';
 
 /**
@@ -117,5 +122,67 @@ describe('Etiket anahtarlari', () => {
   it('bilinmeyen red kodu GENEL mesaja duser — ham kod ekrana yazilmaz', () => {
     expect(rejectionLabelKey('intake_file_encrypted')).toBe('orderIntake.rejection.intake_file_encrypted');
     expect(rejectionLabelKey('bilinmeyen_kod')).toBe('orderIntake.rejection.generic');
+  });
+});
+
+describe('Kalem duzenleme', () => {
+  it('sinir sunucudakiyle AYNI', () => {
+    expect(MAX_CONSIGNMENTS).toBe(20);
+  });
+
+  it('yeni kalem ADR `unknown` ile aciliyor — sessizce `no` OLMUYOR', () => {
+    expect(emptyConsignment().adrStatus).toBe('unknown');
+  });
+
+  it('oneriden COK KALEMLI taslak turetiliyor', () => {
+    const drafts = toConsignmentDrafts({
+      consignments: [
+        { pickupAddress: 'Duisburg', deliveryAddress: 'Hamburg', cargoDescription: 'Teile', adr: 'no', weightKg: 8400 },
+        { pickupAddress: 'Koeln', deliveryAddress: 'Berlin', cargoDescription: 'Ersatz', adr: 'yes', palletCount: 6 },
+      ],
+    });
+    expect(drafts).toHaveLength(2);
+    expect(drafts[0]!.adrStatus).toBe('no');
+    expect(drafts[1]!.adrStatus).toBe('yes');
+    expect(drafts[1]!.palletCount).toBe(6);
+  });
+
+  it('TANINMAYAN ADR degeri `unknown`a duser — `no`ya DEGIL', () => {
+    const drafts = toConsignmentDrafts({ consignments: [{ adr: 'vielleicht' }] });
+    expect(drafts[0]!.adrStatus).toBe('unknown');
+  });
+
+  it('kalem yoksa bos liste', () => {
+    expect(toConsignmentDrafts({})).toEqual([]);
+    expect(toConsignmentDrafts({ consignments: 'bozuk' })).toEqual([]);
+  });
+
+  it('sinirin uzerindeki kalemler KIRPILIYOR', () => {
+    const many = Array.from({ length: 25 }, () => ({ pickupAddress: 'A' }));
+    expect(toConsignmentDrafts({ consignments: many })).toHaveLength(MAX_CONSIGNMENTS);
+  });
+
+  it('eksik zorunlu alan gecersiz sayiliyor ve INDEKSI bildiriliyor', () => {
+    const result = validateConsignments([
+      { pickupAddress: 'A', deliveryAddress: 'B', cargoDescription: 'C' },
+      { pickupAddress: 'A', deliveryAddress: '', cargoDescription: 'C' },
+    ]);
+    expect(result.valid).toBe(false);
+    expect(result.incompleteIndexes).toEqual([1]);
+  });
+
+  it('tam kalemler gecerli', () => {
+    const result = validateConsignments([
+      { pickupAddress: 'A', deliveryAddress: 'B', cargoDescription: 'C' },
+    ]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('BOS sayi `null` — `0` ile BOS ayni sey degil', () => {
+    expect(toNumberOrNull('')).toBeNull();
+    expect(toNumberOrNull('   ')).toBeNull();
+    expect(toNumberOrNull('0')).toBe(0);
+    expect(toNumberOrNull('8,5')).toBe(8.5);
+    expect(toNumberOrNull('abc')).toBeNull();
   });
 });

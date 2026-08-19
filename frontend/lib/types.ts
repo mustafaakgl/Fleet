@@ -4027,7 +4027,10 @@ export interface OrderIntakeMessageDetail extends OrderIntakeMessageRow {
   review:
     | (OrderIntakeReviewSummary & {
         companyCandidates: { ids: string[]; reason: string } | null;
+        /** Secim listesi icin cozulmus adaylar (sunucu, kiraci kapsamli). */
+        companyOptions: Array<{ id: string; name: string }>;
         orderCandidates: { ids: string[]; reason: string; requiresOrderSelection: boolean } | null;
+        orderOptions: Array<{ id: string; orderNumber: string; status: string; updatedAt?: string }>;
         duplicateOfOrder: OrderIntakeOrderRef | null;
         rejectionReason: string | null;
         selectedCompany: { id: string; name: string } | null;
@@ -4051,8 +4054,14 @@ export interface OrderIntakeConsignmentDraft {
   pickupAddress: string;
   deliveryAddress: string;
   cargoDescription: string;
+  pickupWindowStart?: string | null;
+  deliveryWindowStart?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
   weightKg?: number | null;
+  volumeM3?: number | null;
   palletCount?: number | null;
+  /** `unknown` GECERLI ve GUVENLI SAYILMAZ. */
   adrStatus?: 'yes' | 'no' | 'unknown';
 }
 

@@ -385,18 +385,22 @@
     "body": [
       "Kundennummer: 10042",
       "Referenz: KD-2026-0400",
-      "Ladestelle: Duisburg",
-      "Entladestelle: Hamburg",
-      "Ladung: Sendung A und Sendung B",
-      "Paletten: 20"
+      "Ladestelle: Musterweg 3, 47051 Duisburg",
+      "Entladestelle: Hafenstrasse 12, 20095 Hamburg",
+      "Ladung: Maschinenteile",
+      "Gewicht: 8400 kg",
+      "Ladestelle: Ringstrasse 9, 50667 Koeln",
+      "Entladestelle: Leipziger Platz 2, 10117 Berlin",
+      "Ladung: Ersatzteile",
+      "Paletten: 6"
     ],
-    "note": "BIRDEN FAZLA KALEM: mock tek kalem uretiyor ve bu bir SINIRLAMA. Sozlesme 20 kaleme kadar tasiyor; kalem ekleme insanin isi. Bu vaka sinirlamayi GORUNUR kiliyor, gizlemiyor.",
+    "note": "BIRDEN FAZLA KALEM: ayni alan tekrar edince yeni kalem basliyor. Onceki surumde mock tek kalem uretiyordu ve ikinci sevkiyat SESSIZCE dusuyordu.",
     "expect": {
       "intent": "new_order",
       "fields": {
         "externalReference": "KD-2026-0400"
       },
-      "consignmentCount": 1,
+      "consignmentCount": 2,
       "companyMatch": {
         "status": "customer_number",
         "companyId": "cmp-muster"
@@ -406,7 +410,19 @@
         "orderId": null
       },
       "possibleDuplicate": false,
-      "instructionsDetected": false
+      "instructionsDetected": false,
+      "consignments": [
+        {
+          "pickupContains": "Duisburg",
+          "deliveryContains": "Hamburg",
+          "weightKg": 8400
+        },
+        {
+          "pickupContains": "Koeln",
+          "deliveryContains": "Berlin",
+          "palletCount": 6
+        }
+      ]
     }
   },
   {

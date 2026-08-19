@@ -59,6 +59,14 @@ export interface ApproveReviewResult {
   cancellationImpact: Record<string, unknown> | null;
 }
 
+/**
+ * Musteri/siparis secimini hangi roller yapabilir.
+ *
+ * `OPERATIONAL_WRITE_ROLES` ile AYNI: muhasebe fiyati inceler ama hangi
+ * musteriye siparis yazilacagina karar veremez.
+ */
+const SELECTION_ROLES: readonly string[] = ['admin', 'boss', 'office'];
+
 /** Faz 16 gorevlerini hangi rol karara baglayabilir. */
 const TASK_ROLES: Record<number, readonly string[]> = {
   [OPERATIONAL_REVIEW_SEQUENCE]: ['admin', 'boss', 'office'],
@@ -138,6 +146,127 @@ export class OrderIntakeDecisionService {
   }
 
   // -------------------------------------------------------------------------
+  // Musteri / siparis secimi
+  // -------------------------------------------------------------------------
+
+  /**
+   * Belirsiz eslesmede insanin sectigi musteriyi ve/veya siparisi kaydeder.
+   *
+   * KIMLIK YENIDEN DOGRULANIYOR. Sunucu adaylari donduruyor ama istemcinin o
+   * listeye uymasina GUVENILMIYOR: gelen her kimlik burada KIRACI KAPSAMLI bir
+   * sorguyla yeniden cozuluyor. Baska bir kiracinin `companyId`si bu sorgudan
+   * BOS doner ve 400 olur — kaydin varligi bile sizmaz.
+   *
+   * `null` GONDERMEK SECIMI KALDIRIR: kullanici yanlis sectigini fark edip
+   * geri alabilmeli. Bos birakmak (alani hic gondermemek) mevcut secimi
+   * KORUR; ikisi ayri islem.
+   *
+   * ROL: yalnizca operasyon YAZMA rolleri. Muhasebe fiyati inceler ama hangi
+   * musteriye siparis yazilacagina karar VEREMEZ — `transport-orders`ta zaten
+   * boyle.
+   */
+  async select(
+    userId: string,
+    role: string | null | undefined,
+    reviewId: string,
+    input: { companyId?: string | null; orderId?: string | null },
+  ): Promise<{ reviewId: string; selectedCompanyId: string | null; selectedOrderId: string | null }> {
+    if (!SELECTION_ROLES.includes(role ?? '')) {
+      throw new ForbiddenException({ code: 'order_intake_selection_role_forbidden' });
+    }
+
+    const review = await this.loadReview(reviewId);
+    if (review.status !== OrderIntakeReviewStatus.open) {
+      // Karara baglanmis bir inceleme yeniden yonlendirilemez.
+      throw new ConflictException({ code: 'order_intake_review_already_decided' });
+    }
+
+    const data: {
+      selectedCompanyId?: string | null;
+      selectedOrderId?: string | null;
+    } = {};
+
+    if (input.companyId !== undefined) {
+      data.selectedCompanyId = input.companyId === null
+        ? null
+        : await this.resolveCompanyInTenant(input.companyId);
+    }
+
+    if (input.orderId !== undefined) {
+      data.selectedOrderId = input.orderId === null
+        ? null
+        : await this.resolveOrderInTenant(input.orderId);
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException({ code: 'order_intake_selection_empty' });
+    }
+
+    const claimed = await this.prisma.orderIntakeReview.updateMany({
+      where: { id: reviewId, status: OrderIntakeReviewStatus.open },
+      data,
+    });
+    if (claimed.count === 0) {
+      throw new ConflictException({ code: 'order_intake_review_already_decided' });
+    }
+
+    await this.audit.logAction({
+      actorUserId: userId,
+      action: 'order_intake.selection_changed',
+      entityType: 'OrderIntakeReview',
+      entityId: reviewId,
+      summary: 'Auftragseingang: Zuordnung geändert',
+      // HANGI alanlarin degistigi — DEGERLERI degil.
+      metadata: {
+        reviewId,
+        companyChanged: input.companyId !== undefined,
+        orderChanged: input.orderId !== undefined,
+        cleared: input.companyId === null || input.orderId === null,
+      },
+    });
+
+    const updated = await this.loadReview(reviewId);
+    return {
+      reviewId,
+      selectedCompanyId: updated.selectedCompanyId ?? null,
+      selectedOrderId: updated.selectedOrderId ?? null,
+    };
+  }
+
+  /**
+   * KIRACI KAPSAMLI cozum.
+   *
+   * `this.prisma` kiraci kapsamli istemci: baska kiracinin kaydi bu sorgudan
+   * DONMEZ. Hata mesaji "yok" diyor, "baska kiracida" DEMIYOR — varligin
+   * kendisi de bir bilgidir.
+   */
+  private async resolveCompanyInTenant(companyId: string): Promise<string> {
+    const company = await this.prisma.company.findFirst({
+      where: { id: companyId },
+      select: { id: true },
+    });
+    if (!company) {
+      throw new BadRequestException({ code: 'order_intake_company_not_found' });
+    }
+    return company.id;
+  }
+
+  private async resolveOrderInTenant(orderId: string): Promise<string> {
+    const order = await this.prisma.transportOrder.findFirst({
+      where: { id: orderId },
+      select: { id: true, status: true },
+    });
+    if (!order) {
+      throw new BadRequestException({ code: 'order_intake_order_not_found' });
+    }
+    if (order.status === 'cancelled') {
+      // Iptal edilmis siparis degistirilemez ve iptal edilemez.
+      throw new BadRequestException({ code: 'order_intake_order_cancelled' });
+    }
+    return order.id;
+  }
+
+  // -------------------------------------------------------------------------
   // Onay
   // -------------------------------------------------------------------------
 
@@ -149,8 +278,20 @@ export class OrderIntakeDecisionService {
   ): Promise<ApproveReviewResult> {
     const review = await this.loadReview(reviewId);
 
-    const companyId = input.companyId ?? review.matchedCompanyId;
-    const orderId = input.orderId ?? review.matchedOrderId;
+    /**
+     * ONAYDA DA YENIDEN COZULUYOR.
+     *
+     * Secim ucu zaten dogruluyor ama onay ucu ondan BAGIMSIZ cagrilabilir;
+     * istemcinin ara adimi atlayip dogrudan buraya bir kimlik dayatmasi
+     * mumkun olmamali. Iki kapinin da kilitli olmasi gerekiyor.
+     */
+    const requestedCompanyId = input.companyId ?? review.selectedCompanyId ?? review.matchedCompanyId;
+    const requestedOrderId = input.orderId ?? review.selectedOrderId ?? review.matchedOrderId;
+
+    const companyId = requestedCompanyId
+      ? await this.resolveCompanyInTenant(requestedCompanyId)
+      : null;
+    const orderId = requestedOrderId ? await this.resolveOrderInTenant(requestedOrderId) : null;
 
     const tasks = await this.prisma.approvalTask.findMany({
       where: { proposalId: review.proposalId },
@@ -444,6 +585,7 @@ export class OrderIntakeDecisionService {
         status: true,
         matchedCompanyId: true,
         matchedOrderId: true,
+        selectedCompanyId: true,
         selectedOrderId: true,
         proposal: {
           select: {

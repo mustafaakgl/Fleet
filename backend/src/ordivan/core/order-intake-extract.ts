@@ -380,9 +380,9 @@ export function extractTransportOrder(input: OrderExtractionInput): OrderExtract
   }
 
   // --- Kalemler ----------------------------------------------------------
-  const consignment = extractConsignment(lines, record);
-  if (consignment) {
-    payload.consignments = [consignment];
+  const consignments = extractConsignments(lines, record);
+  if (consignments.length > 0) {
+    payload.consignments = consignments;
   }
 
   const instructions = readLabelled(lines, ['hinweise', 'bemerkung', 'anmerkung', 'special instructions', 'aciklama'], {
@@ -452,86 +452,192 @@ export function parseAmount(raw: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/** Kalem alanlarinin etiketleri — GRUPLAMA bunlarin uzerinden yapiliyor. */
+const CONSIGNMENT_LABELS = {
+  pickupAddress: ['ladestelle', 'beladestelle', 'abholadresse', 'pickup address', 'yukleme adresi'],
+  deliveryAddress: ['entladestelle', 'abladestelle', 'lieferadresse', 'delivery address', 'bosaltma adresi'],
+  cargoDescription: ['ladung', 'ware', 'gut', 'cargo', 'yuk'],
+  weightKg: ['gewicht', 'weight', 'agirlik'],
+  palletCount: ['paletten', 'palette', 'pallets', 'palet'],
+  quantity: ['menge', 'quantity', 'miktar'],
+  volumeM3: ['volumen', 'volume', 'hacim'],
+  pickupWindowStart: ['ladezeit', 'abholung am', 'pickup time', 'yukleme zamani'],
+  deliveryWindowStart: ['lieferzeit', 'zustellung am', 'delivery time', 'teslim zamani'],
+} as const;
+
+type ConsignmentField = keyof typeof CONSIGNMENT_LABELS;
+
 /**
- * Tek kalem cikarimi.
+ * Etiket satirda KELIME BASINDA mi geciyor.
  *
- * BIRDEN FAZLA KALEM: bu mock tek kalem uretiyor ve bu bir SINIRLAMA, bir
- * tasarim karari degil — sozlesme 20 kaleme kadar tasiyor ve insan arayuzde
- * kalem ekleyebiliyor. Mock'un cok kalemli bir metni dogru bolmesi, gercek bir
- * modelin isi.
+ * `Entladestelle` icinde `ladestelle` GECER (indeks 3) — bunu kontrol
+ * etmezsek bosaltma adresi yukleme adresi sanilir ve iki noktali bir siparis
+ * iki KALEME bolunur. Onceki kod her alani ayri ayri ve satirlarin tamaminda
+ * aradigi icin bu tuzaga TESADUFEN dusmuyordu; satir bazli siniflandirmada
+ * sinir kontrolu zorunlu.
  */
-function extractConsignment(
+function labelStartsAtWord(folded: string, label: string, index: number): boolean {
+  if (index === 0) return true;
+  return !/[a-z0-9]/.test(folded[index - 1] ?? '');
+}
+
+/** Bir satirin hangi kalem alanini tasidigi — ilk eslesen etiket kazanir. */
+function consignmentFieldOf(line: Line): { field: ConsignmentField; value: string } | null {
+  for (const [field, labels] of Object.entries(CONSIGNMENT_LABELS) as Array<
+    [ConsignmentField, readonly string[]]
+  >) {
+    for (const label of labels) {
+      const index = line.folded.indexOf(label);
+      if (index === -1) continue;
+      if (!labelStartsAtWord(line.folded, label, index)) continue;
+      const after = line.raw.slice(index + label.length);
+      const separator = after.search(/[:=]/);
+      if (separator === -1) continue;
+      const value = after.slice(separator + 1).trim().split(/\s{2,}|[;|]/)[0]?.trim() ?? '';
+      if (value) return { field, value: value.slice(0, 300) };
+    }
+  }
+  return null;
+}
+
+interface ConsignmentGroup {
+  values: Partial<Record<ConsignmentField, { value: string; line: Line }>>;
+  adr?: { value: 'yes' | 'no' | 'unknown'; line: Line };
+  timezone?: { value: string; line: Line };
+}
+
+/**
+ * KALEMLERI GRUPLAR — bir siparis BIRDEN FAZLA kalem tasiyabilir.
+ *
+ * KURAL: satirlar sirayla okunuyor ve AYNI alan ikinci kez gorundugunde YENI
+ * BIR KALEM basliyor. Iki bosaltma noktali bir e-postada
+ *
+ *     Ladestelle: A / Entladestelle: B / Ladung: X
+ *     Ladestelle: C / Entladestelle: D / Ladung: Y
+ *
+ * bu kural iki kalem uretir. Yalnizca ILK eslesmeyi almak — onceki davranis —
+ * ikinci sevkiyati SESSIZCE dusururdu ve musteri iki noktaya gonderdigini
+ * sanarken tek noktaya gitmis bir siparis olusurdu.
+ *
+ * ADR ve zaman dilimi KALEM BAZINDA toplaniyor; belgede tek bir genel ADR
+ * satiri varsa BUTUN kalemlere uygulaniyor, cunku "bu sevkiyat tehlikeli
+ * madde" ifadesi tipik olarak siparisin tamamina aittir.
+ */
+function extractConsignments(
   lines: Line[],
   record: (field: string, line: Line, score: number) => void,
-): Record<string, unknown> | null {
-  const pickup = readLabelled(lines, ['ladestelle', 'beladestelle', 'abholadresse', 'pickup address', 'yukleme adresi'], {
-    maxLength: 300,
+): Array<Record<string, unknown>> {
+  const groups: ConsignmentGroup[] = [];
+  let current: ConsignmentGroup | null = null;
+  /** Belgede tek basina duran genel ADR / zaman dilimi satiri. */
+  let globalAdr: { value: 'yes' | 'no' | 'unknown'; line: Line } | null = null;
+  let globalTimezone: { value: string; line: Line } | null = null;
+
+  for (const line of lines) {
+    const adr = adrOf(line);
+    if (adr) {
+      if (current) current.adr = adr;
+      else globalAdr = adr;
+      continue;
+    }
+
+    const timezone = line.raw.match(/\b(?:Europe|Africa|America|Asia)\/[A-Za-z_]+\b/)?.[0];
+    if (timezone) {
+      const entry = { value: timezone, line };
+      if (current) current.timezone = entry;
+      else globalTimezone = entry;
+      continue;
+    }
+
+    const hit = consignmentFieldOf(line);
+    if (!hit) continue;
+
+    // AYNI ALAN TEKRAR ETTI: yeni kalem basliyor.
+    if (!current || current.values[hit.field] !== undefined) {
+      current = { values: {} };
+      groups.push(current);
+    }
+    current.values[hit.field] = { value: hit.value, line };
+  }
+
+  if (groups.length === 0) {
+    // Kalem alani yok ama genel bir ADR satiri varsa yine de bir kalem acilir:
+    // "Gefahrgut" diyen bir mesajin tehlikeli madde isareti kaybolmamali.
+    if (!globalAdr) return [];
+    groups.push({ values: {} });
+  }
+
+  // SINIR: sozlesme en fazla 20 kalem tasiyor.
+  const limited = groups.slice(0, 20);
+
+  return limited.map((group, index) => {
+    const consignment: Record<string, unknown> = { adr: 'unknown' };
+    const key = (field: string): string => `consignments[${index}].${field}`;
+
+    const text = (field: ConsignmentField, target = field as string): void => {
+      const entry = group.values[field];
+      if (!entry) return;
+      consignment[target] = entry.value;
+      record(key(target), entry.line, CONFIDENCE_LABELLED);
+    };
+
+    text('pickupAddress');
+    text('deliveryAddress');
+    text('cargoDescription');
+    text('pickupWindowStart');
+    text('deliveryWindowStart');
+
+    const numeric = (field: ConsignmentField, integer = false): void => {
+      const entry = group.values[field];
+      if (!entry) return;
+      const parsed = integer
+        ? Number.parseInt(entry.value.replace(/[^\d]/g, ''), 10)
+        : parseAmount(entry.value.replace(/[^\d.,]/g, ''));
+      if (parsed === null || !Number.isFinite(parsed)) return;
+      consignment[field] = parsed;
+      record(key(field), entry.line, CONFIDENCE_LABELLED);
+    };
+
+    numeric('weightKg');
+    numeric('volumeM3');
+    numeric('palletCount', true);
+    numeric('quantity');
+
+    const adr = group.adr ?? globalAdr;
+    if (adr) {
+      consignment.adr = adr.value;
+      record(key('adr'), adr.line, adr.value === 'unknown' ? CONFIDENCE_WEAK : CONFIDENCE_LABELLED);
+    }
+
+    const timezone = group.timezone ?? globalTimezone;
+    if (timezone) {
+      consignment.timezone = timezone.value;
+      record(key('timezone'), timezone.line, CONFIDENCE_PATTERN);
+    }
+
+    return consignment;
   });
-  const delivery = readLabelled(
-    lines,
-    ['entladestelle', 'abladestelle', 'lieferadresse', 'delivery address', 'bosaltma adresi'],
-    { maxLength: 300 },
-  );
-  const cargo = readLabelled(lines, ['ladung', 'ware', 'gut', 'cargo', 'yuk'], { maxLength: 500 });
-  const weight = readLabelled(lines, ['gewicht', 'weight', 'agirlik'], { maxLength: 40, pattern: /\d/ });
-  const pallets = readLabelled(lines, ['paletten', 'palette', 'pallets', 'palet'], { maxLength: 20, pattern: /\d/ });
+}
 
-  const adrLine = lines.find((line) => /\badr\b|gefahrgut|tehlikeli madde|dangerous goods/.test(line.folded));
-
-  if (!pickup && !delivery && !cargo && !adrLine) return null;
-
-  const consignment: Record<string, unknown> = {
-    // ADR DAIMA YAZILIYOR ve varsayilani `unknown`: sozlesme bu alani ZORUNLU
-    // kiliyor ki "belirtilmemis" bir kalem sessizce `no` gibi islem gormesin.
-    adr: 'unknown',
-  };
-
-  if (pickup) {
-    consignment.pickupAddress = pickup.value;
-    record('consignments[0].pickupAddress', pickup.line, CONFIDENCE_LABELLED);
+/**
+ * Bir satirin ADR bildirimi olup olmadigi.
+ *
+ * UC DURUM: acikca "nein/no/hayir" denmediyse ve acikca "ja/evet/Gefahrgut"
+ * denmediyse `unknown` kaliyor. Sessizce `no` saymak, tehlikeli madde tasiyan
+ * bir sevkiyati normal gibi planlatirdi.
+ */
+function adrOf(line: Line): { value: 'yes' | 'no' | 'unknown'; line: Line } | null {
+  if (!/\badr\b|gefahrgut|tehlikeli madde|dangerous goods/.test(line.folded)) return null;
+  if (/\b(nein|no|hayir|kein gefahrgut|keine gefahrgut|not adr|non-adr)\b/.test(line.folded)) {
+    return { value: 'no', line };
   }
-  if (delivery) {
-    consignment.deliveryAddress = delivery.value;
-    record('consignments[0].deliveryAddress', delivery.line, CONFIDENCE_LABELLED);
+  if (
+    /\b(ja|yes|evet|gefahrgut|tehlikeli madde|dangerous goods)\b/.test(line.folded) ||
+    /adr\s*[:=]?\s*(ja|yes|evet)/.test(line.folded)
+  ) {
+    return { value: 'yes', line };
   }
-  if (cargo) {
-    consignment.cargoDescription = cargo.value;
-    record('consignments[0].cargoDescription', cargo.line, CONFIDENCE_LABELLED);
-  }
-  if (weight) {
-    const kilograms = parseAmount(weight.value.replace(/[^\d.,]/g, ''));
-    if (kilograms !== null) {
-      consignment.weightKg = kilograms;
-      record('consignments[0].weightKg', weight.line, CONFIDENCE_LABELLED);
-    }
-  }
-  if (pallets) {
-    const count = Number.parseInt(pallets.value.replace(/[^\d]/g, ''), 10);
-    if (Number.isFinite(count)) {
-      consignment.palletCount = count;
-      record('consignments[0].palletCount', pallets.line, CONFIDENCE_LABELLED);
-    }
-  }
-
-  if (adrLine) {
-    // UC DURUM: acikca "nein/no/hayir" denmediyse `unknown` kaliyor.
-    if (/\b(nein|no|hayir|kein gefahrgut|keine gefahrgut|not adr|non-adr)\b/.test(adrLine.folded)) {
-      consignment.adr = 'no';
-    } else if (/\b(ja|yes|evet|gefahrgut|tehlikeli madde|dangerous goods|adr\s*[:=]?\s*(ja|yes|evet))\b/.test(adrLine.folded)) {
-      consignment.adr = 'yes';
-    }
-    record('consignments[0].adr', adrLine, consignment.adr === 'unknown' ? CONFIDENCE_WEAK : CONFIDENCE_LABELLED);
-  }
-
-  // ZAMAN DILIMI: yalnizca ACIKCA yaziliyorsa. Bir saat gordugumuzde
-  // `Europe/Berlin` VARSAYMIYORUZ — mesaj Rotterdam'dan da gelebilir.
-  const timezone = readPattern(lines, /\b(?:Europe|Africa|America|Asia)\/[A-Za-z_]+\b/);
-  if (timezone) {
-    consignment.timezone = timezone.value;
-    record('consignments[0].timezone', timezone.line, CONFIDENCE_PATTERN);
-  }
-
-  return consignment;
+  return { value: 'unknown', line };
 }
 
 // ---------------------------------------------------------------------------

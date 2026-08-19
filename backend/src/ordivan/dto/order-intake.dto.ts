@@ -11,6 +11,7 @@ import {
   Length,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -194,6 +195,29 @@ export class ApproveOrderIntakeDto {
   @IsOptional()
   @IsBoolean()
   acknowledgeDuplicate?: boolean;
+}
+
+/**
+ * MUSTERI / SIPARIS SECIMI.
+ *
+ * `null` ACIKCA SECIMI KALDIRIR; alani hic gondermemek mevcut secimi KORUR.
+ * Ikisi ayri islem oldugu icin tip de `string | null` ve alanlar opsiyonel.
+ *
+ * KIMLIK BURADA DOGRULANMAZ, SUNUCUDA COZULUR: gelen her kimlik kiraci
+ * kapsamli bir sorguyla yeniden aranir (bkz. OrderIntakeDecisionService.select).
+ */
+export class SelectOrderIntakeDto {
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @Length(1, 64)
+  companyId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @Length(1, 64)
+  orderId?: string | null;
 }
 
 export class RejectOrderIntakeDto {

@@ -4099,6 +4099,20 @@ export const orderIntakeApi = {
       )
       .then((r) => r.data),
 
+  /**
+   * Musteri / mevcut siparis secimi.
+   *
+   * `null` secimi KALDIRIR; alani hic gondermemek mevcut secimi KORUR.
+   * Kimlik sunucuda KIRACI KAPSAMLI olarak yeniden cozuluyor.
+   */
+  select: (reviewId: string, body: { companyId?: string | null; orderId?: string | null }) =>
+    api
+      .post<{ reviewId: string; selectedCompanyId: string | null; selectedOrderId: string | null }>(
+        `/order-intake/reviews/${reviewId}/selection`,
+        body,
+      )
+      .then((r) => r.data),
+
   approve: (
     reviewId: string,
     body: {

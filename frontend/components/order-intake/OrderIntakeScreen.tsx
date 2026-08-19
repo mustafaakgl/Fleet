@@ -11,7 +11,9 @@ import {
   Loader2,
   Mail,
   Paperclip,
+  Plus,
   ShieldAlert,
+  Trash2,
   Upload,
   XCircle,
 } from 'lucide-react';
@@ -25,7 +27,12 @@ import { getApiErrorMessage } from '@/lib/api-errors';
 import { FLEET_FILTER_SELECT } from '@/lib/fleet-table';
 import {
   INTENT_FILTERS,
+  MAX_CONSIGNMENTS,
   channelLabelKey,
+  emptyConsignment,
+  toConsignmentDrafts,
+  toNumberOrNull,
+  validateConsignments,
   fieldLabelKey,
   intentLabelKey,
   intentTone,
@@ -37,6 +44,7 @@ import {
   type IntentFilter,
 } from '@/lib/order-intake-view';
 import type {
+  OrderIntakeConsignmentDraft,
   OrderIntakeMessageDetail,
   OrderIntakeMessageRow,
   OrderIntakeTask,
@@ -73,6 +81,8 @@ export function OrderIntakeScreen() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
   const [impact, setImpact] = useState<Record<string, unknown> | null>(null);
+  /** Ajanin onerisinin DUZENLENEBILIR KOPYASI — oneri degismez. */
+  const [consignments, setConsignments] = useState<OrderIntakeConsignmentDraft[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -108,7 +118,11 @@ export function OrderIntakeScreen() {
     setDetailLoading(true);
     setImpact(null);
     try {
-      setDetail(await orderIntakeApi.detail(messageId));
+      const next = await orderIntakeApi.detail(messageId);
+      setDetail(next);
+      // Kalemler her yuklemede oneriden YENIDEN turetiliyor: yarim kalmis bir
+      // duzenleme baska bir mesaja tasinmamali.
+      setConsignments(toConsignmentDrafts(next.proposed?.payload ?? {}));
     } catch (error) {
       setFeedback({ tone: 'error', text: getApiErrorMessage(error, 'orderIntake.errors.load') });
     } finally {
@@ -163,11 +177,24 @@ export function OrderIntakeScreen() {
   const tasks = useMemo<OrderIntakeTask[]>(() => review?.tasks ?? [], [review]);
   const openTasks = tasks.filter((task) => task.status === 'open');
 
+  const consignmentCheck = useMemo(() => validateConsignments(consignments), [consignments]);
+
   const canApprove =
     review?.status === 'open' &&
     resolvedIntent !== 'unknown' &&
     openTasks.length === 0 &&
+    consignmentCheck.valid &&
     (resolvedIntent === 'new_order' ? Boolean(selectedCompany) : Boolean(selectedOrder));
+
+  /** Tek bir kalem alanini gunceller. */
+  const patchConsignment = useCallback(
+    (index: number, patch: Partial<OrderIntakeConsignmentDraft>) => {
+      setConsignments((current) =>
+        current.map((item, position) => (position === index ? { ...item, ...patch } : item)),
+      );
+    },
+    [],
+  );
 
   const runAction = useCallback(
     async (action: () => Promise<string>) => {
@@ -494,6 +521,211 @@ export function OrderIntakeScreen() {
                 </p>
               ) : null}
 
+              {/* ---------------- Musteri / siparis secimi ---------------- */}
+              {review?.status === 'open' ? (
+                <div className="grid gap-3 rounded border border-slate-200 p-3 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="order-intake-company"
+                      className="text-xs font-medium text-slate-600"
+                    >
+                      {t('orderIntake.select.company')}
+                    </label>
+                    <select
+                      id="order-intake-company"
+                      className={FLEET_FILTER_SELECT}
+                      value={selectedCompany?.id ?? ''}
+                      disabled={busy}
+                      onChange={(event) =>
+                        void runAction(async () => {
+                          await orderIntakeApi.select(review.id, {
+                            // BOS SECIM `null` gonderir — secimi KALDIRIR.
+                            companyId: event.target.value || null,
+                          });
+                          return t('orderIntake.select.saved');
+                        })
+                      }
+                    >
+                      <option value="">{t('orderIntake.select.none')}</option>
+                      {(review.companyOptions ?? []).map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {t('orderIntake.select.candidateNote')}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="order-intake-order" className="text-xs font-medium text-slate-600">
+                      {t('orderIntake.select.order')}
+                    </label>
+                    <select
+                      id="order-intake-order"
+                      className={FLEET_FILTER_SELECT}
+                      value={selectedOrder?.id ?? ''}
+                      disabled={busy}
+                      onChange={(event) =>
+                        void runAction(async () => {
+                          await orderIntakeApi.select(review.id, {
+                            orderId: event.target.value || null,
+                          });
+                          return t('orderIntake.select.saved');
+                        })
+                      }
+                    >
+                      <option value="">{t('orderIntake.select.none')}</option>
+                      {(review.orderOptions ?? []).map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.orderNumber}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* ---------------- Kalem duzenleme ---------------- */}
+              {review?.status === 'open' ? (
+                <div className="rounded border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      {t('orderIntake.consignments.title')}
+                    </h3>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={consignments.length >= MAX_CONSIGNMENTS}
+                      onClick={() => setConsignments((current) => [...current, emptyConsignment()])}
+                    >
+                      <Plus className="mr-1 h-4 w-4" aria-hidden />
+                      {t('orderIntake.consignments.add')}
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {t('orderIntake.consignments.limit', { max: MAX_CONSIGNMENTS })}
+                  </p>
+
+                  <ul className="mt-3 space-y-3">
+                    {consignments.map((consignment, index) => (
+                      <li
+                        key={index}
+                        className={`rounded border p-2 ${
+                          consignmentCheck.incompleteIndexes.includes(index)
+                            ? 'border-red-300 bg-red-50'
+                            : 'border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-slate-600">
+                            {t('orderIntake.consignments.item', { index: index + 1 })}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={t('orderIntake.consignments.remove')}
+                            onClick={() =>
+                              setConsignments((current) =>
+                                current.filter((_item, position) => position !== index),
+                              )
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                          </Button>
+                        </div>
+
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {(
+                            [
+                              ['pickupAddress', 'consignment.pickupAddress'],
+                              ['deliveryAddress', 'consignment.deliveryAddress'],
+                              ['cargoDescription', 'consignment.cargoDescription'],
+                              ['unit', 'consignment.unit'],
+                            ] as const
+                          ).map(([field, labelKey]) => (
+                            <label key={field} className="text-xs text-slate-600">
+                              {t(`orderIntake.field.${labelKey}`)}
+                              <Input
+                                value={String(consignment[field] ?? '')}
+                                onChange={(event) =>
+                                  patchConsignment(index, { [field]: event.target.value })
+                                }
+                              />
+                            </label>
+                          ))}
+
+                          {(
+                            [
+                              ['pickupWindowStart', 'consignment.pickupWindowStart'],
+                              ['deliveryWindowStart', 'consignment.deliveryWindowStart'],
+                            ] as const
+                          ).map(([field, labelKey]) => (
+                            <label key={field} className="text-xs text-slate-600">
+                              {t(`orderIntake.field.${labelKey}`)}
+                              <Input
+                                type="datetime-local"
+                                value={String(consignment[field] ?? '')}
+                                onChange={(event) =>
+                                  patchConsignment(index, { [field]: event.target.value || null })
+                                }
+                              />
+                            </label>
+                          ))}
+
+                          {(
+                            [
+                              ['quantity', 'consignment.quantity'],
+                              ['weightKg', 'consignment.weightKg'],
+                              ['volumeM3', 'consignment.volumeM3'],
+                              ['palletCount', 'consignment.palletCount'],
+                            ] as const
+                          ).map(([field, labelKey]) => (
+                            <label key={field} className="text-xs text-slate-600">
+                              {t(`orderIntake.field.${labelKey}`)}
+                              <Input
+                                inputMode="decimal"
+                                value={consignment[field] === null || consignment[field] === undefined ? '' : String(consignment[field])}
+                                onChange={(event) =>
+                                  patchConsignment(index, {
+                                    [field]: toNumberOrNull(event.target.value),
+                                  })
+                                }
+                              />
+                            </label>
+                          ))}
+
+                          <label className="text-xs text-slate-600">
+                            {t('orderIntake.field.consignment.adr')}
+                            <select
+                              className={FLEET_FILTER_SELECT}
+                              value={consignment.adrStatus ?? 'unknown'}
+                              onChange={(event) =>
+                                patchConsignment(index, {
+                                  adrStatus: event.target.value as 'yes' | 'no' | 'unknown',
+                                })
+                              }
+                            >
+                              {/* `unknown` GECERLI ve GUVENLI SAYILMAZ. */}
+                              <option value="unknown">{t('orderIntake.adr.unknown')}</option>
+                              <option value="no">{t('orderIntake.adr.no')}</option>
+                              <option value="yes">{t('orderIntake.adr.yes')}</option>
+                            </select>
+                          </label>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {consignmentCheck.incompleteIndexes.length > 0 ? (
+                    <p className="mt-2 text-xs text-red-700">
+                      {t('orderIntake.consignments.incomplete')}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
               {/* Inceleme gorevleri */}
               {tasks.length > 0 ? (
                 <div>
@@ -593,6 +825,7 @@ export function OrderIntakeScreen() {
                           orderId: selectedOrder?.id,
                           expectedUpdatedAt: selectedOrder?.updatedAt,
                           values: payload,
+                          consignments,
                           acknowledgeDuplicate: review.possibleDuplicate,
                         });
                         return result.transportOrderId

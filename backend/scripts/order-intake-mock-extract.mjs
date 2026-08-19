@@ -28,12 +28,148 @@ const LABELS = {
   ],
   orderDate: ['auftragsdatum', 'bestelldatum', 'order date', 'siparis tarihi'],
   specialInstructions: ['hinweise', 'bemerkung', 'anmerkung', 'special instructions', 'aciklama'],
+};
+
+/** Kalem alanlarinin etiketleri — GRUPLAMA bunlarin uzerinden yapiliyor. */
+const CONSIGNMENT_LABELS = {
   pickupAddress: ['ladestelle', 'beladestelle', 'abholadresse', 'pickup address', 'yukleme adresi'],
   deliveryAddress: ['entladestelle', 'abladestelle', 'lieferadresse', 'delivery address', 'bosaltma adresi'],
   cargoDescription: ['ladung', 'ware', 'gut', 'cargo', 'yuk'],
   weightKg: ['gewicht', 'weight', 'agirlik'],
   palletCount: ['paletten', 'palette', 'pallets', 'palet'],
+  quantity: ['menge', 'quantity', 'miktar'],
+  volumeM3: ['volumen', 'volume', 'hacim'],
+  pickupWindowStart: ['ladezeit', 'abholung am', 'pickup time', 'yukleme zamani'],
+  deliveryWindowStart: ['lieferzeit', 'zustellung am', 'delivery time', 'teslim zamani'],
 };
+
+/**
+ * Etiket satirda KELIME BASINDA mi geciyor. `Entladestelle` icinde
+ * `ladestelle` gecer; sinir kontrolu olmadan bosaltma yukleme sanilir.
+ */
+function labelStartsAtWord(folded, label, index) {
+  if (index === 0) return true;
+  return !/[a-z0-9]/.test(folded[index - 1] ?? '');
+}
+
+function consignmentFieldOf(line) {
+  for (const [field, labels] of Object.entries(CONSIGNMENT_LABELS)) {
+    for (const label of labels) {
+      const index = line.folded.indexOf(label);
+      if (index === -1) continue;
+      if (!labelStartsAtWord(line.folded, label, index)) continue;
+      const after = line.raw.slice(index + label.length);
+      const separator = after.search(/[:=]/);
+      if (separator === -1) continue;
+      const value = (after.slice(separator + 1).trim().split(/\s{2,}|[;|]/)[0] ?? '').trim();
+      if (value) return { field, value: value.slice(0, 300) };
+    }
+  }
+  return null;
+}
+
+/** Bir satirin ADR bildirimi olup olmadigi. Uc durumlu. */
+function adrOf(line) {
+  if (!/\badr\b|gefahrgut|tehlikeli madde|dangerous goods/.test(line.folded)) return null;
+  if (/\b(nein|no|hayir|kein gefahrgut|keine gefahrgut|not adr|non-adr)\b/.test(line.folded)) {
+    return { value: 'no', line };
+  }
+  if (
+    /\b(ja|yes|evet|gefahrgut|tehlikeli madde|dangerous goods)\b/.test(line.folded) ||
+    /adr\s*[:=]?\s*(ja|yes|evet)/.test(line.folded)
+  ) {
+    return { value: 'yes', line };
+  }
+  return { value: 'unknown', line };
+}
+
+/**
+ * KALEMLERI GRUPLAR — sunucudaki `extractConsignments` ile AYNI kural:
+ * ayni alan ikinci kez gorundugunde yeni kalem baslar.
+ */
+function extractConsignments(lines, record) {
+  const groups = [];
+  let current = null;
+  let globalAdr = null;
+  let globalTimezone = null;
+
+  for (const line of lines) {
+    const adr = adrOf(line);
+    if (adr) {
+      if (current) current.adr = adr;
+      else globalAdr = adr;
+      continue;
+    }
+
+    const timezone = line.raw.match(/\b(?:Europe|Africa|America|Asia)\/[A-Za-z_]+\b/)?.[0];
+    if (timezone) {
+      const entry = { value: timezone, line };
+      if (current) current.timezone = entry;
+      else globalTimezone = entry;
+      continue;
+    }
+
+    const hit = consignmentFieldOf(line);
+    if (!hit) continue;
+
+    if (!current || current.values[hit.field] !== undefined) {
+      current = { values: {} };
+      groups.push(current);
+    }
+    current.values[hit.field] = { value: hit.value, line };
+  }
+
+  if (groups.length === 0) {
+    if (!globalAdr) return [];
+    groups.push({ values: {} });
+  }
+
+  return groups.slice(0, 20).map((group, index) => {
+    const consignment = { adr: 'unknown' };
+    const key = (field) => `consignments[${index}].${field}`;
+
+    const text = (field) => {
+      const entry = group.values[field];
+      if (!entry) return;
+      consignment[field] = entry.value;
+      record(key(field), entry.line, CONFIDENCE_LABELLED);
+    };
+    text('pickupAddress');
+    text('deliveryAddress');
+    text('cargoDescription');
+    text('pickupWindowStart');
+    text('deliveryWindowStart');
+
+    const numeric = (field, integer = false) => {
+      const entry = group.values[field];
+      if (!entry) return;
+      const parsed = integer
+        ? Number.parseInt(entry.value.replace(/[^\d]/g, ''), 10)
+        : parseAmount(entry.value.replace(/[^\d.,]/g, ''));
+      if (parsed === null || !Number.isFinite(parsed)) return;
+      consignment[field] = parsed;
+      record(key(field), entry.line, CONFIDENCE_LABELLED);
+    };
+    numeric('weightKg');
+    numeric('volumeM3');
+    numeric('palletCount', true);
+    numeric('quantity');
+
+    const adr = group.adr ?? globalAdr;
+    if (adr) {
+      consignment.adr = adr.value;
+      record(key('adr'), adr.line, adr.value === 'unknown' ? CONFIDENCE_WEAK : CONFIDENCE_LABELLED);
+    }
+
+    const timezone = group.timezone ?? globalTimezone;
+    if (timezone) {
+      consignment.timezone = timezone.value;
+      record(key('timezone'), timezone.line, CONFIDENCE_PATTERN);
+    }
+
+    return consignment;
+  });
+}
 
 const INTENT_TERMS = {
   cancellation: [
@@ -269,59 +405,10 @@ export function extractOrderPayload(content) {
     }
   }
 
-  // --- Kalem ---
-  const pickup = readLabelled(lines, LABELS.pickupAddress, 300);
-  const delivery = readLabelled(lines, LABELS.deliveryAddress, 300);
-  const cargo = readLabelled(lines, LABELS.cargoDescription, 500);
-  const weight = readLabelled(lines, LABELS.weightKg, 40, /\d/);
-  const pallets = readLabelled(lines, LABELS.palletCount, 20, /\d/);
-  const adrLine = lines.find((line) => /\badr\b|gefahrgut|tehlikeli madde|dangerous goods/.test(line.folded));
-
-  if (pickup || delivery || cargo || adrLine) {
-    // ADR DAIMA yaziliyor ve varsayilani `unknown`.
-    const consignment = { adr: 'unknown' };
-    if (pickup) {
-      consignment.pickupAddress = pickup.value;
-      record('consignments[0].pickupAddress', pickup.line, CONFIDENCE_LABELLED);
-    }
-    if (delivery) {
-      consignment.deliveryAddress = delivery.value;
-      record('consignments[0].deliveryAddress', delivery.line, CONFIDENCE_LABELLED);
-    }
-    if (cargo) {
-      consignment.cargoDescription = cargo.value;
-      record('consignments[0].cargoDescription', cargo.line, CONFIDENCE_LABELLED);
-    }
-    if (weight) {
-      const kilograms = parseAmount(weight.value.replace(/[^\d.,]/g, ''));
-      if (kilograms !== null) {
-        consignment.weightKg = kilograms;
-        record('consignments[0].weightKg', weight.line, CONFIDENCE_LABELLED);
-      }
-    }
-    if (pallets) {
-      const count = Number.parseInt(pallets.value.replace(/[^\d]/g, ''), 10);
-      if (Number.isFinite(count)) {
-        consignment.palletCount = count;
-        record('consignments[0].palletCount', pallets.line, CONFIDENCE_LABELLED);
-      }
-    }
-    if (adrLine) {
-      if (/\b(nein|no|hayir|kein gefahrgut|keine gefahrgut|not adr|non-adr)\b/.test(adrLine.folded)) {
-        consignment.adr = 'no';
-      } else if (
-        /\b(ja|yes|evet|gefahrgut|tehlikeli madde|dangerous goods|adr\s*[:=]?\s*(ja|yes|evet))\b/.test(adrLine.folded)
-      ) {
-        consignment.adr = 'yes';
-      }
-      record('consignments[0].adr', adrLine, consignment.adr === 'unknown' ? CONFIDENCE_WEAK : CONFIDENCE_LABELLED);
-    }
-    const timezone = readPattern(lines, /\b(?:Europe|Africa|America|Asia)\/[A-Za-z_]+\b/);
-    if (timezone) {
-      consignment.timezone = timezone.value;
-      record('consignments[0].timezone', timezone.line, CONFIDENCE_PATTERN);
-    }
-    payload.consignments = [consignment];
+  // --- Kalemler: BIRDEN FAZLA olabilir ---
+  const consignments = extractConsignments(lines, record);
+  if (consignments.length > 0) {
+    payload.consignments = consignments;
   }
 
   const instructions = readLabelled(lines, LABELS.specialInstructions, 2000);
