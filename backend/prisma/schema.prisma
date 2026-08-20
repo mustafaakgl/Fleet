@@ -4734,6 +4734,9 @@ model AutomationJob {
   runs      AgentRun[]
   proposals AutomationProposal[]
 
+  /// Faz 17 — bu isin uretmekte oldugu dispatch talebi.
+  dispatchProposal DispatchProposal? @relation("DispatchProposalJob")
+
   @@index([tenantId])
   /// Kiralama sorgusunun canonical yolu: kiraci + durum + en eski once.
   @@index([tenantId, status, createdAt])
@@ -5862,7 +5865,26 @@ enum DispatchCheckStatus {
   unknown
 }
 
-/// Onerinin yasam dongusu.
+/**
+ * URETIM YASAM DONGUSU — INCELEME DURUMUNDAN AYRI.
+ * `DispatchProposalStatus` INSANIN karari, bu ise ONERININ URETILIP
+ * URETILMEDIGI. Ikisini tek alanda birlestirmek, "henuz hesaplanmadi" ile
+ * "hesaplandi ama karar verilmedi" arasindaki farki kaybettirirdi.
+ * `proposalId` YALNIZCA `ready` durumunda ZORUNLU sayilir: kayit uretim
+ * TALEBI olarak dogar, ajanin ciktisi sonradan baglanir.
+ */
+enum DispatchProposalGeneration {
+  queued
+  processing
+  /// Ajan ciktisi baglandi; `proposalId` DOLU olmali.
+  ready
+  /// Uretim basarisiz. Kontrollu bicimde YENIDEN calistirilabilir.
+  failed
+  /// Suresi doldu. Sessizce hazir sayilmaz.
+  expired
+}
+
+/// Onerinin INSAN KARARI dongusu. Yalnizca `generation = ready` iken anlamli.
 enum DispatchProposalStatus {
   open
   approved
@@ -5921,10 +5943,62 @@ model DispatchProposal {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   /// Ajanin DEGISMEZ ciktisi.
-  proposalId String             @unique
-  proposal   AutomationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  /**
+   * /**
+   * AJANIN CIKTISI — SONRADAN BAGLANIR.
+   * NULLABLE cunku bu kayit uretim TALEBI olarak dogar; `AutomationProposal`
+   * ancak worker isi tamamlayinca olusur. `@unique` NULL'lari birbirinden
+   * AYRI saydigi icin exactly-once garantisi kaybolmaz — ama TEK BASINA
+   * YETMEZ: birden fazla talep ayni anda `null` tasiyabilir. Asil koruma,
+   * baglamanin KOSULLU bir update (CAS) ile yapilmasi;
+   * bkz. core/dispatch-generation.ts.
+   */
+  proposalId String?             @unique
+  proposal   AutomationProposal? @relation(fields: [proposalId], references: [id], onDelete: Cascade)
 
   status DispatchProposalStatus @default(open)
+
+  /// Uretim asamasi. `ready` olana kadar bu kayit bir TALEPTIR.
+  generation DispatchProposalGeneration @default(queued)
+
+  /**
+   * URETIM ISI — TEK.
+   * `@unique`: bir oneri EN FAZLA BIR isle iliskilenir. Iki is baglanabilseydi
+   * iki worker ayni oneriye iki ayri cikti yazmaya calisirdi.
+   * Oneri ve is AYNI TRANSACTION'da olusuyor: isi olmayan talep ya da talebi
+   * olmayan is kalamaz.
+   */
+  jobId String?        @unique
+  job   AutomationJob? @relation("DispatchProposalJob", fields: [jobId], references: [id], onDelete: SetNull)
+
+  /**
+   * BEKLENEN DENEME NUMARASI.
+   * Is yeniden denendiginde artar. Worker'in GEC gelen cevabi eski denemeye
+   * aitse CAS kosulu tutmaz ve cevap yok sayilir — yoksa bayat bir sonuc
+   * guncel denemenin uzerine yazardi.
+   */
+  jobAttempt Int @default(1)
+
+  /**
+   * ISTEK PARMAK IZI — kiraci kapsamli.
+   * Planlama baglaminin (siparisler + revizyonlari) deterministik ozeti.
+   * Tekrarlanan istegi tanimak icin saklaniyor.
+   */
+  requestFingerprint String
+
+  /**
+   * AKTIF PARMAK IZI — TEKILLIK TASIYICISI.
+   * Oneri CANLI iken (`queued`/`processing`, ya da `ready` + karar bekliyor)
+   * `requestFingerprint` degerini, aksi halde `null` tasir. `@unique` oldugu
+   * icin ayni baglamda ayni anda IKI URETIM imkansiz — kural uygulamada degil
+   * VERITABANINDA.
+   * KALICI DEGIL: basarisiz/suresi dolmus ya da karara baglanmis oneri bu
+   * alani BIRAKIR; boylece ayni siparis daha sonra BILINCLI OLARAK yeniden
+   * planlanabilir. `(order, revision)` uzerine kalici unique koysaydik,
+   * musteri hicbir sey degistirmeden ikinci kez plan yapamazdi (Faz 15
+   * `duplicateKey` ile ayni gerekce).
+   */
+  activeFingerprint String? @unique
 
   /**
    * HESAPLAMA ZAMANI.
@@ -5969,6 +6043,8 @@ model DispatchProposal {
 
   @@index([tenantId])
   @@index([tenantId, status, createdAt])
+  @@index([tenantId, generation, createdAt])
+  @@index([tenantId, requestFingerprint])
   @@map("dispatch_proposals")
 }
 
