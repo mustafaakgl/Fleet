@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { type Location, type Tour, TourStatus, TourStopKind, TruckAccessStatus } from '@prisma/client';
+import { Prisma, type Location, type Tour, TourStatus, TourStopKind, TruckAccessStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   applyOptimizedOrder,
@@ -255,7 +255,41 @@ export class TourService {
    * gorev sirasidir; optimizasyon ayri bir adim olarak calisir. Bu ayrim
    * bilincli — dispatcher once ne istedigini gorur, sonra sistemin onerisini.
    */
-  async createFromAssignments(params: CreateTourFromAssignmentsParams): Promise<Tour> {
+
+  /**
+   * DIS TRANSACTION VARSA ONA KATIL, yoksa kendi islemini ac.
+   *
+   * Prisma IC ICE `$transaction` DESTEKLEMEZ: dis bir islem surerken ikincisini
+   * acmak ya kilitlenir ya da sessizce AYRI bir baglantida calisir — ikincisi
+   * daha tehlikeli, cunku dis islem geri alindiginda ic yazim KALIR.
+   *
+   * Bu yardimci o secimi TEK YERDE yapiyor. Govde degismiyor, dolayisiyla
+   * dogrulama mantigi KOPYALANMIYOR: cagiran ister tek basina ister daha genis
+   * bir islemin parcasi olarak calissin, AYNI kontrollerden geciyor.
+   */
+  private runInTransaction<T>(
+    tx: Prisma.TransactionClient | undefined,
+    body: (client: Prisma.TransactionClient) => Promise<T>,
+    options?: { isolationLevel?: Prisma.TransactionIsolationLevel },
+  ): Promise<T> {
+    // IZOLASYON SEVIYESI KORUNUYOR: kendi islemimizi acarken cagiranin
+    // istedigi seviye aynen geciyor. Dis bir isleme KATILIRKEN seviye o
+    // islemin seviyesidir — bu yuzden dispatch onayi kendi islemini
+    // `Serializable` aciyor; daha gevsek bir seviyede cakisma kontrolu
+    // yaris kosullarina acik kalirdi.
+    return tx ? body(tx) : this.prisma.$transaction(body, options);
+  }
+
+  /**
+   * Gorevlerden tur olusturur.
+   *
+   * `externalTx`: verilirse yazim DIS islemin parcasi olur — dispatch onayinda
+   * `Assignment` ve `Tour` atomik olsun diye.
+   */
+  async createFromAssignments(
+    params: CreateTourFromAssignmentsParams,
+    externalTx?: Prisma.TransactionClient,
+  ): Promise<Tour> {
     if (params.assignmentIds.length === 0) {
       throw new BadRequestException({ code: 'no_assignments' });
     }
@@ -286,7 +320,7 @@ export class TourService {
       });
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.runInTransaction(externalTx, async (tx) => {
       const tour = await tx.tour.create({
         data: {
           name: params.name ?? null,

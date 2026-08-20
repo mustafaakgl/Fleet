@@ -14,6 +14,8 @@ import { OrderIntakeController } from './order-intake.controller';
 import { OrderIntakeDecisionService } from './order-intake-decision.service';
 import { OrderIntakeService } from './order-intake.service';
 import { DispatchService } from './dispatch.service';
+import { DispatchApprovalService } from './dispatch-approval.service';
+import { AssignmentsModule } from '../assignments/assignments.module';
 import { RoutingModule } from '../routing/routing.module';
 import { OrdivanAdminController } from './ordivan-admin.controller';
 import { OrdivanConnectorController } from './ordivan-connector.controller';
@@ -29,7 +31,7 @@ import { resolveOrdivanMode } from './ordivan.config';
  * tehlikeli basarisizlik bicimi olurdu.
  */
 @Module({
-  imports: [PrismaModule, AuditModule, TransportOrdersModule, RoutingModule],
+  imports: [PrismaModule, AuditModule, TransportOrdersModule, RoutingModule, AssignmentsModule],
   controllers: [
     OrdivanAdminController,
     OrdivanConnectorController,

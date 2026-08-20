@@ -537,7 +537,48 @@ export class AssignmentsService {
     return { created, skipped, total: source.length };
   }
 
-  async create(dto: CreateAssignmentDto, currentUserId: string) {
+
+  /**
+   * DIS TRANSACTION VARSA ONA KATIL, yoksa kendi islemini ac.
+   *
+   * Prisma IC ICE `$transaction` DESTEKLEMEZ: dis bir islem surerken ikincisini
+   * acmak ya kilitlenir ya da sessizce AYRI bir baglantida calisir — ikincisi
+   * daha tehlikeli, cunku dis islem geri alindiginda ic yazim KALIR.
+   *
+   * Bu yardimci o secimi TEK YERDE yapiyor. Govde degismiyor, dolayisiyla
+   * dogrulama mantigi KOPYALANMIYOR: cagiran ister tek basina ister daha genis
+   * bir islemin parcasi olarak calissin, AYNI kontrollerden geciyor.
+   */
+  private runInTransaction<T>(
+    tx: Prisma.TransactionClient | undefined,
+    body: (client: Prisma.TransactionClient) => Promise<T>,
+    options?: { isolationLevel?: Prisma.TransactionIsolationLevel },
+  ): Promise<T> {
+    // IZOLASYON SEVIYESI KORUNUYOR: kendi islemimizi acarken cagiranin
+    // istedigi seviye aynen geciyor. Dis bir isleme KATILIRKEN seviye o
+    // islemin seviyesidir — bu yuzden dispatch onayi kendi islemini
+    // `Serializable` aciyor; daha gevsek bir seviyede cakisma kontrolu
+    // yaris kosullarina acik kalirdi.
+    return tx ? body(tx) : this.prisma.$transaction(body, options);
+  }
+
+  /**
+   * Gorev olusturur.
+   *
+   * `externalTx`: verilirse yazim DIS islemin parcasi olur. Dispatch onayi
+   * bunu kullaniyor ki `Assignment` ve `Tour` ya BIRLIKTE olussun ya da
+   * hicbiri olusmasin.
+   *
+   * DIKKAT — islem ONCESI okumalar: ehliyet kapisi, sirket ve kiraci
+   * okumalari islem disinda kaliyor (mevcut davranis). Bunlar SALT OKUNUR
+   * dogrulamalar; baglayici cakisma kontrolu (`validateAvailability`) islemin
+   * ICINDE ve dis islem geri alindiginda hicbir yazim kalmiyor.
+   */
+  async create(
+    dto: CreateAssignmentDto,
+    currentUserId: string,
+    externalTx?: Prisma.TransactionClient,
+  ) {
     const workDate = new Date(dto.work_date);
     if (Number.isNaN(workDate.getTime())) {
       throw new BadRequestException('Invalid work_date');
@@ -590,7 +631,7 @@ export class AssignmentsService {
       tenantBaseCurrency: tenant?.baseCurrency,
     });
 
-    const created = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const created = await this.runInTransaction(externalTx, async (tx) => {
       const startTime = this.normalizeTime(dto.start_time);
       const endTime = this.normalizeTime(dto.end_time);
       const conflict = await this.validateAvailability(tx, {
@@ -668,9 +709,9 @@ export class AssignmentsService {
       });
 
       return assignment;
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }).catch(mapAssignmentTransactionError);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(
+      mapAssignmentTransactionError,
+    );
 
     await this.companyEmailsService.updateEmailStatusAfterAssignmentChange(
       created.companyId,
