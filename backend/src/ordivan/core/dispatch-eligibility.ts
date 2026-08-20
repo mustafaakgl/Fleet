@@ -573,6 +573,62 @@ export interface OverrideDeclaration {
   code: string;
   note?: string;
   answer?: 'yes' | 'no';
+  /**
+   * BEYANIN KAPSAMI.
+   *
+   * Bir beyan BELIRLI BIR DURUMA aittir: hangi oneride, hangi surucu ve arac
+   * icin, hangi is gununde ve onerinin hangi damgasinda verildi. Kapsam
+   * tasinmasin diye burada tasiniyor — `scopeMatches` disinda hicbir yerde
+   * gecerli sayilmaz.
+   */
+  scope?: OverrideScope;
+}
+
+/**
+ * KAPSAM — DORT PARCA + DAMGA.
+ *
+ * Dordu birden eslesmezse beyan GECERSIZDIR ve kontrol yeniden `unknown`
+ * olur. Bir gun icin verilmis "surucunun kartina baktim" beyaninin ertesi gun
+ * ya da baska bir surucu icin gecerli sayilmasi, kontrolun kendisini
+ * anlamsiz kilardi.
+ */
+export interface OverrideScope {
+  dispatchProposalId: string;
+  driverId: string | null;
+  vehicleId: string | null;
+  /** ISO 'YYYY-MM-DD'. */
+  workDate: string;
+  /** Beyan verildigi andaki oneri damgasi. */
+  proposalRevision: number;
+}
+
+/**
+ * Beyanin BU baglamda gecerli olup olmadigi.
+ *
+ * KAPSAMSIZ BEYAN GECERSIZ: `scope` yoksa beyan hicbir yere baglanmamis
+ * demektir ve serbest bir bayrak gibi davranirdi. Baglam verilmisken
+ * kapsamsiz beyani kabul etmek, kilidi acik birakmak olurdu.
+ */
+export function scopeMatches(
+  declaration: OverrideDeclaration,
+  context: OverrideScope | null,
+): boolean {
+  if (!context) {
+    // Baglam bilinmiyorsa kapsam dogrulanamaz; saf motor bu durumda
+    // kapsami ARAMAZ (birim testleri ve onizleme icin).
+    return true;
+  }
+  const scope = declaration.scope;
+  if (!scope) return false;
+
+  return (
+    scope.dispatchProposalId === context.dispatchProposalId &&
+    scope.driverId === context.driverId &&
+    scope.vehicleId === context.vehicleId &&
+    scope.workDate === context.workDate &&
+    // ONERI YENIDEN HESAPLANDIYSA eski beyan TASINMAZ.
+    scope.proposalRevision === context.proposalRevision
+  );
 }
 
 /** Aciklamanin anlamli sayilmasi icin gereken en az uzunluk. */
@@ -614,6 +670,8 @@ export interface ApplyGate {
 export function resolveApplyGate(
   checks: readonly DispatchCheck[],
   declarations: readonly OverrideDeclaration[] = [],
+  /** Verilirse her beyanin kapsami BU baglama karsi dogrulanir. */
+  context: OverrideScope | null = null,
 ): ApplyGate {
   const overall = overallStatus(checks);
   const decision = decisionOf(overall);
@@ -627,7 +685,11 @@ export function resolveApplyGate(
   const needsDeclaration: DispatchCheck[] = [];
 
   for (const item of overridable) {
-    const declaration = declarations.find((entry) => entry.code === item.code);
+    // KAPSAM DISI BEYAN YOK SAYILIR: baska bir gune ya da baska bir oneriye
+    // ait bir beyan, bu kontrolu asamaz.
+    const declaration = declarations.find(
+      (entry) => entry.code === item.code && scopeMatches(entry, context),
+    );
     if (!declaration) {
       needsDeclaration.push(item);
       continue;

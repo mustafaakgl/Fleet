@@ -6,6 +6,7 @@ import {
   evaluateAdr,
   isRecommendable,
   resolveApplyGate,
+  scopeMatches,
   evaluateCandidate,
   evaluateDriveTime,
   evaluateDriver,
@@ -618,5 +619,73 @@ describe('Uygulama kapisi — temiz aday', () => {
     const result = evaluateCandidate({ vehicle: vehicle(), driver: driver(), demand: demand(), at: AT });
     const gate = resolveApplyGate(result.checks, [{ code: 'driver_drive_time', note: 'gereksiz beyan' }]);
     assert.equal(gate.mode, 'direct');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Beyanin KAPSAMI — baska gune/oneriye tasinamaz
+// ---------------------------------------------------------------------------
+
+describe('Override beyani KAPSAMA KILITLI', () => {
+  const scope = {
+    dispatchProposalId: 'dp-1',
+    driverId: 'drv-1',
+    vehicleId: 'veh-1',
+    workDate: '2026-09-01',
+    proposalRevision: 3,
+  };
+  const declaration = {
+    code: 'driver_drive_time',
+    note: 'surucu kartini elle okudum, 6 saat kaldi',
+    scope,
+  };
+  const noTacho = () => evaluateDriver(driver({ remainingDriveMinutes: null }), AT);
+
+  it('tam eslesen kapsamda beyan GECERLI', () => {
+    const gate = resolveApplyGate(noTacho(), [declaration], scope);
+    assert.equal(gate.applicable, true);
+    assert.equal(gate.mode, 'manual_override');
+  });
+
+  it('BASKA GUNE tasinamaz', () => {
+    const gate = resolveApplyGate(noTacho(), [declaration], { ...scope, workDate: '2026-09-02' });
+    assert.equal(gate.applicable, false);
+  });
+
+  it('BASKA SURUCUYE tasinamaz', () => {
+    const gate = resolveApplyGate(noTacho(), [declaration], { ...scope, driverId: 'drv-2' });
+    assert.equal(gate.applicable, false);
+  });
+
+  it('BASKA ARACA tasinamaz', () => {
+    const gate = resolveApplyGate(noTacho(), [declaration], { ...scope, vehicleId: 'veh-2' });
+    assert.equal(gate.applicable, false);
+  });
+
+  it('BASKA ONERIYE tasinamaz', () => {
+    const gate = resolveApplyGate(noTacho(), [declaration], { ...scope, dispatchProposalId: 'dp-2' });
+    assert.equal(gate.applicable, false);
+  });
+
+  it('ONERI YENIDEN HESAPLANDIYSA eski beyan gecersiz', () => {
+    // Damga degisti: araclar ya da siparis degismis olabilir.
+    const gate = resolveApplyGate(noTacho(), [declaration], { ...scope, proposalRevision: 4 });
+    assert.equal(gate.applicable, false);
+  });
+
+  it('KAPSAMSIZ beyan, baglam varken GECERSIZ', () => {
+    const gate = resolveApplyGate(
+      noTacho(),
+      [{ code: 'driver_drive_time', note: 'kartina baktim, suresi var' }],
+      scope,
+    );
+    assert.equal(gate.applicable, false);
+  });
+
+  it('scopeMatches tek tek dogrulanabiliyor', () => {
+    assert.equal(scopeMatches(declaration, scope), true);
+    assert.equal(scopeMatches(declaration, { ...scope, workDate: '2026-09-03' }), false);
+    // Baglam yoksa kapsam ARANMAZ (birim testi / onizleme yolu).
+    assert.equal(scopeMatches(declaration, null), true);
   });
 });

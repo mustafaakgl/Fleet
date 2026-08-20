@@ -1002,112 +1002,113 @@ model Tenant {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  users                      User[]
-  invitations                UserInvitation[]
-  subscription               TenantSubscription?
-  drivers                    Driver[]
-  vehicles                   Vehicle[]
-  companies                  Company[]
-  assignments                Assignment[]
-  transportRequests          TransportRequest[]
-  calendarEvents             CalendarEvent[]
-  requests                   Request[]
-  documents                  Document[]
-  vehicleHandovers           VehicleHandover[]
-  accidents                  Accident[]
-  companyEmails              CompanyEmail[]
-  notifications              Notification[]
-  reminders                  Reminder[]
-  morningCheckins            MorningCheckin[]
-  serviceRecords             ServiceRecord[]
-  conversations              Conversation[]
-  messageAttachments         MessageAttachment[]
-  messageTranslations        MessageTranslation[]
-  auditLogs                  AuditLog[]
-  driverLocationHistory      DriverLocationHistory[]
-  driverLocationLatest       DriverLocationLatest[]
-  customerAssignmentMessages CustomerAssignmentMessage[]
-  workSessions               WorkSession[]
-  vehicleEquipment           VehicleEquipment[]
-  driverLicenses             DriverLicense[]
-  licenseChecks              LicenseCheck[]
-  checklistTemplates         ChecklistTemplate[]
-  departureChecks            DepartureCheck[]
-  defects                    Defect[]
-  defectStatusLogs           DefectStatusLog[]
-  departureCheckReminders    DepartureCheckReminderState[]
-  fines                      Fine[]
-  fineStatusLogs             FineStatusLog[]
-  fleetTrips                 FleetTrip[]
-  fleetTripPurposeLogs       FleetTripPurposeLog[]
-  fleetDrivingEvents         FleetDrivingEvent[]
-  fleetFuelEntries           FleetFuelEntry[]
-  fleetFuelEntryReversals    FleetFuelEntryReversal[]
-  fuelCardImportBatches      FuelCardImportBatch[]
-  fuelCardTransactions       FuelCardTransaction[]
-  vehicleFuelCompatibilities VehicleFuelCompatibility[]
-  fuelingIntents             FuelingIntent[]
-  fleetMaintenanceRules      FleetMaintenanceRule[]
-  devices                    Device[]
-  vehicleTelemetryLatest     VehicleTelemetryLatest[]
-  vehicleFuelLevelSamples    VehicleFuelLevelSample[]
-  fuelReconciliations        FuelReconciliation[]
-  ordivanConnectors          OrdivanConnector[]
-  automationJobs             AutomationJob[]
-  agentRuns                  AgentRun[]
-  automationProposals        AutomationProposal[]
-  approvalTasks              ApprovalTask[]
-  automationCorrectionEvents AutomationCorrectionEvent[]
-  automationDocuments        AutomationDocument[]
-  documentIntakes            DocumentIntake[]
-  intakeDocuments            IntakeDocument[]
-  intakeDocumentRoutings     IntakeDocumentRouting[]
-  transportOrders            TransportOrder[]
-  consignments               Consignment[]
-  transportOrderRevisions    TransportOrderRevision[]
-  orderIntakeMessages        OrderIntakeMessage[]
-  orderIntakeAttachments     OrderIntakeAttachment[]
-  orderIntakeReviews         OrderIntakeReview[]
-  dispatchProposals          DispatchProposal[]
-  dispatchProposalOrders     DispatchProposalOrder[]
-  dispatchCandidates         DispatchCandidate[]
-  deliverySlots              DeliverySlot[]
-  deliverySlotInvitations    DeliverySlotInvitation[]
-  deliverySlotBookings       DeliverySlotBooking[]
-  vehicleDtcs                VehicleDtc[]
-  tachoProviderCredentials   TachoProviderCredential[]
-  dddFiles                   DddFile[]
-  tachoActivities            TachoActivity[]
-  tachoInfringements         TachoInfringement[]
-  tachoDownloadSchedules     TachoDownloadSchedule[]
-  telemetryQuarantine        TelemetryQuarantine[]
-  equipmentIssuances         EquipmentIssuance[]
-  billingProfile             TenantBillingProfile?
-  rateCards                  RateCard[]
-  rateCardItems              RateCardItem[]
-  outgoingInvoices           Invoice[]
-  invoiceLines               InvoiceLine[]
-  invoiceAssignmentClaims    InvoiceAssignmentClaim[]
-  invoiceNumberSequences     InvoiceNumberSequence[]
-  invoicePayments            InvoicePayment[]
-  invoiceDeliveryAttempts    InvoiceDeliveryAttempt[]
-  invoiceAuditEvents         InvoiceAuditEvent[]
-  dunningNotices             DunningNotice[]
-  datevExports               DatevExport[]
-  locations                  Location[]
-  tours                      Tour[]
-  tourStops                  TourStop[]
-  workTimeEvents             WorkTimeEvent[]
-  breakCandidates            BreakCandidate[]
-  payrollProfile             TenantPayrollProfile?
-  driverPayrollProfiles      DriverPayrollProfile[]
-  publicHolidays             PublicHoliday[]
-  payrollDayTypeMappings     PayrollDayTypeMapping[]
-  payrollPeriods             PayrollPeriod[]
-  payrollDays                PayrollDay[]
-  payrollEntries             PayrollEntry[]
-  payrollWageTypeMappings    PayrollWageTypeMapping[]
-  payrollExports             PayrollExport[]
+  users                        User[]
+  invitations                  UserInvitation[]
+  subscription                 TenantSubscription?
+  drivers                      Driver[]
+  vehicles                     Vehicle[]
+  companies                    Company[]
+  assignments                  Assignment[]
+  transportRequests            TransportRequest[]
+  calendarEvents               CalendarEvent[]
+  requests                     Request[]
+  documents                    Document[]
+  vehicleHandovers             VehicleHandover[]
+  accidents                    Accident[]
+  companyEmails                CompanyEmail[]
+  notifications                Notification[]
+  reminders                    Reminder[]
+  morningCheckins              MorningCheckin[]
+  serviceRecords               ServiceRecord[]
+  conversations                Conversation[]
+  messageAttachments           MessageAttachment[]
+  messageTranslations          MessageTranslation[]
+  auditLogs                    AuditLog[]
+  driverLocationHistory        DriverLocationHistory[]
+  driverLocationLatest         DriverLocationLatest[]
+  customerAssignmentMessages   CustomerAssignmentMessage[]
+  workSessions                 WorkSession[]
+  vehicleEquipment             VehicleEquipment[]
+  driverLicenses               DriverLicense[]
+  licenseChecks                LicenseCheck[]
+  checklistTemplates           ChecklistTemplate[]
+  departureChecks              DepartureCheck[]
+  defects                      Defect[]
+  defectStatusLogs             DefectStatusLog[]
+  departureCheckReminders      DepartureCheckReminderState[]
+  fines                        Fine[]
+  fineStatusLogs               FineStatusLog[]
+  fleetTrips                   FleetTrip[]
+  fleetTripPurposeLogs         FleetTripPurposeLog[]
+  fleetDrivingEvents           FleetDrivingEvent[]
+  fleetFuelEntries             FleetFuelEntry[]
+  fleetFuelEntryReversals      FleetFuelEntryReversal[]
+  fuelCardImportBatches        FuelCardImportBatch[]
+  fuelCardTransactions         FuelCardTransaction[]
+  vehicleFuelCompatibilities   VehicleFuelCompatibility[]
+  fuelingIntents               FuelingIntent[]
+  fleetMaintenanceRules        FleetMaintenanceRule[]
+  devices                      Device[]
+  vehicleTelemetryLatest       VehicleTelemetryLatest[]
+  vehicleFuelLevelSamples      VehicleFuelLevelSample[]
+  fuelReconciliations          FuelReconciliation[]
+  ordivanConnectors            OrdivanConnector[]
+  automationJobs               AutomationJob[]
+  agentRuns                    AgentRun[]
+  automationProposals          AutomationProposal[]
+  approvalTasks                ApprovalTask[]
+  automationCorrectionEvents   AutomationCorrectionEvent[]
+  automationDocuments          AutomationDocument[]
+  documentIntakes              DocumentIntake[]
+  intakeDocuments              IntakeDocument[]
+  intakeDocumentRoutings       IntakeDocumentRouting[]
+  transportOrders              TransportOrder[]
+  consignments                 Consignment[]
+  transportOrderRevisions      TransportOrderRevision[]
+  orderIntakeMessages          OrderIntakeMessage[]
+  orderIntakeAttachments       OrderIntakeAttachment[]
+  orderIntakeReviews           OrderIntakeReview[]
+  dispatchProposals            DispatchProposal[]
+  dispatchProposalOrders       DispatchProposalOrder[]
+  dispatchCandidates           DispatchCandidate[]
+  deliverySlots                DeliverySlot[]
+  deliverySlotInvitations      DeliverySlotInvitation[]
+  deliverySlotBookings         DeliverySlotBooking[]
+  dispatchOverrideDeclarations DispatchOverrideDeclaration[]
+  vehicleDtcs                  VehicleDtc[]
+  tachoProviderCredentials     TachoProviderCredential[]
+  dddFiles                     DddFile[]
+  tachoActivities              TachoActivity[]
+  tachoInfringements           TachoInfringement[]
+  tachoDownloadSchedules       TachoDownloadSchedule[]
+  telemetryQuarantine          TelemetryQuarantine[]
+  equipmentIssuances           EquipmentIssuance[]
+  billingProfile               TenantBillingProfile?
+  rateCards                    RateCard[]
+  rateCardItems                RateCardItem[]
+  outgoingInvoices             Invoice[]
+  invoiceLines                 InvoiceLine[]
+  invoiceAssignmentClaims      InvoiceAssignmentClaim[]
+  invoiceNumberSequences       InvoiceNumberSequence[]
+  invoicePayments              InvoicePayment[]
+  invoiceDeliveryAttempts      InvoiceDeliveryAttempt[]
+  invoiceAuditEvents           InvoiceAuditEvent[]
+  dunningNotices               DunningNotice[]
+  datevExports                 DatevExport[]
+  locations                    Location[]
+  tours                        Tour[]
+  tourStops                    TourStop[]
+  workTimeEvents               WorkTimeEvent[]
+  breakCandidates              BreakCandidate[]
+  payrollProfile               TenantPayrollProfile?
+  driverPayrollProfiles        DriverPayrollProfile[]
+  publicHolidays               PublicHoliday[]
+  payrollDayTypeMappings       PayrollDayTypeMapping[]
+  payrollPeriods               PayrollPeriod[]
+  payrollDays                  PayrollDay[]
+  payrollEntries               PayrollEntry[]
+  payrollWageTypeMappings      PayrollWageTypeMapping[]
+  payrollExports               PayrollExport[]
 }
 
 model TenantBillingProfile {
@@ -1205,60 +1206,61 @@ model User {
   updatedAt        DateTime   @updatedAt
 
   driver                          Driver?
-  fleetTripClassifications        FleetTrip[]                 @relation("FleetTripClassifiedBy")
-  fleetTripPurposeLogs            FleetTripPurposeLog[]       @relation("FleetTripPurposeChangedBy")
-  createdAssignments              Assignment[]                @relation("AssignmentCreatedBy")
-  createdTours                    Tour[]                      @relation("TourCreatedBy")
-  approvedRequests                Request[]                   @relation("ApprovedRequests")
-  uploadedDocuments               Document[]                  @relation("DocumentUploadedBy")
+  fleetTripClassifications        FleetTrip[]                   @relation("FleetTripClassifiedBy")
+  fleetTripPurposeLogs            FleetTripPurposeLog[]         @relation("FleetTripPurposeChangedBy")
+  createdAssignments              Assignment[]                  @relation("AssignmentCreatedBy")
+  createdTours                    Tour[]                        @relation("TourCreatedBy")
+  approvedRequests                Request[]                     @relation("ApprovedRequests")
+  uploadedDocuments               Document[]                    @relation("DocumentUploadedBy")
   notifications                   Notification[]
-  createdConversations            Conversation[]              @relation("ConversationCreatedBy")
+  createdConversations            Conversation[]                @relation("ConversationCreatedBy")
   conversationParticipants        ConversationParticipant[]
-  sentMessages                    Message[]                   @relation("MessageSentBy")
+  sentMessages                    Message[]                     @relation("MessageSentBy")
   messageReads                    MessageRead[]
   auditLogs                       AuditLog[]
   companyMemberships              CompanyUser[]
   passwordResetTokens             PasswordResetToken[]
-  createdPasswordResets           PasswordResetToken[]        @relation("PasswordResetCreatedBy")
-  sentInvitations                 UserInvitation[]            @relation("InvitationSentBy")
+  createdPasswordResets           PasswordResetToken[]          @relation("PasswordResetCreatedBy")
+  sentInvitations                 UserInvitation[]              @relation("InvitationSentBy")
   customerAssignmentMessages      CustomerAssignmentMessage[]
-  verifiedLicenseChecks           LicenseCheck[]              @relation("LicenseCheckVerifiedBy")
-  defectStatusChanges             DefectStatusLog[]           @relation("DefectStatusChangedByUser")
-  createdFines                    Fine[]                      @relation("FineCreatedBy")
-  fineStatusChanges               FineStatusLog[]             @relation("FineStatusChangedByUser")
+  verifiedLicenseChecks           LicenseCheck[]                @relation("LicenseCheckVerifiedBy")
+  defectStatusChanges             DefectStatusLog[]             @relation("DefectStatusChangedByUser")
+  createdFines                    Fine[]                        @relation("FineCreatedBy")
+  fineStatusChanges               FineStatusLog[]               @relation("FineStatusChangedByUser")
   refreshTokens                   RefreshToken[]
-  acknowledgedTachoInfringements  TachoInfringement[]         @relation("TachoInfringementAcknowledgedBy")
-  payrollMarkedTachoInfringements TachoInfringement[]         @relation("TachoInfringementPayrollMarkedBy")
-  issuedEquipmentIssuances        EquipmentIssuance[]         @relation("EquipmentIssuanceIssuedBy")
-  approvedEquipmentIssuances      EquipmentIssuance[]         @relation("EquipmentIssuanceApprovedBy")
-  createdInvoices                 Invoice[]                   @relation("InvoiceCreatedBy")
-  finalizedInvoices               Invoice[]                   @relation("InvoiceFinalizedBy")
-  approvedPayrollPeriods          PayrollPeriod[]             @relation("PayrollPeriodApprovedBy")
-  createdPayrollExports           PayrollExport[]             @relation("PayrollExportCreatedBy")
-  decidedBreakCandidates          BreakCandidate[]            @relation("BreakCandidateDecidedBy")
-  recordedInvoicePayments         InvoicePayment[]            @relation("InvoicePaymentRecordedBy")
-  createdDatevExports             DatevExport[]               @relation("DatevExportCreatedBy")
-  reviewedFuelEntries             FleetFuelEntry[]            @relation("FuelEntryReviewedBy")
-  reviewedFuelReconciliations     FuelReconciliation[]        @relation("FuelReconciliationReviewedBy")
-  enrolledOrdivanConnectors       OrdivanConnector[]          @relation("OrdivanConnectorCreatedBy")
-  createdAutomationJobs           AutomationJob[]             @relation("AutomationJobCreatedBy")
-  decidedApprovalTasks            ApprovalTask[]              @relation("ApprovalTaskDecidedBy")
-  assignedApprovalTasks           ApprovalTask[]              @relation("ApprovalTaskAssignedTo")
-  uploadedAutomationDocuments     AutomationDocument[]        @relation("AutomationDocumentUploadedBy")
-  uploadedDocumentIntakes         DocumentIntake[]            @relation("DocumentIntakeUploadedBy")
-  assignedIntakeDocuments         IntakeDocument[]            @relation("IntakeDocumentAssignedTo")
-  decidedIntakeDocuments          IntakeDocument[]            @relation("IntakeDocumentDecidedBy")
-  routedIntakeDocuments           IntakeDocumentRouting[]     @relation("IntakeDocumentRoutedBy")
-  createdTransportOrders          TransportOrder[]            @relation("TransportOrderCreatedBy")
-  confirmedTransportOrders        TransportOrder[]            @relation("TransportOrderConfirmedBy")
-  cancelledTransportOrders        TransportOrder[]            @relation("TransportOrderCancelledBy")
-  createdOrderRevisions           TransportOrderRevision[]    @relation("TransportOrderRevisionCreatedBy")
-  decidedOrderRevisions           TransportOrderRevision[]    @relation("TransportOrderRevisionDecidedBy")
-  uploadedOrderIntakeMessages     OrderIntakeMessage[]        @relation("OrderIntakeMessageUploadedBy")
-  decidedOrderIntakeReviews       OrderIntakeReview[]         @relation("OrderIntakeReviewDecidedBy")
-  decidedDispatchProposals        DispatchProposal[]          @relation("DispatchProposalDecidedBy")
-  createdSlotInvitations          DeliverySlotInvitation[]    @relation("DeliverySlotInvitationCreatedBy")
-  reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
+  acknowledgedTachoInfringements  TachoInfringement[]           @relation("TachoInfringementAcknowledgedBy")
+  payrollMarkedTachoInfringements TachoInfringement[]           @relation("TachoInfringementPayrollMarkedBy")
+  issuedEquipmentIssuances        EquipmentIssuance[]           @relation("EquipmentIssuanceIssuedBy")
+  approvedEquipmentIssuances      EquipmentIssuance[]           @relation("EquipmentIssuanceApprovedBy")
+  createdInvoices                 Invoice[]                     @relation("InvoiceCreatedBy")
+  finalizedInvoices               Invoice[]                     @relation("InvoiceFinalizedBy")
+  approvedPayrollPeriods          PayrollPeriod[]               @relation("PayrollPeriodApprovedBy")
+  createdPayrollExports           PayrollExport[]               @relation("PayrollExportCreatedBy")
+  decidedBreakCandidates          BreakCandidate[]              @relation("BreakCandidateDecidedBy")
+  recordedInvoicePayments         InvoicePayment[]              @relation("InvoicePaymentRecordedBy")
+  createdDatevExports             DatevExport[]                 @relation("DatevExportCreatedBy")
+  reviewedFuelEntries             FleetFuelEntry[]              @relation("FuelEntryReviewedBy")
+  reviewedFuelReconciliations     FuelReconciliation[]          @relation("FuelReconciliationReviewedBy")
+  enrolledOrdivanConnectors       OrdivanConnector[]            @relation("OrdivanConnectorCreatedBy")
+  createdAutomationJobs           AutomationJob[]               @relation("AutomationJobCreatedBy")
+  decidedApprovalTasks            ApprovalTask[]                @relation("ApprovalTaskDecidedBy")
+  assignedApprovalTasks           ApprovalTask[]                @relation("ApprovalTaskAssignedTo")
+  uploadedAutomationDocuments     AutomationDocument[]          @relation("AutomationDocumentUploadedBy")
+  uploadedDocumentIntakes         DocumentIntake[]              @relation("DocumentIntakeUploadedBy")
+  assignedIntakeDocuments         IntakeDocument[]              @relation("IntakeDocumentAssignedTo")
+  decidedIntakeDocuments          IntakeDocument[]              @relation("IntakeDocumentDecidedBy")
+  routedIntakeDocuments           IntakeDocumentRouting[]       @relation("IntakeDocumentRoutedBy")
+  createdTransportOrders          TransportOrder[]              @relation("TransportOrderCreatedBy")
+  confirmedTransportOrders        TransportOrder[]              @relation("TransportOrderConfirmedBy")
+  cancelledTransportOrders        TransportOrder[]              @relation("TransportOrderCancelledBy")
+  createdOrderRevisions           TransportOrderRevision[]      @relation("TransportOrderRevisionCreatedBy")
+  decidedOrderRevisions           TransportOrderRevision[]      @relation("TransportOrderRevisionDecidedBy")
+  uploadedOrderIntakeMessages     OrderIntakeMessage[]          @relation("OrderIntakeMessageUploadedBy")
+  decidedOrderIntakeReviews       OrderIntakeReview[]           @relation("OrderIntakeReviewDecidedBy")
+  decidedDispatchProposals        DispatchProposal[]            @relation("DispatchProposalDecidedBy")
+  createdSlotInvitations          DeliverySlotInvitation[]      @relation("DeliverySlotInvitationCreatedBy")
+  dispatchOverrideDeclarations    DispatchOverrideDeclaration[] @relation("DispatchOverrideDeclaredBy")
+  reversedFuelEntries             FleetFuelEntryReversal[]      @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1397,6 +1399,7 @@ model Driver {
 
   /// Faz 17 — bu surucunun gorundugu dispatch adaylari.
   dispatchCandidates DispatchCandidate[]
+  dispatchOverrides  DispatchOverrideDeclaration[]
 
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
@@ -1564,6 +1567,7 @@ model Vehicle {
 
   /// Faz 17 — bu aracin gorundugu dispatch adaylari.
   dispatchCandidates DispatchCandidate[]
+  dispatchOverrides  DispatchOverrideDeclaration[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -5961,6 +5965,7 @@ model DispatchProposal {
 
   orders     DispatchProposalOrder[]
   candidates DispatchCandidate[]
+  overrides  DispatchOverrideDeclaration[]
 
   @@index([tenantId])
   @@index([tenantId, status, createdAt])
@@ -6160,4 +6165,60 @@ model DeliverySlotBooking {
   @@index([invitationId])
   @@index([slotId])
   @@map("delivery_slot_bookings")
+}
+
+/**
+ * INSANIN OVERRIDE BEYANI — KAPSAMA KILITLI (Faz 17).
+ * NEDEN AYRI TABLO: bir beyan ("takograf verisi yok ama surucunun kartina
+ * baktim, 6 saat kaldi") BELIRLI BIR DURUMA aittir. Onu onerinin uzerinde
+ * serbest bir bayrak olarak tutsaydik, ayni beyan baska bir gune, baska bir
+ * surucuye ya da baska bir oneriye tasinabilirdi — ve tam da o an, kimsenin
+ * kontrol etmedigi bir surus suresi "kontrol edilmis" sayilirdi.
+ * KAPSAM DORT PARCALI: oneri + surucu + arac + IS GUNU. Dordu birden
+ * eslesmezse beyan GECERSIZDIR ve kontrol yeniden `unknown` olur.
+ * `proposalRevision`: beyan verildigi andaki oneri damgasi. Oneri yeniden
+ * hesaplandiginda (araclar degisti, siparis revize edildi) eski beyan
+ * TASINMAZ — cunku dayandigi durum artik ayni degil.
+ * KIM, NE ZAMAN, NE DEDI: `declaredById`, `declaredAt` ve `note` zorunlu.
+ * Beyan bir sorumluluk devridir; sorumlunun adi olmadan devir olmaz.
+ */
+model DispatchOverrideDeclaration {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  dispatchProposalId String
+  dispatchProposal   DispatchProposal @relation(fields: [dispatchProposalId], references: [id], onDelete: Cascade)
+
+  /// Hangi kontrol asildi (`driver_drive_time`, `vehicle_adr`, ...).
+  checkCode String
+
+  // --- KAPSAM ---
+  driverId         String?
+  driver           Driver?  @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicleId        String?
+  vehicle          Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  /// Beyanin gecerli oldugu IS GUNU. Baska gune tasinmaz.
+  workDate         DateTime
+  /// Beyan verildigi andaki oneri damgasi.
+  proposalRevision Int
+
+  /// `external_verification` icin ZORUNLU aciklama.
+  note   String
+  /// `explicit_choice` icin verilen cevap (`yes` / `no`).
+  answer String?
+
+  declaredById String
+  declaredBy   User     @relation("DispatchOverrideDeclaredBy", fields: [declaredById], references: [id], onDelete: Restrict)
+  declaredAt   DateTime @default(now())
+
+  /**
+   * AYNI KAPSAMDA AYNI KONTROL IKI KEZ BEYAN EDILEMEZ.
+   * Tekillik kapsami iceriyor: ayni kontrol FARKLI bir surucu/arac/gun icin
+   * ayri bir beyan gerektirir ve bu bilincli.
+   */
+  @@unique([dispatchProposalId, checkCode, driverId, vehicleId, workDate])
+  @@index([tenantId])
+  @@index([dispatchProposalId])
+  @@map("dispatch_override_declarations")
 }

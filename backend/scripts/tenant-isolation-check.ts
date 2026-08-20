@@ -815,6 +815,14 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.deliverySlotBooking.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.deliverySlotBooking.count()),
       }),
+      // Override beyanlari — kim neyi ustlendi.
+      verifyTenantScopedModel({
+        label: 'DispatchOverrideDeclaration', tenantA, tenantB,
+        unscopedCountA: () => base.dispatchOverrideDeclaration.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.dispatchOverrideDeclaration.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.dispatchOverrideDeclaration.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.dispatchOverrideDeclaration.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');
