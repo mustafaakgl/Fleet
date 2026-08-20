@@ -23,6 +23,43 @@
 
 export type DispatchCheckStatus = 'verified' | 'incompatible' | 'unknown';
 
+/**
+ * PLANLAMA KARARI — KONTROL SONUCUNDAN AYRI.
+ *
+ * NEDEN IKI AYRI KAVRAM: kontrol sonucu VERININ ne soyledigidir; karar ise o
+ * veriyle NE YAPILABILECEGIDIR. Ikisini tek alanda birlestirmek, "bilmiyorum"
+ * ile "yapma" arasindaki farki kaybettirir ve daha kotusu, birinin digerine
+ * cevrilmesini kolaylastirir.
+ *
+ * ESLEME TEK YONLU VE SABIT:
+ *   verified     -> eligible
+ *   incompatible -> blocked
+ *   unknown      -> review_required
+ *
+ * `unknown` HICBIR KOSULDA `verified`a CEVRILMEZ. Dispatcher bir eksigi
+ * "harici kontrol ettim" diyerek gecebilir, ama kontrol sonucu YINE `unknown`
+ * kalir ve kararin `manual_override` oldugu kaydedilir. Ozetle: insan riski
+ * ustlenebilir, veriyi degistiremez.
+ */
+export type DispatchDecision = 'eligible' | 'blocked' | 'review_required';
+
+/**
+ * BIR `unknown` NASIL ASILABILIR.
+ *
+ *   - `none`                  — asilamaz. Eksik VERI doldurulmali (arac
+ *                               kapasitesi, yuk agirligi, belge tarihi).
+ *                               Burada bir beyan kabul etmek, veri girisini
+ *                               kalici olarak ertelemenin yolu olurdu.
+ *   - `external_verification` — yetkili dispatcher "harici kontrol ettim"
+ *                               beyani + ZORUNLU aciklama ile ilerleyebilir.
+ *                               Takograf icin: kanonik veri yok ama surucunun
+ *                               kartina bakilmis olabilir.
+ *   - `explicit_choice`       — kullanici belirsiz olani ACIKCA cevaplamali
+ *                               (yukun ADR olup olmadigi gibi). Beyan degil,
+ *                               bir SECIM isteniyor.
+ */
+export type OverridePolicy = 'none' | 'external_verification' | 'explicit_choice';
+
 export interface DispatchCheck {
   /** Makine tarafindan okunabilir kod. */
   code: string;
@@ -34,6 +71,14 @@ export interface DispatchCheck {
   reasonKey: string;
   /** Sayilabilir kanit: karsilastirilan degerler. Serbest metin YOK. */
   evidence?: Record<string, string | number | boolean | null>;
+  /**
+   * Bu kontrol `unknown` ise nasil asilabilecegi.
+   *
+   * YALNIZCA `unknown` DURUMUNDA ANLAMLI. `incompatible` bir kontrol
+   * ASILAMAZ ve bu alan onun icin okunmaz — yasal engeller (ehliyet, aktiflik,
+   * bakim) bir beyanla gecilemez.
+   */
+  override?: OverridePolicy;
 }
 
 /** Planlanacak isin talebi — siparis(ler)den turetilir. */
@@ -131,8 +176,14 @@ function check(
   status: DispatchCheckStatus,
   reasonKey: string,
   evidence?: Record<string, string | number | boolean | null>,
+  override?: OverridePolicy,
 ): DispatchCheck {
-  return evidence ? { code, status, reasonKey, evidence } : { code, status, reasonKey };
+  const base: DispatchCheck = { code, status, reasonKey };
+  if (evidence) base.evidence = evidence;
+  // Politika YALNIZCA `unknown`a yaziliyor: `verified` asilacak bir sey degil,
+  // `incompatible` ise asilamaz.
+  if (override && status === 'unknown') base.override = override;
+  return base;
 }
 
 /**
@@ -148,14 +199,18 @@ function compareCapacity(
   capacity: number | null,
   reasonPrefix: string,
 ): DispatchCheck {
+  // KAPASITEDE GENEL OVERRIDE YOK: bir beyan, eksik kapasite verisini
+  // doldurmaz. "Sigar herhalde" diyerek gonderilen bir arac, asilmis bir
+  // tonajla yola cikar. Eksik olan ARAC KAPASITESI ya da YUK BILGISI
+  // doldurulmali.
   if (demand === null && capacity === null) {
-    return check(code, 'unknown', `${reasonPrefix}Unknown`, { demand: null, capacity: null });
+    return check(code, 'unknown', `${reasonPrefix}Unknown`, { demand: null, capacity: null }, 'none');
   }
   if (capacity === null) {
-    return check(code, 'unknown', `${reasonPrefix}CapacityUnknown`, { demand, capacity: null });
+    return check(code, 'unknown', `${reasonPrefix}CapacityUnknown`, { demand, capacity: null }, 'none');
   }
   if (demand === null) {
-    return check(code, 'unknown', `${reasonPrefix}DemandUnknown`, { demand: null, capacity });
+    return check(code, 'unknown', `${reasonPrefix}DemandUnknown`, { demand: null, capacity }, 'none');
   }
   return demand <= capacity
     ? check(code, 'verified', `${reasonPrefix}Fits`, { demand, capacity })
@@ -165,12 +220,13 @@ function compareCapacity(
 /** Son kullanma tarihi kontrolu — UC DURUMLU. */
 function checkExpiry(code: string, expiry: string | null, at: Date, reasonPrefix: string): DispatchCheck {
   if (!expiry) {
-    // Girilmemis belge "gecerli" SAYILMAZ.
-    return check(code, 'unknown', `${reasonPrefix}Missing`, { expiresAt: null });
+    // Girilmemis belge "gecerli" SAYILMAZ ve bir beyanla gecilemez: belge
+    // tarihi bilinmiyorsa girilmeli.
+    return check(code, 'unknown', `${reasonPrefix}Missing`, { expiresAt: null }, 'none');
   }
   const parsed = new Date(expiry);
   if (Number.isNaN(parsed.getTime())) {
-    return check(code, 'unknown', `${reasonPrefix}Unreadable`, { expiresAt: expiry });
+    return check(code, 'unknown', `${reasonPrefix}Unreadable`, { expiresAt: expiry }, 'none');
   }
   return parsed.getTime() >= at.getTime()
     ? check(code, 'verified', `${reasonPrefix}Valid`, { expiresAt: expiry })
@@ -244,26 +300,62 @@ export function evaluateAdr(
   certified: boolean | null,
   demandAdr: 'yes' | 'no' | 'unknown',
 ): DispatchCheck {
+  // 1) Yuk tehlikeli DEGILSE her arac uygundur; belgesi olmasa da fark etmez.
   if (demandAdr === 'no') {
-    return check('vehicle_adr', 'verified', 'dispatch.reason.adrNotRequired', { required: false });
-  }
-  if (certified === true) {
-    return check('vehicle_adr', 'verified', 'dispatch.reason.adrCertified', {
-      required: demandAdr === 'yes',
-      certified: true,
+    return check('vehicle_adr', 'verified', 'dispatch.reason.adrNotRequired', {
+      required: false,
+      certified,
     });
   }
+
+  // 2) ARAC ACIKCA YETKISIZ ise, yuk ADR de olsa ADR OLABILIR de olsa GECEMEZ.
+  //
+  //    Bu dal, "yuk belirsiz" dalindan ONCE gelmek ZORUNDA. Once secim
+  //    sorsaydik, kullanici "evet, ADR" dedigi anda kapi bir beyanla asilmis
+  //    olurdu — oysa arac zaten yetkisiz. Belirsizligi cozmek, yetkisiz araci
+  //    yetkili yapmaz.
   if (certified === false) {
-    // Yuk ADR ise KESIN engel; yuk belirsizse yine gecilemez.
     return check('vehicle_adr', 'incompatible', 'dispatch.reason.adrNotCertified', {
       required: demandAdr === 'yes',
       certified: false,
     });
   }
-  return check('vehicle_adr', 'unknown', 'dispatch.reason.adrUnknown', {
-    required: demandAdr === 'yes',
-    certified: null,
-  });
+
+  // 3) Yuk kesin ADR ve arac belgeli: uygun.
+  if (certified === true && demandAdr === 'yes') {
+    return check('vehicle_adr', 'verified', 'dispatch.reason.adrCertified', {
+      required: true,
+      certified: true,
+    });
+  }
+
+  // 4) Arac BELGELI ama yukun ADR olup olmadigi bilinmiyor: ACIK SECIM.
+  //
+  //    Secim yalnizca BURADA isteniyor, cunku iki cevap da guvenli: yuk ADR
+  //    ise arac zaten yetkili, degilse sorun yok. Tehlikeli madde yine de
+  //    surucu egitimini, evraki ve rota kisitlarini bagladigi icin soruyu
+  //    atlamiyoruz.
+  if (certified === true) {
+    return check(
+      'vehicle_adr',
+      'unknown',
+      'dispatch.reason.adrDemandUnknown',
+      { required: null, certified: true },
+      'explicit_choice',
+    );
+  }
+
+  // 5) ARAC BELGESI BILINMIYOR: secim degil VERI isteniyor.
+  //
+  //    Burada secim sorsaydik, "evet ADR" cevabi belgesi bilinmeyen bir araci
+  //    gecirirdi. Eksik olan arac kaydi; once o doldurulmali.
+  return check(
+    'vehicle_adr',
+    'unknown',
+    'dispatch.reason.adrUnknown',
+    { required: demandAdr === 'yes' ? true : null, certified: null },
+    'none',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -324,9 +416,16 @@ export function evaluateDriver(driver: DriverFacts, at: Date): DispatchCheck[] {
  */
 export function evaluateDriveTime(remainingMinutes: number | null): DispatchCheck {
   if (remainingMinutes === null) {
-    return check('driver_drive_time', 'unknown', 'dispatch.reason.driveTimeNoData', {
-      remainingMinutes: null,
-    });
+    // KANONIK VERI YOK ama surucunun kartina bakilmis OLABILIR. Yetkili
+    // dispatcher "harici kontrol ettim" beyani ve ZORUNLU aciklamayla
+    // ilerleyebilir; kontrol sonucu YINE `unknown` kalir.
+    return check(
+      'driver_drive_time',
+      'unknown',
+      'dispatch.reason.driveTimeNoData',
+      { remainingMinutes: null },
+      'external_verification',
+    );
   }
   return remainingMinutes > 0
     ? check('driver_drive_time', 'verified', 'dispatch.reason.driveTimeAvailable', {
@@ -349,15 +448,22 @@ export function evaluateDriveTime(remainingMinutes: number | null): DispatchChec
  * planlanirsa arac bir saat yanlis gider.
  */
 export function evaluateWindows(demand: DispatchDemand): DispatchCheck {
+  // PENCERE YOKLUGU "kisit yok" DEMEK DEGILDIR: musteri saatini bildirmemis
+  // de olabilir. `verified` yazmak bir bilinmeyeni kesin cevaba cevirirdi;
+  // bunun yerine dispatcher "zaman kisiti yok" diye ACIKCA secer.
   if (demand.windows.length === 0) {
-    return check('time_windows', 'unknown', 'dispatch.reason.windowsMissing', { count: 0 });
+    return check('time_windows', 'unknown', 'dispatch.reason.windowsMissing', { count: 0 }, 'explicit_choice');
   }
 
   const withTime = demand.windows.filter((window) => window.start !== null || window.end !== null);
   if (withTime.length === 0) {
-    return check('time_windows', 'unknown', 'dispatch.reason.windowsMissing', {
-      count: demand.windows.length,
-    });
+    return check(
+      'time_windows',
+      'unknown',
+      'dispatch.reason.windowsMissing',
+      { count: demand.windows.length },
+      'explicit_choice',
+    );
   }
 
   const withoutZone = withTime.filter((window) => !window.timezone);
@@ -404,7 +510,10 @@ export function overallStatus(checks: readonly DispatchCheck[]): DispatchCheckSt
 
 export interface CandidateEvaluation {
   checks: DispatchCheck[];
+  /** Kontrollerin toplami — VERI ne diyor. */
   overall: DispatchCheckStatus;
+  /** O veriyle ne yapilabilecegi — KARAR. */
+  decision: DispatchDecision;
 }
 
 /** Bir arac + surucu ciftini butun kurallara karsi degerlendirir. */
@@ -419,15 +528,145 @@ export function evaluateCandidate(input: {
     ...evaluateDriver(input.driver, input.at),
     evaluateWindows(input.demand),
   ];
-  return { checks, overall: overallStatus(checks) };
+  const overall = overallStatus(checks);
+  return { checks, overall, decision: decisionOf(overall) };
 }
 
 /**
- * UYGULANABILIR MI.
+ * KONTROL SONUCUNU PLANLAMA KARARINA CEVIRIR.
  *
- * YALNIZCA `verified` uygulanabilir. `unknown` bir adayi uygulamak, tam da
- * bu motorun engellemek icin var oldugu sey: dogrulanamamis bir varsayimla
- * arac gondermek. Dispatcher eksik veriyi tamamlayip yeniden hesaplatabilir.
+ * TEK YONLU VE SABIT ESLEME. Bu islev bilincli olarak hicbir kosul
+ * icermiyor: `unknown`i belirli durumlarda `eligible` yapan bir "kestirme"
+ * eklenirse, motorun butun garantisi o kestirmenin dogrulugu kadar olur.
+ * Insanin riski ustlenmesi AYRI bir adim (bkz. `resolveApplyGate`) ve orada
+ * bile kontrol sonucu `unknown` KALIR.
+ */
+export function decisionOf(overall: DispatchCheckStatus): DispatchDecision {
+  switch (overall) {
+    case 'verified':
+      return 'eligible';
+    case 'incompatible':
+      return 'blocked';
+    default:
+      return 'review_required';
+  }
+}
+
+/** Bir adayin AJAN TARAFINDAN "onerilen" gosterilip gosterilemeyecegi. */
+export function isRecommendable(overall: DispatchCheckStatus): boolean {
+  // AJAN YALNIZCA `eligible` adayi one cikarabilir. `review_required` bir
+  // adayi "uygun" ya da "onerilen" diye sunmak, dogrulanmamis bir seyi
+  // dogrulanmis gibi gostermek olurdu.
+  return decisionOf(overall) === 'eligible';
+}
+
+/**
+ * INSANIN BEYANI.
+ *
+ * `note` YALNIZCA `external_verification` icin zorunlu: "harici kontrol
+ * ettim" diyen kisi NEYI kontrol ettigini yazmali, yoksa beyan bir tiklamaya
+ * indirgenir ve denetimde hicbir sey ifade etmez.
+ *
+ * `answer` ise `explicit_choice` icin: bir SECIM isteniyor, aciklama degil.
+ */
+export interface OverrideDeclaration {
+  code: string;
+  note?: string;
+  answer?: 'yes' | 'no';
+}
+
+/** Aciklamanin anlamli sayilmasi icin gereken en az uzunluk. */
+export const MIN_OVERRIDE_NOTE_LENGTH = 10;
+
+export type ApplyMode = 'direct' | 'manual_override';
+
+export interface ApplyGate {
+  applicable: boolean;
+  /** Uygulanabiliyorsa nasil: dogrudan mi, insan beyaniyla mi. */
+  mode: ApplyMode;
+  decision: DispatchDecision;
+  /** Asilamayan `incompatible` kontroller. */
+  blocking: DispatchCheck[];
+  /** Veri doldurulmadan asilamayan `unknown` kontroller. */
+  needsData: DispatchCheck[];
+  /** Beyan/secim bekleyen ve HENUZ verilmemis `unknown` kontroller. */
+  needsDeclaration: DispatchCheck[];
+  /** Kabul edilen beyanlarin kodlari — denetime yazilir. */
+  acceptedOverrides: string[];
+}
+
+/**
+ * UYGULAMA KAPISI.
+ *
+ * SIRA ONEMLI:
+ *   1. `incompatible` varsa HICBIR SEY asamaz. Yasal engeller (ehliyet,
+ *      surucu aktifligi, arac bakimi, asilmis tonaj) bir beyanla gecilemez —
+ *      gecilebilseydi kontrolun var olmasinin anlami kalmazdi.
+ *   2. Politikasi `none` olan `unknown` varsa VERI doldurulmali. Kapasite ve
+ *      belge tarihleri buraya girer.
+ *   3. Kalan `unknown`lar icin beyan/secim aranir. Eksik olan varsa
+ *      uygulanamaz.
+ *
+ * BEYAN VERILSE BILE kontrol sonucu `unknown` KALIR ve karar
+ * `manual_override` olarak isaretlenir. Insan riski ustlenir, veriyi
+ * degistirmez.
+ */
+export function resolveApplyGate(
+  checks: readonly DispatchCheck[],
+  declarations: readonly OverrideDeclaration[] = [],
+): ApplyGate {
+  const overall = overallStatus(checks);
+  const decision = decisionOf(overall);
+
+  const blocking = checks.filter((item) => item.status === 'incompatible');
+  const unknowns = checks.filter((item) => item.status === 'unknown');
+  const needsData = unknowns.filter((item) => (item.override ?? 'none') === 'none');
+
+  const overridable = unknowns.filter((item) => (item.override ?? 'none') !== 'none');
+  const accepted: string[] = [];
+  const needsDeclaration: DispatchCheck[] = [];
+
+  for (const item of overridable) {
+    const declaration = declarations.find((entry) => entry.code === item.code);
+    if (!declaration) {
+      needsDeclaration.push(item);
+      continue;
+    }
+    if (item.override === 'external_verification') {
+      // ZORUNLU ACIKLAMA: bos ya da "ok" gibi bir metin beyan sayilmaz.
+      if ((declaration.note ?? '').trim().length < MIN_OVERRIDE_NOTE_LENGTH) {
+        needsDeclaration.push(item);
+        continue;
+      }
+    } else if (item.override === 'explicit_choice') {
+      // ACIK SECIM: "bilmiyorum" bir cevap DEGIL.
+      if (declaration.answer !== 'yes' && declaration.answer !== 'no') {
+        needsDeclaration.push(item);
+        continue;
+      }
+    }
+    accepted.push(item.code);
+  }
+
+  const applicable =
+    blocking.length === 0 && needsData.length === 0 && needsDeclaration.length === 0;
+
+  return {
+    applicable,
+    mode: accepted.length > 0 ? 'manual_override' : 'direct',
+    decision,
+    blocking,
+    needsData,
+    needsDeclaration,
+    acceptedOverrides: accepted,
+  };
+}
+
+/**
+ * UYGULANABILIR MI — beyansiz kisa yol.
+ *
+ * YALNIZCA `verified` dogrudan uygulanabilir. `unknown` bir adayi beyansiz
+ * uygulamak, tam da bu motorun engellemek icin var oldugu sey.
  */
 export function isApplicable(overall: DispatchCheckStatus): boolean {
   return overall === 'verified';

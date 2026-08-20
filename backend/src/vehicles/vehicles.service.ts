@@ -53,6 +53,17 @@ function toClientVehicle(row: VehicleWithCurrentDriver) {
     // number: istemci sayiyi bicimlendiriyor, uzerinde hesap yapmiyor.
     fuel_tank_capacity_liters:
       row.fuelTankCapacityLiters === null ? null : Number(row.fuelTankCapacityLiters),
+    // FAZ 17 — dispatch uygunlugu icin. `null` BILINMIYOR demek ve arayuz
+    // bunu "girilmemis" olarak GOSTERMELI; 0 ya da "sinirsiz" DEGIL.
+    payload_capacity_kg:
+      row.payloadCapacityKg === null ? null : Number(row.payloadCapacityKg),
+    cargo_volume_m3: row.cargoVolumeM3 === null ? null : Number(row.cargoVolumeM3),
+    pallet_capacity: row.palletCapacity,
+    adr_certified: row.adrCertified,
+    height_cm: row.heightCm,
+    length_cm: row.lengthCm,
+    width_cm: row.widthCm,
+    gross_weight_kg: row.grossWeightKg === null ? null : Number(row.grossWeightKg),
     created_at: row.createdAt.toISOString(),
   };
 }
@@ -365,6 +376,33 @@ export class VehiclesService {
       // almanin yolu olmali. Kapasite yoksa mutabakatin kapasite kurallari
       // hic calismaz — yanlis bir deger ise sahte litre farki uretirdi.
       data.fuelTankCapacityLiters = dto.fuel_tank_capacity_liters ?? null;
+    }
+
+    // FAZ 17 — yuk kapasitesi ve ADR.
+    //
+    // BOS GONDERIM ALANI TEMIZLER: yanlis girilmis bir kapasiteyi geri almanin
+    // yolu olmali. Temizlenen alan dispatch motorunda `unknown` uretir ve plan
+    // uygulamayi ENGELLER; sessizce eski degeri korumak, duzeltilmis sanilan
+    // bir veriyle plan yapilmasina yol acardi.
+    if (dto.payload_capacity_kg !== undefined) {
+      data.payloadCapacityKg = dto.payload_capacity_kg ?? null;
+    }
+    if (dto.cargo_volume_m3 !== undefined) {
+      data.cargoVolumeM3 = dto.cargo_volume_m3 ?? null;
+    }
+    if (dto.pallet_capacity !== undefined) {
+      data.palletCapacity = dto.pallet_capacity ?? null;
+    }
+    if (dto.adr_certified !== undefined) {
+      // UC DURUM KORUNUYOR: `null` BILINMIYOR'a geri doner, `false` ACIKCA
+      // yetkisiz demektir. Ikisini birlestirmek motorun ADR kuralini bozardi.
+      data.adrCertified = dto.adr_certified;
+    }
+    if (dto.height_cm !== undefined) data.heightCm = dto.height_cm ?? null;
+    if (dto.length_cm !== undefined) data.lengthCm = dto.length_cm ?? null;
+    if (dto.width_cm !== undefined) data.widthCm = dto.width_cm ?? null;
+    if (dto.gross_weight_kg !== undefined) {
+      data.grossWeightKg = dto.gross_weight_kg ?? null;
     }
 
     const updated = await this.prisma.vehicle.update({

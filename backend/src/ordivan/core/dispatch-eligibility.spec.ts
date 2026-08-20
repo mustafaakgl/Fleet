@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  MIN_OVERRIDE_NOTE_LENGTH,
+  decisionOf,
   evaluateAdr,
+  isRecommendable,
+  resolveApplyGate,
   evaluateCandidate,
   evaluateDriveTime,
   evaluateDriver,
@@ -398,5 +402,221 @@ describe('Kanit serbest metin TASIMAZ', () => {
         );
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KARAR KATMANI — kontrol sonucundan AYRI
+// ---------------------------------------------------------------------------
+
+describe('Karar esleme TEK YONLU ve SABIT', () => {
+  it('verified -> eligible, incompatible -> blocked, unknown -> review_required', () => {
+    assert.equal(decisionOf('verified'), 'eligible');
+    assert.equal(decisionOf('incompatible'), 'blocked');
+    assert.equal(decisionOf('unknown'), 'review_required');
+  });
+
+  it('`unknown` HICBIR KOSULDA `eligible` OLMAZ', () => {
+    // Kestirme bir kural eklenirse burasi kirilir.
+    assert.notEqual(decisionOf('unknown'), 'eligible');
+  });
+
+  it('degerlendirme hem VERIYI hem KARARI tasiyor', () => {
+    const result = evaluateCandidate({ vehicle: vehicle(), driver: driver(), demand: demand(), at: AT });
+    assert.equal(result.overall, 'verified');
+    assert.equal(result.decision, 'eligible');
+  });
+
+  it('bilinmeyen kapasitede karar `review_required`', () => {
+    const result = evaluateCandidate({
+      vehicle: vehicle({ payloadCapacityKg: null }),
+      driver: driver(),
+      demand: demand(),
+      at: AT,
+    });
+    assert.equal(result.overall, 'unknown');
+    assert.equal(result.decision, 'review_required');
+  });
+});
+
+describe('AJAN `unknown` adayi ONERILEN gosteremez', () => {
+  it('yalnizca `eligible` aday onerilebilir', () => {
+    assert.equal(isRecommendable('verified'), true);
+    assert.equal(isRecommendable('unknown'), false);
+    assert.equal(isRecommendable('incompatible'), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Uygulama kapisi ve override politikalari
+// ---------------------------------------------------------------------------
+
+describe('Uygulama kapisi — YASAL ENGEL ASILAMAZ', () => {
+  it('`incompatible` hicbir beyanla gecilemez', () => {
+    const checks = evaluateVehicle(vehicle({ status: 'maintenance' }), demand(), AT);
+    const gate = resolveApplyGate(checks, [
+      { code: 'vehicle_available', note: 'atolyeyi aradim, arac hazir dediler' },
+    ]);
+    assert.equal(gate.applicable, false);
+    assert.equal(gate.decision, 'blocked');
+    assert.equal(gate.blocking.length, 1);
+  });
+
+  it('suresi dolmus ehliyet beyanla gecilemez', () => {
+    const checks = evaluateDriver(driver({ licenseExpiresAt: '2026-01-01' }), AT);
+    const gate = resolveApplyGate(checks, [
+      { code: 'driver_license', note: 'surucu yeni ehliyetini gosterdi' },
+    ]);
+    assert.equal(gate.applicable, false);
+  });
+});
+
+describe('Uygulama kapisi — TAKOGRAF harici dogrulama ile asilabilir', () => {
+  const noTacho = () => evaluateDriver(driver({ remainingDriveMinutes: null }), AT);
+
+  it('kanonik veri yoksa kontrol `external_verification` politikasini tasir', () => {
+    const check = find(noTacho(), 'driver_drive_time');
+    assert.equal(check.status, 'unknown');
+    assert.equal(check.override, 'external_verification');
+  });
+
+  it('beyansiz UYGULANAMAZ', () => {
+    const gate = resolveApplyGate(noTacho());
+    assert.equal(gate.applicable, false);
+    assert.ok(gate.needsDeclaration.some((item) => item.code === 'driver_drive_time'));
+  });
+
+  it('ZORUNLU aciklama ile uygulanabilir ve karar `manual_override`', () => {
+    const gate = resolveApplyGate(noTacho(), [
+      { code: 'driver_drive_time', note: 'surucu kartini elle okudum, 6 saat kaldi' },
+    ]);
+    assert.equal(gate.applicable, true);
+    assert.equal(gate.mode, 'manual_override');
+    assert.deepEqual(gate.acceptedOverrides, ['driver_drive_time']);
+  });
+
+  it('SONUC YINE `unknown` — beyan veriyi degistirmez', () => {
+    const checks = noTacho();
+    const gate = resolveApplyGate(checks, [
+      { code: 'driver_drive_time', note: 'surucu kartini elle okudum, 6 saat kaldi' },
+    ]);
+    assert.equal(find(checks, 'driver_drive_time').status, 'unknown');
+    assert.equal(gate.decision, 'review_required');
+  });
+
+  it('BOS ya da cok kisa aciklama beyan SAYILMAZ', () => {
+    for (const note of ['', '   ', 'ok', 'tamam']) {
+      const gate = resolveApplyGate(noTacho(), [{ code: 'driver_drive_time', note }]);
+      assert.equal(gate.applicable, false, JSON.stringify(note));
+    }
+    assert.ok(MIN_OVERRIDE_NOTE_LENGTH > 5);
+  });
+});
+
+describe('Uygulama kapisi — KAPASITEDE genel override YOK', () => {
+  it('bilinmeyen kapasite `none` politikasi tasir', () => {
+    const check = find(
+      evaluateVehicle(vehicle({ payloadCapacityKg: null }), demand(), AT),
+      'vehicle_capacity_weight',
+    );
+    assert.equal(check.override, 'none');
+  });
+
+  it('beyan verilse bile UYGULANAMAZ — veri doldurulmali', () => {
+    const checks = evaluateVehicle(vehicle({ payloadCapacityKg: null }), demand(), AT);
+    const gate = resolveApplyGate(checks, [
+      { code: 'vehicle_capacity_weight', note: 'gozle baktim sigar gibi duruyor' },
+    ]);
+    assert.equal(gate.applicable, false);
+    assert.ok(gate.needsData.some((item) => item.code === 'vehicle_capacity_weight'));
+    assert.equal(gate.acceptedOverrides.length, 0);
+  });
+
+  it('YUK BILGISI eksikse de veri doldurulmali', () => {
+    const checks = evaluateVehicle(vehicle(), demand({ totalWeightKg: null }), AT);
+    const gate = resolveApplyGate(checks);
+    assert.ok(gate.needsData.some((item) => item.code === 'vehicle_capacity_weight'));
+  });
+
+  it('belge tarihi eksikse de beyanla gecilemez', () => {
+    const checks = evaluateDriver(driver({ licenseExpiresAt: null }), AT);
+    const gate = resolveApplyGate(checks, [{ code: 'driver_license', note: 'ehliyeti gordum gecerli' }]);
+    assert.equal(gate.applicable, false);
+    assert.ok(gate.needsData.some((item) => item.code === 'driver_license'));
+  });
+});
+
+describe('Uygulama kapisi — ADR ACIK SECIM ister', () => {
+  it('yuk ADR mi bilinmiyorsa politika `explicit_choice`', () => {
+    const check = evaluateAdr(true, 'unknown');
+    assert.equal(check.status, 'unknown');
+    assert.equal(check.override, 'explicit_choice');
+  });
+
+  it('SECIM YAPILMADAN plan uygulanamaz', () => {
+    const gate = resolveApplyGate([evaluateAdr(true, 'unknown')]);
+    assert.equal(gate.applicable, false);
+    assert.ok(gate.needsDeclaration.some((item) => item.code === 'vehicle_adr'));
+  });
+
+  it('aciklama yeterli DEGIL — bir SECIM gerekiyor', () => {
+    const gate = resolveApplyGate([evaluateAdr(true, 'unknown')], [
+      { code: 'vehicle_adr', note: 'muhtemelen tehlikeli madde degil' },
+    ]);
+    assert.equal(gate.applicable, false);
+  });
+
+  it('acik secimle uygulanabilir ve karar `manual_override`', () => {
+    const gate = resolveApplyGate([evaluateAdr(true, 'unknown')], [
+      { code: 'vehicle_adr', answer: 'no' },
+    ]);
+    assert.equal(gate.applicable, true);
+    assert.equal(gate.mode, 'manual_override');
+  });
+
+  it('BELGELI arac + belirsiz yuk -> ACIK SECIM (iki cevap da guvenli)', () => {
+    const check = evaluateAdr(true, 'unknown');
+    assert.equal(check.status, 'unknown');
+    assert.equal(check.override, 'explicit_choice');
+  });
+
+  it('BELGESIZ arac + belirsiz yuk -> `incompatible`, SECIM SORULMAZ', () => {
+    // Kritik sira: once secim sorsaydik, "evet ADR" cevabi yetkisiz araci
+    // bir beyanla gecirirdi. Belirsizligi cozmek yetkisiz araci yetkili yapmaz.
+    const check = evaluateAdr(false, 'unknown');
+    assert.equal(check.status, 'incompatible');
+    assert.equal(check.override, undefined);
+    const gate = resolveApplyGate([check], [{ code: 'vehicle_adr', answer: 'yes' }]);
+    assert.equal(gate.applicable, false);
+  });
+
+  it('BELGESI BILINMEYEN arac + belirsiz yuk -> VERI isteniyor', () => {
+    const check = evaluateAdr(null, 'unknown');
+    assert.equal(check.override, 'none');
+  });
+
+  it('ARAC BELGESI bilinmiyorsa secim degil VERI isteniyor', () => {
+    // Eksik arac kaydini kullaniciya onaylatmak, veri girisini atlatmak olurdu.
+    const check = evaluateAdr(null, 'yes');
+    assert.equal(check.override, 'none');
+    const gate = resolveApplyGate([check], [{ code: 'vehicle_adr', answer: 'yes' }]);
+    assert.equal(gate.applicable, false);
+  });
+});
+
+describe('Uygulama kapisi — temiz aday', () => {
+  it('her sey `verified` ise beyan gerekmez ve mod `direct`', () => {
+    const result = evaluateCandidate({ vehicle: vehicle(), driver: driver(), demand: demand(), at: AT });
+    const gate = resolveApplyGate(result.checks);
+    assert.equal(gate.applicable, true);
+    assert.equal(gate.mode, 'direct');
+    assert.equal(gate.decision, 'eligible');
+    assert.equal(gate.acceptedOverrides.length, 0);
+  });
+
+  it('ILGISIZ bir beyan modu `manual_override` YAPMAZ', () => {
+    const result = evaluateCandidate({ vehicle: vehicle(), driver: driver(), demand: demand(), at: AT });
+    const gate = resolveApplyGate(result.checks, [{ code: 'driver_drive_time', note: 'gereksiz beyan' }]);
+    assert.equal(gate.mode, 'direct');
   });
 });

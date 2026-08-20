@@ -351,6 +351,26 @@ async function upsertVehicle(params: {
   currentDriverId?: string | null;
   notes?: string;
   photoUrl?: string;
+  /**
+   * FAZ 17 — DEMO kapasite verisi.
+   *
+   * OPSIYONEL VE BILINCLI OLARAK EKSIK BIRAKILABILIR. Seed'deki her araca
+   * kapasite yazmiyoruz: dispatch motorunun `unknown` dalinin GERCEK veriyle
+   * de calistigini gorebilmek icin bir kismi ACIKCA bos birakiliyor.
+   * Uretim verisine varsayim yazilmaz — bu degerler yalnizca `MyFleet Demo`
+   * kiracisinin sentetik araclari icin.
+   */
+  capacity?: {
+    payloadCapacityKg: number;
+    cargoVolumeM3: number;
+    palletCapacity: number;
+    /** UC DURUMLU: `null` = bilinmiyor, `false` = ACIKCA yetkisiz. */
+    adrCertified: boolean | null;
+    heightCm?: number;
+    lengthCm?: number;
+    widthCm?: number;
+    grossWeightKg?: number;
+  };
 }) {
   const photoUrl = photoUrlForVehicleBrand(params.brand, params.photoUrl);
   return prisma.vehicle.upsert({
@@ -374,6 +394,9 @@ async function upsertVehicle(params: {
       currentDriverId: params.currentDriverId ?? null,
       notes: params.notes,
       photoUrl,
+      // Kapasite YALNIZCA verildiyse yaziliyor: seed tekrar kosuldugunda elle
+      // girilmis bir kapasiteyi EZMEMELI.
+      ...(params.capacity ?? {}),
     },
     create: {
       ...(params.id ? { id: params.id } : {}),
@@ -392,6 +415,7 @@ async function upsertVehicle(params: {
       currentDriverId: params.currentDriverId ?? null,
       notes: params.notes,
       photoUrl,
+      ...(params.capacity ?? {}),
     },
   });
 }
@@ -1401,6 +1425,33 @@ async function main(): Promise<void> {
       spExpiryDate: addDays(today, spOffset),
       insuranceExpiryDate: addDays(today, insuranceOffset),
       notes: `${entry.type} · zul. Gesamtmasse ${entry.grossWeightKg} kg`,
+      /**
+       * FAZ 17 — DEMO KAPASITESI.
+       *
+       * KAYNAK VE TUREME ACIK: `grossWeightKg` zaten pilot filo verisinde
+       * duruyor (aracin azami yuklu agirligi). Tasima kapasitesi bunun
+       * yaklasik %60'i alindi — 15 t'luk bir dagitim kamyonunda ~6 t yuk
+       * tipik bir buyukluk. Bu bir OLCUM DEGIL, DEMO ICIN belgelenmis bir
+       * turetme; gercek filoda kapasite arac ruhsatindan girilir.
+       *
+       * HER UCUNCU ARAC BILINCLI OLARAK EKSIK BIRAKILIYOR: dispatch
+       * motorunun `unknown` dali gercek veriyle de gorunur olsun ve arayuz
+       * "dogrulanamadi" durumunu gosterebilsin. Eksik veri bir kusur degil,
+       * urunun normal hali.
+       *
+       * ADR UC DURUMLU DAGITILIYOR: bir kismi belgeli, bir kismi ACIKCA
+       * belgesiz, bir kismi bilinmiyor — motorun uc dali da denenebilsin.
+       */
+      capacity:
+        seq % 3 === 0
+          ? undefined
+          : {
+              payloadCapacityKg: Math.round(entry.grossWeightKg * 0.6),
+              cargoVolumeM3: 38,
+              palletCapacity: 18,
+              adrCertified: seq % 4 === 1 ? true : seq % 4 === 2 ? false : null,
+              grossWeightKg: entry.grossWeightKg,
+            },
     };
   });
 

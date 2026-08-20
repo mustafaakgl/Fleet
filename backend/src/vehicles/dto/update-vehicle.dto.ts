@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -9,6 +10,7 @@ import {
   Max,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { VehicleStatus } from '@prisma/client';
@@ -89,4 +91,74 @@ export class UpdateVehicleDto {
   @IsPositive()
   @Max(5000)
   fuel_tank_capacity_liters?: number;
+
+  // --- FAZ 17: YUK KAPASITESI VE ADR ---
+  //
+  // HEPSI OPSIYONEL VE BOS GONDERIM ALANI TEMIZLER. Bir varsayilan yazsaydik
+  // dispatch motoru "bilmiyorum" diyemez, eksik veriyi kesin cevap gibi
+  // sunardi. Bos birakilan alan, motorda `unknown` uretir ve plan uygulamayi
+  // ENGELLER — dogru davranis bu.
+
+  /** Tasiyabilecegi yuk (kg). Aracin toplam agirligi DEGIL. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(100_000)
+  payload_capacity_kg?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
+  @Max(1_000)
+  cargo_volume_m3?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  @Max(100)
+  pallet_capacity?: number;
+
+  /**
+   * ADR tasima yetkisi — UC DURUMLU.
+   *
+   * `true`/`false` ACIK bir cevap; alani hic gondermemek mevcut degeri KORUR;
+   * `null` gondermek BILINMIYOR'a geri doner. Ucuncu durumu kaldirmak,
+   * belgesi girilmemis araci ya yanlis sekilde eler ya da daha kotusu
+   * tehlikeli maddeyi yetkisiz araca yukletirdi.
+   */
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsBoolean()
+  adr_certified?: boolean | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  @Max(500)
+  height_cm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  @Max(3_000)
+  length_cm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  @Max(400)
+  width_cm?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(100_000)
+  gross_weight_kg?: number;
 }
