@@ -21,6 +21,8 @@ export const JOB_TYPES = [
   'document.service_invoice.extract',
   /** Faz 16 — e-posta/PDF'ten tasima emri alani cikarimi. */
   'transport_order.extract',
+  /** Faz 17 — arac/surucu adaylarini SIRALAMA (secme DEGIL). */
+  'dispatch.plan',
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
@@ -37,6 +39,14 @@ export const PROPOSAL_TYPES = [
    * taslagi insan onayindan sonra Faz 15 servisinde olusur.
    */
   'transport_order.extraction',
+  /**
+   * Faz 17 — dispatch SIRALAMASI.
+   *
+   * ADI BILINCLI OLARAK `decision` ya da `assignment` DEGIL: bu ciktinin
+   * kendisi bir gorev ya da tur degildir, hatta bir SECIM bile degildir —
+   * yalnizca sunucunun verdigi adaylarin SIRALAMASI ve gerekcesidir.
+   */
+  'dispatch.plan.suggestion',
 ] as const;
 export type ProposalType = (typeof PROPOSAL_TYPES)[number];
 
@@ -157,6 +167,37 @@ export const JOB_TYPE_REGISTRY: Record<JobType, JobTypeDefinition> = {
      * kurallarla yapiliyor (bkz. order-intake-match.ts). Ajana bir "musteri
      * ara" araci vermek, gonderen adresini kesin eslesmeye cevirmenin ve
      * kiraci sinirini ajanin karar verdigi bir seye donusturmenin yoluydu.
+     */
+    toolset: [],
+  },
+  'dispatch.plan': {
+    jobType: 'dispatch.plan',
+    /** Surumlu yetenek — sozlesme degisirse `@v2` acilir. */
+    requiredCapability: 'dispatch.plan@v1',
+    schemaVersions: {
+      1: {
+        /**
+         * ONERI KIMLIGI — ICERIGI DEGIL.
+         *
+         * Siparis adresleri, tutarlar, surucu ve arac bilgileri is kaydina
+         * GIRMEZ; kuyruk kaydinda duran her sey loglara ve denetime sizabilir.
+         * Worker ayrintilari ayri, yetkilendirilmis bir uctan alir (Faz 16 ile
+         * ayni desen).
+         */
+        dispatchProposalId: { type: 'string', required: true, maxLength: 64 },
+        /** Sunucunun verdigi aday sayisi — worker kac ref bekleyecegini bilir. */
+        candidateCount: { type: 'integer', required: false, min: 0, max: 50 },
+        orderCount: { type: 'integer', required: false, min: 0, max: 20 },
+      },
+    },
+    allowedProposalTypes: ['dispatch.plan.suggestion'],
+    /**
+     * ARAC YOK.
+     *
+     * Uygunluk SUNUCUDA, deterministik kurallarla belirleniyor
+     * (bkz. core/dispatch-eligibility.ts). Ajana bir "arac ara" ya da
+     * "musaitlik sorgula" araci vermek, secimi ajanin karar verdigi bir seye
+     * cevirirdi — bu fazda acikca yasak olan sey.
      */
     toolset: [],
   },
@@ -326,6 +367,64 @@ export const PROPOSAL_SCHEMAS: Record<ProposalType, Record<number, ObjectSpec>> 
           shipperReference:   { type: 'string', required: false, maxLength: 80 },
           consigneeReference: { type: 'string', required: false, maxLength: 80 },
         },
+      },
+    },
+  },
+  /**
+   * FAZ 17 — DISPATCH SIRALAMASI.
+   *
+   * BURADA KIMLIK YOK ve bu sozlesmenin en onemli ozelligi. Ajan `vehicleId`,
+   * `driverId`, `tourId` ya da `assignmentId` YAZAMAZ — sema onlari
+   * reddeder. Yerine SUNUCUNUN URETTIGI kisa referanslar (`c1`, `c2`, ...)
+   * kullaniliyor ve cagiran taraf bunlari kendi listesine karsi cozuyor.
+   * Listede olmayan bir referans REDDEDILIR.
+   *
+   * NEDEN BOYLE: ajan bir kimlik yazabilseydi, girdiyi kontrol eden biri
+   * (e-posta govdesine, belgeye kimlik gomerek) baska bir aracin ya da baska
+   * bir kiracinin kaydinin planlanmasini deneyebilirdi. Kapali bir referans
+   * kumesinde bunun bir yolu YOK.
+   *
+   * GEREKCE DE KAPALI KUME: serbest metin bir gerekce ekrana basilirdi.
+   * `rationaleKey` bir ceviri anahtaridir; sunucu diline metin uretmez.
+   */
+  'dispatch.plan.suggestion': {
+    1: {
+      rankedCandidates: {
+        type: 'array',
+        required: true,
+        maxItems: 50,
+        items: {
+          /** Sunucunun verdigi kisa referans. Kimlik DEGIL. */
+          candidateRef: { type: 'string', required: true, maxLength: 16 },
+          rank: { type: 'integer', required: true, min: 1, max: 50 },
+          /** Kapali gerekce kumesi — serbest metin YOK. */
+          rationaleKey: {
+            type: 'enum',
+            required: true,
+            values: [
+              'closest_to_pickup',
+              'capacity_fits_best',
+              'driver_continuity',
+              'least_empty_km',
+              'window_fits_best',
+              'no_strong_signal',
+            ],
+          },
+        },
+      },
+      /** Ayni turda tasinabilecek siparislerin referanslari. */
+      consolidationRefs: {
+        type: 'array',
+        required: false,
+        maxItems: 20,
+        items: { orderRef: { type: 'string', required: true, maxLength: 16 } },
+      },
+      /** Onerilen durak sirasi — yine REFERANSLARLA. */
+      stopOrderRefs: {
+        type: 'array',
+        required: false,
+        maxItems: 60,
+        items: { stopRef: { type: 'string', required: true, maxLength: 16 } },
       },
     },
   },

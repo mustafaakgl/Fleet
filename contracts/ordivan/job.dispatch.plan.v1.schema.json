@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fleet.local/contracts/ordivan/job.dispatch.plan.v1.schema.json",
+  "title": "job.dispatch.plan.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "dispatchProposalId": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "candidateCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+    },
+    "orderCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20
+    }
+  },
+  "required": [
+    "dispatchProposalId"
+  ]
+}

@@ -1068,6 +1068,12 @@ model Tenant {
   orderIntakeMessages        OrderIntakeMessage[]
   orderIntakeAttachments     OrderIntakeAttachment[]
   orderIntakeReviews         OrderIntakeReview[]
+  dispatchProposals          DispatchProposal[]
+  dispatchProposalOrders     DispatchProposalOrder[]
+  dispatchCandidates         DispatchCandidate[]
+  deliverySlots              DeliverySlot[]
+  deliverySlotInvitations    DeliverySlotInvitation[]
+  deliverySlotBookings       DeliverySlotBooking[]
   vehicleDtcs                VehicleDtc[]
   tachoProviderCredentials   TachoProviderCredential[]
   dddFiles                   DddFile[]
@@ -1250,6 +1256,8 @@ model User {
   decidedOrderRevisions           TransportOrderRevision[]    @relation("TransportOrderRevisionDecidedBy")
   uploadedOrderIntakeMessages     OrderIntakeMessage[]        @relation("OrderIntakeMessageUploadedBy")
   decidedOrderIntakeReviews       OrderIntakeReview[]         @relation("OrderIntakeReviewDecidedBy")
+  decidedDispatchProposals        DispatchProposal[]          @relation("DispatchProposalDecidedBy")
+  createdSlotInvitations          DeliverySlotInvitation[]    @relation("DeliverySlotInvitationCreatedBy")
   reversedFuelEntries             FleetFuelEntryReversal[]    @relation("FuelEntryReversedBy")
 
   @@unique([tenantId, email])
@@ -1387,6 +1395,9 @@ model Driver {
   fuelingIntents          FuelingIntent[]
   intakeDocuments         IntakeDocument[]
 
+  /// Faz 17 — bu surucunun gorundugu dispatch adaylari.
+  dispatchCandidates DispatchCandidate[]
+
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
   @@index([companyId])
@@ -1481,12 +1492,45 @@ model Vehicle {
   /// tahmin yazmak, yakit mutabakatinda OLCULMUS gibi gorunen uydurma bir
   /// litre farki uretirdi. Bos ise kapasite kurallari HIC CALISMAZ.
   fuelTankCapacityLiters  Decimal?        @db.Decimal(7, 2)
-  initialOdometerKm       Decimal?        @db.Decimal(12, 3)
-  odometerCorrectedKm     Decimal?        @db.Decimal(12, 3)
-  odometerCorrectedAt     DateTime?
-  deletedAt               DateTime?
-  createdAt               DateTime        @default(now())
-  updatedAt               DateTime        @updatedAt
+
+  // --- FAZ 17: YUK KAPASITESI VE KISITLAR ---
+  //
+  // HEPSI NULLABLE VE VARSAYILANSIZ. `null` = BILINMIYOR; "sinirsiz" ya da
+  // "hayir" DEMEK DEGILDIR. Bir varsayilan yazsaydik (ornegin 0 ya da
+  // `adrCertified: false`), uygunluk motoru "bilmiyorum" diyemez ve eksik
+  // veriyi KESIN BIR CEVAP gibi sunardi — tam da bu fazda yasak olan sey.
+  //
+  // Motor bu alanlar bossa ilgili kontrolu `unknown` isaretler ve `unknown`
+  // hicbir zaman "uygun" sayilmaz.
+
+  /// Tasima kapasitesi (kg). Aracin toplam agirligi degil, TASIYABILECEGI yuk.
+  payloadCapacityKg Decimal? @db.Decimal(10, 2)
+  /// Yuk hacmi (m3).
+  cargoVolumeM3     Decimal? @db.Decimal(10, 3)
+  /// Kac Euro-palet sigar.
+  palletCapacity    Int?
+
+  /// ADR (tehlikeli madde) tasima yetkisi.
+  ///
+  /// UC DURUMLU BIR BOOLEAN: `true` yetkili, `false` ACIKCA yetkisiz, `null`
+  /// BILINMIYOR. `null`u `false`a indirseydik belgesi girilmemis arac "ADR
+  /// tasiyamaz" diye elenirdi — yanlis ama guvenli. Tersi (`null` = `true`)
+  /// tehlikeli maddeyi yetkisiz araca yukletirdi.
+  adrCertified Boolean?
+
+  /// --- Boyut kisitlari (Valhalla truck profili icin). ---
+  heightCm      Int?
+  lengthCm      Int?
+  widthCm       Int?
+  /// Azami yuklu agirlik (kg) — kopru/yol kisitlari icin.
+  grossWeightKg Decimal? @db.Decimal(10, 2)
+
+  initialOdometerKm   Decimal?  @db.Decimal(12, 3)
+  odometerCorrectedKm Decimal?  @db.Decimal(12, 3)
+  odometerCorrectedAt DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   currentDriver Driver? @relation("CurrentVehicleDriver", fields: [currentDriverId], references: [id], onDelete: SetNull)
 
@@ -1517,6 +1561,9 @@ model Vehicle {
   tachoDownloadSchedules  TachoDownloadSchedule[]
   tours                   Tour[]
   intakeDocuments         IntakeDocument[]
+
+  /// Faz 17 — bu aracin gorundugu dispatch adaylari.
+  dispatchCandidates DispatchCandidate[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, internalCode])
@@ -1762,6 +1809,9 @@ model Location {
   consignmentPickups    Consignment[] @relation("ConsignmentPickupLocation")
   consignmentDeliveries Consignment[] @relation("ConsignmentDeliveryLocation")
 
+  /// Faz 17 — bu noktadaki teslimat/yukleme slotlari.
+  deliverySlots DeliverySlot[] @relation("DeliverySlotLocation")
+
   @@unique([tenantId, normalizedHash])
   @@index([tenantId])
   @@index([tenantId, companyId])
@@ -1826,6 +1876,9 @@ model Tour {
   /// Yakit niyetleri turun PLANINA girmez — yalnizca bu tura ait olduklari
   /// bilinsin diye baglanir. Durak sayisi ve sirasi bundan etkilenmez.
   fuelingIntents FuelingIntent[]
+
+  /// Faz 17 — bu turu ureten dispatch onerisi (varsa).
+  fromDispatchProposal DispatchProposal? @relation("TourFromDispatchProposal")
 
   @@index([tenantId])
   @@index([tenantId, workDate])
@@ -4804,6 +4857,9 @@ model AutomationProposal {
   /// Faz 16 — bu oneriyi tasiyan gelen kutusu incelemesi.
   orderIntakeReview OrderIntakeReview?
 
+  /// Faz 17 — bu oneriyi tasiyan dispatch onerisi.
+  dispatchProposal DispatchProposal?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -5334,6 +5390,9 @@ model TransportOrder {
   selectedOrderIntakeReviews    OrderIntakeReview[] @relation("OrderIntakeReviewSelectedOrder")
   duplicateOfOrderIntakeReviews OrderIntakeReview[] @relation("OrderIntakeReviewDuplicateOf")
 
+  /// Faz 17 — bu siparisi kapsayan dispatch onerileri (konsolidasyon n:m).
+  dispatchProposalOrders DispatchProposalOrder[]
+
   @@unique([tenantId, orderNumber])
   /// Kiraci ICINDE tekil. Kiracilar arasinda ayni referans CAKISABILIR ve sizmaz.
   @@unique([tenantId, duplicateKey])
@@ -5397,6 +5456,9 @@ model Consignment {
   updatedAt DateTime @updatedAt
 
   assignments Assignment[]
+
+  /// Faz 17 — bu kalem icin uretilen slot davetleri.
+  slotInvitations DeliverySlotInvitation[]
 
   @@unique([transportOrderId, sequence])
   @@index([tenantId])
@@ -5774,4 +5836,328 @@ model OrderIntakeReview {
   @@index([matchedCompanyId])
   @@index([matchedOrderId])
   @@map("order_intake_reviews")
+}
+
+// ============================================================================
+// FAZ 17 — DISPATCH AJANI VE TESLIMAT SLOTLARI
+// ============================================================================
+
+/**
+ * UC DURUMLU UYGUNLUK — Faz 12'nin `AutomationCheckStatus` sozlesmesiyle AYNI
+ * felsefe, dispatch'e ozgu adlandirmayla.
+ * `unknown` HICBIR ZAMAN "uygun" ya da "guvenli" DEMEK DEGILDIR. Bir kontrol
+ * calistirilamadiysa (arac kapasitesi girilmemis, takograf verisi yok) bunu
+ * SOYLEMEK zorundayiz; sessizce gecmek, kontrol edilmis izlenimi verir ve
+ * dispatcher'i olmayan bir guvenceye yaslandirir.
+ * `incompatible` ile `unknown` AYRI: birincisi "olmaz" der ve gerekcesi
+ * vardir; ikincisi "bilmiyorum" der ve insanin bakmasini ister.
+ */
+enum DispatchCheckStatus {
+  verified
+  incompatible
+  unknown
+}
+
+/// Onerinin yasam dongusu.
+enum DispatchProposalStatus {
+  open
+  approved
+  rejected
+  /// Suresi doldu. Sessizce onaylanmis SAYILMAZ.
+  expired
+  /**
+   * Dayandigi siparis revizyonu DEGISTI.
+   * Oneri SILINMEZ: hangi plan hangi veriyle uretilmisti sorusunun cevabi
+   * denetimde kalmali. Ama uygulanamaz — eski revizyona gore kurulmus bir
+   * plani yeni gercege uygulamak, musterinin degistirdigi seyi yok sayardi.
+   */
+  superseded
+}
+
+/**
+ * Rota hesabinin sonucu.
+ * `degraded`: Valhalla cevap vermedi ya da kismi cevap verdi; mesafe/sure
+ * KABA bir tahmin (kus ucusu) ve bu ACIKCA isaretleniyor. UYDURULMUS bir ETA
+ * gercek bir ETA gibi gosterilmez — dispatcher neyin tahmin oldugunu bilmeli.
+ */
+enum DispatchRouteStatus {
+  ok
+  degraded
+  failed
+}
+
+/// Slotun hangi ucta oldugu.
+enum DeliverySlotKind {
+  pickup
+  delivery
+}
+
+enum DeliverySlotInvitationStatus {
+  open
+  booked
+  cancelled
+  expired
+  /// Ic taraf iptal etti (ornegin siparis degisti).
+  revoked
+}
+
+/**
+ * DISPATCH ONERISI (Faz 17).
+ * AJANIN CIKTISI BURADA DEGIL: alanlar, guven ve kanit DEGISMEZ
+ * `AutomationProposal` icinde durur (Faz 12/16 ile ayni). Bu kayit onun
+ * OPERASYONEL karsiligi — hangi siparisler, hangi adaylar, hangi rota ve
+ * insanin ne sectigi.
+ * BU KAYIT HICBIR SEY UYGULAMAZ. Onay sonrasinda `Assignment` ve `Tour`
+ * MEVCUT domain servisleriyle olusur; buradan dogrudan yazim YOK. Aksi halde
+ * `AssignmentsService`in ehliyet ve cakisma kapilari atlanabilirdi.
+ */
+model DispatchProposal {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Ajanin DEGISMEZ ciktisi.
+  proposalId String             @unique
+  proposal   AutomationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  status DispatchProposalStatus @default(open)
+
+  /**
+   * HESAPLAMA ZAMANI.
+   * Plan bir ANIN fotografidir: musaitlik, kapasite ve rota o an gecerliydi.
+   * Dispatcher iki gun sonra baktiginda bunu gormeli — "dun geceki veriyle
+   * hesaplandi" ile "su an hesaplandi" ayni sey degil.
+   */
+  computedAt DateTime
+
+  /// --- Rota ---
+  routeStatus       DispatchRouteStatus @default(ok)
+  /// Teknik hata SINIFI, saglayici mesaji degil.
+  routeFailureClass String?
+  totalDistanceKm   Decimal?            @db.Decimal(12, 3)
+  totalDurationMin  Int?
+  /// Onerilen durak sirasi ve ETA: [{ sequence, kind, locationId, etaAt }].
+  plannedStops      Json?
+
+  /**
+   * EXACTLY-ONCE SONUC.
+   * `@unique`: bir oneri EN FAZLA BIR tur uretebilir. Cift tiklama ya da
+   * eszamanli iki onay ikinci bir tur URETEMEZ ve bu, uygulama kontrolunun
+   * degil VERITABANININ garantisi (Faz 13/16 ile ayni desen).
+   */
+  resultTourId String? @unique
+  resultTour   Tour?   @relation("TourFromDispatchProposal", fields: [resultTourId], references: [id], onDelete: SetNull)
+
+  decidedById     String?
+  decidedBy       User?     @relation("DispatchProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt       DateTime?
+  /// Red sebebi — reddederken ZORUNLU.
+  rejectionReason String?
+  /// Dispatcher'in aciklamasi. HTML olarak RENDER EDILMEZ.
+  decisionNote    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders     DispatchProposalOrder[]
+  candidates DispatchCandidate[]
+
+  @@index([tenantId])
+  @@index([tenantId, status, createdAt])
+  @@map("dispatch_proposals")
+}
+
+/**
+ * ONERININ KAPSADIGI SIPARISLER (Faz 17).
+ * n:m cunku KONSOLIDASYON var: birden fazla siparis ayni turda tasinabilir.
+ * `sourceRevision` BURADA TUTULUYOR ve bu bir guvenlik kilididir: oneri
+ * uretilirken siparisin hangi revizyonu okunmustu. Onay aninda siparisin
+ * guncel revizyonu farkliysa plan UYGULANMAZ — musteri bu arada adresi ya da
+ * zamani degistirmis olabilir ve eski plana gore arac gonderilirdi.
+ */
+model DispatchProposalOrder {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  dispatchProposalId String
+  dispatchProposal   DispatchProposal @relation(fields: [dispatchProposalId], references: [id], onDelete: Cascade)
+
+  transportOrderId String
+  transportOrder   TransportOrder @relation(fields: [transportOrderId], references: [id], onDelete: Cascade)
+
+  /// Onerinin dayandigi revizyon numarasi.
+  sourceRevision Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([dispatchProposalId, transportOrderId])
+  @@index([tenantId])
+  @@index([transportOrderId])
+  @@map("dispatch_proposal_orders")
+}
+
+/**
+ * ARAC/SURUCU ADAYI VE UYGUNLUGU (Faz 17).
+ * AI ADAY SECMEZ, SIRALAR. Uygunluk ve yasaklar SUNUCUDA deterministik
+ * kurallarla belirlenir (bkz. core/dispatch-eligibility.ts); modelin katkisi
+ * yalnizca siralama ve aciklamadir. Bir modelin "bu arac uygun" demesi, o
+ * aracin bakimda olmadigi anlamina gelmez.
+ * `checks` her kontrolun UC DURUMLU sonucunu ve GEREKCESINI tasir; dispatcher
+ * neden elendigini ya da neyin dogrulanamadigini gorur.
+ */
+model DispatchCandidate {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  dispatchProposalId String
+  dispatchProposal   DispatchProposal @relation(fields: [dispatchProposalId], references: [id], onDelete: Cascade)
+
+  /// Modelin onerdigi siralama. 1 = en iyi aday.
+  rank Int
+
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId  String?
+  driver    Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
+  /**
+   * ADAYIN GENEL DURUMU — en kotu kontrolden turetilir.
+   * Bir `incompatible` varsa aday `incompatible`; hic `incompatible` yok ama
+   * en az bir `unknown` varsa aday `unknown`. "Cogunluk uygun" diye
+   * `verified` YAZILMAZ.
+   */
+  overallStatus DispatchCheckStatus
+
+  /// [{ code, status, reasonKey, evidence }] — uc durumlu.
+  checks Json
+
+  /// Dispatcher'in sectigi aday.
+  selected Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([dispatchProposalId, rank])
+  @@index([tenantId])
+  @@index([dispatchProposalId])
+  @@map("dispatch_candidates")
+}
+
+/**
+ * TESLIMAT/YUKLEME SLOTU (Faz 17).
+ * KAPASITE VERITABANINDA KORUNUYOR: `bookedCount < capacity` kosullu bir
+ * UPDATE ile artiriliyor. Once-oku-sonra-yaz olsaydi, son kontenjani iki
+ * eszamanli istek de "musait" gorur ve ikisi de rezerve ederdi. PostgreSQL'de
+ * tek bir kosullu UPDATE atomiktir; uygulama kontrolu bu yarisi kaybeder.
+ */
+model DeliverySlot {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  locationId String
+  location   Location @relation("DeliverySlotLocation", fields: [locationId], references: [id], onDelete: Cascade)
+
+  /// Gunun tarihi (yerel gun siniri cagiranin isi).
+  date        DateTime
+  /// 'HH:mm' — Faz 15 `TourStop.windowStart` ile AYNI bicim.
+  windowStart String
+  windowEnd   String
+
+  capacity    Int
+  bookedCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings DeliverySlotBooking[]
+
+  /// Ayni yer + gun + pencere IKI KEZ tanimlanamaz.
+  @@unique([tenantId, locationId, date, windowStart, windowEnd])
+  @@index([tenantId])
+  @@index([tenantId, date])
+  @@map("delivery_slots")
+}
+
+/**
+ * SLOT DAVETI — GIRIS GEREKTIRMEYEN GUVENLI BAGLANTI (Faz 17).
+ * TOKEN DUZ METIN SAKLANMAZ: yalnizca SHA-256 ozeti ve gosterim icin kisa bir
+ * onek tutulur. Duz metin yalnizca uretildigi ANDA, bir kez doner — repodaki
+ * `OrdivanConnector` ve refresh-token ile AYNI desen. Veritabanini okuyan
+ * biri linkleri kullanamaz.
+ * TEK AMACLI YETKI: bu token YALNIZCA bu davetin slot secimini yapar. Baska
+ * bir siparise, baska bir kiraciya, fiyata, surucuye ya da araca erisim
+ * VERMEZ — yanit govdesi bunlari zaten icermez.
+ * SURE SONU ZORUNLU: suresiz bir link, sizdiginda sonsuza kadar gecerli olur.
+ */
+model DeliverySlotInvitation {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  /// Davetin bagli oldugu kalem ve uc.
+  consignmentId String
+  consignment   Consignment      @relation(fields: [consignmentId], references: [id], onDelete: Cascade)
+  kind          DeliverySlotKind
+
+  /// SHA-256 ozeti. Kiraci genelinde tekil.
+  tokenHash   String @unique
+  /// Gosterim icin kirilmis onek — TAM TOKEN DEGIL.
+  tokenPrefix String
+
+  expiresAt DateTime
+  status    DeliverySlotInvitationStatus @default(open)
+
+  /// Kotuye kullanim sayaci — hiz siniri icin.
+  attemptCount  Int       @default(0)
+  lastAttemptAt DateTime?
+
+  createdById String?
+  createdBy   User?   @relation("DeliverySlotInvitationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings DeliverySlotBooking[]
+
+  @@index([tenantId])
+  @@index([tenantId, status, expiresAt])
+  @@index([consignmentId])
+  @@map("delivery_slot_invitations")
+}
+
+/**
+ * SLOT REZERVASYONU — APPEND-ONLY GECMIS (Faz 17).
+ * IPTAL SILME DEGILDIR: iptal edilen rezervasyon satiri KALIR ve
+ * `cancelledAt` damgalanir. "Musteri once hangi saati secmisti" sorusunun
+ * cevabi bu tabloda durur.
+ * `activeInvitationId` TEKIL VE NULLABLE: rezervasyon aktifken davetin
+ * kimligini, iptal edilince `null` tasir. Boylece "bir davetin AYNI ANDA en
+ * fazla bir aktif rezervasyonu olur" kurali VERITABANINDA duruyor ama gecmis
+ * kayitlar birbirini engellemiyor — Faz 15'teki `duplicateKey` ile ayni desen.
+ */
+model DeliverySlotBooking {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  invitationId String
+  invitation   DeliverySlotInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  slotId String
+  slot   DeliverySlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+
+  /// Aktifken `invitationId`, iptal edilince `null`.
+  activeInvitationId String? @unique
+
+  bookedAt     DateTime  @default(now())
+  cancelledAt  DateTime?
+  /// Iptal sebebi — sayilabilir olmasi gerekmiyor, musteri metni DEGIL.
+  cancelReason String?
+
+  @@index([tenantId])
+  @@index([invitationId])
+  @@index([slotId])
+  @@map("delivery_slot_bookings")
 }

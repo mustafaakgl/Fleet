@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fleet.local/contracts/ordivan/proposal.dispatch.plan.suggestion.v1.schema.json",
+  "title": "proposal.dispatch.plan.suggestion.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "rankedCandidates": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://fleet.local/contracts/ordivan/item.schema.json",
+        "title": "item",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidateRef": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "rationaleKey": {
+            "type": "string",
+            "enum": [
+              "closest_to_pickup",
+              "capacity_fits_best",
+              "driver_continuity",
+              "least_empty_km",
+              "window_fits_best",
+              "no_strong_signal"
+            ]
+          }
+        },
+        "required": [
+          "candidateRef",
+          "rank",
+          "rationaleKey"
+        ]
+      }
+    },
+    "consolidationRefs": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://fleet.local/contracts/ordivan/item.schema.json",
+        "title": "item",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "orderRef": {
+            "type": "string",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "orderRef"
+        ]
+      }
+    },
+    "stopOrderRefs": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://fleet.local/contracts/ordivan/item.schema.json",
+        "title": "item",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stopRef": {
+            "type": "string",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "stopRef"
+        ]
+      }
+    }
+  },
+  "required": [
+    "rankedCandidates"
+  ]
+}

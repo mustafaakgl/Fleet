@@ -767,6 +767,54 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.orderIntakeReview.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.orderIntakeReview.count()),
       }),
+      // Faz 17 — plan onerileri; bir kiracinin plani digerine SIZMAMALI.
+      verifyTenantScopedModel({
+        label: 'DispatchProposal', tenantA, tenantB,
+        unscopedCountA: () => base.dispatchProposal.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.dispatchProposal.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.dispatchProposal.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.dispatchProposal.count()),
+      }),
+      // Konsolidasyon bagi: hangi siparisler ayni turda.
+      verifyTenantScopedModel({
+        label: 'DispatchProposalOrder', tenantA, tenantB,
+        unscopedCountA: () => base.dispatchProposalOrder.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.dispatchProposalOrder.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.dispatchProposalOrder.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.dispatchProposalOrder.count()),
+      }),
+      // Arac/surucu adaylari ve uygunluk gerekceleri.
+      verifyTenantScopedModel({
+        label: 'DispatchCandidate', tenantA, tenantB,
+        unscopedCountA: () => base.dispatchCandidate.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.dispatchCandidate.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.dispatchCandidate.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.dispatchCandidate.count()),
+      }),
+      // Slot kapasiteleri.
+      verifyTenantScopedModel({
+        label: 'DeliverySlot', tenantA, tenantB,
+        unscopedCountA: () => base.deliverySlot.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.deliverySlot.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.deliverySlot.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.deliverySlot.count()),
+      }),
+      // Girissiz link davetleri — token ozetleri dahil.
+      verifyTenantScopedModel({
+        label: 'DeliverySlotInvitation', tenantA, tenantB,
+        unscopedCountA: () => base.deliverySlotInvitation.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.deliverySlotInvitation.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.deliverySlotInvitation.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.deliverySlotInvitation.count()),
+      }),
+      // Rezervasyon gecmisi.
+      verifyTenantScopedModel({
+        label: 'DeliverySlotBooking', tenantA, tenantB,
+        unscopedCountA: () => base.deliverySlotBooking.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.deliverySlotBooking.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.deliverySlotBooking.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.deliverySlotBooking.count()),
+      }),
     ]);
 
     console.log('Tenant isolation check passed.');

@@ -48,6 +48,17 @@
         "transport_order.extraction"
       ],
       "toolset": []
+    },
+    {
+      "jobType": "dispatch.plan",
+      "requiredCapability": "dispatch.plan@v1",
+      "schemaVersions": [
+        1
+      ],
+      "allowedProposalTypes": [
+        "dispatch.plan.suggestion"
+      ],
+      "toolset": []
     }
   ],
   "proposalTypes": [
@@ -71,6 +82,12 @@
     },
     {
       "proposalType": "transport_order.extraction",
+      "schemaVersions": [
+        1
+      ]
+    },
+    {
+      "proposalType": "dispatch.plan.suggestion",
       "schemaVersions": [
         1
       ]

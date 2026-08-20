@@ -66,6 +66,7 @@ paths:
                           - "document.mock_classification"
                           - "document.service_invoice.extract"
                           - "transport_order.extract"
+                          - "dispatch.plan"
                       schemaVersion:
                         type: "integer"
                       payload:
