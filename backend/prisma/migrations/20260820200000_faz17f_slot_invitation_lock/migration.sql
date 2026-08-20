@@ -1,0 +1,11 @@
+-- Faz 17f — davet kaba kuvvet kilidi icin eksik kolon.
+--
+-- NEDEN: Faz 17e'nin servis kodu `lockedUntil` alanini hem `select` hem
+-- `data` icinde kullaniyordu ama kolon HIC OLUSTURULMAMISTI. Servis
+-- testleri Prisma'yi taklit ettigi icin eksiklik gorunmedi; GERCEK bir
+-- public istek `Unknown argument lockedUntil` ile duserdi. Yani daveti
+-- koruyan tek sayac calismiyordu.
+--
+-- NULLABLE VE VARSAYILANSIZ: kilit bir ISTISNADIR. `now()` gibi bir
+-- varsayilan, var olan butun davetleri bir anda kilitli sayardi.
+ALTER TABLE "delivery_slot_invitations" ADD COLUMN "lockedUntil" TIMESTAMP(3);

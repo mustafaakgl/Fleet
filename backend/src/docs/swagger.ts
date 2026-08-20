@@ -41,6 +41,9 @@ const MUTATING_METHODS = new Set<RouteDocMetadata['method']>(['post', 'put', 'pa
 const SENSITIVE_FIELD_PATTERN = /(password|refresh.?token|access.?token|token|secret|hash|stack|internal|storage|path)/i;
 const SWAGGER_MODEL_PROPERTIES_METADATA_KEY = 'swagger/apiModelProperties';
 const TAG_BY_CONTROLLER_NAME: Record<string, string> = {
+  // Girissiz slot ucu, yetkilendirilmis slot yonetimiyle AYNI etikette
+  // toplaniyor; sozlesmeyi okuyan biri ikisini yan yana gormeli.
+  PublicSlotController: 'Delivery slots',
   DriverMobileController: 'Drivers',
   LicenseChecksDriverController: 'Drivers',
   DriverEquipmentIssuancesController: 'Equipment issuance',
@@ -99,6 +102,12 @@ const TAG_BY_PATH_PREFIX: Record<string, string> = {
   common: 'Common',
   prisma: 'Internal',
   'customer-portal': 'Customer portal',
+  // Faz 17f — dispatch ve teslimat slotlari.
+  dispatch: 'Dispatch',
+  'delivery-slots': 'Delivery slots',
+  'order-intake': 'Order intake',
+  ordivan: 'Automation',
+  'transport-orders': 'Transport orders',
   'fleet-ops': 'Fleet operations',
   'license-checks': 'Drivers',
   'driver-licenses': 'Drivers',

@@ -15,7 +15,11 @@ import { OrderIntakeDecisionService } from './order-intake-decision.service';
 import { OrderIntakeService } from './order-intake.service';
 import { DispatchService } from './dispatch.service';
 import { DispatchApprovalService } from './dispatch-approval.service';
+import { DispatchReadService } from './dispatch-read.service';
+import { DispatchController } from './dispatch.controller';
 import { DeliverySlotService } from './delivery-slot.service';
+import { DeliverySlotController } from './delivery-slot.controller';
+import { PublicSlotController } from './public-slot.controller';
 import { AssignmentsModule } from '../assignments/assignments.module';
 import { RoutingModule } from '../routing/routing.module';
 import { OrdivanAdminController } from './ordivan-admin.controller';
@@ -41,6 +45,18 @@ import { resolveOrdivanMode } from './ordivan.config';
     DocumentInboxController,
     // Faz 16 — siparis gelen kutusu.
     OrderIntakeController,
+    /**
+     * Faz 17f — dispatch ve slot API'leri.
+     *
+     * 17c/17d/17e servisleri bu commit'e kadar HICBIR controller'a bagli
+     * degildi: kod vardi, ucu yoktu. Kayit burada yapiliyor.
+     */
+    DispatchController,
+    DeliverySlotController,
+    // Girissiz uc AYRI bir controller: `@Public()` ve `@Throttle` bir
+    // yetkilendirilmis controller'in metotlarina karistirilsaydi, ileride
+    // eklenen bir uc yanlislikla public olabilirdi.
+    PublicSlotController,
   ],
   providers: [
     OrdivanConnectorService,
@@ -53,6 +69,11 @@ import { resolveOrdivanMode } from './ordivan.config';
     OrderIntakeContentService,
     OrderIntakeService,
     OrderIntakeDecisionService,
+    // Faz 17f — dispatch ve slot.
+    DispatchService,
+    DispatchApprovalService,
+    DispatchReadService,
+    DeliverySlotService,
     OrdivanScheduler,
     {
       provide: 'ORDIVAN_MODE',
@@ -69,6 +90,10 @@ import { resolveOrdivanMode } from './ordivan.config';
     OrderIntakeContentService,
     OrderIntakeService,
     OrderIntakeDecisionService,
+    DispatchService,
+    DispatchApprovalService,
+    DispatchReadService,
+    DeliverySlotService,
   ],
 })
 export class OrdivanModule {}

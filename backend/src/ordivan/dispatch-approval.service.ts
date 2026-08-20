@@ -42,10 +42,23 @@ export interface ApproveDispatchInput {
   driverId: string;
   /** Faz 15 deseni: iyimser eszamanlilik damgasi. */
   expectedUpdatedAt: string;
+  /**
+   * ONERININ HANGI HESABINA BAKARAK ONAYLANDI.
+   * `jobAttempt` ile eslesmezse oneri bu arada YENIDEN URETILMIS demektir ve
+   * dispatcher'in ekraninda gordugu adaylar artik gecerli degildir.
+   */
+  proposalRevision: number;
   /** `review_required` adaylar icin beyanlar. */
   overrides?: OverrideDeclaration[];
-  /** Tekrarlanan istegi tanimak icin. */
-  idempotencyKey?: string;
+  /** Tekrarlanan istegi tanimak icin — ZORUNLU. */
+  idempotencyKey: string;
+}
+
+export interface RejectDispatchInput {
+  reason: string;
+  expectedUpdatedAt: string;
+  proposalRevision: number;
+  idempotencyKey: string;
 }
 
 export interface ApproveDispatchResult {
@@ -97,6 +110,15 @@ export class DispatchApprovalService {
 
     // --- TEKRARLANAN ONAY: mevcut sonucu don ---
     if (proposal.resultTourId) {
+      /**
+       * AYNI ANAHTAR MI, BASKA BIR ISTEK MI.
+       *
+       * Ayni anahtarla gelen istek TEKRARDIR ve mevcut sonucu alir. FARKLI
+       * bir anahtarla gelen istek ise "ben onayladim" sanan IKINCI BIR
+       * kullanicidir — ona da mevcut turu donmek, kendi sectigi arac/surucu
+       * uygulanmis gibi gostermek olurdu. O yuzden 409.
+       */
+      this.assertIdempotencyMatch(proposal.decisionIdempotencyKey, input.idempotencyKey);
       const existingAssignments = await this.prisma.assignment.findMany({
         where: { tourStops: { some: { tourId: proposal.resultTourId } } },
         select: { id: true },
@@ -117,8 +139,11 @@ export class DispatchApprovalService {
       });
     }
     if (proposal.status !== 'open') {
+      // Reddedilmis bir oneri de buraya duser; anahtar eslesse bile ONAY
+      // uretilemez — red bir karardir ve geri alinmasi ayri bir islemdir.
       throw new ConflictException({ code: 'dispatch_proposal_already_decided', status: proposal.status });
     }
+    this.assertProposalRevision(proposal.jobAttempt, input.proposalRevision);
 
     // --- CANLI VERI: siparisler hala planlanabilir mi ---
     const orders = await this.prisma.transportOrder.findMany({
@@ -219,7 +244,12 @@ export class DispatchApprovalService {
             resultTourId: null,
             updatedAt: expected,
           },
-          data: { status: 'approved', decidedById: userId, decidedAt: new Date() },
+          data: {
+            status: 'approved',
+            decidedById: userId,
+            decidedAt: new Date(),
+            decisionIdempotencyKey: input.idempotencyKey,
+          },
         });
         if (claimed.count === 0) {
           throw new ConflictException({ code: 'dispatch_approval_raced' });
@@ -363,23 +393,46 @@ export class DispatchApprovalService {
     userId: string,
     role: string | null | undefined,
     dispatchProposalId: string,
-    reason: string,
-  ): Promise<{ dispatchProposalId: string }> {
+    input: RejectDispatchInput,
+  ): Promise<{ dispatchProposalId: string; repeated: boolean }> {
     if (!APPROVAL_ROLES.includes(role ?? '')) {
       throw new ForbiddenException({ code: 'dispatch_approval_role_forbidden' });
     }
-    if (reason.trim().length < 5) {
+    if (input.reason.trim().length < 5) {
       // SEBEPSIZ RED, neyin duzeltilecegini bilinmez kilar.
       throw new BadRequestException({ code: 'dispatch_reject_reason_required' });
     }
 
+    // Bozuk damga bir CAKISMA degil, bir ISTEK HATASIDIR (onayla ayni gerekce).
+    const expected = this.parseExpected(input.expectedUpdatedAt);
+    const proposal = await this.load(dispatchProposalId);
+
+    // --- TEKRARLANAN RED: ayni anahtar mevcut karari alir ---
+    if (proposal.status === 'rejected') {
+      this.assertIdempotencyMatch(proposal.decisionIdempotencyKey, input.idempotencyKey);
+      return { dispatchProposalId, repeated: true };
+    }
+    if (proposal.status !== 'open') {
+      throw new ConflictException({ code: 'dispatch_proposal_already_decided', status: proposal.status });
+    }
+    this.assertProposalRevision(proposal.jobAttempt, input.proposalRevision);
+
+    /**
+     * RED DE IYIMSER ESZAMANLILIKLA KORUNUYOR.
+     *
+     * `updatedAt` kosulu olmasaydi, oneri okunduktan sonra baskasi tarafindan
+     * ONAYLANMIS bir plan yine de reddedilebilir gorunurdu: `status: 'open'`
+     * kontrolu o yarisi yakalar ama istemci hangi durumu gordugunu bilmez.
+     * Damga, "ekranda gordugun sey hala gecerli mi" sorusunu cevapliyor.
+     */
     const claimed = await this.prisma.dispatchProposal.updateMany({
-      where: { id: dispatchProposalId, status: 'open' },
+      where: { id: dispatchProposalId, status: 'open', updatedAt: expected },
       data: {
         status: 'rejected',
         decidedById: userId,
         decidedAt: new Date(),
-        rejectionReason: reason.trim().slice(0, 500),
+        decisionIdempotencyKey: input.idempotencyKey,
+        rejectionReason: input.reason.trim().slice(0, 500),
         // Karara baglandi: ayni siparis yeniden planlanabilsin.
         activeFingerprint: null,
       },
@@ -397,7 +450,7 @@ export class DispatchApprovalService {
       metadata: { dispatchProposalId },
     });
 
-    return { dispatchProposalId };
+    return { dispatchProposalId, repeated: false };
   }
 
   // -------------------------------------------------------------------------
@@ -570,6 +623,7 @@ export class DispatchApprovalService {
         resultTourId: true,
         jobAttempt: true,
         computedAt: true,
+        decisionIdempotencyKey: true,
         orders: { select: { transportOrderId: true, sourceRevision: true } },
       },
     });
@@ -588,6 +642,28 @@ export class DispatchApprovalService {
       ),
       appliedMode: 'direct' as const,
     };
+  }
+
+  /**
+   * TEKRAR ANAHTARI KARSILASTIRMASI.
+   *
+   * Karar zaten verilmisken gelen istek IKI SEYDEN BIRI olabilir: ayni
+   * istegin tekrari (ag hatasi, cift tiklama) ya da BASKA birinin istegi.
+   * Ikisine ayni cevabi vermek, ikinci kullaniciya kendi sectigi
+   * arac/surucunun uygulandigi izlenimini verirdi.
+   */
+  private assertIdempotencyMatch(stored: string | null, supplied: string): void {
+    if (stored !== null && stored === supplied) return;
+    throw new ConflictException({ code: 'dispatch_proposal_already_decided' });
+  }
+
+  /** Oneri yeniden uretildiyse ekrandaki adaylar artik gecerli degil. */
+  private assertProposalRevision(current: number, supplied: number): void {
+    if (current === supplied) return;
+    throw new ConflictException({
+      code: 'dispatch_stale_proposal_revision',
+      currentRevision: current,
+    });
   }
 
   private parseExpected(value: string): Date {

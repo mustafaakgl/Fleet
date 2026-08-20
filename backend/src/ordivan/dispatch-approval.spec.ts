@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
-import { DispatchApprovalService } from './dispatch-approval.service';
+import { DispatchApprovalService, type RejectDispatchInput } from './dispatch-approval.service';
 
 type Row = Record<string, unknown>;
 
@@ -37,6 +37,9 @@ interface BuildOptions {
   tourThrows?: boolean;
   consignmentCount?: number;
   withoutWindows?: boolean;
+  /** Faz 17f — karar tekrar anahtari ve oneri damgasi. */
+  jobAttempt?: number;
+  decisionIdempotencyKey?: string | null;
 }
 
 function build(options: BuildOptions = {}) {
@@ -47,7 +50,8 @@ function build(options: BuildOptions = {}) {
       generation: options.generation ?? 'ready',
       proposalId: 'prop-1',
       resultTourId: options.resultTourId ?? null,
-      jobAttempt: 1,
+      jobAttempt: options.jobAttempt ?? 1,
+      decisionIdempotencyKey: options.decisionIdempotencyKey ?? null,
       computedAt: NOW,
       updatedAt: NOW,
       activeFingerprint: 'fp-1',
@@ -278,8 +282,22 @@ const APPROVE = {
   vehicleId: 'veh-1',
   driverId: 'drv-1',
   expectedUpdatedAt: EXPECTED,
+  // Faz 17f: onerinin hangi hesabina bakildigi ve tekrar anahtari ZORUNLU.
+  proposalRevision: 1,
+  idempotencyKey: 'approve-key-0001',
   overrides: [TACHO_OVERRIDE],
 };
+
+/** Faz 17f: red de ayni eszamanlilik ve tekrar korumasini tasiyor. */
+function rejectInput(reason: string, overrides: Partial<RejectDispatchInput> = {}): RejectDispatchInput {
+  return {
+    reason,
+    expectedUpdatedAt: EXPECTED,
+    proposalRevision: 1,
+    idempotencyKey: 'reject-key-0001',
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Basarili yol
@@ -471,6 +489,8 @@ describe('Takograf beyani ZORUNLU', () => {
           vehicleId: 'veh-1',
           driverId: 'drv-1',
           expectedUpdatedAt: EXPECTED,
+          proposalRevision: 1,
+          idempotencyKey: 'approve-key-0002',
         }),
       (error: unknown) => error instanceof ConflictException,
     );
@@ -591,7 +611,7 @@ describe('TAM ROLLBACK', () => {
 describe('Red', () => {
   it('HICBIR domain kaydi olusmuyor', async () => {
     const harness = build();
-    await harness.service.reject('user-1', 'office', 'dp-1', 'arac bulunamadi');
+    await harness.service.reject('user-1', 'office', 'dp-1', rejectInput('arac bulunamadi'));
     assert.equal(harness.assignments.length, 0);
     assert.equal(harness.tours.length, 0);
     assert.deepEqual(harness.calls, []);
@@ -601,7 +621,7 @@ describe('Red', () => {
   it('SEBEPSIZ red reddediliyor', async () => {
     const harness = build();
     await assert.rejects(
-      () => harness.service.reject('user-1', 'office', 'dp-1', 'x'),
+      () => harness.service.reject('user-1', 'office', 'dp-1', rejectInput('x')),
       (error: unknown) => error instanceof BadRequestException,
     );
   });
@@ -609,7 +629,7 @@ describe('Red', () => {
   it('MUHASEBE reddedemez', async () => {
     const harness = build();
     await assert.rejects(
-      () => harness.service.reject('user-1', 'accounting', 'dp-1', 'gecerli bir sebep'),
+      () => harness.service.reject('user-1', 'accounting', 'dp-1', rejectInput('gecerli bir sebep')),
       (error: unknown) => error instanceof ForbiddenException,
     );
   });
@@ -617,7 +637,7 @@ describe('Red', () => {
   it('karara baglanmis oneri yeniden reddedilemez', async () => {
     const harness = build({ status: 'approved' });
     await assert.rejects(
-      () => harness.service.reject('user-1', 'office', 'dp-1', 'gecerli bir sebep'),
+      () => harness.service.reject('user-1', 'office', 'dp-1', rejectInput('gecerli bir sebep')),
       (error: unknown) => error instanceof ConflictException,
     );
   });
@@ -626,6 +646,124 @@ describe('Red', () => {
 // ---------------------------------------------------------------------------
 // Degismezlik
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Faz 17f — tekrar anahtari ve oneri damgasi
+// ---------------------------------------------------------------------------
+
+describe('Tekrar anahtari', () => {
+  it('AYNI anahtarla gelen tekrar MEVCUT sonucu doner', async () => {
+    const harness = build();
+    const first = await harness.service.approve('user-1', 'office', 'dp-1', APPROVE);
+    const second = await harness.service.approve('user-1', 'office', 'dp-1', APPROVE);
+
+    assert.equal(second.repeated, true);
+    assert.equal(second.tourId, first.tourId);
+    assert.equal(harness.tours.length, 1);
+  });
+
+  /**
+   * FARKLI ANAHTAR TEKRAR DEGIL, IKINCI BIR KULLANICIDIR.
+   *
+   * Ona da mevcut turu donseydik, KENDI sectigi arac ve surucunun
+   * uygulandigini sanirdi — oysa yola cikan baskasinin secimi. 409 tek durust
+   * cevap.
+   */
+  it('FARKLI anahtarla gelen istek 409 — sessizce mevcut sonuc DONMUYOR', async () => {
+    const harness = build();
+    await harness.service.approve('user-1', 'office', 'dp-1', APPROVE);
+    await assert.rejects(
+      () =>
+        harness.service.approve('user-2', 'office', 'dp-1', {
+          ...APPROVE,
+          idempotencyKey: 'baska-kullanici-anahtari',
+        }),
+      (error: unknown) => error instanceof ConflictException,
+    );
+    assert.equal(harness.tours.length, 1);
+  });
+
+  it('anahtar KARARLA BIRLIKTE saklaniyor', async () => {
+    const harness = build();
+    await harness.service.approve('user-1', 'office', 'dp-1', APPROVE);
+    assert.equal(harness.proposals[0]!.decisionIdempotencyKey, 'approve-key-0001');
+  });
+
+  it('redde de tekrar AYNI karari doner, farkli anahtar 409', async () => {
+    const harness = build();
+    await harness.service.reject('user-1', 'office', 'dp-1', rejectInput('arac bulunamadi'));
+    const repeat = await harness.service.reject('user-1', 'office', 'dp-1', rejectInput('arac bulunamadi'));
+    assert.equal(repeat.repeated, true);
+
+    await assert.rejects(
+      () =>
+        harness.service.reject('user-2', 'office', 'dp-1', rejectInput('baska sebep', {
+          idempotencyKey: 'baska-anahtar-0002',
+        })),
+      (error: unknown) => error instanceof ConflictException,
+    );
+  });
+});
+
+describe('Oneri damgasi (proposalRevision)', () => {
+  it('ONERI YENIDEN URETILDIYSE onay reddediliyor', async () => {
+    // Ekranda `jobAttempt: 1` goruluyordu; sunucuda 2. Adaylar degismis olabilir.
+    const harness = build({ jobAttempt: 2 });
+    await assert.rejects(
+      () => harness.service.approve('user-1', 'office', 'dp-1', APPROVE),
+      (error: unknown) =>
+        error instanceof ConflictException &&
+        JSON.stringify(error.getResponse()).includes('dispatch_stale_proposal_revision'),
+    );
+    assert.equal(harness.tours.length, 0);
+  });
+
+  it('bayat damgayla RED de yapilamaz', async () => {
+    const harness = build({ jobAttempt: 2 });
+    await assert.rejects(
+      () => harness.service.reject('user-1', 'office', 'dp-1', rejectInput('arac bulunamadi')),
+      (error: unknown) => error instanceof ConflictException,
+    );
+    assert.equal(harness.proposals[0]!.status, 'open');
+  });
+
+  it('guncel damga GECIYOR', async () => {
+    const harness = build({ jobAttempt: 2 });
+    const result = await harness.service.approve('user-1', 'office', 'dp-1', {
+      ...APPROVE,
+      proposalRevision: 2,
+      // Beyanin kapsami da ONERININ damgasini tasimali.
+      overrides: [{ ...TACHO_OVERRIDE, scope: { ...SCOPE, proposalRevision: 2 } }],
+    });
+    assert.equal(result.repeated, false);
+    assert.equal(harness.tours.length, 1);
+  });
+});
+
+describe('Redde bayat damga', () => {
+  it('BAYAT updatedAt ile red reddediliyor', async () => {
+    const harness = build();
+    await assert.rejects(
+      () =>
+        harness.service.reject('user-1', 'office', 'dp-1', rejectInput('arac bulunamadi', {
+          expectedUpdatedAt: '2020-01-01T00:00:00.000Z',
+        })),
+      (error: unknown) => error instanceof ConflictException,
+    );
+    assert.equal(harness.proposals[0]!.status, 'open');
+  });
+
+  it('gecersiz damga bicimi redde de 400', async () => {
+    const harness = build();
+    await assert.rejects(
+      () =>
+        harness.service.reject('user-1', 'office', 'dp-1', rejectInput('arac bulunamadi', {
+          expectedUpdatedAt: 'yakinda',
+        })),
+      (error: unknown) => error instanceof BadRequestException,
+    );
+  });
+});
 
 describe('AI ciktisi DEGISMEZ', () => {
   it('onay `AutomationProposal`i guncellemiyor', async () => {

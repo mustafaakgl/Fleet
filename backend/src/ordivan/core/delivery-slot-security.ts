@@ -141,6 +141,17 @@ export function evaluateInvitation(
     return { usable: false, reason: 'revoked' };
   }
   if (state.status === 'booked') return { usable: false, reason: 'already_booked' };
+  /**
+   * DURUM DAMGASI DA SURE KADAR BAGLAYICI (Faz 17f).
+   *
+   * Once yalnizca `expiresAt` karsilastiriliyordu. `status = 'expired'`
+   * yazilmis ama `expiresAt`i ileri tarihli bir davet — bir sup temizleyicisi
+   * ya da elle mudahale boyle bir satir birakabilir — KULLANILABILIR
+   * gorunurdu. "Suresi doldu" iki ayri yerde ifade ediliyorsa ikisine de
+   * bakilmali; yalnizca birine bakmak, digerini yazan kodu sessizce etkisiz
+   * kilar.
+   */
+  if (state.status === 'expired') return { usable: false, reason: 'expired' };
   if (state.expiresAt.getTime() <= now.getTime()) return { usable: false, reason: 'expired' };
   if (currentRevision !== null && currentRevision !== state.sourceRevision) {
     return { usable: false, reason: 'stale_revision' };

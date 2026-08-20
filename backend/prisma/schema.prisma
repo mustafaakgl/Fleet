@@ -6044,6 +6044,20 @@ model DispatchProposal {
   decidedById     String?
   decidedBy       User?     @relation("DispatchProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
   decidedAt       DateTime?
+  /**
+   * KARAR TEKRAR ANAHTARI (Faz 17f).
+   * Ag tekrari ya da cift tiklama IKINCI BIR KARAR uretmesin diye istemcinin
+   * verdigi anahtar KARARLA BIRLIKTE saklaniyor. `resultTourId @unique` zaten
+   * ikinci turu engelliyor; bu alan istemciye "ayni istegi mi tekrarladim,
+   * yoksa baskasi mi karar verdi" sorusunun cevabini veriyor — ikisi ayni
+   * degil ve arayuzde ayni gosterilemez.
+   * `@@unique([tenantId, decisionIdempotencyKey])`: bir anahtar kiraci icinde
+   * BIR karara aittir. Ayni anahtarin baska bir oneride kullanilmasi bir
+   * istemci hatasidir ve sessizce kabul edilirse tekrar korumasi anlamsiz olur.
+   * NULL'lar birbirinden ayri sayildigi icin karar verilmemis oneriler
+   * tekillige takilmaz.
+   */
+  decisionIdempotencyKey String?
   /// Red sebebi — reddederken ZORUNLU.
   rejectionReason String?
   /// Dispatcher'in aciklamasi. HTML olarak RENDER EDILMEZ.
@@ -6056,6 +6070,7 @@ model DispatchProposal {
   candidates DispatchCandidate[]
   overrides  DispatchOverrideDeclaration[]
 
+  @@unique([tenantId, decisionIdempotencyKey])
   @@index([tenantId])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, generation, createdAt])
@@ -6244,6 +6259,17 @@ model DeliverySlotInvitation {
   /// Kotuye kullanim sayaci — hiz siniri icin.
   attemptCount  Int       @default(0)
   lastAttemptAt DateTime?
+  /**
+   * KABA KUVVET KILIDI (Faz 17f).
+   * `MAX_TOKEN_ATTEMPTS` basarisiz denemeden sonra damgalanir; kilit
+   * suresince davet KULLANILAMAZ ve istemci yine AYNI guvenli cevabi alir.
+   * Faz 17e'de kod bu alani okuyup yaziyordu ama kolon HIC OLUSTURULMAMISTI:
+   * servis testleri Prisma'yi taklit ettigi icin eksiklik sessiz kaldi ve
+   * gercek bir istekte sorgu duserdi. Kilit ISTEMCI BASINA DEGIL DAVET
+   * BASINA: saldirgan IP degistirerek ayni linki sinirsiz deneyemesin.
+   * Rota duzeyindeki `@Throttle` bunun YERINE GECMEZ, USTUNE BINER.
+   */
+  lockedUntil   DateTime?
 
   createdById String?
   createdBy   User?   @relation("DeliverySlotInvitationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)

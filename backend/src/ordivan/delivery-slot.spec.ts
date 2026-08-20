@@ -444,14 +444,23 @@ describe('Rezervasyon', () => {
     }
   });
 
+  /**
+   * Faz 17f: bu dal 17e'de ULASILAMAZDI.
+   *
+   * `book` daveti `allowBooked` olmadan cozuyordu, yani ilk rezervasyondan
+   * sonra ikinci istek "link gecersiz" cevabi aliyordu ve asagidaki tekrar
+   * dali hic calismiyordu. Test o zaman davranisi kabul edip idempotency'yi
+   * dolayli olcuyordu; artik DOGRUDAN olcuyor.
+   */
   it('IDEMPOTENT tekrar: ayni slot ikinci kez kontenjan tuketmiyor', async () => {
     const harness = build({ capacity: 2 });
     const first = await harness.service.book(harness.TOKEN, 'slot-1');
-    // Davet `booked` olduktan sonra tekrar denemek guvenli hata verir; bu
-    // yuzden idempotency dogrudan aktif rezervasyon uzerinden olculuyor.
+    const second = await harness.service.book(harness.TOKEN, 'slot-1');
+
+    assert.equal(second.repeated, true);
+    assert.equal(second.bookingId, first.bookingId);
     assert.equal(harness.slots[0]!.bookedCount, 1);
     assert.equal(harness.bookings.length, 1);
-    assert.ok(first.bookingId);
   });
 });
 
