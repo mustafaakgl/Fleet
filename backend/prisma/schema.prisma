@@ -1813,6 +1813,14 @@ model Location {
   consignmentPickups    Consignment[] @relation("ConsignmentPickupLocation")
   consignmentDeliveries Consignment[] @relation("ConsignmentDeliveryLocation")
 
+  /**
+   * Konumun IANA zaman dilimi (Faz 17).
+   * NULLABLE ve VARSAYILANSIZ: bilinmiyorsa KIRACININ dilimine dusulur.
+   * Sabit `Europe/Berlin` yazsaydik, Rotterdam deposundaki bir rampa Berlin
+   * saatiyle gosterilir ve musteri bir saat once ya da sonra gelirdi.
+   */
+  timezone String?
+
   /// Faz 17 — bu noktadaki teslimat/yukleme slotlari.
   deliverySlots DeliverySlot[] @relation("DeliverySlotLocation")
 
@@ -5918,6 +5926,12 @@ enum DeliverySlotKind {
   delivery
 }
 
+/// Slotun acik mi kapali mi oldugu. Kapali slot SECILEMEZ.
+enum DeliverySlotStatus {
+  open
+  closed
+}
+
 enum DeliverySlotInvitationStatus {
   open
   booked
@@ -5944,6 +5958,7 @@ model DispatchProposal {
 
   /// Ajanin DEGISMEZ ciktisi.
   /**
+   * /**
    * /**
    * AJANIN CIKTISI — SONRADAN BAGLANIR.
    * NULLABLE cunku bu kayit uretim TALEBI olarak dogar; `AutomationProposal`
@@ -6140,11 +6155,29 @@ model DeliverySlot {
   locationId String
   location   Location @relation("DeliverySlotLocation", fields: [locationId], references: [id], onDelete: Cascade)
 
-  /// Gunun tarihi (yerel gun siniri cagiranin isi).
-  date        DateTime
-  /// 'HH:mm' — Faz 15 `TourStop.windowStart` ile AYNI bicim.
-  windowStart String
-  windowEnd   String
+  /**
+   * PENCERE UTC ANLARI OLARAK SAKLANIYOR.
+   * Onceki hali `date` + `'HH:mm'` metinleriydi ve bu, Faz 16/17'de defalarca
+   * reddedilen belirsizligin ta kendisiydi: `08:00` hangi dilimde? Yaz saati
+   * gecisinde ayni metin bir gun 60, ertesi gun 120 dakika kayardi.
+   * `timezone` YALNIZCA GOSTERIM icin: kullaniciya kendi diliminde
+   * gosterilirken kullaniliyor; karsilastirma ve cakisma DAIMA UTC uzerinden.
+   * Sabit `Europe/Berlin` YOK — deger konumdan, o yoksa kiracidan cozuluyor.
+   */
+  startsAt DateTime
+  endsAt   DateTime
+  /// IANA adi. Gosterim icin; hesap UTC ile yapilir.
+  timezone String
+
+  /**
+   * Rampa / kapi gibi kaynak.
+   * NULLABLE DEGIL, BOS METIN: tekillik anahtarinin parcasi ve PostgreSQL
+   * NULL'lari birbirinden ayri sayar — nullable olsaydi ayni saatte
+   * "kaynaksiz" iki slot acilabilirdi.
+   */
+  resourceRef String @default("")
+
+  status DeliverySlotStatus @default(open)
 
   capacity    Int
   bookedCount Int @default(0)
@@ -6155,9 +6188,10 @@ model DeliverySlot {
   bookings DeliverySlotBooking[]
 
   /// Ayni yer + gun + pencere IKI KEZ tanimlanamaz.
-  @@unique([tenantId, locationId, date, windowStart, windowEnd])
+  /// Ayni yer + ayni kaynak + ayni UTC araligi IKI KEZ tanimlanamaz.
+  @@unique([tenantId, locationId, startsAt, endsAt, resourceRef])
   @@index([tenantId])
-  @@index([tenantId, date])
+  @@index([tenantId, startsAt])
   @@map("delivery_slots")
 }
 
@@ -6186,6 +6220,23 @@ model DeliverySlotInvitation {
   tokenHash   String @unique
   /// Gosterim icin kirilmis onek — TAM TOKEN DEGIL.
   tokenPrefix String
+
+  /**
+   * DAVETIN DAYANDIGI SIPARIS REVIZYONU.
+   * Musteri siparisi degistirdiginde eski davet ARTIK GECERLI DEGIL: adres ya
+   * da pencere degismis olabilir ve o davetle secilen saat yanlis bir plana
+   * baglanirdi.
+   */
+  sourceRevision Int
+
+  /**
+   * TEK AKTIF DAVET — VERITABANINDA.
+   * Davet aciksa `{consignmentId}:{kind}`, aksi halde `null`. `@unique` oldugu
+   * icin ayni kalem+uc icin AYNI ANDA iki gecerli link olusturulamaz; iptal
+   * edilen davet alani birakir ve yenisi uretilebilir (Faz 15 `duplicateKey`
+   * deseni).
+   */
+  activeTargetKey String? @unique
 
   expiresAt DateTime
   status    DeliverySlotInvitationStatus @default(open)

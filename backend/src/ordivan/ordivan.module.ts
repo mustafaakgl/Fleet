@@ -15,6 +15,7 @@ import { OrderIntakeDecisionService } from './order-intake-decision.service';
 import { OrderIntakeService } from './order-intake.service';
 import { DispatchService } from './dispatch.service';
 import { DispatchApprovalService } from './dispatch-approval.service';
+import { DeliverySlotService } from './delivery-slot.service';
 import { AssignmentsModule } from '../assignments/assignments.module';
 import { RoutingModule } from '../routing/routing.module';
 import { OrdivanAdminController } from './ordivan-admin.controller';
