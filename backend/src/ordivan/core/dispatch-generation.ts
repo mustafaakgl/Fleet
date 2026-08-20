@@ -218,6 +218,19 @@ export function completionCasWhere(context: {
  * `processing` de calistirilmaz: halen calisan bir worker olabilir ve ikinci
  * bir is, ayni oneriye iki cikti yazma yarisi baslatirdi.
  */
-export function canRetryGeneration(generation: DispatchGeneration): boolean {
+export function canRetryGeneration(
+  generation: DispatchGeneration,
+  status: DispatchReviewStatus = 'open',
+): boolean {
+  /**
+   * `superseded` YENIDEN CALISTIRILAMAZ.
+   *
+   * Bu oneri, siparis REVIZE EDILDIGI icin gecersiz kilindi ve kayitli
+   * `sourceRevision` degerleri artik ESKI. Yeniden calistirmak, guncel
+   * olmayan bir revizyona gore plan uretmek olurdu — tam da superseded
+   * isaretinin engellemek icin var oldugu sey. Dogru yol YENI bir talep
+   * acmak; yeni parmak izi guncel revizyonu tasir.
+   */
+  if (status === 'superseded') return false;
   return generation === 'failed' || generation === 'expired';
 }

@@ -268,3 +268,45 @@ describe('Eszamanlilik senaryolari', () => {
     );
   });
 });
+
+describe('Superseded — artik AKTIF DEGIL', () => {
+  it('aktif parmak izi BIRAKILIR', () => {
+    assert.equal(
+      activeFingerprintFor({ requestFingerprint: 'fp', generation: 'failed', status: 'superseded' }),
+      null,
+    );
+    assert.equal(isLiveGeneration('failed', 'superseded'), false);
+  });
+
+  it('GEC WORKER CEVABI baglanamaz', () => {
+    // `processing` degil: cevap `not_processing` ile reddedilir.
+    const decision = evaluateCompletion(stored({ generation: 'failed' }), {
+      ...CONTEXT,
+      currentRevisions: current(),
+    });
+    assert.deepEqual(decision, { accept: false, reason: 'not_processing' });
+  });
+
+  it('ESKI REVIZYON yeniden calistirilamaz — yeni talep acilmali', () => {
+    // `failed` normalde retry edilebilir; `superseded` EDILEMEZ cunku
+    // kayitli sourceRevision degerleri artik eski.
+    assert.equal(canRetryGeneration('failed', 'open'), true);
+    assert.equal(canRetryGeneration('failed', 'superseded'), false);
+    assert.equal(canRetryGeneration('expired', 'superseded'), false);
+  });
+
+  it('YENI REVIZYON hemen planlanabilir — parmak izi farkli', () => {
+    const base = { tenantId: 't1', workDate: '2026-09-01' };
+    const eski = buildRequestFingerprint({ ...base, orders: ORDERS });
+    const yeni = buildRequestFingerprint({
+      ...base,
+      orders: [{ transportOrderId: 'ord-1', sourceRevision: 4 }, ORDERS[1]!],
+    });
+    assert.notEqual(eski, yeni);
+    // Eski oneri aktif parmak izini biraktigi icin yeni talep engellenmiyor.
+    assert.equal(
+      activeFingerprintFor({ requestFingerprint: eski, generation: 'failed', status: 'superseded' }),
+      null,
+    );
+  });
+});

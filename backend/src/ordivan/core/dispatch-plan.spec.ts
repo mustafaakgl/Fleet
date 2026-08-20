@@ -7,6 +7,7 @@ import {
   applyAgentRanking,
   buildRoutePlan,
   haversineKm,
+  pairVehiclesWithDrivers,
   resolveConsolidation,
   toTruckProfile,
   type ServerCandidate,
@@ -309,5 +310,121 @@ describe('Konsolidasyon', () => {
       () => resolveConsolidation(offered, []),
       (error: unknown) => error instanceof DispatchRefError && error.reason === 'no_orders_selected',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Arac - surucu eslestirmesi
+// ---------------------------------------------------------------------------
+
+describe('Arac-surucu eslestirmesi SINIRLI ama KOR DEGIL', () => {
+  it('currentDriverId UYGUN DEGILKEN baska musait surucu onerilir', () => {
+    // Onceki davranis yalnizca `currentDriverId` uzerinden aday uretiyordu ve
+    // bu, izinli bir surucunun aracini "aday yok" gibi gosteriyordu.
+    const result = pairVehiclesWithDrivers(
+      [{ id: 'v1', currentDriverId: 'd-izinli' }],
+      // `d-izinli` listede YOK (izinli/pasif oldugu icin cekilmedi).
+      [{ id: 'd-musait', busy: false }],
+    );
+    assert.equal(result.pairs.length, 1);
+    assert.equal(result.pairs[0]!.driverId, 'd-musait');
+    assert.equal(result.pairs[0]!.preferred, false);
+  });
+
+  it('SURUCUSUZ arac + musait surucu eslestirilir', () => {
+    const result = pairVehiclesWithDrivers(
+      [{ id: 'v1', currentDriverId: null }],
+      [{ id: 'd1', busy: false }],
+    );
+    assert.deepEqual(result.pairs, [{ vehicleId: 'v1', driverId: 'd1', preferred: false }]);
+  });
+
+  it('AYNI SURUCU IKI ARACA onerilmez', () => {
+    const result = pairVehiclesWithDrivers(
+      [
+        { id: 'v1', currentDriverId: 'd1' },
+        { id: 'v2', currentDriverId: 'd1' },
+      ],
+      [{ id: 'd1', busy: false }],
+    );
+    const driverIds = result.pairs.map((pair) => pair.driverId);
+    assert.equal(new Set(driverIds).size, driverIds.length);
+    assert.equal(result.pairs.length, 1);
+  });
+
+  it('MEVCUT ESLESME esit kosulda ONCELIKLI', () => {
+    const result = pairVehiclesWithDrivers(
+      [{ id: 'v1', currentDriverId: 'd2' }],
+      [
+        { id: 'd1', busy: false },
+        { id: 'd2', busy: false },
+      ],
+    );
+    assert.equal(result.pairs[0]!.driverId, 'd2');
+    assert.equal(result.pairs[0]!.preferred, true);
+  });
+
+  it('MUSAIT surucu, mesgul olandan once eslestirilir', () => {
+    const result = pairVehiclesWithDrivers(
+      [{ id: 'v1', currentDriverId: null }],
+      [
+        { id: 'd-mesgul', busy: true },
+        { id: 'd-musait', busy: false },
+      ],
+    );
+    assert.equal(result.pairs[0]!.driverId, 'd-musait');
+  });
+
+  it('SINIR asilirsa SESSIZ KIRPMA YOK — kac aday disarida kaldigi bildirilir', () => {
+    const vehicles = Array.from({ length: 10 }, (_item, index) => ({
+      id: `v${index}`,
+      currentDriverId: null,
+    }));
+    const drivers = Array.from({ length: 10 }, (_item, index) => ({
+      id: `d${index}`,
+      busy: false,
+    }));
+    const result = pairVehiclesWithDrivers(vehicles, drivers, 4);
+    assert.equal(result.pairs.length, 4);
+    assert.equal(result.truncated, 6);
+  });
+
+  it('kirpmada MEVCUT ESLESMELER korunur', () => {
+    const result = pairVehiclesWithDrivers(
+      [
+        { id: 'v1', currentDriverId: null },
+        { id: 'v2', currentDriverId: 'd2' },
+      ],
+      [
+        { id: 'd1', busy: false },
+        { id: 'd2', busy: false },
+      ],
+      1,
+    );
+    assert.equal(result.pairs.length, 1);
+    assert.equal(result.pairs[0]!.preferred, true);
+    assert.equal(result.truncated, 1);
+  });
+
+  it('DETERMINISTIK: girdi sirasi sonucu degistirmez', () => {
+    const vehicles = [
+      { id: 'v2', currentDriverId: null },
+      { id: 'v1', currentDriverId: null },
+    ];
+    const drivers = [
+      { id: 'd2', busy: false },
+      { id: 'd1', busy: false },
+    ];
+    assert.deepEqual(
+      pairVehiclesWithDrivers(vehicles, drivers),
+      pairVehiclesWithDrivers([...vehicles].reverse(), [...drivers].reverse()),
+    );
+  });
+
+  it('surucu yoksa aday uretilmez — uydurma esleme YOK', () => {
+    assert.deepEqual(pairVehiclesWithDrivers([{ id: 'v1', currentDriverId: 'd1' }], []), {
+      pairs: [],
+      truncated: 0,
+    });
   });
 });

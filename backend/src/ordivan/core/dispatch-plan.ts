@@ -373,3 +373,124 @@ export function resolveConsolidation(
     workDate: selected[0]!.workDate,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Arac - surucu eslestirmesi
+// ---------------------------------------------------------------------------
+
+/**
+ * ARAC VE SURUCU BAGIMSIZ — REPO KANITI.
+ *
+ * `AssignmentsService.checkConflicts` surucu ve arac cakismasini AYRI AYRI
+ * sorguluyor (`driver_overlap` / `vehicle_overlap`) ve `create` surucuyu
+ * `vehicle.currentDriverId`ye KISITLAMIYOR; tersine gorev olustuktan SONRA
+ * `currentDriverId`yi yaziyor (assignments.service.ts:657). Yani bu alan bir
+ * SONUC — "en son bu araci kim kullandi" — degistirilemez bir bag degil.
+ *
+ * Bu yuzden adaylari yalnizca `currentDriverId` uzerinden uretmek MUSAIT
+ * ALTERNATIF SURUCULERI KACIRIR: izinli bir surucunun araci, baska bir surucu
+ * musaitken "uygun aday yok" gibi gorunurdu.
+ *
+ * AMA KOR KARTEZYEN DE YAPILMIYOR: 50 arac x 50 surucu = 2500 aday hem
+ * dispatcher icin gurultu hem de sozlesmenin 50 aday sinirini asar.
+ *
+ * KADEMELI VE SINIRLI:
+ *   1. MEVCUT ESLESME once degerlendirilir ve esit kosulda ONCELIKLIDIR.
+ *   2. Kalan araclara, kalan MUSAIT suruculer sinirli sayida eslestirilir.
+ *   3. Bir surucu AYNI ANDA IKI ARACA onerilmez — onerilseydi dispatcher
+ *      ikisini de secip ayni kisiyi iki yere gonderebilirdi.
+ *   4. Sinir asilirsa KAC ADAYIN DISARIDA kaldigi bildirilir; sessizce
+ *      kirpmak, "baska aday yok" izlenimi verirdi.
+ */
+
+/** Sozlesmenin `rankedCandidates` siniriyla AYNI. */
+export const MAX_PAIRED_CANDIDATES = 50;
+
+export interface PairableVehicle {
+  id: string;
+  /** Son atanan surucu. Bir TERCIH, kisit degil. */
+  currentDriverId: string | null;
+}
+
+export interface PairableDriver {
+  id: string;
+  /** Surucu o gun baska bir ise bagli mi. */
+  busy: boolean;
+}
+
+export interface VehicleDriverPair {
+  vehicleId: string;
+  driverId: string;
+  /** Mevcut/tercih edilen eslesme mi. */
+  preferred: boolean;
+}
+
+export interface PairingResult {
+  pairs: VehicleDriverPair[];
+  /** Sinir yuzunden uretilemeyen aday sayisi. SESSIZ KIRPMA YOK. */
+  truncated: number;
+}
+
+/**
+ * Sinirli arac-surucu eslestirmesi.
+ *
+ * DETERMINISTIK: girdi sirasi ne olursa olsun ayni sonucu verir; esitlikte
+ * kimlige gore siralanir. Aksi halde ayni planlama iki kez calistirildiginda
+ * farkli adaylar cikar ve dispatcher neye bakacagini bilemezdi.
+ */
+export function pairVehiclesWithDrivers(
+  vehicles: readonly PairableVehicle[],
+  drivers: readonly PairableDriver[],
+  limit: number = MAX_PAIRED_CANDIDATES,
+): PairingResult {
+  const driverById = new Map(drivers.map((driver) => [driver.id, driver]));
+  const usedDrivers = new Set<string>();
+  const pairs: VehicleDriverPair[] = [];
+
+  const orderedVehicles = [...vehicles].sort((left, right) => left.id.localeCompare(right.id));
+
+  // --- 1. KADEME: mevcut eslesmeler ---
+  for (const vehicle of orderedVehicles) {
+    if (!vehicle.currentDriverId) continue;
+    const driver = driverById.get(vehicle.currentDriverId);
+    // Surucu listede yoksa (isten ayrilmis, baska kiraci) eslesme dusuyor.
+    if (!driver) continue;
+    if (usedDrivers.has(driver.id)) continue;
+    usedDrivers.add(driver.id);
+    pairs.push({ vehicleId: vehicle.id, driverId: driver.id, preferred: true });
+  }
+
+  // --- 2. KADEME: bostaki suruculer, esleismemis araclara ---
+  //
+  // MUSAIT OLANLAR ONCE: o gun baska ise bagli bir surucuyu one koymak,
+  // dispatcher'a zaten elenecek bir adayi gostermek olurdu. Ama tamamen
+  // DISLANMIYORLAR — cakisma gerekcesiyle listede gorunmeleri, "neden bu
+  // surucu yok" sorusunu cevapliyor.
+  const remainingDrivers = [...drivers]
+    .filter((driver) => !usedDrivers.has(driver.id))
+    .sort((left, right) => {
+      if (left.busy !== right.busy) return left.busy ? 1 : -1;
+      return left.id.localeCompare(right.id);
+    });
+
+  const pairedVehicles = new Set(pairs.map((pair) => pair.vehicleId));
+  let cursor = 0;
+  for (const vehicle of orderedVehicles) {
+    if (pairedVehicles.has(vehicle.id)) continue;
+    const driver = remainingDrivers[cursor];
+    if (!driver) break;
+    cursor += 1;
+    usedDrivers.add(driver.id);
+    pairs.push({ vehicleId: vehicle.id, driverId: driver.id, preferred: false });
+  }
+
+  // --- SINIR: mevcut eslesmeler KORUNUR, kirpma sondan ---
+  if (pairs.length <= limit) {
+    return { pairs, truncated: 0 };
+  }
+  const kept = [...pairs].sort((left, right) => {
+    if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
+    return left.vehicleId.localeCompare(right.vehicleId);
+  });
+  return { pairs: kept.slice(0, limit), truncated: pairs.length - limit };
+}

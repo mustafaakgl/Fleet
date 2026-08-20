@@ -21,6 +21,7 @@ import {
 import {
   applyAgentRanking,
   buildRoutePlan,
+  pairVehiclesWithDrivers,
   toTruckProfile,
   type RoutePlan,
   type ServerCandidate,
@@ -82,6 +83,14 @@ export class DispatchService {
     private readonly jobs: AutomationJobService,
     private readonly valhalla: ValhallaClient,
   ) {}
+
+  /**
+   * Son eslestirmede sinir yuzunden disarida kalan aday sayisi.
+   *
+   * SESSIZ KIRPMA YOK: bu sayi denetime ve arayuze tasiniyor ki "baska aday
+   * yok" ile "gosterilmeyen aday var" birbirine karismasin.
+   */
+  private lastPairingTruncated = 0;
 
   // -------------------------------------------------------------------------
   // Uretim talebi
@@ -251,6 +260,7 @@ export class DispatchService {
         metadata: {
           orderCount: orders.length,
           candidateCount: candidates.length,
+          candidatesTruncated: this.lastPairingTruncated,
           routeStatus: route.status,
           workDate: input.workDate,
         },
@@ -439,10 +449,30 @@ export class DispatchService {
     const at = new Date();
     const result: Array<ServerCandidate & { checks: DispatchCheck[] }> = [];
 
-    for (const [index, vehicle] of vehicles.entries()) {
-      // ARACA BAGLI SURUCU: kartezyen carpim yerine gercek esleme.
-      const driver = vehicle.currentDriverId ? driversById.get(vehicle.currentDriverId) : undefined;
-      if (!driver) continue;
+    /**
+     * ESLESTIRME `currentDriverId` ILE SINIRLI DEGIL.
+     *
+     * `AssignmentsService` surucu ve araci BAGIMSIZ ele aliyor (cakisma
+     * kontrolu ayri, `create` surucuyu araca kisitlamiyor ve
+     * `currentDriverId`yi gorev olustuktan SONRA yaziyor). Yalnizca o alandan
+     * aday uretmek, izinli bir surucunun aracini baska surucu musaitken
+     * "aday yok" gibi gosterirdi.
+     */
+    const pairing = pairVehiclesWithDrivers(
+      vehicles.map((vehicle) => ({ id: vehicle.id, currentDriverId: vehicle.currentDriverId })),
+      drivers.map((driver) => ({
+        id: driver.id,
+        busy: (driverAssignments.get(driver.id) ?? 0) + (driverTours.get(driver.id) ?? 0) > 0,
+      })),
+    );
+    this.lastPairingTruncated = pairing.truncated;
+
+    const vehicleById = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
+
+    for (const [index, pair] of pairing.pairs.entries()) {
+      const vehicle = vehicleById.get(pair.vehicleId);
+      const driver = driversById.get(pair.driverId);
+      if (!vehicle || !driver) continue;
 
       const vehicleFacts: VehicleFacts = {
         id: vehicle.id,
@@ -615,15 +645,18 @@ export class DispatchService {
   async retryGeneration(userId: string, dispatchProposalId: string): Promise<{ jobId: string }> {
     const existing = await this.prisma.dispatchProposal.findFirst({
       where: { id: dispatchProposalId },
-      select: { id: true, generation: true, jobAttempt: true, requestFingerprint: true },
+      select: { id: true, generation: true, status: true, jobAttempt: true, requestFingerprint: true },
     });
     if (!existing) {
       throw new NotFoundException({ code: 'dispatch_proposal_not_found' });
     }
-    if (!canRetryGeneration(existing.generation)) {
+    if (!canRetryGeneration(existing.generation, existing.status)) {
+      // `superseded` burada da reddediliyor: eski revizyona gore yeniden
+      // plan uretmek, isaretin var olma sebebini ortadan kaldirirdi.
       throw new ConflictException({
         code: 'dispatch_retry_not_allowed',
         generation: existing.generation,
+        status: existing.status,
       });
     }
 
