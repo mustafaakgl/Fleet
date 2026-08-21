@@ -44,6 +44,21 @@ export const NAV_ACCESS: NavAccessRule[] = [
   { href: '/automation/connectors', roles: ['admin', 'boss'] },
   { href: '/automation/queue', roles: ['admin', 'boss'] },
   /**
+   * Ticari siparisler (Faz 15) ve belge gelen kutusu (Faz 14).
+   *
+   * IKISI DE `navigation.ts` tarafindan SUNULUYORDU ama BURADA YOKTU: yani
+   * kenar cubugu ikisini de hicbir role gostermiyordu. Sunucudaki karsiligi
+   * her ikisinde de `@Roles(...OPERATIONAL_ROLES)` — surucu ve musteri
+   * disarida, dort operasyon rolu iceride. Menude gorunmek YETKI DEGILDIR;
+   * asil kisit o guard.
+   *
+   * `/automation/inbox` gunluk operasyon oldugu icin office ve accounting'e
+   * de aciliyor; Ordivan bolumunun geri kalani (enrollment, oneri kuyrugu)
+   * admin/boss'a ozel kalmaya devam ediyor.
+   */
+  { href: '/transport-orders', roles: ['admin', 'boss', 'accounting', 'office'] },
+  { href: '/automation/inbox', roles: ['admin', 'boss', 'accounting', 'office'] },
+  /**
    * Faz 17 — dispatch ve teslimat slotlari.
    *
    * Muhasebe LISTEDE: kuyrugu ve finansal alanlari gormesi gerekiyor. Plani
