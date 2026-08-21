@@ -160,7 +160,31 @@ export class UpdateSlotDto {
   status?: DeliverySlotStatus;
 }
 
-/** Public rezervasyon. Token GOVDEDE DEGIL, baslikta tasiniyor. */
+/**
+ * Oturum acma (Faz 17g).
+ *
+ * Token GOVDEDE ya da BASLIKTA — ikisi de URL'DE DEGIL. Tarayici akisinda
+ * govde kullaniliyor cunku sayfa token'i fragment'tan okuyup tek bir POST ile
+ * gonderiyor; `?token=` olsaydi deger vekil loglarina ve `Referer` basligina
+ * duserdi.
+ */
+export class OpenSlotSessionDto {
+  /**
+   * UZUNLUK KISITI BILINCLI OLARAK GENIS.
+   *
+   * `@Length(20, 128)` yazsaydik KISA bir token 400, gecerli uzunlukta ama
+   * taninmayan bir token 404 donerdi — yani cevabin KENDISI token'in bicimi
+   * hakkinda bilgi verirdi. Butun basarisiz sonuclarin ayirt edilemez olmasi
+   * bu ucun temel kurali; bicim dogrulamasi da serviste AYNI guvenli 404'e
+   * dusuyor. Ust sinir yalnizca govdeyi sinirlamak icin.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, 512)
+  token?: string;
+}
+
+/** Public rezervasyon. Token GOVDEDE DEGIL, baslikta ya da oturumda. */
 export class BookSlotDto {
   @IsString()
   @Length(1, 64)

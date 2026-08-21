@@ -68,6 +68,7 @@ export const TENANT_SCOPED_MODELS = new Set([
   'DeliverySlot',
   'DeliverySlotInvitation',
   'DeliverySlotBooking',
+  'DeliverySlotSession',
   'DispatchOverrideDeclaration',
   'VehicleDtc',
   'MessageAttachment',

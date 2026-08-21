@@ -55,6 +55,66 @@ const nextConfig: NextConfig = {
   // Same-origin API proxy so a phone on the public tunnel never has to resolve
   // localhost:3000 itself. Scoped to the backend's global prefix (api/v1) so the
   // frontend's own route handlers (/api/leads, /api/route-map) keep working.
+  /**
+   * GIRISSIZ SLOT SAYFASININ GUVENLIK BASLIKLARI (Faz 17g).
+   *
+   * Yalnizca `/public/delivery-slot` icin: uygulamanin geri kalani Sentry ve
+   * harita saglayicisi gibi dis kaynaklara cikiyor ve ayni siki politikayi
+   * oraya uygulamak calisan ozellikleri kirardi. Bu sayfanin ise HICBIR dis
+   * kaynaga ihtiyaci yok — o yuzden burada siki olabiliyoruz.
+   *
+   *   `default-src 'self'`     — her sey ayni kaynaktan.
+   *   `script-src 'self' 'unsafe-inline'` — ucuncu taraf script YOK. Inline'a
+   *       izin veriliyor cunku Next hydration verisini inline script olarak
+   *       yaziyor; nonce icin middleware gerekirdi ve asil hedef DIS
+   *       kaynaklari kapatmak.
+   *   `connect-src 'self'`     — sayfa yalnizca kendi API'sine konusabilir.
+   *       Bir analytics ya da hata toplayici, secilen saati disari
+   *       TASIYAMAZ.
+   *   `frame-ancestors 'none'` — clickjacking ile randevu degistirilemez.
+   *   `form-action 'self'`     — form baska bir kaynaga POST edilemez.
+   *
+   * `Referrer-Policy: no-referrer` — bu adres hicbir dis istekte `Referer`
+   * olarak gitmiyor.
+   */
+  async headers() {
+    return [
+      {
+        source: '/public/delivery-slot',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              /**
+               * `'unsafe-eval'` YALNIZCA GELISTIRMEDE.
+               *
+               * Next'in dev paketleyicisi modulleri `eval` ile yukluyor;
+               * uretim derlemesinde bu YOK. Tek bir sabit CSP yazsaydik ya
+               * gelistirme sunucusu calismaz ya da uretimde gereksiz bir
+               * kapi acik kalirdi. Asil hedef — UCUNCU TARAF kaynaklarini
+               * kapatmak — iki modda da aynen gecerli.
+               */
+              isProductionBuild
+                ? "script-src 'self' 'unsafe-inline'"
+                : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data:",
+              "font-src 'self' data:",
+              "connect-src 'self'",
+              "frame-ancestors 'none'",
+              "form-action 'self'",
+              "base-uri 'self'",
+              "object-src 'none'",
+            ].join('; '),
+          },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

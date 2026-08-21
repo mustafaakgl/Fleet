@@ -101,6 +101,15 @@ function toManagedSlotRow(row: {
   };
 }
 
+/**
+ * PUBLIC UCLARIN KIMLIK KAYNAGI (Faz 17g).
+ *
+ * Duz `string` ile cagirmak DUZ TOKEN demektir — `x-slot-token` sozlesmesi
+ * boylece HIC DEGISMEDEN duruyor. Oturum cerezi ise davetin kimligini
+ * tasiyor; ikisi de asagida AYNI degerlendirme kapisindan geciyor.
+ */
+export type SlotCredential = string | { kind: 'session'; invitationId: string };
+
 export interface PublicSlotView {
   id: string;
   startsAt: string;
@@ -246,13 +255,45 @@ export class DeliverySlotService {
    * bilincli olarak `unscoped` — kiraci HENUZ bilinmiyor; bulunan kayit
    * kiraciyi TASIYOR ve sonraki her adim ona gore yapiliyor.
    */
+  /** Token ya da oturum — TEK kapi. */
+  private async resolveCredential(
+    credential: SlotCredential,
+    options: { allowBooked?: boolean } = {},
+  ) {
+    return typeof credential === 'string'
+      ? this.resolveInvitation(credential, options)
+      : this.resolveInvitationBySession(credential.invitationId, options);
+  }
+
   private async resolveInvitation(token: string, options: { allowBooked?: boolean } = {}) {
     if (!token || token.length < 20) {
       throw new NotFoundException(SAFE_INVITATION_ERROR);
     }
+    return this.evaluateInvitationRow(
+      await this.loadInvitationRow({ tokenHash: hashSlotToken(token) }),
+      options,
+    );
+  }
 
-    const invitation = await this.prisma.unscoped.deliverySlotInvitation.findUnique({
-      where: { tokenHash: hashSlotToken(token) },
+  /**
+   * Oturum cerezinden cozulmus daveti dogrular (Faz 17g).
+   *
+   * OTURUM DAVETTEN FAZLA YETKI VERMEZ: davet BURADA yeniden okunuyor ve
+   * ayni kapidan geciyor. Oturum acildiktan sonra davet iptal edilir, suresi
+   * dolar ya da siparis revize edilirse acik oturum da o anda ise yaramaz
+   * hale gelir. Oturumu daveti KOPYALAYAN bir kayit yapsaydik, iptal
+   * dugmesi calisiyor gorunur ama acik sekmeler calismaya devam ederdi.
+   */
+  private async resolveInvitationBySession(
+    invitationId: string,
+    options: { allowBooked?: boolean } = {},
+  ) {
+    return this.evaluateInvitationRow(await this.loadInvitationRow({ id: invitationId }), options);
+  }
+
+  private async loadInvitationRow(where: { id: string } | { tokenHash: string }) {
+    return this.prisma.unscoped.deliverySlotInvitation.findFirst({
+      where,
       select: {
         id: true,
         tenantId: true,
@@ -273,7 +314,18 @@ export class DeliverySlotService {
         },
       },
     });
+  }
 
+  /**
+   * Davet satirini degerlendirir — TOKEN ILE OTURUM ICIN AYNI KAPI.
+   *
+   * Iki ayri degerlendirme yolu olsaydi biri eninde sonunda digerinden
+   * ayrisirdi ve gevsek olan taraf sessizce acik kalirdi.
+   */
+  private async evaluateInvitationRow(
+    invitation: Awaited<ReturnType<DeliverySlotService['loadInvitationRow']>>,
+    options: { allowBooked?: boolean },
+  ) {
     if (!invitation) {
       throw new NotFoundException(SAFE_INVITATION_ERROR);
     }
@@ -343,8 +395,8 @@ export class DeliverySlotService {
    * adi ya da baska siparis BILGISI YOK — link sizarsa ogrenilebilecek sey
    * "su depoda su saatlerde yer var"dan ibaret.
    */
-  async listSlots(token: string): Promise<{ kind: string; slots: PublicSlotView[] }> {
-    const invitation = await this.resolveInvitation(token);
+  async listSlots(credential: SlotCredential): Promise<{ kind: string; slots: PublicSlotView[] }> {
+    const invitation = await this.resolveCredential(credential);
     const locationId =
       invitation.kind === 'pickup'
         ? invitation.consignment.pickupLocationId
@@ -409,8 +461,8 @@ export class DeliverySlotService {
    * bir istek de "link gecersiz" cevabi alirdi. Servis testleri Prisma'yi
    * taklit ettigi icin bu, ancak gercek bir istekte gorulebiliyordu.
    */
-  async book(token: string, slotId: string): Promise<{ bookingId: string; repeated: boolean }> {
-    const invitation = await this.resolveInvitation(token, { allowBooked: true });
+  async book(credential: SlotCredential, slotId: string): Promise<{ bookingId: string; repeated: boolean }> {
+    const invitation = await this.resolveCredential(credential, { allowBooked: true });
     const now = new Date();
 
     const slot = await this.prisma.unscoped.deliverySlot.findFirst({
@@ -913,8 +965,8 @@ export class DeliverySlotService {
    * ILGISIZ bir durumdur ve ayri bir hata koduyla donuyor — token'in var olup
    * olmadigini ele vermez, cunku bu noktaya ancak GECERLI bir token ulasir.
    */
-  async cancelBooking(token: string): Promise<{ cancelled: boolean }> {
-    const invitation = await this.resolveInvitation(token, { allowBooked: true });
+  async cancelBooking(credential: SlotCredential): Promise<{ cancelled: boolean }> {
+    const invitation = await this.resolveCredential(credential, { allowBooked: true });
 
     const booking = await this.prisma.unscoped.deliverySlotBooking.findFirst({
       where: { activeInvitationId: invitation.id },
@@ -955,6 +1007,18 @@ export class DeliverySlotService {
     await this.invalidateOpenProposals(invitation.consignmentId, invitation.tenantId);
 
     return { cancelled: true };
+  }
+
+  /**
+   * Token'i BIR KEZ dogrular ve oturum acmak icin daveti doner (Faz 17g).
+   *
+   * `allowBooked`: musteri rezervasyonunu yaptiktan sonra linke yeniden
+   * tiklayabilmeli — saatini degistirmek ya da iptal etmek icin. Kabul
+   * etmeseydik ilk rezervasyondan sonra link "gecersiz" gorunurdu.
+   */
+  async openSession(token: string): Promise<{ invitationId: string; tenantId: string; kind: string }> {
+    const invitation = await this.resolveInvitation(token, { allowBooked: true });
+    return { invitationId: invitation.id, tenantId: invitation.tenantId, kind: invitation.kind };
   }
 
   /** Kiracinin dilimi — sabit varsayilan YOK, kayittan okunuyor. */

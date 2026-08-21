@@ -294,7 +294,18 @@ export class TourService {
       throw new BadRequestException({ code: 'no_assignments' });
     }
 
-    const assignments = await this.prisma.assignment.findMany({
+    /**
+     * OKUMA DA DIS ISLEMDEN (Faz 17g duzeltmesi).
+     *
+     * Bu sorgu `this.prisma` uzerinden yapiliyordu; yani dis islem varken
+     * BASKA BIR BAGLANTIDAN okuyordu. Dispatch onayinda `Assignment` kayitlari
+     * TAM DA O ISLEMIN icinde olusuyor ve henuz commit edilmemis olduklari
+     * icin disaridan GORUNMUYORLARDI — sonuc, her onayin
+     * `assignment_not_found` ile dusmesi. Yazimi dis isleme katip okumayi
+     * disarida birakmak, atomikligi yarim uygulamakti.
+     */
+    const reader = externalTx ?? this.prisma;
+    const assignments = await reader.assignment.findMany({
       where: { id: { in: params.assignmentIds } },
       select: {
         id: true,

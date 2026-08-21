@@ -74,6 +74,19 @@ export interface DispatchPlannedStopView {
   kind: string;
   locationId: string | null;
   etaAt: string | null;
+  /**
+   * KONUM — HARITA ICIN (Faz 17g).
+   *
+   * Koordinat `Location` kaydindan cozuluyor, `plannedStops` JSON'undan
+   * DEGIL: JSON bir anin fotografi ve koordinat sonradan duzeltilmis
+   * olabilir. Geokodlanmamis konumda `null` kaliyor ve harita o duragi
+   * CIZMIYOR — 0,0'a bir isaret koymak, Gine Korfezi'nde bir teslimat
+   * gostermek olurdu.
+   */
+  latitude: number | null;
+  longitude: number | null;
+  /** Insan tarafindan okunabilir konum adi. Ham depolama yolu DEGIL. */
+  locationLabel: string | null;
 }
 
 export interface DispatchRouteView {
@@ -207,9 +220,9 @@ function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
-/** Plan gunu: oneri hesaplandigi gun icin kuruldu (onay servisiyle AYNI kural). */
-function workDateOf(computedAt: Date): string {
-  return computedAt.toISOString().slice(0, 10);
+/** Plan gunu KAYITTAN — `computedAt`ten TURETILMIYOR (Faz 17g). */
+function workDateOf(workDate: Date): string {
+  return workDate.toISOString().slice(0, 10);
 }
 
 @Injectable()
@@ -248,6 +261,7 @@ export class DispatchReadService {
           status: true,
           generation: true,
           computedAt: true,
+          workDate: true,
           routeStatus: true,
           resultTourId: true,
           decidedAt: true,
@@ -264,7 +278,7 @@ export class DispatchReadService {
           id: row.id,
           status: row.status,
           generation: row.generation,
-          workDate: workDateOf(row.computedAt),
+          workDate: workDateOf(row.workDate),
           computedAt: row.computedAt.toISOString(),
           orderCount: row._count.orders,
           candidateCount: row._count.candidates,
@@ -298,6 +312,7 @@ export class DispatchReadService {
         generation: true,
         jobAttempt: true,
         computedAt: true,
+        workDate: true,
         routeStatus: true,
         routeFailureClass: true,
         totalDistanceKm: true,
@@ -344,7 +359,7 @@ export class DispatchReadService {
       status: row.status,
       generation: row.generation,
       jobAttempt: row.jobAttempt,
-      workDate: workDateOf(row.computedAt),
+      workDate: workDateOf(row.workDate),
       computedAt: row.computedAt.toISOString(),
       orderCount: row._count.orders,
       candidateCount: row._count.candidates,
@@ -363,7 +378,7 @@ export class DispatchReadService {
         failureClass: row.routeFailureClass,
         totalDistanceKm: toNumber(row.totalDistanceKm),
         totalDurationMin: row.totalDurationMin,
-        plannedStops: this.projectStops(row.plannedStops),
+        plannedStops: await this.projectStops(row.plannedStops),
       },
       orders: row.orders.map((order) => ({
         transportOrderId: order.transportOrder.id,
@@ -589,15 +604,22 @@ export class DispatchReadService {
         status: check.status,
         reasonKey: maskReasonKey(check.reasonKey ?? '', role),
         evidence: maskEvidenceRecord(check.evidence, role),
-        // POLITIKANIN KENDISI DEGIL, YALNIZCA ASILABILIRLIK: `override`
-        // nesnesi ic karar kurallarini tasiyor ve istemcinin isine yaramaz.
-        overridable: Boolean(check.override) && check.status === 'unknown',
+        /**
+         * POLITIKANIN KENDISI DEGIL, YALNIZCA ASILABILIRLIK.
+         *
+         * `override` UC DEGERLI bir dize: `'none'` | `'external_verification'`
+         * | `'explicit_choice'`. `Boolean(check.override)` yazmak `'none'`u da
+         * DOGRU sayardi — yani veri eksikligi yuzunden asilamayan bir kontrol
+         * arayuzde "beyanla gecilebilir" gorunur, kullanici beyani doldurur ve
+         * sunucu 409 ile reddederdi. Kural `resolveApplyGate` ile AYNI.
+         */
+        overridable: check.status === 'unknown' && (check.override ?? 'none') !== 'none',
       }));
   }
 
-  private projectStops(value: Prisma.JsonValue): DispatchPlannedStopView[] {
+  private async projectStops(value: Prisma.JsonValue): Promise<DispatchPlannedStopView[]> {
     if (!Array.isArray(value)) return [];
-    return (value as unknown[])
+    const stops = (value as unknown[])
       .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
       .map((entry) => ({
         sequence: typeof entry.sequence === 'number' ? entry.sequence : 0,
@@ -605,6 +627,36 @@ export class DispatchReadService {
         locationId: typeof entry.locationId === 'string' ? entry.locationId : null,
         etaAt: typeof entry.etaAt === 'string' ? entry.etaAt : null,
       }));
+
+    const locationIds = [
+      ...new Set(stops.map((stop) => stop.locationId).filter((id): id is string => Boolean(id))),
+    ];
+    if (locationIds.length === 0) {
+      return stops.map((stop) => ({ ...stop, latitude: null, longitude: null, locationLabel: null }));
+    }
+
+    /**
+     * TEK TOPLU SORGU — durak basina sorgu DEGIL.
+     *
+     * Kiraci kapsamli: baska kiracinin konumu bulunamaz ve koordinat `null`
+     * kalir. Harita o duragi cizmez; yanlis bir yere isaret koymaktansa
+     * hicbir sey cizmemek dogru.
+     */
+    const locations = await this.prisma.location.findMany({
+      where: { id: { in: locationIds } },
+      select: { id: true, latitude: true, longitude: true, label: true, city: true },
+    });
+    const byId = new Map(locations.map((location) => [location.id, location]));
+
+    return stops.map((stop) => {
+      const location = stop.locationId ? byId.get(stop.locationId) : undefined;
+      return {
+        ...stop,
+        latitude: toNumber(location?.latitude ?? null),
+        longitude: toNumber(location?.longitude ?? null),
+        locationLabel: location?.label || location?.city || null,
+      };
+    });
   }
 
   /**

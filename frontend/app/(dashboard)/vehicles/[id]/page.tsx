@@ -36,11 +36,13 @@ import { ServiceRecordInlineField } from '@/components/service-records/ServiceRe
 import { VehicleHandoverHistory, type VehicleHandoverHistoryRow } from '@/components/vehicles/VehicleHandoverHistory';
 import { VehicleCostChart } from '@/components/vehicles/VehicleCostChart';
 import { VehicleFuelCompatibilityCard } from '@/components/vehicles/VehicleFuelCompatibilityCard';
+import { VehicleCapacityCard } from '@/components/vehicles/VehicleCapacityCard';
 import { VehiclePlateDisplay } from '@/components/vehicles/VehiclePlateDisplay';
 import { EquipmentPhotoPreview } from '@/components/vehicles/EquipmentPhotoPreview';
 import { getUser } from '@/lib/auth';
 import {
   canEditServiceRecords,
+  canEditVehicleCapacity,
   canEditVehicleFuelCompatibility,
   canViewOperationalTachograph,
 } from '@/lib/permissions';
@@ -103,6 +105,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const canEditServiceHistory = canEditServiceRecords(getUser()?.role ?? 'customer');
   const showVehicleCosts = canViewOperationalTachograph(getUser()?.role ?? 'customer');
   const canEditFuelCompatibility = canEditVehicleFuelCompatibility(getUser()?.role ?? 'customer');
+  const canEditCapacity = canEditVehicleCapacity(getUser()?.role ?? 'customer');
 
   const handleServiceRecordUpdated = useCallback((updated: ServiceRecord) => {
     setServiceRecords((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
@@ -439,6 +442,16 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </dl>
         </CardContent>
       </Card>
+
+      {/* Faz 17: dispatch uygunlugu bu alanlara dayaniyor. Yakit
+          uyumlulugundan ONCE duruyor cunku planlama gunluk operasyonun
+          merkezinde; eksik bir kapasite alani plani dogrudan engelliyor. */}
+      <VehicleCapacityCard
+        vehicleId={id}
+        vehicle={vehicle}
+        canEdit={canEditCapacity}
+        onSaved={(updated) => setVehicle((current) => (current ? { ...current, ...updated } : current))}
+      />
 
       {/* Aracin teknik ozelligi — arac bilgilerinin hemen ardinda duruyor.
           Surucunun akaryakit istasyonu onerileri bu kayda dayaniyor. */}

@@ -35,6 +35,7 @@ import {
 import { connectorHasCapability } from './core/job-type-registry';
 import { MAX_INTAKE_FILE_BYTES } from './core/intake-file';
 import { OrderIntakeContentService } from './order-intake-content.service';
+import { DispatchService } from './dispatch.service';
 import { MAX_ORDER_INTAKE_BYTES, OrderIntakeService } from './order-intake.service';
 import { DocumentIntakeService } from './document-intake.service';
 import { ConnectorIntakeUploadDto, ConnectorOrderIntakeMessageDto } from './dto/document-inbox.dto';
@@ -70,6 +71,7 @@ export class OrdivanConnectorController {
     private readonly intake: DocumentIntakeService,
     private readonly orderIntake: OrderIntakeService,
     private readonly orderIntakeContent: OrderIntakeContentService,
+    private readonly dispatch: DispatchService,
   ) {}
 
   /**
@@ -137,16 +139,53 @@ export class OrdivanConnectorController {
     return this.jobs.markRunning(connector, id, dto.leaseToken);
   }
 
-  /** Tamamlama IDEMPOTENT; bayat deneme REDDEDILIR. */
+  /**
+   * Tamamlama IDEMPOTENT; bayat deneme REDDEDILIR.
+   *
+   * DISPATCH BAGLAMASI BURADA (Faz 17g): `dispatch.plan` isi tamamlandiginda
+   * ajanin ciktisi `DispatchProposal`e BAGLANMALI, yoksa oneri sonsuza kadar
+   * `processing` kalir. Baglama `AutomationJobService` icinde yapilamiyor
+   * cunku `DispatchService` zaten ona bagimli — ters yon bir DONGU olurdu.
+   * Controller ikisini de goruyor ve dogru yer burasi.
+   *
+   * BAGLAMA SESSIZCE BASARISIZ OLABILIR ve bu bilincli: `linkProposal` bes
+   * kosullu bir CAS. Kosul tutmazsa (bayat deneme, revizyon degismis, zaten
+   * baglanmis) cevap YOK SAYILIYOR — hata firlatmak worker'i sonsuz yeniden
+   * denemeye sokardi. Tamamlama yaniti bu yuzden DEGISMIYOR.
+   */
   @Post('jobs/:id/complete')
   @UseGuards(ConnectorCredentialGuard)
   @HttpCode(200)
-  complete(
+  async complete(
     @CurrentConnector() connector: AuthenticatedConnector,
     @Param('id') id: string,
     @Body() dto: CompleteJobDto,
   ) {
-    return this.jobs.completeJob(connector, id, dto);
+    const result = await this.jobs.completeJob(connector, id, dto);
+
+    if (dto.proposalType === 'dispatch.plan.suggestion' && result.proposalId) {
+      const context = await this.jobs.dispatchContextFor(id);
+      if (context) {
+        const payload = (dto.payload ?? {}) as { rankedCandidates?: unknown };
+        const rankings = Array.isArray(payload.rankedCandidates)
+          ? (payload.rankedCandidates as Array<Record<string, unknown>>).map((entry) => ({
+              candidateRef: String(entry.candidateRef ?? ''),
+              rank: typeof entry.rank === 'number' ? entry.rank : 0,
+              rationaleKey: String(entry.rationaleKey ?? ''),
+            }))
+          : [];
+
+        await this.dispatch.linkProposal({
+          dispatchProposalId: context.dispatchProposalId,
+          jobId: id,
+          attempt: context.attempt,
+          automationProposalId: result.proposalId,
+          rankings,
+        });
+      }
+    }
+
+    return result;
   }
 
   /**

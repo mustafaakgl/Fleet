@@ -14,6 +14,7 @@ import {
   TransportOrderStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { RoutingService } from '../routing/routing.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   assessCancellationImpact,
@@ -134,6 +135,8 @@ export class TransportOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    /** Kalem adreslerini `Location` kaydina cevirmek icin (Faz 17g). */
+    private readonly routing: RoutingService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -331,6 +334,13 @@ export class TransportOrdersService {
     }
 
     const consignments = input.consignments ?? [];
+    /**
+     * KONUM COZUMU ISLEMDEN ONCE.
+     *
+     * Geocoding bir AG CAGRISI; veritabani islemini onun suresince acik
+     * tutmak kilit suresini dis bir servisin gecikmesine baglardi.
+     */
+    const consignmentLocations = await this.resolveConsignmentLocations(consignments);
 
     try {
       const order = await this.prisma.$transaction(async (tx) => {
@@ -362,7 +372,9 @@ export class TransportOrdersService {
 
         if (consignments.length > 0) {
           await tx.consignment.createMany({
-            data: consignments.map((item, index) => this.consignmentData(created.id, item, index + 1)),
+            data: consignments.map((item, index) =>
+              this.consignmentData(created.id, item, index + 1, consignmentLocations.get(index)),
+            ),
           });
         }
 
@@ -428,10 +440,47 @@ export class TransportOrdersService {
     }
   }
 
+  /**
+   * KALEM ADRESLERINI `Location` KAYDINA BAGLAR (Faz 17g).
+   *
+   * `Consignment.pickupLocationId` / `deliveryLocationId` kolonlari Faz 17a'da
+   * eklenmisti ama HICBIR KOD ONLARI DOLDURMUYORDU. Sonuc, Faz 17'nin butun
+   * zincirini sessizce kiriyordu: rota `missing_locations` ile bozuluyor,
+   * onaydan cikan gorevlerde koordinat olmadigi icin tur olusmuyor ve teslimat
+   * slotu icin gereken konum hic bulunamiyordu.
+   *
+   * GEOCODER ARIZASI AKISI DURDURMAZ: `resolveLocation` basarisiz geocode'da
+   * bile adres metnini tasiyan bir kayit uretiyor; koordinat bos kalir ve
+   * sonradan yeniden denenebilir. Siparis kaydetmeyi bir dis servise bagimli
+   * kilmak, tam da kacinilmasi gereken sey.
+   */
+  private async resolveConsignmentLocations(
+    inputs: readonly ConsignmentInput[],
+  ): Promise<Map<number, { pickupLocationId: string | null; deliveryLocationId: string | null }>> {
+    const resolved = new Map<
+      number,
+      { pickupLocationId: string | null; deliveryLocationId: string | null }
+    >();
+
+    for (const [index, input] of inputs.entries()) {
+      const [pickup, delivery] = await Promise.all([
+        this.routing.resolveLocation({ rawAddress: input.pickupAddress }).catch(() => null),
+        this.routing.resolveLocation({ rawAddress: input.deliveryAddress }).catch(() => null),
+      ]);
+      resolved.set(index, {
+        pickupLocationId: pickup?.id ?? null,
+        deliveryLocationId: delivery?.id ?? null,
+      });
+    }
+
+    return resolved;
+  }
+
   private consignmentData(
     transportOrderId: string,
     input: ConsignmentInput,
     sequence: number,
+    locations?: { pickupLocationId: string | null; deliveryLocationId: string | null },
   ): Prisma.ConsignmentCreateManyInput {
     const decimal = (value: number | null | undefined, places: number): Prisma.Decimal | null =>
       value === null || value === undefined ? null : new Prisma.Decimal(value.toFixed(places));
@@ -457,6 +506,8 @@ export class TransportOrdersService {
       temperatureMaxC: decimal(input.temperatureMaxC, 2),
       shipperReference: input.shipperReference?.trim() || null,
       consigneeReference: input.consigneeReference?.trim() || null,
+      pickupLocationId: locations?.pickupLocationId ?? null,
+      deliveryLocationId: locations?.deliveryLocationId ?? null,
     };
   }
 
@@ -559,6 +610,17 @@ export class TransportOrdersService {
       consignments: order.consignments.map((item) => ({
         id: item.id,
         sequence: item.sequence,
+        /**
+         * COZULMUS KONUM KIMLIKLERI (Faz 17g).
+         *
+         * Teslimat slotu daveti bu kimlige dayaniyor: dispatcher hangi
+         * konumun penceresini actigini bilmeli. Ham adres zaten donuyor;
+         * kimlik olmadan ise slot tanimlamak icin arayuzun tahmin yurutmesi
+         * gerekirdi. Koordinat cozulemediyse `null` kalir ve arayuz bunu
+         * "konum baglanamadi" olarak gosterir.
+         */
+        pickupLocationId: item.pickupLocationId,
+        deliveryLocationId: item.deliveryLocationId,
         pickupAddress: item.pickupAddress,
         pickupWindowStart: isoDate(item.pickupWindowStart),
         pickupWindowEnd: isoDate(item.pickupWindowEnd),

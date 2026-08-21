@@ -815,6 +815,14 @@ async function main() {
         scopedCountA: () => TenantContext.run(tenantA, () => scoped.deliverySlotBooking.count()),
         scopedCountB: () => TenantContext.run(tenantB, () => scoped.deliverySlotBooking.count()),
       }),
+      // Girissiz slot oturumlari (Faz 17g).
+      verifyTenantScopedModel({
+        label: 'DeliverySlotSession', tenantA, tenantB,
+        unscopedCountA: () => base.deliverySlotSession.count({ where: { tenantId: tenantA } }),
+        unscopedCountB: () => base.deliverySlotSession.count({ where: { tenantId: tenantB } }),
+        scopedCountA: () => TenantContext.run(tenantA, () => scoped.deliverySlotSession.count()),
+        scopedCountB: () => TenantContext.run(tenantB, () => scoped.deliverySlotSession.count()),
+      }),
       // Override beyanlari — kim neyi ustlendi.
       verifyTenantScopedModel({
         label: 'DispatchOverrideDeclaration', tenantA, tenantB,

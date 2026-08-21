@@ -1074,6 +1074,7 @@ model Tenant {
   deliverySlots                DeliverySlot[]
   deliverySlotInvitations      DeliverySlotInvitation[]
   deliverySlotBookings         DeliverySlotBooking[]
+  deliverySlotSessions         DeliverySlotSession[]
   dispatchOverrideDeclarations DispatchOverrideDeclaration[]
   vehicleDtcs                  VehicleDtc[]
   tachoProviderCredentials     TachoProviderCredential[]
@@ -6023,6 +6024,19 @@ model DispatchProposal {
    */
   computedAt DateTime
 
+  /**
+   * PLANIN AIT OLDUGU IS GUNU (Faz 17g).
+   *
+   * `computedAt` ILE AYNI SEY DEGIL ve karistirmak agir bir hataydi: onay
+   * servisi is gununu `computedAt`ten TURETIYORDU, yani Carsamba gunu
+   * planlanan bir Cuma turu CARSAMBA'ya yazilirdi. Cakisma kontrolu de yanlis
+   * gune bakardi — "arac musait" denip aslinda dolu oldugu bir gune gorev
+   * acilabilirdi.
+   *
+   * Talep edilen gun artik SAKLANIYOR ve onay o gunu kullaniyor.
+   */
+  workDate DateTime
+
   /// --- Rota ---
   routeStatus       DispatchRouteStatus @default(ok)
   /// Teknik hata SINIFI, saglayici mesaji degil.
@@ -6278,11 +6292,65 @@ model DeliverySlotInvitation {
   updatedAt DateTime @updatedAt
 
   bookings DeliverySlotBooking[]
+  sessions DeliverySlotSession[]
 
   @@index([tenantId])
   @@index([tenantId, status, expiresAt])
   @@index([consignmentId])
   @@map("delivery_slot_invitations")
+}
+
+/**
+ * SLOT OTURUMU — TIKLANABILIR LINK ICIN (Faz 17g).
+ *
+ * NEDEN VAR: davet linki token'i URL FRAGMENT'inda tasiyor
+ * (`/public/delivery-slot#token=...`). Fragment sunucuya HIC gitmez, ama
+ * sayfada JavaScript'e acilir. Sayfa onu BIR KEZ bu uca gonderip yerine
+ * kisa omurlu bir HttpOnly cookie aliyor ve fragment'i hemen siliyor.
+ * Boylece token; URL'de, gecmiste, `Referer` basliginda ve hata loglarinda
+ * KALMIYOR. Token'i her istekte tasisaydik, her istek yeni bir sizma
+ * firsatiydi.
+ *
+ * NEDEN DB'DE, NEDEN IMZALI COOKIE DEGIL: imzali bir cookie GERI ALINAMAZ —
+ * calinmis bir cookie suresi dolana kadar gecerli kalirdi ve "oturumu kapat"
+ * bir sey ifade etmezdi. Satir burada oldugu icin `revokedAt` damgasi ANINDA
+ * etkili.
+ *
+ * TOKEN DUZ METIN SAKLANMAZ: yalnizca SHA-256 ozeti — `RefreshToken`,
+ * `OrdivanConnector` ve `DeliverySlotInvitation` ile AYNI desen.
+ *
+ * OTURUM DAVETTEN DAHA FAZLA YETKI VERMEZ: her istekte davet YENIDEN
+ * okunuyor ve yeniden degerlendiriliyor. Davet iptal edilir, suresi dolar ya
+ * da siparis revize edilirse acik oturum da o anda ise yaramaz hale gelir.
+ */
+model DeliverySlotSession {
+  id       String @id @default(cuid())
+  tenantId String @default("default-tenant")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  invitationId String
+  invitation   DeliverySlotInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 ozeti. Duz metin oturum kimligi YALNIZCA cookie'de yasar.
+  tokenHash String @unique
+
+  /**
+   * KISA OMUR.
+   * Davetin kendisi gunlerce gecerli olabilir; oturum DAKIKALARLA olculur.
+   * Paylasilan bir bilgisayarda acik kalan sekme, saatler sonra baskasinin
+   * randevuyu degistirmesine izin vermemeli.
+   */
+  expiresAt DateTime
+  /// Acik oturumun kapatilmasi. Satir SILINMEZ: ne zaman kapandigi kalmali.
+  revokedAt DateTime?
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([tenantId])
+  @@index([invitationId])
+  @@index([expiresAt])
+  @@map("delivery_slot_sessions")
 }
 
 /**

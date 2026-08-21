@@ -18,6 +18,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { transportOrdersApi } from '@/lib/api';
+import { getUser } from '@/lib/auth';
+import { canPlanDispatch as roleCanPlanDispatch } from '@/lib/permissions';
+import { CreateDispatchProposalAction } from '@/components/dispatch/CreateDispatchProposalAction';
 import {
   FLEET_FILTER_SELECT,
   FLEET_TABLE,
@@ -570,6 +573,13 @@ function TransportOrderDetailPanel({
   const [acknowledged, setAcknowledged] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
+  /**
+   * Planlama bir OPERASYON yazma yetkisi: muhasebe siparisi ve fiyatini gorur
+   * ama plan ACAMAZ. Sunucuda `@RequiresWrite()` ayni kisiti tasiyor; ikisi
+   * birlikte degismeli, yoksa arayuz dugme acar ve kullanici 403 alir.
+   */
+  const canPlanDispatch = roleCanPlanDispatch(getUser()?.role ?? 'customer');
+
   const masked = financialsMasked(detail);
   const pending = pendingRevision(detail);
   const stale = staleAssignments(detail);
@@ -653,6 +663,13 @@ function TransportOrderDetailPanel({
           <p className="mt-1 text-xs">{t('transportOrders.podNotConnected')}</p>
         ) : null}
       </div>
+
+      {/* --------------- Faz 17: planlama onerisi olusturma ------------------- */}
+      <CreateDispatchProposalAction
+        transportOrderId={detail.id}
+        orderStatus={detail.status}
+        canPlan={canPlanDispatch}
+      />
 
       {/* ------------------------------ Finans ------------------------------- */}
       <div className="rounded border border-slate-200 p-3">

@@ -280,6 +280,44 @@ function buildResult(job) {
     };
   }
 
+  /**
+   * FAZ 17 — DISPATCH SIRALAMASI.
+   *
+   * AJAN ADAY SECMEZ, SIRALAR. Uygunluk sunucuda deterministik kurallarla
+   * belirleniyor; buradan cikan tek sey bir SIRA ve kapali bir gerekce
+   * anahtari. Bu yuzden payload'da hicbir Fleet kimligi (arac, surucu,
+   * siparis) YOK — yalnizca sunucunun verdigi kisa referanslar.
+   *
+   * Aday sayisi is payload'indan okunuyor: sunucu kac referans verdiyse o
+   * kadar sira uretiliyor. Uydurma bir referans yazsaydik sunucu onu
+   * eslestiremez ve baglama sessizce dusserdi.
+   */
+  if (job.jobType === 'dispatch.plan') {
+    const candidateCount = Math.max(1, Math.min(Number(job.payload?.candidateCount ?? 1), 50));
+    const orderCount = Math.max(0, Math.min(Number(job.payload?.orderCount ?? 0), 20));
+    return {
+      proposalType: 'dispatch.plan.suggestion',
+      proposalSchemaVersion: 1,
+      payload: {
+        rankedCandidates: Array.from({ length: candidateCount }, (_item, index) => ({
+          candidateRef: `c${index + 1}`,
+          rank: index + 1,
+          // Deterministik ve KAPALI KUME: serbest metin gerekce yok.
+          rationaleKey: index === 0 ? 'capacity_fits_best' : 'no_strong_signal',
+        })),
+        consolidationRefs: Array.from({ length: orderCount }, (_item, index) => ({
+          orderRef: `o${index + 1}`,
+        })),
+      },
+      // Guven skoru SIRALAMAYA ait, bir karara degil.
+      confidence: { rankedCandidates: 0.6 },
+      evidence: { source: 'mock_dispatch_ranking', dispatchProposalId: job.payload?.dispatchProposalId ?? null },
+      // Uygunluk kontrollerini SUNUCU uretiyor; ele gecirilmis bir worker
+      // "arac uygun" diyebilirdi.
+      checks: [],
+    };
+  }
+
   if (job.jobType === 'document.mock_classification') {
     const classified = classifyDocument(job.payload?.documentName);
     return {

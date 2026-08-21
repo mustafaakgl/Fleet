@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantContext } from '../tenant/tenant-context';
 import { ValhallaClient } from '../routing/valhalla.client';
 import type { GeoPoint, RouteSummary } from '../routing/core/routing.types';
 import { AutomationJobService } from './automation-job.service';
@@ -183,6 +184,15 @@ export class DispatchService {
     const candidates = await this.gatherCandidates(start, end, demand);
     const route = await this.computeRoute(orders.flatMap((order) => order.consignments), demand, start);
 
+    /**
+     * Kiraci BAGLAMDAN. Uzantinin ust duzeye ekledigi degerin aynisi; ic ice
+     * yazimlara elle tasinmasi gerekiyor (bkz. asagisi).
+     */
+    const tenantId = TenantContext.getTenantId();
+    if (!tenantId) {
+      throw new BadRequestException({ code: 'dispatch_tenant_context_missing' });
+    }
+
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const job = await tx.automationJob.create({
@@ -201,6 +211,8 @@ export class DispatchService {
           data: {
             generation: 'processing',
             computedAt: new Date(),
+            // TALEP EDILEN GUN SAKLANIYOR: onay bunu kullaniyor, `computedAt`i degil.
+            workDate: start,
             routeStatus: route.status,
             routeFailureClass: route.failureClass,
             totalDistanceKm: route.totalDistanceKm,
@@ -214,14 +226,29 @@ export class DispatchService {
               generation: 'processing',
               status: 'open',
             }),
+            /**
+             * IC ICE YAZIMDA `tenantId` ELLE VERILIYOR (Faz 17g duzeltmesi).
+             *
+             * Kiraci uzantisi YALNIZCA UST DUZEY `data`ya `tenantId`
+             * ekliyor; `orders.create` / `candidates.create` gibi ic ice
+             * yazimlar ONA UGRAMAZ ve semadaki `@default("default-tenant")`
+             * degerine duserdi. Sonuc sessiz ama agirdi: her kiracinin
+             * adaylari ve siparis baglari `default-tenant`a yazilir, kendi
+             * kiracisindan GORUNMEZ olur ve `default-tenant` kullanicisina
+             * GORUNUR hale gelirdi.
+             *
+             * Kiraci baglamdan okunuyor — istemciden DEGIL.
+             */
             orders: {
               create: orders.map((order) => ({
+                tenantId,
                 transportOrderId: order.id,
                 sourceRevision: order.currentRevision,
               })),
             },
             candidates: {
               create: candidates.map((candidate, index) => ({
+                tenantId,
                 rank: index + 1,
                 vehicleId: candidate.vehicleId,
                 driverId: candidate.driverId,

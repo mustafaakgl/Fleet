@@ -133,6 +133,20 @@ function build(options: BuildOptions = {}) {
       async findUnique({ where }: { where: Row }) {
         return invitations.find((row) => row.tokenHash === where.tokenHash) ?? null;
       },
+      /**
+       * Faz 17g: davet artik hem TOKEN OZETIYLE hem KIMLIKLE cozuluyor
+       * (oturum cerezi kimligi tasiyor). Taklit ikisini de desteklemeli,
+       * yoksa oturum yolu testte hic calismaz.
+       */
+      async findFirst({ where }: { where: Row }) {
+        return (
+          invitations.find((row) =>
+            where.tokenHash !== undefined
+              ? row.tokenHash === where.tokenHash
+              : row.id === where.id,
+          ) ?? null
+        );
+      },
       async create({ data }: { data: Row }) {
         if (invitations.some((row) => row.activeTargetKey && row.activeTargetKey === data.activeTargetKey)) {
           unique();

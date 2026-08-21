@@ -43,6 +43,15 @@ export const NAV_ACCESS: NavAccessRule[] = [
   // ve oneri onayi bir yetki devri karari — accounting/office DISARIDA.
   { href: '/automation/connectors', roles: ['admin', 'boss'] },
   { href: '/automation/queue', roles: ['admin', 'boss'] },
+  /**
+   * Faz 17 — dispatch ve teslimat slotlari.
+   *
+   * Muhasebe LISTEDE: kuyrugu ve finansal alanlari gormesi gerekiyor. Plani
+   * DEGISTIREMEZ ve bu menude degil, sunucudaki `@RequiresWrite()` ile
+   * saglaniyor — menude gorunmek yetki degildir. Surucu disarida.
+   */
+  { href: '/dispatch', roles: ['admin', 'boss', 'accounting', 'office'] },
+  { href: '/delivery-slots', roles: ['admin', 'boss', 'accounting', 'office'] },
   { href: '/devices', roles: ['admin', 'boss', 'office'] },
   { href: '/tachograph/remaining-driving-time', roles: ['admin', 'boss', 'accounting', 'office'] },
   { href: '/tachograph/infringements', roles: ['admin', 'boss', 'accounting', 'office'] },

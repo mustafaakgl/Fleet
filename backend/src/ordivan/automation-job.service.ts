@@ -293,6 +293,25 @@ export class AutomationJobService {
    * BAYAT DENEME: token guncel degilse istek reddedilir ve mevcut sonuc
    * DEGISMEZ.
    */
+  /**
+   * Bir isin bagli oldugu dispatch talebi (Faz 17g).
+   *
+   * Baglamayi controller yapiyor ama HANGI oneriye baglanacagini bilmesi
+   * gerekiyor. Bu bilgi `DispatchProposal.jobId` uzerinden okunuyor —
+   * connector'in bildirdigi bir kimlikten DEGIL. Worker kendi hangi oneriye
+   * yazacagini secebilseydi, gecerli bir anahtar baska bir planlamanin
+   * sonucunu ezmeye yeterdi.
+   */
+  async dispatchContextFor(
+    jobId: string,
+  ): Promise<{ dispatchProposalId: string; attempt: number } | null> {
+    const row = await this.prisma.dispatchProposal.findFirst({
+      where: { jobId },
+      select: { id: true, jobAttempt: true },
+    });
+    return row ? { dispatchProposalId: row.id, attempt: row.jobAttempt } : null;
+  }
+
   async completeJob(
     connector: AuthenticatedConnector,
     jobId: string,

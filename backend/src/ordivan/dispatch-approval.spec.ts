@@ -51,6 +51,8 @@ function build(options: BuildOptions = {}) {
       proposalId: 'prop-1',
       resultTourId: options.resultTourId ?? null,
       jobAttempt: options.jobAttempt ?? 1,
+      // Faz 17g: plan gunu artik KAYITTAN okunuyor, `computedAt`ten degil.
+      workDate: NOW,
       decisionIdempotencyKey: options.decisionIdempotencyKey ?? null,
       computedAt: NOW,
       updatedAt: NOW,

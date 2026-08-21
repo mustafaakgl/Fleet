@@ -4145,3 +4145,231 @@ export const orderIntakeApi = {
       })
       .then((r) => r.data),
 };
+
+// ---------------------------------------------------------------------------
+// Faz 17 — dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * DISPATCH KUYRUGU.
+ *
+ * FINANS MASKESI SUNUCUDA: office kullanicisina `contractedRevenue`,
+ * `currency` ve `plannedTollCents` ZATEN `null` gelir. Istemcide gizlemek bir
+ * savunma degildir — ayni ucu `curl` ile cagirana hicbir sey yapmaz.
+ */
+export const dispatchApi = {
+  listProposals: (
+    params: {
+      status?: import('./types').DispatchProposalStatus;
+      generation?: import('./types').DispatchGeneration;
+      workDateFrom?: string;
+      workDateTo?: string;
+      page?: number;
+      pageSize?: number;
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<{
+        rows: import('./types').DispatchProposalRow[];
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+      }>('/dispatch/proposals', { params, signal })
+      .then((r) => r.data),
+
+  detail: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').DispatchProposalDetail>(`/dispatch/proposals/${id}`, { signal })
+      .then((r) => r.data),
+
+  candidates: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').DispatchCandidateView[]>(`/dispatch/proposals/${id}/candidates`, {
+        signal,
+      })
+      .then((r) => r.data),
+
+  overrides: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').DispatchOverrideView[]>(`/dispatch/proposals/${id}/overrides`, {
+        signal,
+      })
+      .then((r) => r.data),
+
+  /** Uygulanmamis oneride 404 doner — bos tur UYDURULMAZ. */
+  resultTour: (id: string, signal?: AbortSignal) =>
+    api
+      .get<import('./types').DispatchTourView>(`/dispatch/proposals/${id}/tour`, { signal })
+      .then((r) => r.data),
+
+  createProposal: (body: { transportOrderIds: string[]; workDate: string }) =>
+    api
+      .post<{ dispatchProposalId: string; jobId: string | null; reused: boolean }>(
+        '/dispatch/proposals',
+        body,
+      )
+      .then((r) => r.data),
+
+  retry: (id: string) =>
+    api.post<{ jobId: string }>(`/dispatch/proposals/${id}/retry`, {}).then((r) => r.data),
+
+  /**
+   * Onay.
+   *
+   * UC ZORUNLU ALAN: `expectedUpdatedAt` (iyimser eszamanlilik),
+   * `proposalRevision` (oneri yeniden uretildiyse ekrandaki adaylar gecersiz)
+   * ve `idempotencyKey` (cift tiklama ikinci bir tur URETMEZ).
+   */
+  approve: (
+    id: string,
+    body: {
+      vehicleId: string;
+      driverId: string;
+      expectedUpdatedAt: string;
+      proposalRevision: number;
+      idempotencyKey: string;
+      overrides?: import('./types').DispatchOverrideDeclaration[];
+    },
+  ) =>
+    api
+      .post<import('./types').DispatchApproveResult>(`/dispatch/proposals/${id}/approve`, body)
+      .then((r) => r.data),
+
+  reject: (
+    id: string,
+    body: {
+      reason: string;
+      expectedUpdatedAt: string;
+      proposalRevision: number;
+      idempotencyKey: string;
+    },
+  ) =>
+    api
+      .post<{ dispatchProposalId: string; repeated: boolean }>(
+        `/dispatch/proposals/${id}/reject`,
+        body,
+      )
+      .then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// Faz 17 — teslimat slotlari (ic kullanici)
+// ---------------------------------------------------------------------------
+
+export const deliverySlotsApi = {
+  listSlots: (
+    params: { locationId?: string; from?: string; to?: string; page?: number; pageSize?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<{
+        rows: import('./types').ManagedSlotRow[];
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+      }>('/delivery-slots', { params, signal })
+      .then((r) => r.data),
+
+  /** `timezone` GONDERILMIYOR: sunucu konumdan ya da kiracidan cozuyor. */
+  createSlot: (body: {
+    locationId: string;
+    startsAt: string;
+    endsAt: string;
+    capacity: number;
+    resourceRef?: string;
+  }) => api.post<import('./types').ManagedSlotRow>('/delivery-slots', body).then((r) => r.data),
+
+  updateSlot: (
+    id: string,
+    body: { capacity?: number; status?: import('./types').DeliverySlotStatus },
+  ) => api.patch<import('./types').ManagedSlotRow>(`/delivery-slots/${id}`, body).then((r) => r.data),
+
+  listInvitations: (
+    params: {
+      consignmentId?: string;
+      status?: import('./types').DeliverySlotInvitationStatus;
+      page?: number;
+      pageSize?: number;
+    } = {},
+    signal?: AbortSignal,
+  ) =>
+    api
+      .get<{
+        rows: import('./types').SlotInvitationRow[];
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+      }>('/delivery-slots/invitations', { params, signal })
+      .then((r) => r.data),
+
+  /** DUZ METIN TOKEN YALNIZCA BURADA, BIR KEZ doner. */
+  createInvitation: (body: {
+    consignmentId: string;
+    kind: import('./types').DeliverySlotKind;
+    expiresInHours?: number;
+  }) =>
+    api
+      .post<{ invitationId: string; token: string; expiresAt: string }>(
+        '/delivery-slots/invitations',
+        body,
+      )
+      .then((r) => r.data),
+
+  revokeInvitation: (id: string) =>
+    api
+      .post<{ invitationId: string }>(`/delivery-slots/invitations/${id}/revoke`, {})
+      .then((r) => r.data),
+
+  reissueInvitation: (id: string, body: { expiresInHours?: number } = {}) =>
+    api
+      .post<{ invitationId: string; token: string; expiresAt: string }>(
+        `/delivery-slots/invitations/${id}/reissue`,
+        body,
+      )
+      .then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// Faz 17g — public slot (girissiz)
+// ---------------------------------------------------------------------------
+
+/**
+ * PUBLIC SLOT ISTEMCISI.
+ *
+ * TOKEN YALNIZCA BIR KEZ, YALNIZCA `openSession` govdesinde gonderilir ve
+ * hicbir yerde saklanmaz — ne `localStorage`, ne `sessionStorage`, ne modul
+ * duzeyinde bir degisken. Sonraki her istek HttpOnly cookie ile gidiyor;
+ * cookie'ye JavaScript erisemedigi icin bir XSS onu okuyamaz.
+ *
+ * `withCredentials` global `api` ornegininde zaten acik.
+ */
+export const publicSlotApi = {
+  openSession: (token: string) =>
+    api
+      .post<{ kind: string; expiresAt: string }>('/public/delivery-slots/session', { token })
+      .then((r) => r.data),
+
+  closeSession: () =>
+    api.delete<{ closed: boolean }>('/public/delivery-slots/session').then((r) => r.data),
+
+  listSlots: (signal?: AbortSignal) =>
+    api
+      .get<{ kind: string; slots: import('./types').PublicSlotView[] }>('/public/delivery-slots', {
+        signal,
+      })
+      .then((r) => r.data),
+
+  book: (slotId: string) =>
+    api
+      .post<{ bookingId: string; repeated: boolean }>('/public/delivery-slots/bookings', { slotId })
+      .then((r) => r.data),
+
+  cancel: () =>
+    api
+      .post<{ cancelled: boolean }>('/public/delivery-slots/bookings/cancel', {})
+      .then((r) => r.data),
+};

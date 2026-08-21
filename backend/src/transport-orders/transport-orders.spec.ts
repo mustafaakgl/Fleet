@@ -282,7 +282,20 @@ function build(options: BuildOptions = {}) {
     },
   };
 
-  const service = new TransportOrdersService(prisma as never, audit as never);
+  /**
+   * Faz 17g: kalem adresleri artik `Location` kaydina baglaniyor.
+   *
+   * Taklit GEOCODE ETMIYOR, deterministik bir kimlik doner: testin olctugu
+   * sey konum cozumu degil, siparis mantigi. Gercek geocoder'a gitmek testi
+   * bir ag servisine bagimli kilardi.
+   */
+  const routing = {
+    async resolveLocation({ rawAddress }: { rawAddress: string }) {
+      return { id: `loc-${rawAddress.slice(0, 12).replace(/\s+/g, '-')}` };
+    },
+  };
+
+  const service = new TransportOrdersService(prisma as never, audit as never, routing as never);
   return { service, orders, consignments, assignments, tours, revisions, audits };
 }
 

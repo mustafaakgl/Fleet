@@ -4,6 +4,7 @@ import {
   Bell,
   Bot,
   Building2,
+  CalendarClock,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
@@ -394,6 +395,25 @@ const TRANSPORT_ORDERS_ITEM: NavItem = {
   icon: ClipboardList,
 };
 
+/**
+ * Dispatch kuyrugu ve teslimat slotlari (Faz 17).
+ *
+ * ROL: `OPERATIONAL_ROLES` — surucu ve musteri disarida. Muhasebe kuyrugu
+ * GORUR ama plani degistiremez; kisit sunucudaki `@RequiresWrite()` guard'i
+ * ve menude gorunmek YETKI DEGILDIR.
+ */
+const DISPATCH_ITEM: NavItem = {
+  href: '/dispatch',
+  labelKey: 'nav.dispatch',
+  icon: Route,
+};
+
+const DELIVERY_SLOTS_ITEM: NavItem = {
+  href: '/delivery-slots',
+  labelKey: 'nav.deliverySlots',
+  icon: CalendarClock,
+};
+
 const DOCUMENT_INBOX_ITEM: NavItem = {
   href: '/automation/inbox',
   labelKey: 'nav.automation.inbox',
@@ -450,6 +470,9 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         heuteGroup.items.push(DOCUMENT_INBOX_ITEM);
       }
       heuteGroup.items.push(TRANSPORT_ORDERS_ITEM);
+      // Planlama ve teslimat penceresi siparisin hemen ardinda: ikisi de
+      // siparisten dogan gunluk operasyon.
+      heuteGroup.items.push(DISPATCH_ITEM, DELIVERY_SLOTS_ITEM);
     }
   }
 

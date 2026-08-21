@@ -238,6 +238,23 @@ export interface Vehicle {
    * telematik kontrolunun miktar kurallari calismaz.
    */
   fuel_tank_capacity_liters?: number | null;
+
+  /**
+   * FAZ 17 — yuk kapasitesi ve kisitlar.
+   *
+   * HEPSI NULLABLE: `null` BILINMIYOR demek; "sinirsiz" ya da "hayir" DEGIL.
+   * Uygunluk motoru bos alani `unknown` isaretler ve `unknown` hicbir zaman
+   * "uygun" sayilmaz — arayuz de bunu "dogrulanamadi" olarak gostermeli.
+   */
+  payload_capacity_kg?: number | null;
+  cargo_volume_m3?: number | null;
+  pallet_capacity?: number | null;
+  /** UC DURUMLU: `true` yetkili, `false` ACIKCA yetkisiz, `null` BILINMIYOR. */
+  adr_certified?: boolean | null;
+  height_cm?: number | null;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  gross_weight_kg?: number | null;
   created_at?: string;
 }
 
@@ -4071,4 +4088,229 @@ export interface OrderIntakeApproveResult {
   transportOrderId: string | null;
   revisionId: string | null;
   cancellationImpact: Record<string, unknown> | null;
+}
+
+// ---------------------------------------------------------------------------
+// Faz 17 — dispatch ve teslimat slotlari
+// ---------------------------------------------------------------------------
+
+export type DispatchProposalStatus =
+  | 'open'
+  | 'approved'
+  | 'rejected'
+  | 'expired'
+  | 'superseded';
+
+/** Uretim asamasi. `ready` olana kadar oneri bir TALEPTIR. */
+export type DispatchGeneration = 'queued' | 'processing' | 'ready' | 'failed' | 'expired';
+
+export type DispatchRouteStatus = 'ok' | 'degraded' | 'failed';
+
+/** UC DURUMLU: `unknown` hicbir zaman "uygun" DEMEK DEGILDIR. */
+export type DispatchCheckStatus = 'verified' | 'incompatible' | 'unknown';
+
+export type DispatchDecision = 'eligible' | 'blocked' | 'review_required';
+
+export interface DispatchCheckView {
+  code: string;
+  status: DispatchCheckStatus;
+  reasonKey: string;
+  evidence?: Record<string, string | number | boolean | null>;
+  /** `unknown` kontrol bir BEYANLA asilabilir mi. */
+  overridable: boolean;
+}
+
+export interface DispatchOrderView {
+  transportOrderId: string;
+  orderNumber: string;
+  status: string;
+  companyId: string;
+  companyName: string | null;
+  sourceRevision: number;
+  currentRevision: number;
+  /** Plan bayat: musteri siparisi bu arada degistirdi. */
+  stale: boolean;
+  consignmentCount: number;
+  /** Finansal — office icin `null` GELIR (istemcide gizlenmiyor). */
+  currency: string | null;
+  contractedRevenue: number | null;
+  billingMode: string | null;
+}
+
+export interface DispatchPlannedStopView {
+  sequence: number;
+  kind: string;
+  locationId: string | null;
+  etaAt: string | null;
+  /** Geokodlanmamis konumda `null` — harita o duragi CIZMEZ. */
+  latitude: number | null;
+  longitude: number | null;
+  locationLabel: string | null;
+}
+
+export interface DispatchRouteView {
+  status: DispatchRouteStatus;
+  failureClass: string | null;
+  totalDistanceKm: number | null;
+  totalDurationMin: number | null;
+  plannedStops: DispatchPlannedStopView[];
+}
+
+export interface DispatchAgentView {
+  proposalType: string;
+  schemaVersion: number;
+  rankedCandidates: Array<{ candidateRef: string; rank: number; rationaleKey: string }>;
+  consolidationRefs: string[];
+  stopOrderRefs: string[];
+}
+
+export interface DispatchProposalRow {
+  id: string;
+  status: DispatchProposalStatus;
+  generation: DispatchGeneration;
+  workDate: string;
+  computedAt: string;
+  orderCount: number;
+  candidateCount: number;
+  routeStatus: DispatchRouteStatus;
+  resultTourId: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  /** `expectedUpdatedAt` icin gereken iyimser eszamanlilik damgasi. */
+  updatedAt: string;
+}
+
+export interface DispatchProposalDetail extends DispatchProposalRow {
+  jobAttempt: number;
+  route: DispatchRouteView;
+  orders: DispatchOrderView[];
+  agent: DispatchAgentView | null;
+  decidedById: string | null;
+  rejectionReason: string | null;
+  decisionNote: string | null;
+  financialFieldsMasked: boolean;
+}
+
+export interface DispatchCandidateView {
+  id: string;
+  rank: number;
+  vehicleId: string | null;
+  vehiclePlate: string | null;
+  driverId: string | null;
+  driverName: string | null;
+  overallStatus: DispatchCheckStatus;
+  decision: DispatchDecision;
+  selected: boolean;
+  checks: DispatchCheckView[];
+}
+
+export interface DispatchOverrideView {
+  id: string;
+  checkCode: string;
+  vehicleId: string | null;
+  driverId: string | null;
+  workDate: string;
+  proposalRevision: number;
+  answer: string | null;
+  note: string;
+  declaredById: string | null;
+  declaredAt: string;
+}
+
+export interface DispatchTourStopView {
+  sequence: number;
+  kind: string;
+  status: string;
+  locationId: string | null;
+  plannedArrivalAt: string | null;
+}
+
+export interface DispatchTourView {
+  tourId: string;
+  status: string;
+  workDate: string;
+  vehicleId: string | null;
+  driverId: string | null;
+  plannedStartAt: string | null;
+  plannedEndAt: string | null;
+  plannedDistanceKm: number | null;
+  plannedDurationMin: number | null;
+  /** Finansal — office icin `null` gelir. */
+  plannedTollCents: number | null;
+  stops: DispatchTourStopView[];
+  assignmentIds: string[];
+}
+
+/** Beyanin kapsami — bes parcanin BESI de sunucudakiyle eslesmeli. */
+export interface DispatchOverrideScope {
+  dispatchProposalId: string;
+  vehicleId: string;
+  driverId: string;
+  workDate: string;
+  proposalRevision: number;
+}
+
+export interface DispatchOverrideDeclaration {
+  code: string;
+  note?: string;
+  answer?: 'yes' | 'no';
+  scope: DispatchOverrideScope;
+}
+
+export interface DispatchApproveResult {
+  dispatchProposalId: string;
+  tourId: string;
+  assignmentIds: string[];
+  mode: 'direct' | 'manual_override';
+  /** Ayni onay daha once yapilmisti ve MEVCUT sonuc donduruldu. */
+  repeated: boolean;
+}
+
+// --- Teslimat slotlari ---
+
+export type DeliverySlotKind = 'pickup' | 'delivery';
+export type DeliverySlotStatus = 'open' | 'closed';
+export type DeliverySlotInvitationStatus =
+  | 'open'
+  | 'booked'
+  | 'cancelled'
+  | 'expired'
+  | 'revoked';
+
+export interface SlotInvitationRow {
+  id: string;
+  consignmentId: string;
+  kind: DeliverySlotKind;
+  status: DeliverySlotInvitationStatus;
+  /** Kirilmis onek — TAM TOKEN DEGIL, ozet HIC DEGIL. */
+  tokenPrefix: string;
+  sourceRevision: number;
+  expiresAt: string;
+  locked: boolean;
+  failedAttempts: number;
+  createdAt: string;
+  activeBooking: { bookingId: string; slotId: string; bookedAt: string } | null;
+}
+
+export interface ManagedSlotRow {
+  id: string;
+  locationId: string;
+  startsAt: string;
+  endsAt: string;
+  timezone: string;
+  resourceRef: string;
+  status: DeliverySlotStatus;
+  capacity: number;
+  bookedCount: number;
+  remaining: number;
+}
+
+/** Public yanit — DAR. Kiraci, fiyat, arac, surucu ve siparis bilgisi YOK. */
+export interface PublicSlotView {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  timezone: string;
+  resourceRef: string | null;
+  available: boolean;
 }

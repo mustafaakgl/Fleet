@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { OPERATIONAL_ROLES } from '../common/utils/permissions';
 import { DeliverySlotService } from './delivery-slot.service';
+import { DeliverySlotSessionService } from './delivery-slot-session.service';
 import {
   CreateSlotDto,
   CreateSlotInvitationDto,
@@ -48,7 +49,10 @@ interface AuthenticatedRequest {
 @UseGuards(JwtAuthGuard, DriverBlockGuard, RolesGuard)
 @Roles(...OPERATIONAL_ROLES)
 export class DeliverySlotController {
-  constructor(private readonly slots: DeliverySlotService) {}
+  constructor(
+    private readonly slots: DeliverySlotService,
+    private readonly sessions: DeliverySlotSessionService,
+  ) {}
 
   // -------------------------------------------------------------------------
   // Davetler
@@ -81,19 +85,31 @@ export class DeliverySlotController {
   @Post('invitations/:id/revoke')
   @RequiresWrite()
   @HttpCode(200)
-  revokeInvitation(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
-    return this.slots.revokeInvitation(request.user.id, request.user.role, id);
+  async revokeInvitation(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    const result = await this.slots.revokeInvitation(request.user.id, request.user.role, id);
+    /**
+     * ACIK OTURUMLAR DA KAPANIYOR.
+     *
+     * Oturum her istekte daveti yeniden okudugu icin iptal ZATEN aninda
+     * etkili; bu cagri o korumanin YERINE GECMIYOR, USTUNE BINIYOR. Iptal
+     * edilmis bir davetin oturum satirinin "acik" gorunmeye devam etmesi,
+     * denetime bakan birine yanlis bir tablo gosterirdi.
+     */
+    await this.sessions.revokeForInvitation(id);
+    return result;
   }
 
   /** Yeni davet: eskisi once iptal edilir, sonra yenisi uretilir. */
   @Post('invitations/:id/reissue')
   @RequiresWrite()
   @HttpCode(201)
-  reissueInvitation(
+  async reissueInvitation(
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
     @Body() dto: ReissueSlotInvitationDto,
   ) {
+    // Eski link gecersiz kilindi: onunla acilmis oturumlar da kapanmali.
+    await this.sessions.revokeForInvitation(id);
     return this.slots.reissueInvitation(request.user.id, request.user.role, id, dto.expiresInHours);
   }
 

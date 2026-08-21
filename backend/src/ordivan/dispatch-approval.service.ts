@@ -623,6 +623,7 @@ export class DispatchApprovalService {
         resultTourId: true,
         jobAttempt: true,
         computedAt: true,
+        workDate: true,
         decisionIdempotencyKey: true,
         orders: { select: { transportOrderId: true, sourceRevision: true } },
       },
@@ -632,14 +633,14 @@ export class DispatchApprovalService {
     }
     return {
       ...row,
-      // Plan gunu: oneri hesaplandigi gun icin kuruldu.
-      workDate: new Date(
-        Date.UTC(
-          row.computedAt.getUTCFullYear(),
-          row.computedAt.getUTCMonth(),
-          row.computedAt.getUTCDate(),
-        ),
-      ),
+      /**
+       * PLAN GUNU KAYITTAN OKUNUYOR (Faz 17g).
+       *
+       * Once `computedAt`ten turetiliyordu ve bu, Carsamba gunu planlanan bir
+       * Cuma turunu CARSAMBA'ya yaziyordu; cakisma kontrolu de yanlis gune
+       * bakiyordu. Talep edilen gun artik saklandigi icin tahmin gerekmiyor.
+       */
+      workDate: row.workDate,
       appliedMode: 'direct' as const,
     };
   }

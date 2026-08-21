@@ -32,6 +32,8 @@ const AGENT_PAYLOAD = {
 
 interface BuildOptions {
   tenantId?: string;
+  /** Konumun kiracisi — durak koordinatinin cozulup cozulmedigini olcmek icin. */
+  locationTenant?: string;
   resultTourId?: string | null;
   rejectionReason?: string | null;
 }
@@ -46,6 +48,8 @@ function build(options: BuildOptions = {}) {
     generation: 'ready',
     jobAttempt: 1,
     computedAt: new Date('2026-09-01T06:30:00.000Z'),
+    // Plan gunu KAYITTAN — hesaplama gununden AYRI olabilir.
+    workDate: new Date('2026-09-04T00:00:00.000Z'),
     routeStatus: 'ok',
     routeFailureClass: null,
     totalDistanceKm: 412.5,
@@ -105,6 +109,13 @@ function build(options: BuildOptions = {}) {
           evidence: { expectedRevenue: 900, targetRevenue: 1100 },
           override: 'explicit_choice',
         },
+        {
+          // VERI EKSIKLIGI: `unknown` ama `'none'` — beyanla ASILAMAZ.
+          code: 'vehicle_capacity_weight',
+          status: 'unknown',
+          reasonKey: 'value_missing',
+          override: 'none',
+        },
       ],
       vehicle: { plateNumber: 'B-FL 1024' },
       driver: { firstName: 'Alex', lastName: 'Meyer' },
@@ -157,6 +168,19 @@ function build(options: BuildOptions = {}) {
     tour: {
       findFirst: async () => scoped(tours)[0] ?? null,
     },
+    location: {
+      findMany: async () =>
+        scoped([
+          {
+            id: 'loc-1',
+            tenantId: options.locationTenant ?? rowTenant,
+            latitude: 51.4344,
+            longitude: 6.7623,
+            label: 'Depot Duisburg',
+            city: 'Duisburg',
+          },
+        ]),
+    },
   } as unknown as PrismaService;
 
   return { service: new DispatchReadService(prisma) };
@@ -167,6 +191,13 @@ function build(options: BuildOptions = {}) {
 // ---------------------------------------------------------------------------
 
 describe('Ofis yanitinda finans YOK', () => {
+  it('plan gunu HESAPLAMA GUNUNDEN ayri okunuyor', async () => {
+    // Carsamba planlanan Cuma turu CARSAMBA'ya yazilmamali.
+    const detail = await build().service.detail('dp-1', 'admin');
+    assert.equal(detail.computedAt, '2026-09-01T06:30:00.000Z');
+    assert.equal(detail.workDate, '2026-09-04');
+  });
+
   it('siparis tutari, para birimi ve faturalama modu null', async () => {
     const detail = await build().service.detail('dp-1', 'office');
     const order = detail.orders[0]!;
@@ -191,6 +222,27 @@ describe('Ofis yanitinda finans YOK', () => {
     assert.equal('internalCost' in stop, false);
   });
 
+  it('durak koordinati `Location` kaydindan cozuluyor — harita icin', async () => {
+    const detail = await build().service.detail('dp-1', 'office');
+    const stop = detail.route.plannedStops[0]!;
+    assert.equal(stop.latitude, 51.4344);
+    assert.equal(stop.longitude, 6.7623);
+    assert.equal(stop.locationLabel, 'Depot Duisburg');
+  });
+
+  it('BASKA KIRACININ konumu cozulmuyor — koordinat `null` kaliyor', async () => {
+    // Harita o duragi CIZMEZ. 0,0'a isaret koymak Gine Korfezi'nde bir
+    // teslimat gostermek olurdu.
+    const detail = await build({ tenantId: TENANT, locationTenant: 'other-tenant' }).service.detail(
+      'dp-1',
+      'admin',
+    );
+    const stop = detail.route.plannedStops[0]!;
+    assert.equal(stop.latitude, null);
+    assert.equal(stop.longitude, null);
+    assert.equal(stop.locationLabel, null);
+  });
+
   it('aday kanitindaki tutar ve gerekce ANAHTARI maskeli', async () => {
     const candidates = await build().service.candidates('dp-1', 'office');
     const checks = candidates[0]!.checks;
@@ -208,6 +260,17 @@ describe('Ofis yanitinda finans YOK', () => {
     // Kontrolun kendisi ve asilabilirligi GORUNUR kaliyor.
     assert.equal(financial.status, 'unknown');
     assert.equal(financial.overridable, true);
+
+    /**
+     * `'none'` ASILAMAZ DEMEK.
+     *
+     * `Boolean(check.override)` yazsaydik `'none'` de dogru sayilir ve veri
+     * eksikligi yuzunden asilamayan bir kontrol arayuzde "beyanla gecilebilir"
+     * gorunurdu; kullanici beyani doldurur, sunucu 409 ile reddederdi.
+     */
+    const missingData = checks.find((check) => check.code === 'vehicle_capacity_weight')!;
+    assert.equal(missingData.status, 'unknown');
+    assert.equal(missingData.overridable, false);
   });
 
   it('tutar tasiyan red gerekcesi ofise gitmiyor', async () => {

@@ -19,6 +19,7 @@ import { DispatchReadService } from './dispatch-read.service';
 import { DispatchController } from './dispatch.controller';
 import { DeliverySlotService } from './delivery-slot.service';
 import { DeliverySlotController } from './delivery-slot.controller';
+import { DeliverySlotSessionService } from './delivery-slot-session.service';
 import { PublicSlotController } from './public-slot.controller';
 import { AssignmentsModule } from '../assignments/assignments.module';
 import { RoutingModule } from '../routing/routing.module';
@@ -74,6 +75,7 @@ import { resolveOrdivanMode } from './ordivan.config';
     DispatchApprovalService,
     DispatchReadService,
     DeliverySlotService,
+    DeliverySlotSessionService,
     OrdivanScheduler,
     {
       provide: 'ORDIVAN_MODE',
@@ -94,6 +96,7 @@ import { resolveOrdivanMode } from './ordivan.config';
     DispatchApprovalService,
     DispatchReadService,
     DeliverySlotService,
+    DeliverySlotSessionService,
   ],
 })
 export class OrdivanModule {}
