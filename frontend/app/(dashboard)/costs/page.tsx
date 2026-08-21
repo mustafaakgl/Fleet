@@ -168,9 +168,14 @@ function CostsPageContent() {
   /** Drill-down filtresi — yalnizca fis sekmesi icin anlamli. */
   const receiptFilter = useMemo(() => {
     const vehicleId = searchParams.get('vehicleId');
-    if (!vehicleId) return undefined;
+    // Faz 18C: Finance merkezi belirli bir fise baglanti veriyor. Arac
+    // filtresi olmadan da gecerli — yeni bir detay sayfasi acmak yerine
+    // mevcut cekmece dogrudan aciliyor.
+    const receiptId = searchParams.get('receipt');
+    if (!vehicleId && !receiptId) return undefined;
     return {
-      vehicleId,
+      vehicleId: vehicleId ?? undefined,
+      receiptId: receiptId ?? undefined,
       from: searchParams.get('from') ?? undefined,
       to: searchParams.get('to') ?? undefined,
     };

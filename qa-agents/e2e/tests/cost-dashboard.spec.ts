@@ -73,9 +73,13 @@ test.describe.serial('Fahrzeugkosten-Dashboard', () => {
     // 6) Dagilim listesi metin olarak var.
     await expect(page.getByTestId('composition-list')).toBeVisible();
 
-    // 7) Arac tablosunda 12 sutun var.
+    // 7) Arac tablosunda 13 sutun var.
+    //
+    // Faz 18B'de 12'den 13'e cikti: tek bir "Umsatz" sutunu YERINE tahmini
+    // gelir ve gercek gelir AYRI sutunlarda. Tek sutun, tabloyu okuyan
+    // kisinin hangisine baktigini bilmemesi demekti.
     const headers = page.getByTestId('vehicle-table').locator('thead th');
-    await expect(headers).toHaveCount(12);
+    await expect(headers).toHaveCount(13);
 
     // 8) Satir secimi, secili arac kartiyla SENKRON.
     const firstRow = page.getByTestId('vehicle-table').locator('tbody tr[role="button"]').first();

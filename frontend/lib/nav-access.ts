@@ -88,6 +88,15 @@ export const NAV_ACCESS: NavAccessRule[] = [
   { href: '/fleet-analytics/fuel-card', roles: ['admin', 'boss', 'accounting', 'office'] },
   { href: '/requests', roles: ['admin', 'boss', 'accounting', 'office', 'driver'] },
   { href: '/costs', roles: ['admin', 'boss', 'accounting'] },
+  /**
+   * Finance merkezi (Faz 18C) — YALNIZCA finansal roller.
+   *
+   * Office DISARIDA ve bu, `/invoicing`ten farkli olmasinin sebebi: office
+   * giden fatura keser ama gider, marj ve ihtilafli ceza gormez. Menude
+   * gorunmemek YETKI DEGILDIR; asil kisit `@Roles(...FINANCIAL_ROLES)` ile
+   * `finance.controller.ts`te — bu satir yalnizca kenar cubugunu hizaliyor.
+   */
+  { href: '/finance', roles: ['admin', 'boss', 'accounting'] },
   { href: '/getting-started', roles: ['admin'] },
   { href: '/privacy', roles: ['admin'] },
   { href: '/import', roles: ['admin'] },

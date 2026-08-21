@@ -45,6 +45,14 @@ export interface FuelReceiptPanelFilter {
   plateNumber?: string;
   from?: string;
   to?: string;
+  /**
+   * Dogrudan acilacak fis (Faz 18C).
+   *
+   * Finance merkezinden gelen baglanti belirli bir fisi hedefliyor. YENI BIR
+   * DETAY SAYFASI ACILMADI: fisin detayi zaten bu ekrandaki cekmece ve iki
+   * ayri detay gorunumu, ikisinin farkli seyler gostermesi riskini dogururdu.
+   */
+  receiptId?: string;
 }
 
 export function FuelReceiptReviewPanel({ filter }: { filter?: FuelReceiptPanelFilter } = {}) {
@@ -55,7 +63,7 @@ export function FuelReceiptReviewPanel({ filter }: { filter?: FuelReceiptPanelFi
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(filter?.receiptId ?? null);
 
   const abortRef = useRef<AbortController | null>(null);
   /** Eski cevap yenisinin uzerine YAZMAMALI. */
@@ -67,6 +75,17 @@ export function FuelReceiptReviewPanel({ filter }: { filter?: FuelReceiptPanelFi
    * Sayfalanmis bir listeyi istemcide filtrelemek, "3 fis" yerine "bu sayfada
    * gorunen 3 fis" demek olurdu — sayfa 2'deki kayitlar sessizce kaybolurdu.
    */
+  /**
+   * Baglantidaki fis ID'si degisirse cekmece o fise gecer.
+   *
+   * `null`a DUSURULMUYOR: kullanici cekmeceyi kapattiktan sonra URL'de kalan
+   * parametre onu tekrar acardi.
+   */
+  const linkedReceiptId = filter?.receiptId;
+  useEffect(() => {
+    if (linkedReceiptId) setOpenId(linkedReceiptId);
+  }, [linkedReceiptId]);
+
   const filterVehicleId = filter?.vehicleId;
   const filterFrom = filter?.from;
   const filterTo = filter?.to;

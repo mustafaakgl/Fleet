@@ -1126,6 +1126,86 @@ export interface CostDashboardResponse {
   };
 }
 
+/* ── Finance merkezi (Faz 18C) ───────────────────────────────────────────── */
+
+/**
+ * Tutar + kayit SAYISI birlikte.
+ *
+ * `count === 0` "veri yok" demek; `amount === '0.00'` ise "olctuk, sifir
+ * cikti". Ekran ikisini AYRI gosteriyor — tek basina `0,00`, hicbir kayit
+ * olmadigi halde "sifir maliyet" diye okunurdu.
+ */
+export interface FinanceAmount {
+  amount: string;
+  count: number;
+}
+
+export interface FinanceListBlock<T> {
+  totalAmount: string;
+  totalCount: number;
+  /** Listelenen satirlar; `totalCount`tan az olabilir — kirpma GORUNUR. */
+  items: T[];
+}
+
+export interface FinanceServiceItem {
+  id: string;
+  date: string;
+  vehicleId: string;
+  vehiclePlate: string;
+  serviceType: string;
+  repairCompany: string;
+  amount: string;
+  currency: string;
+  inBaseCurrency: boolean;
+}
+
+export interface FinanceFuelItem {
+  id: string;
+  enteredAt: string;
+  vehicleId: string;
+  vehiclePlate: string;
+  stationName: string | null;
+  amount: string | null;
+  currency: string;
+  workflowStatus: FuelEntryWorkflowStatus;
+}
+
+export interface FinanceFineItem {
+  id: string;
+  violationAt: string;
+  vehicleId: string;
+  vehiclePlate: string;
+  violationType: string;
+  amount: string | null;
+  currency: string;
+  inBaseCurrency: boolean;
+}
+
+/** GET /finance/summary — YALNIZCA FINANCIAL_ROLES. */
+export interface FinanceSummaryResponse {
+  baseCurrency: string;
+  period: { from: string; to: string; timezone: string };
+  revenue: {
+    /** GERCEK — faturadan. Fatura hic yoksa `null` (sifir DEGIL). */
+    actual: FinanceAmount | null;
+    /** TAHMIN — gorev planindan. `actual` ile ASLA toplanmaz. */
+    estimated: FinanceAmount;
+  };
+  cost: {
+    fuel: FinanceAmount;
+    service: FinanceAmount;
+    fines: FinanceAmount;
+    /** YALNIZCA onayli gercek gider. */
+    total: FinanceAmount;
+  };
+  /** Gercek gelir - onayli gider. Fatura yoksa `null`. */
+  margin: string | null;
+  pendingServiceRecords: FinanceListBlock<FinanceServiceItem>;
+  fuelReceipts: FinanceListBlock<FinanceFuelItem>;
+  disputedFines: FinanceListBlock<FinanceFineItem>;
+  unconvertedByCurrency: Array<{ currency: string; amount: string; entryCount: number }>;
+}
+
 /** GET/PUT /tenant/settings/currency */
 export interface TenantCurrencySettings {
   baseCurrency: string;

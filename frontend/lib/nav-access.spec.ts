@@ -85,3 +85,40 @@ describe('nav-access', () => {
     }
   });
 });
+
+describe('finance merkezi (Faz 18C)', () => {
+  it('yalnizca finansal rollere gorunur', () => {
+    const rule = NAV_ACCESS.find((entry) => entry.href === '/finance');
+    assert.ok(rule, '/finance icin erisim kurali yok');
+    assert.deepEqual([...rule!.roles].sort(), ['accounting', 'admin', 'boss']);
+  });
+
+  it('office, driver ve customer menude gormez', () => {
+    // Office `/invoicing`i GORUYOR: fatura kesmek onun isi. Finance merkezi
+    // ise gider, marj ve ihtilafli ceza gosteriyor — o degil.
+    for (const role of ['office', 'driver'] as const) {
+      assert.equal(
+        allowedHrefsForRole(role).has('/finance'),
+        false,
+        `${role} /finance'i goruyor`,
+      );
+    }
+    assert.equal(allowedHrefsForRole('office').has('/invoicing'), true);
+  });
+
+  it('kenar cubugu finansal rollere baglantiyi gercekten sunuyor', () => {
+    // Kural listesi ile navigation.ts KESISIYOR: biri eksikse baglanti
+    // hicbir role ulasmaz (bkz. /invoicing regresyonu).
+    for (const role of ['admin', 'boss', 'accounting'] as const) {
+      const offered = flattenNavGroups(getNavigationForRole(role as Role)).map(
+        (item) => item.href,
+      );
+      assert.ok(offered.includes('/finance'), `${role} icin /finance sunulmuyor`);
+      assert.ok(allowedHrefsForRole(role).has('/finance'));
+    }
+    const officeOffered = flattenNavGroups(getNavigationForRole('office' as Role)).map(
+      (item) => item.href,
+    );
+    assert.equal(officeOffered.includes('/finance'), false);
+  });
+});

@@ -29,6 +29,7 @@ import type {
   MorningCheckin,
   ServiceRecord,
   ServiceRecordApprovalStatus,
+  FinanceSummaryResponse,
   Reminder,
   Notification,
   Document,
@@ -840,6 +841,22 @@ export const tenantSettingsApi = {
   setTimezone: (timezone: string) =>
     api
       .put<import('./types').TenantCurrencySettings>('/tenant/settings/timezone', { timezone })
+      .then((r) => r.data),
+};
+
+/**
+ * Finance merkezi (Faz 18C).
+ *
+ * TEK istek: ekranin yedi blogu ayni donemi, ayni temel para birimini ve ayni
+ * tanima kurallarini paylasiyor. Yedi ayri uctan okumak, iki istek arasinda
+ * donem kaymasina ve ekranin yarisinin digerini tutmamasina yol acardi.
+ *
+ * ONAY/RET icin AYRI BIR UC YOK: mevcut `serviceRecordsApi.review` kullanilir.
+ */
+export const financeApi = {
+  getSummary: (params: { months?: number } = {}, signal?: AbortSignal) =>
+    api
+      .get<FinanceSummaryResponse>('/finance/summary', { params, signal })
       .then((r) => r.data),
 };
 

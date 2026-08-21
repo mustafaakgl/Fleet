@@ -22,6 +22,7 @@ import { CompanyEmailsModule } from './company-emails/company-emails.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { FinanceModule } from './finance/finance.module';
 import { SearchModule } from './search/search.module';
 import { ServiceRecordsModule } from './service-records/service-records.module';
 import { MorningCheckinsModule } from './morning-checkins/morning-checkins.module';
@@ -100,6 +101,7 @@ import { WriteRoleGuard } from './common/guards/write-role.guard';
     NotificationsModule,
     RemindersModule,
     DashboardModule,
+    FinanceModule,
     SearchModule,
     ServiceRecordsModule,
     MorningCheckinsModule,

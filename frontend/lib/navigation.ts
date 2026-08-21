@@ -18,6 +18,7 @@ import {
   Euro,
   FileText,
   IdCard,
+  Landmark,
   LayoutDashboard,
   ListTodo,
   MapPinned,
@@ -366,6 +367,19 @@ const INVOICING_ITEM: NavItem = {
   icon: Receipt,
 };
 
+/**
+ * Finance merkezi (Faz 18C) — TEK ekran, alti ayri sayfa DEGIL.
+ *
+ * Abrechnung bolumunun BASINDA duruyor: gunluk "neyi onaylamam gerekiyor"
+ * sorusunun cevabi burada, fatura ve Lohnvorbereitung ise oradan acilan
+ * detaylar. Office'e HIC verilmiyor (bkz. getNavigationForRole).
+ */
+const FINANCE_ITEM: NavItem = {
+  href: '/finance',
+  labelKey: 'nav.finance',
+  icon: Landmark,
+};
+
 /** Lohnvorbereitung — DATEV Lohn tarafi; /invoicing (Rechnungswesen) ayri. */
 const PAYROLL_ITEM: NavItem = {
   href: '/payroll',
@@ -454,12 +468,14 @@ export function getNavigationForRole(role: Role): NavGroup[] {
         icon: CreditCard,
         items:
           role === 'admin'
-            ? [BILLING_ITEM, INVOICING_ITEM, PAYROLL_ITEM]
+            ? [FINANCE_ITEM, BILLING_ITEM, INVOICING_ITEM, PAYROLL_ITEM]
             : role === 'office'
               // Office yalnizca giden faturalari goruyor; Lohnvorbereitung
               // maas verisi tasidigi icin finans rollerinde kaliyor.
+              // Finance merkezi de office'e ACILMIYOR: gider, marj ve
+              // ihtilafli ceza gosteriyor.
               ? [INVOICING_ITEM]
-              : [INVOICING_ITEM, PAYROLL_ITEM],
+              : [FINANCE_ITEM, INVOICING_ITEM, PAYROLL_ITEM],
       };
       heuteGroup.items.push(billingSection);
 
