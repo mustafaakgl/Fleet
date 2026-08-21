@@ -35,6 +35,42 @@ const DEMO_TENANT_ID = 'default-tenant';
 const IMEI_FMC130 = '359339080000101';
 const IMEI_FMC650 = '359339080000102';
 
+/**
+ * Kiracinin TEMEL para birimini veritabanindan okur.
+ *
+ * `prisma/seed.ts` icindeki `resolveTenantBaseCurrency` ile AYNI kural — ve
+ * ayni gerekce:
+ *
+ * FALLBACK YOK. `?? 'EUR'` ya da sabit bir para birimi yazsaydik, kolonun bos
+ * ya da bozuk oldugu bir kiracida seed SESSIZCE yanlis para biriminde gorev
+ * acardi. `Assignment.currency`nin semada varsayilansiz olmasinin butun amaci
+ * tam da bunu engellemek; bir fallback o korumayi bosa cikarirdi. Deger
+ * okunamiyorsa seed DURUR.
+ *
+ * Kiracinin kendi degeri DEGISTIRILMIYOR: burasi yalnizca okuyor.
+ */
+async function resolveTenantBaseCurrency(tenantId) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { baseCurrency: true },
+  });
+
+  if (!tenant) {
+    throw new Error(`[seed-tacho-demo] Kiraci bulunamadi: ${tenantId}`);
+  }
+
+  const currency = (tenant.baseCurrency ?? '').trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new Error(
+      `[seed-tacho-demo] Kiracinin baseCurrency degeri gecersiz (${tenantId}): ${JSON.stringify(
+        tenant.baseCurrency,
+      )}`,
+    );
+  }
+
+  return currency;
+}
+
 function startOfDay(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -88,6 +124,9 @@ async function main() {
 
   await prisma.tenant.upsert({
     where: { slug: DEMO_TENANT_SLUG },
+    // `baseCurrency` BILINCLI OLARAK YAZILMIYOR: var olan bir kiracinin para
+    // birimini bir demo seed'i degistirmemeli. Yeni kayitta semadaki
+    // varsayilan gecerli olur; bu seed o degeri OKUR, DAYATMAZ.
     update: { name: 'Demo Tenant' },
     create: {
       id: DEMO_TENANT_ID,
@@ -95,6 +134,10 @@ async function main() {
       name: 'Demo Tenant',
     },
   });
+
+  // Kiraci upsert EDILDIKTEN SONRA okunuyor: yeni olusturulmus bir kiracida
+  // deger ancak bu noktada kesinlesir.
+  const tenantBaseCurrency = await resolveTenantBaseCurrency(DEMO_TENANT_ID);
 
   const company = await prisma.company.upsert({
     where: {
@@ -252,12 +295,23 @@ async function main() {
   if (existingAssignment) {
     await prisma.assignment.update({
       where: { id: existingAssignment.id },
-      data: { status: AssignmentStatus.in_progress },
+      data: {
+        status: AssignmentStatus.in_progress,
+        // GUNCELLEME YOLUNDA DA YAZILIYOR: seed tekrar kosuldugunda kiracinin
+        // temel para birimi degismis olabilir. Yalnizca `create`e yazsaydik,
+        // ilk kosuda acilmis gorev eski birimde kalirdi (prisma/seed.ts ile
+        // ayni gerekce).
+        currency: tenantBaseCurrency,
+      },
     });
   } else {
     await prisma.assignment.create({
       data: {
         tenantId: DEMO_TENANT_ID,
+        // `Assignment.currency` VARSAYILANSIZ: yazilmadigi icin bu script
+        // `Argument \`currency\` is missing` ile duşuyordu ve codec8/tacho
+        // dogrulamasi hic calismiyordu.
+        currency: tenantBaseCurrency,
         ...assignmentKey,
         cargoOwner: 'Tacho Demo',
         pickupAddress: 'Berlin Depot',
