@@ -32,6 +32,18 @@ import { formatFleetCurrency } from '@/lib/locale-format';
 
 const PERIOD_OPTIONS = [3, 6, 12];
 
+/**
+ * CSV EKRANLA AYNI KURALLARI KULLANIR.
+ *
+ * Kolon adlari sinifi TASIYOR: `service_cost` yalnizca onayli servis,
+ * `pending_service_cost` onay bekleyen, `disputed_fine_cost` itiraz edilmis
+ * ceza. `revenue` kolonu KALDIRILDI ve yerine `estimated_revenue` ile
+ * `actual_revenue` geldi — tek bir "revenue" kolonu, tabloyu acan kisinin
+ * hangisine baktigini bilmemesi demekti.
+ *
+ * Olculemeyen deger BOS birakiliyor, `0` yazilmiyor: faturasi olmayan bir
+ * aracin marjina `0,00` yazmak "basa bas" demek olurdu.
+ */
 function downloadCostsCsv(data: VehicleCostsResponse) {
   const headers = [
     'plate_number',
@@ -39,10 +51,13 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
     'brand',
     'model',
     'service_cost',
+    'pending_service_cost',
     'fine_cost',
+    'disputed_fine_cost',
     'fuel_cost',
     'total_cost',
-    'revenue',
+    'estimated_revenue',
+    'actual_revenue',
     'margin',
     // Tutarlarin CINSI dosyada yaziyor: EUR varsayimi yok.
     'currency',
@@ -55,18 +70,65 @@ function downloadCostsCsv(data: VehicleCostsResponse) {
         row.internal_code,
         row.brand,
         row.model,
+        // Yalnizca ONAYLANMIS servis; bekleyen AYRI kolonda.
         row.service_cost.toFixed(2),
+        row.pending_service_cost.toFixed(2),
+        // Itiraz edilmis ceza toplamda DEGIL; kendi kolonunda.
         row.fine_cost.toFixed(2),
+        row.disputed_fine_cost.toFixed(2),
         // Yalnizca ONAYLANMIS yakit; export da ayni kurala uyuyor.
         row.fuel_cost.toFixed(2),
         row.total_cost.toFixed(2),
-        row.revenue.toFixed(2),
-        row.margin.toFixed(2),
+        row.estimated_revenue.toFixed(2),
+        row.actual_revenue === null ? '' : row.actual_revenue.toFixed(2),
+        row.margin === null ? '' : row.margin.toFixed(2),
         data.baseCurrency,
       ]
         .map((cell) => escapeCsvCell(String(cell)))
         .join(','),
     );
+  }
+
+  // Toplama GIRMEYEN tutarlar dosyanin sonunda ayri bir blokta: satirlara
+  // karistirmak, onlari maliyetmis gibi toplanabilir kilardi.
+  lines.push('');
+  lines.push('excluded_from_totals,amount,count,currency');
+  lines.push(
+    ['pending_service', data.excludedFromTotals.pendingService.amount, String(data.excludedFromTotals.pendingServiceCount), data.baseCurrency]
+      .map((cell) => escapeCsvCell(cell))
+      .join(','),
+  );
+  lines.push(
+    ['disputed_fines', data.excludedFromTotals.disputedFines.amount, String(data.excludedFromTotals.disputedFineCount), data.baseCurrency]
+      .map((cell) => escapeCsvCell(cell))
+      .join(','),
+  );
+  lines.push(
+    ['pending_fuel_receipts', '', String(data.excludedFromTotals.pendingReceiptCount), data.baseCurrency]
+      .map((cell) => escapeCsvCell(cell))
+      .join(','),
+  );
+  lines.push(
+    [
+      'actual_revenue_without_vehicle',
+      data.excludedFromTotals.actualRevenueWithoutVehicle.amount,
+      String(data.excludedFromTotals.actualRevenueWithoutVehicleCount),
+      data.baseCurrency,
+    ]
+      .map((cell) => escapeCsvCell(cell))
+      .join(','),
+  );
+
+  if (data.unconvertedByCurrency.length > 0) {
+    lines.push('');
+    lines.push('unconverted_currency,unconverted_amount,unconverted_entry_count');
+    for (const entry of data.unconvertedByCurrency) {
+      lines.push(
+        [entry.currency, entry.amount, String(entry.entryCount)]
+          .map((cell) => escapeCsvCell(cell))
+          .join(','),
+      );
+    }
   }
   const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -135,21 +197,43 @@ function CostsPageContent() {
     void load();
   }, [load]);
 
+  /**
+   * Ozet kartlari.
+   *
+   * `basis` alani KART BASINA sinifi tasiyor ve ekranda ROZET olarak
+   * yaziliyor: renk tek basina anlam tasimaz (renk korlugu, yazdirma, ekran
+   * okuyucu), bu yuzden "Tahmin" / "Gercek" metin olarak da duruyor.
+   *
+   * `value: null` = OLCULEMEDI. Sifir gostermek yerine acikca "bilinmiyor"
+   * yazmak, faturasi olmayan bir filoya "0 EUR ciro" demekten iyidir.
+   */
   const summaryCards = useMemo(() => {
     if (!data) return [];
     return [
-      { key: 'total', label: t('costs.summary.totalCost'), value: data.fleet.total_cost },
-      { key: 'service', label: t('costs.summary.serviceCost'), value: data.fleet.service_cost },
-      { key: 'fines', label: t('costs.summary.fineCost'), value: data.fleet.fine_cost },
+      { key: 'total', label: t('costs.summary.totalCost'), value: data.fleet.total_cost, basis: 'actual' as const },
+      { key: 'service', label: t('costs.summary.serviceCost'), value: data.fleet.service_cost, basis: 'actual' as const },
+      { key: 'fines', label: t('costs.summary.fineCost'), value: data.fleet.fine_cost, basis: 'actual' as const },
       // ONAYLANMIS yakit. Bekleyen fisler bu rakama DAHIL DEGIL — ayri
       // gosteriliyor ki "gorunmeyen ne var" sorusu cevapsiz kalmasin.
-      { key: 'fuel', label: t('costs.summary.fuelCost'), value: data.fleet.fuel_cost },
-      { key: 'revenue', label: t('costs.summary.revenue'), value: data.fleet.revenue },
-      { key: 'margin', label: t('costs.summary.margin'), value: data.fleet.margin },
+      { key: 'fuel', label: t('costs.summary.fuelCost'), value: data.fleet.fuel_cost, basis: 'actual' as const },
+      {
+        key: 'estimatedRevenue',
+        label: t('costs.summary.estimatedRevenue'),
+        value: data.fleet.estimated_revenue,
+        basis: 'estimated' as const,
+      },
+      {
+        key: 'actualRevenue',
+        label: t('costs.summary.actualRevenue'),
+        value: data.fleet.actual_revenue,
+        basis: 'actual' as const,
+      },
+      { key: 'margin', label: t('costs.summary.margin'), value: data.fleet.margin, basis: 'actual' as const },
       {
         key: 'avg',
         label: t('costs.summary.avgPerVehicle'),
         value: data.fleet.avg_cost_per_vehicle,
+        basis: 'actual' as const,
       },
     ];
   }, [data, t]);
@@ -235,6 +319,30 @@ function CostsPageContent() {
             {t('costs.periodInfo', { from: data.from, to: data.to })}
           </p>
 
+          {/* Onay bekleyen servis ve itiraz edilmis ceza TOPLAMA DAHIL DEGIL.
+              Tutarlariyla birlikte yaziliyorlar: "toplam eksik" oldugunu
+              gormek, eksik oldugunu bilmemekten iyidir. */}
+          {data.excludedFromTotals.pendingServiceCount > 0 ||
+          data.excludedFromTotals.disputedFineCount > 0 ? (
+            <p
+              className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+              data-testid="excluded-from-totals-note"
+            >
+              {t('costs.excludedFromTotalsNote', {
+                pendingAmount: formatFleetCurrency(
+                  Number(data.excludedFromTotals.pendingService.amount),
+                  data.baseCurrency,
+                ),
+                pendingCount: data.excludedFromTotals.pendingServiceCount,
+                disputedAmount: formatFleetCurrency(
+                  Number(data.excludedFromTotals.disputedFines.amount),
+                  data.baseCurrency,
+                ),
+                disputedCount: data.excludedFromTotals.disputedFineCount,
+              })}
+            </p>
+          ) : null}
+
           {/* Bekleyen fisler TOPLAMA DAHIL DEGIL; sayisi ayri duruyor. */}
           {data.fuel.pending_count > 0 ? (
             <p
@@ -271,15 +379,27 @@ function CostsPageContent() {
                 <CardContent>
                   <span
                     className={`text-xl font-semibold ${
-                      card.key === 'margin'
+                      card.key === 'margin' && card.value !== null
                         ? card.value >= 0
                           ? 'text-emerald-700'
                           : 'text-red-700'
                         : 'text-slate-900'
                     }`}
                   >
-                    {formatFleetCurrency(card.value, data.baseCurrency)}
+                    {card.value === null
+                      ? t('costs.unknownValue')
+                      : formatFleetCurrency(card.value, data.baseCurrency)}
                   </span>
+                  {/* Sinif METIN olarak da duruyor: renk tek basina anlam
+                      tasimaz. */}
+                  <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">
+                    {card.basis === 'estimated'
+                      ? t('costs.basis.estimated')
+                      : t('costs.basis.actual')}
+                  </p>
+                  {card.value === null ? (
+                    <p className="mt-1 text-xs text-slate-500">{t('costs.noActualRevenueHint')}</p>
+                  ) : null}
                 </CardContent>
               </Card>
             ))}
@@ -294,7 +414,12 @@ function CostsPageContent() {
                     <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.service')}</TableHead>
                     <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.fines')}</TableHead>
                     <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.totalCost')}</TableHead>
-                    <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.revenue')}</TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>
+                      {t('costs.table.estimatedRevenue')}
+                    </TableHead>
+                    <TableHead className={FLEET_TABLE_HEAD}>
+                      {t('costs.table.actualRevenue')}
+                    </TableHead>
                     <TableHead className={FLEET_TABLE_HEAD}>{t('costs.table.margin')}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -316,21 +441,59 @@ function CostsPageContent() {
                       <TableCell className={FLEET_TABLE_CELL}>
                         {formatFleetCurrency(row.service_cost, data.baseCurrency)}
                         <span className="ml-1 text-xs text-slate-400">({row.service_count})</span>
+                        {/* Onay bekleyen servis toplamda DEGIL — ama gizli de
+                            degil: tutari ve adediyle burada duruyor. */}
+                        {row.pending_service_count > 0 ? (
+                          <div className="text-xs text-amber-700">
+                            {t('costs.table.pendingServiceHint', {
+                              amount: formatFleetCurrency(
+                                row.pending_service_cost,
+                                data.baseCurrency,
+                              ),
+                              count: row.pending_service_count,
+                            })}
+                          </div>
+                        ) : null}
                       </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
                         {formatFleetCurrency(row.fine_cost, data.baseCurrency)}
                         <span className="ml-1 text-xs text-slate-400">({row.fine_count})</span>
+                        {row.disputed_fine_count > 0 ? (
+                          <div className="text-xs text-amber-700">
+                            {t('costs.table.disputedFineHint', {
+                              amount: formatFleetCurrency(
+                                row.disputed_fine_cost,
+                                data.baseCurrency,
+                              ),
+                              count: row.disputed_fine_count,
+                            })}
+                          </div>
+                        ) : null}
                       </TableCell>
                       <TableCell className={`${FLEET_TABLE_CELL} font-semibold`}>
                         {formatFleetCurrency(row.total_cost, data.baseCurrency)}
                       </TableCell>
-                      <TableCell className={FLEET_TABLE_CELL}>{formatFleetCurrency(row.revenue, data.baseCurrency)}</TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        {formatFleetCurrency(row.estimated_revenue, data.baseCurrency)}
+                      </TableCell>
+                      <TableCell className={FLEET_TABLE_CELL}>
+                        {/* Fatura yoksa `unknown` — sifir ya da tire DEGIL. */}
+                        {row.actual_revenue === null
+                          ? t('costs.unknownValue')
+                          : formatFleetCurrency(row.actual_revenue, data.baseCurrency)}
+                      </TableCell>
                       <TableCell
                         className={`${FLEET_TABLE_CELL} font-semibold ${
-                          row.margin >= 0 ? 'text-emerald-700' : 'text-red-700'
+                          row.margin === null
+                            ? 'text-slate-500'
+                            : row.margin >= 0
+                              ? 'text-emerald-700'
+                              : 'text-red-700'
                         }`}
                       >
-                        {formatFleetCurrency(row.margin, data.baseCurrency)}
+                        {row.margin === null
+                          ? t('costs.unknownValue')
+                          : formatFleetCurrency(row.margin, data.baseCurrency)}
                       </TableCell>
                     </TableRow>
                   ))}

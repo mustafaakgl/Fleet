@@ -3,8 +3,17 @@ import { describe, it } from 'node:test';
 import { BadRequestException } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { FleetTripStatus, FuelEntryWorkflowStatus, Prisma } from '@prisma/client';
+import {
+  FineStatus,
+  FleetTripStatus,
+  FuelEntryWorkflowStatus,
+  InvoiceKind,
+  OutgoingInvoiceStatus,
+  Prisma,
+  ServiceRecordApprovalStatus,
+} from '@prisma/client';
 import { ROLES_KEY } from '../common/decorators/roles.decorator';
+import { ActualRevenueService } from '../common/finance/actual-revenue.service';
 import { FINANCIAL_ROLES } from '../common/utils/permissions';
 import { TenantContext } from '../tenant/tenant-context';
 import { CostDashboardService } from './cost-dashboard.service';
@@ -30,8 +39,33 @@ interface Seed {
     /** Faz 9: bu fis ters kayda alindi mi. */
     reversed?: boolean;
   }>;
-  service?: Array<{ vehicleId: string; date: string; costAmount: number; currency?: string }>;
-  fines?: Array<{ vehicleId: string; violationAt: string; amount: number; currency?: string }>;
+  service?: Array<{
+    vehicleId: string;
+    date: string;
+    costAmount: number;
+    currency?: string;
+    /** Faz 18B: muhasebe onayi. Verilmezse ONAYLI sayilir (eski davranis). */
+    approvalStatus?: ServiceRecordApprovalStatus;
+  }>;
+  fines?: Array<{
+    vehicleId: string;
+    violationAt: string;
+    amount: number;
+    currency?: string;
+    /** Faz 18B: `widerspruch` gercek maliyete girmez. */
+    status?: FineStatus;
+  }>;
+  /** Faz 18B: GERCEK gelir — fatura satirlari. */
+  invoiceLines?: Array<{
+    vehicleId: string | null;
+    companyId?: string;
+    serviceDate: string | null;
+    invoiceDate?: string;
+    netCents: number;
+    currency?: string;
+    status?: OutgoingInvoiceStatus;
+    kind?: InvoiceKind;
+  }>;
   trips?: Array<{ vehicleId: string; startedAt: string; distanceKm: number | null; status?: FleetTripStatus }>;
   assignments?: Array<{
     vehicleId: string;
@@ -40,6 +74,27 @@ interface Seed {
     currency?: string;
   }>;
   baseCurrency?: string;
+}
+
+/** Fatura durumlarinin GERCEK gelire sayilan kumesi (spec kopyasi degil, ayni liste). */
+const ACTUAL_STATUSES: OutgoingInvoiceStatus[] = [
+  OutgoingInvoiceStatus.finalized,
+  OutgoingInvoiceStatus.sent,
+  OutgoingInvoiceStatus.partially_paid,
+  OutgoingInvoiceStatus.paid,
+  OutgoingInvoiceStatus.overdue,
+];
+
+/** Servisin gonderdigi `status` filtresini gercekten uygular. */
+function matchesFineStatus(
+  rowStatus: FineStatus | undefined,
+  where: unknown,
+): boolean {
+  const status = rowStatus ?? FineStatus.neu;
+  if (where && typeof where === 'object' && 'not' in (where as Record<string, unknown>)) {
+    return status !== (where as { not: FineStatus }).not;
+  }
+  return status === where;
 }
 
 function inRange(at: string, where: { gte?: Date; lt?: Date } | undefined): boolean {
@@ -109,9 +164,25 @@ function build(seed: Seed = {}) {
       },
     },
     serviceRecord: {
+      count: async (args: { where: Record<string, unknown> }) => {
+        count('service.count');
+        return (seed.service ?? []).filter(
+          (row) =>
+            (row.approvalStatus ?? ServiceRecordApprovalStatus.approved) ===
+            args.where.approvalStatus,
+        ).length;
+      },
       findMany: async (args: { where: Record<string, unknown> }) => {
         count('service.findMany');
         return (seed.service ?? [])
+          // Taklit, servisin GONDERDIGI onay filtresini uyguluyor — kendi
+          // kuralini uydurmuyor. Aksi halde "onaysiz servis toplama girmez"
+          // testi, servis filtreyi hic gondermese bile gecerdi.
+          .filter(
+            (row) =>
+              (row.approvalStatus ?? ServiceRecordApprovalStatus.approved) ===
+              args.where.approvalStatus,
+          )
           .filter((row) => inRange(row.date, args.where.date as never))
           .map((row) => ({
             vehicleId: row.vehicleId,
@@ -122,15 +193,46 @@ function build(seed: Seed = {}) {
       },
     },
     fine: {
+      count: async (args: { where: Record<string, unknown> }) => {
+        count('fine.count');
+        return (seed.fines ?? []).filter((row) => matchesFineStatus(row.status, args.where.status))
+          .length;
+      },
       findMany: async (args: { where: Record<string, unknown> }) => {
         count('fine.findMany');
         return (seed.fines ?? [])
+          // `status: { not: 'widerspruch' }` ve `status: 'widerspruch'`
+          // filtrelerinin IKISI de gercekten uygulaniyor.
+          .filter((row) => matchesFineStatus(row.status, args.where.status))
           .filter((row) => inRange(row.violationAt, args.where.violationAt as never))
           .map((row) => ({
             vehicleId: row.vehicleId,
             violationAt: new Date(row.violationAt),
             amount: d(row.amount),
             currency: row.currency ?? 'EUR',
+          }));
+      },
+    },
+    invoiceLine: {
+      findMany: async () => {
+        count('invoiceLine.findMany');
+        // Fatura durumu ve tarih araligi `ActualRevenueService`in
+        // `where`inde; taklit yalnizca satirlari veriyor ve filtreleme
+        // asagida ELLE uygulaniyor ki servis kuralini atlayamasin.
+        return (seed.invoiceLines ?? [])
+          .filter((row) =>
+            ACTUAL_STATUSES.includes(row.status ?? OutgoingInvoiceStatus.finalized),
+          )
+          .map((row) => ({
+            netCents: row.netCents,
+            serviceDate: row.serviceDate === null ? null : new Date(row.serviceDate),
+            assignment: row.vehicleId === null ? null : { vehicleId: row.vehicleId },
+            invoice: {
+              invoiceDate: new Date(row.invoiceDate ?? row.serviceDate ?? '2026-06-15T00:00:00Z'),
+              currency: row.currency ?? 'EUR',
+              companyId: row.companyId ?? 'c1',
+              kind: row.kind ?? InvoiceKind.invoice,
+            },
           }));
       },
     },
@@ -165,7 +267,10 @@ function build(seed: Seed = {}) {
     },
   };
 
-  const service = new CostDashboardService(prisma as never);
+  const service = new CostDashboardService(
+    prisma as never,
+    new ActualRevenueService(prisma as never),
+  );
 
   return {
     // Gercek istekte kiraci baglami HER ZAMAN var (TenantInterceptor kuruyor);
@@ -231,7 +336,7 @@ describe('cost dashboard — cost rules', () => {
     const result = await service.getCostDashboard(RANGE);
     assert.equal(result.composition.fuel, '100.00');
     assert.deepEqual(result.unconvertedByCurrency, [
-      { currency: 'TRY', fuelAmount: '5000.00', entryCount: 1 },
+      { currency: 'TRY', amount: '5000.00', entryCount: 1 },
     ]);
     assert.equal(result.dataQuality.excludedUnconvertedEntries, 1);
   });
@@ -439,7 +544,17 @@ describe('cost dashboard — ranking and performance', () => {
     // ARAC BASINA SORGU YOK: 50 araclik filo tek araclikla AYNI sayida sorgu
     // atmali. N+1 olsaydi buyuk filo 100+ sorgu uretirdi.
     assert.equal(large.queries.length, small.queries.length);
-    assert.ok(large.queries.length < 15, `beklenenden fazla sorgu: ${large.queries.length}`);
+    /**
+     * Ust sinir Faz 18B'de 15'ten 24'e cikti ve nedeni bilincli: toplama
+     * GIRMEYEN siniflar (onay bekleyen servis, ihtilafli ceza) ile gercek
+     * gelir AYRI sorgularla okunuyor. Tek sorguda okuyup bellekte ayirmak
+     * dort sorgu tasarruf ederdi ama filtreyi canonical `where`
+     * yardimcilarindan cikarirdi — ve bu fazin butun meselesi, kuralin TEK
+     * yerde ve atlanamaz olmasi.
+     *
+     * Sinir hala SABIT: filo buyudukce sorgu sayisi artmiyor.
+     */
+    assert.ok(large.queries.length <= 24, `beklenenden fazla sorgu: ${large.queries.length}`);
   });
 
   it('filters to a single vehicle when asked', async () => {
@@ -476,11 +591,18 @@ describe('cost dashboard — currency and revenue', () => {
     const result = await service.getCostDashboard(RANGE);
     assert.equal(result.composition.fuel, '5000.00');
     assert.deepEqual(result.unconvertedByCurrency, [
-      { currency: 'EUR', fuelAmount: '100.00', entryCount: 1 },
+      { currency: 'EUR', amount: '100.00', entryCount: 1 },
     ]);
   });
 
-  it('keeps the existing revenue and margin behaviour', async () => {
+  it('gorev tahmini TAHMINI GELIR alaninda kalir; marjda YER ALMAZ', async () => {
+    /**
+     * FAZ 18B'NIN ILK DUZELTMESI.
+     *
+     * `expectedDailyRevenue` bir plan rakami. Onceden `revenue` diye
+     * toplaniyor ve marj ondan hesaplaniyordu: faturasi olmayan bir arac
+     * "400 EUR kar etti" gorunuyordu.
+     */
     const { service } = build({
       fuel: [{ vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 }],
       assignments: [
@@ -489,9 +611,76 @@ describe('cost dashboard — currency and revenue', () => {
     });
 
     const result = await service.getCostDashboard(RANGE);
-    assert.equal(result.summary.revenue!.current, '500.00');
-    assert.equal(result.summary.margin!.current, '400.00');
-    assert.equal(result.vehicleRanking[0]!.margin, '400.00');
+    assert.equal(result.summary.estimatedRevenue!.current, '500.00');
+    // Fatura YOK: gercek gelir ve marj OLCULEMEDI — sifir degil, null.
+    assert.equal(result.summary.actualRevenue, null);
+    assert.equal(result.summary.margin, null);
+    assert.equal(result.vehicleRanking[0]!.margin, null);
+    assert.equal(result.vehicleRanking[0]!.estimatedRevenue, '500.00');
+    assert.equal(result.vehicleRanking[0]!.actualRevenue, null);
+    assert.ok(result.vehicleRanking[0]!.dataQuality.includes('no_actual_revenue'));
+  });
+
+  it('GERCEK gelir faturadan gelir ve marj ONDAN hesaplanir', async () => {
+    const { service } = build({
+      fuel: [{ vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 }],
+      assignments: [
+        { vehicleId: 'v1', workDate: '2026-06-10T00:00:00Z', expectedDailyRevenue: 500 },
+      ],
+      invoiceLines: [
+        { vehicleId: 'v1', serviceDate: '2026-06-10T00:00:00Z', netCents: 30_000 },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.summary.estimatedRevenue!.current, '500.00');
+    assert.equal(result.summary.actualRevenue!.current, '300.00');
+    // Marj 300 - 100; TAHMINDEKI 500 hicbir yere karismiyor.
+    assert.equal(result.summary.margin!.current, '200.00');
+    assert.equal(result.vehicleRanking[0]!.margin, '200.00');
+  });
+
+  it('TASLAK ve IPTAL fatura gercek gelire GIRMEZ; alacak dekontu DUSER', async () => {
+    const { service } = build({
+      invoiceLines: [
+        { vehicleId: 'v1', serviceDate: '2026-06-10T00:00:00Z', netCents: 100_000 },
+        {
+          vehicleId: 'v1',
+          serviceDate: '2026-06-11T00:00:00Z',
+          netCents: 900_000,
+          status: OutgoingInvoiceStatus.draft,
+        },
+        {
+          vehicleId: 'v1',
+          serviceDate: '2026-06-12T00:00:00Z',
+          netCents: 700_000,
+          status: OutgoingInvoiceStatus.cancelled,
+        },
+        {
+          vehicleId: 'v1',
+          serviceDate: '2026-06-13T00:00:00Z',
+          netCents: 20_000,
+          kind: InvoiceKind.credit_note,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    // 1.000 - 200 = 800. Taslak ve iptal hic sayilmadi.
+    assert.equal(result.summary.actualRevenue!.current, '800.00');
+  });
+
+  it('goreve baglanmayan fatura satiri FILO toplamina girer, ARACA yazilmaz', async () => {
+    const { service } = build({
+      invoiceLines: [
+        { vehicleId: null, serviceDate: '2026-06-10T00:00:00Z', netCents: 50_000 },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.summary.actualRevenue!.current, '500.00');
+    // Rastgele bir araca yazilsaydi o aracin marji bozulurdu.
+    assert.equal(result.vehicleRanking[0]!.actualRevenue, null);
   });
 
   it('TEMEL PARA BIRIMI DISINDAKI gelir toplama GIRMEZ', async () => {
@@ -515,8 +704,8 @@ describe('cost dashboard — currency and revenue', () => {
 
     const result = await service.getCostDashboard(RANGE);
     // 500 EUR; 45.000 TRY GIRMEDI.
-    assert.equal(result.summary.revenue!.current, '500.00');
-    assert.notEqual(result.summary.revenue!.current, '45500.00');
+    assert.equal(result.summary.estimatedRevenue!.current, '500.00');
+    assert.notEqual(result.summary.estimatedRevenue!.current, '45500.00');
 
     // SILINMEDI: ayri kirilimda duruyor.
     const bucket = result.unconvertedByCurrency.find((row) => row.currency === 'TRY');
@@ -532,7 +721,8 @@ describe('cost dashboard — currency and revenue', () => {
 
     const result = await service.getCostDashboard(RANGE);
     // Uydurma sifir gelir GOSTERILMIYOR.
-    assert.equal(result.summary.revenue, null);
+    assert.equal(result.summary.estimatedRevenue, null);
+    assert.equal(result.summary.actualRevenue, null);
     assert.equal(result.summary.margin, null);
   });
 });
@@ -619,7 +809,7 @@ describe('cost dashboard — ters kayit (Faz 9)', () => {
     assert.equal(result.composition.fuel, '100.00');
     // Geri alinan TRY fisi donusturulmemisler listesine de GIRMEZ.
     assert.deepEqual(result.unconvertedByCurrency, [
-      { currency: 'TRY', fuelAmount: '5000.00', entryCount: 1 },
+      { currency: 'TRY', amount: '5000.00', entryCount: 1 },
     ]);
   });
 
@@ -652,5 +842,198 @@ describe('cost dashboard — ters kayit (Faz 9)', () => {
     // Ters kayit iliskisi ayni `where` icinde cozuluyor; satir basina ikinci
     // bir sorgu atilsaydi bu sayi arac sayisiyla buyurdu.
     assert.equal(queries.filter((q) => q === 'fuel.findMany').length, 2);
+  });
+});
+
+describe('cost dashboard — tanima kurallari (Faz 18B)', () => {
+  it('YALNIZCA ONAYLI servis kaydi maliyete girer', async () => {
+    const { service } = build({
+      service: [
+        { vehicleId: 'v1', date: '2026-06-10T10:00:00Z', costAmount: 250 },
+        {
+          vehicleId: 'v1',
+          date: '2026-06-11T10:00:00Z',
+          costAmount: 900,
+          approvalStatus: ServiceRecordApprovalStatus.pending,
+        },
+        {
+          vehicleId: 'v1',
+          date: '2026-06-12T10:00:00Z',
+          costAmount: 700,
+          approvalStatus: ServiceRecordApprovalStatus.rejected,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.composition.service, '250.00');
+    assert.equal(result.summary.totalCost.current, '250.00');
+  });
+
+  it('onay bekleyen servis SILINMIYOR: tutariyla ayri raporlaniyor', async () => {
+    const { service } = build({
+      service: [
+        {
+          vehicleId: 'v1',
+          date: '2026-06-11T10:00:00Z',
+          costAmount: 900,
+          approvalStatus: ServiceRecordApprovalStatus.pending,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.summary.pendingServiceCost, '900.00');
+    assert.equal(result.summary.pendingServiceCount, 1);
+    assert.equal(result.excludedFromTotals.pendingService, '900.00');
+    // Toplamda YOK.
+    assert.equal(result.composition.total, '0.00');
+    assert.equal(result.vehicleRanking[0]!.pendingService, '900.00');
+  });
+
+  it('reddedilen servis HICBIR kovaya girmez', async () => {
+    const { service } = build({
+      service: [
+        {
+          vehicleId: 'v1',
+          date: '2026-06-11T10:00:00Z',
+          costAmount: 700,
+          approvalStatus: ServiceRecordApprovalStatus.rejected,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.composition.service, '0.00');
+    assert.equal(result.summary.pendingServiceCost, '0.00');
+    assert.equal(result.summary.pendingServiceCount, 0);
+  });
+
+  it('ITIRAZ EDILMIS ceza gercek maliyete girmez, ihtilafli olarak ayri durur', async () => {
+    const { service } = build({
+      fines: [
+        { vehicleId: 'v1', violationAt: '2026-06-10T10:00:00Z', amount: 60 },
+        {
+          vehicleId: 'v1',
+          violationAt: '2026-06-11T10:00:00Z',
+          amount: 320,
+          status: FineStatus.widerspruch,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.composition.fines, '60.00');
+    assert.equal(result.summary.totalCost.current, '60.00');
+    // Sifirlanmadi: itiraz kaybedilirse odenecek tutar GORUNUR kaliyor.
+    assert.equal(result.summary.disputedFineCost, '320.00');
+    assert.equal(result.summary.disputedFineCount, 1);
+    assert.equal(result.vehicleRanking[0]!.disputedFines, '320.00');
+  });
+
+  it('odenmis ve kapatilmis ceza maliyette KALIR', async () => {
+    const { service } = build({
+      fines: [
+        { vehicleId: 'v1', violationAt: '2026-06-10T10:00:00Z', amount: 60, status: FineStatus.bezahlt },
+        {
+          vehicleId: 'v1',
+          violationAt: '2026-06-11T10:00:00Z',
+          amount: 40,
+          status: FineStatus.abgeschlossen,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.composition.fines, '100.00');
+    assert.equal(result.summary.disputedFineCount, 0);
+  });
+
+  it('toplam yalnizca ONAYLI gerceklerden olusur — kategoriler toplami tutar', async () => {
+    const { service } = build({
+      fuel: [
+        { vehicleId: 'v1', enteredAt: '2026-06-10T10:00:00Z', totalCost: 100 },
+        {
+          vehicleId: 'v1',
+          enteredAt: '2026-06-11T10:00:00Z',
+          totalCost: 800,
+          workflowStatus: FuelEntryWorkflowStatus.submitted,
+        },
+      ],
+      service: [
+        { vehicleId: 'v1', date: '2026-06-15T10:00:00Z', costAmount: 250 },
+        {
+          vehicleId: 'v1',
+          date: '2026-06-16T10:00:00Z',
+          costAmount: 900,
+          approvalStatus: ServiceRecordApprovalStatus.pending,
+        },
+      ],
+      fines: [
+        { vehicleId: 'v1', violationAt: '2026-07-01T10:00:00Z', amount: 60 },
+        {
+          vehicleId: 'v1',
+          violationAt: '2026-07-02T10:00:00Z',
+          amount: 320,
+          status: FineStatus.widerspruch,
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.summary.totalCost.current, '410.00');
+    assert.equal(
+      Number(result.composition.total),
+      Number(result.composition.fuel) +
+        Number(result.composition.service) +
+        Number(result.composition.fines),
+    );
+    // Disarida kalanlar toplama EKLENMIYOR ama gorunuyorlar.
+    assert.equal(result.excludedFromTotals.pendingService, '900.00');
+    assert.equal(result.excludedFromTotals.disputedFines, '320.00');
+    assert.equal(result.excludedFromTotals.pendingReceiptCount, 1);
+  });
+
+  it('TEMEL PARA BIRIMI DISINDAKI servis ve ceza SESSIZCE dusmez', async () => {
+    /**
+     * Onceden `continue` ile atlaniyorlardi: toplam eksiliyor ama ekranda
+     * hicbir iz kalmiyordu.
+     */
+    const { service } = build({
+      service: [
+        { vehicleId: 'v1', date: '2026-06-10T10:00:00Z', costAmount: 250 },
+        { vehicleId: 'v1', date: '2026-06-11T10:00:00Z', costAmount: 9000, currency: 'TRY' },
+      ],
+      fines: [
+        { vehicleId: 'v1', violationAt: '2026-07-01T10:00:00Z', amount: 1200, currency: 'TRY' },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.composition.service, '250.00');
+    const bucket = result.unconvertedByCurrency.find((row) => row.currency === 'TRY');
+    assert.ok(bucket, 'TRY kaydi kirilimda yok');
+    assert.equal(bucket!.entryCount, 2);
+    assert.equal(bucket!.amount, '10200.00');
+  });
+
+  it('temel para birimi disindaki FATURA geliri de toplama girmez', async () => {
+    const { service } = build({
+      invoiceLines: [
+        { vehicleId: 'v1', serviceDate: '2026-06-10T00:00:00Z', netCents: 100_000 },
+        {
+          vehicleId: 'v1',
+          serviceDate: '2026-06-11T00:00:00Z',
+          netCents: 4_500_000,
+          currency: 'TRY',
+        },
+      ],
+    });
+
+    const result = await service.getCostDashboard(RANGE);
+    assert.equal(result.summary.actualRevenue!.current, '1000.00');
+    const bucket = result.unconvertedByCurrency.find((row) => row.currency === 'TRY');
+    assert.ok(bucket, 'TRY fatura kirilimda yok');
+    assert.equal(bucket!.entryCount, 1);
   });
 });

@@ -101,14 +101,25 @@ export function RevenueSummary() {
     };
   }, [assignments, drivers, monthKey]);
 
-  const todayRevenue = apiAnalytics?.todayRevenue ?? calculateDailyRevenue(getTodayDate());
+  /**
+   * BU EKRANIN TAMAMI TAHMINDIR ve artik bunu YAZIYOR (Faz 18B).
+   *
+   * Kaynak `Assignment.expectedDailyRevenue`; sirket/arac/surucu kirilimi de
+   * ayni alandan turuyor. Ekran "Umsatz" basligi altinda gerceklesen ciro
+   * gibi okunuyordu. Gerceklesen rakam ayri bir kartta, faturadan geliyor.
+   */
+  const todayEstimatedRevenue =
+    apiAnalytics?.todayEstimatedRevenue ?? calculateDailyRevenue(getTodayDate());
   const tomorrowForecast = calculateDailyRevenue(getTomorrowDate());
-  const monthlyRevenue =
-    apiAnalytics?.monthlyRevenue ?? calculateMonthlyRevenue(now.getMonth() + 1, now.getFullYear());
+  const monthlyEstimatedRevenue =
+    apiAnalytics?.monthlyEstimatedRevenue ??
+    calculateMonthlyRevenue(now.getMonth() + 1, now.getFullYear());
+  /** GERCEK ciro — yalnizca API'den gelir; yerel hesaptan TUREMEZ. */
+  const monthlyActualRevenue = apiAnalytics?.monthlyActualRevenue ?? null;
 
-  const revenueByCompany = (apiAnalytics?.revenueByCompany ?? []).map((row) => ({
+  const revenueByCompany = (apiAnalytics?.estimatedRevenueByCompany ?? []).map((row) => ({
     name: row.companyName,
-    amount: row.revenue,
+    amount: row.estimatedRevenue,
   }));
   const companyRows =
     revenueByCompany.length > 0 ? revenueByCompany : derived.revenueByCompany;
@@ -121,33 +132,71 @@ export function RevenueSummary() {
         {loading ? <p className="mt-1 text-xs text-slate-500">{t('common.loading')}</p> : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={t('revenue.today')} value={currency(todayRevenue)} tone="text-brand-primary" />
-        <MetricCard label={t('revenue.tomorrow')} value={currency(tomorrowForecast)} tone="text-brand-primary" />
-        <MetricCard label={t('revenue.monthly')} value={currency(monthlyRevenue)} tone="text-slate-900" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard
+          label={t('revenue.todayEstimated')}
+          value={currency(todayEstimatedRevenue)}
+          tone="text-brand-primary"
+          basis={t('revenue.basisEstimated')}
+        />
+        <MetricCard
+          label={t('revenue.tomorrow')}
+          value={currency(tomorrowForecast)}
+          tone="text-brand-primary"
+          basis={t('revenue.basisEstimated')}
+        />
+        <MetricCard
+          label={t('revenue.monthlyEstimated')}
+          value={currency(monthlyEstimatedRevenue)}
+          tone="text-slate-900"
+          basis={t('revenue.basisEstimated')}
+        />
+        {/* GERCEK ciro: faturadan. Tahminle AYNI KARTTA degil ve hicbir
+            yerde onunla toplanmiyor. */}
+        <MetricCard
+          label={t('revenue.monthlyActual')}
+          value={monthlyActualRevenue === null ? t('revenue.unknown') : currency(monthlyActualRevenue)}
+          tone="text-slate-900"
+          basis={t('revenue.basisActual')}
+        />
         <MetricCard
           label={t('revenue.lost')}
           value={currency(derived.lostRevenueThisMonth)}
           tone={derived.lostRevenueThisMonth > 0 ? 'text-red-700' : 'text-slate-900'}
+          basis={t('revenue.basisEstimated')}
         />
       </div>
 
       <WeeklyCompanyRevenue />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <RevenueTable title={t('revenue.byCompany')} rows={companyRows} />
-        <RevenueTable title={t('revenue.byVehicle')} rows={derived.revenueByVehicle} />
-        <RevenueTable title={t('revenue.byDriver')} rows={derived.revenueByDriver} />
+        {/* Uc kirilim da TAHMIN uzerinden: kaynak
+            `Assignment.expectedDailyRevenue`. Basliklar bunu yaziyor. */}
+        <RevenueTable title={t('revenue.byCompanyEstimated')} rows={companyRows} />
+        <RevenueTable title={t('revenue.byVehicleEstimated')} rows={derived.revenueByVehicle} />
+        <RevenueTable title={t('revenue.byDriverEstimated')} rows={derived.revenueByDriver} />
       </div>
     </div>
   );
 }
 
-function MetricCard({ label, value, tone }: { label: string; value: string; tone: string }) {
+function MetricCard({
+  label,
+  value,
+  tone,
+  basis,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+  /** Sinif ROZETI — renk tek basina anlam tasimaz, metin de olmali. */
+  basis?: string;
+}) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className={`mt-2 text-2xl font-bold ${tone}`}>{value}</p>
+      {basis ? <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">{basis}</p> : null}
     </div>
   );
 }

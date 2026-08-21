@@ -7,6 +7,7 @@ import {
   AutomationProposalStatus,
   AutomationRejectionCategory,
   Prisma,
+  ServiceRecordApprovalStatus,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -435,8 +436,24 @@ export class AutomationProposalService {
         return { claimed: 1, serviceRecordId: null as string | null };
       }
 
+      /**
+       * ONAY BURADA GERCEKTEN YASANIYOR (Faz 18B).
+       *
+       * `ServiceRecord.approvalStatus` varsayilani `pending`; bu satir onu
+       * `approved` yapan TEK yer ve nedeni acik: kaydi dogduran sey, bir
+       * insanin tutari, para birimini ve net/brut esasini tek tek dogrulayip
+       * oneriyi onaylamasi. Onaylayanin kimligi ve ani da yaziliyor —
+       * imzasiz bir onay, onay degildir.
+       *
+       * Elle acilan kayitlar bu kapidan GECMIYOR ve `pending` kaliyor.
+       */
       const record = await tx.serviceRecord.create({
-        data: finalization.data,
+        data: {
+          ...finalization.data,
+          approvalStatus: ServiceRecordApprovalStatus.approved,
+          reviewedById: userId,
+          reviewedAt: now,
+        },
         select: { id: true },
       });
 

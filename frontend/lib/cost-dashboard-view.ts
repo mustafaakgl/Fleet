@@ -221,6 +221,33 @@ export function buildInsights(data: CostDashboardResponse | null): CostInsight[]
     });
   }
 
+  /**
+   * Toplama girmeyen tutarlar da BIR ICGORU.
+   *
+   * "Toplam maliyet 12.400 EUR" cumlesi, 3.100 EUR'luk onaylanmamis servis
+   * kaydi varken yaniltici. Rakami gizlemeden sebebini yaziyoruz.
+   */
+  if (data.summary.pendingServiceCount > 0) {
+    insights.push({
+      key: 'pendingService',
+      params: {
+        count: data.summary.pendingServiceCount,
+        amount: data.summary.pendingServiceCost,
+        currency: data.baseCurrency,
+      },
+    });
+  }
+  if (data.summary.disputedFineCount > 0) {
+    insights.push({
+      key: 'disputedFines',
+      params: {
+        count: data.summary.disputedFineCount,
+        amount: data.summary.disputedFineCost,
+        currency: data.baseCurrency,
+      },
+    });
+  }
+
   // Eksik veri GIZLENMIYOR.
   if (data.dataQuality.vehiclesWithoutDistance > 0) {
     insights.push({
@@ -371,16 +398,30 @@ export function escapeCsvCell(value: string): string {
  * Donusturulmemis kayitlar AYRI ve etiketli bir bolumde: base toplamin
  * icine karistirilmiyor.
  */
+/**
+ * CSV EKRANLA AYNI KURALLARI KULLANIR.
+ *
+ * Kolon adlari sinifi TASIYOR: `service` yalnizca onayli servis,
+ * `pending_service` onay bekleyen, `disputed_fines` itiraz edilmis ceza.
+ * Tek bir `revenue` kolonu KALDIRILDI — dosyayi acan kisinin tahmine mi
+ * gercege mi baktigini bilmemesi demekti.
+ *
+ * Olculemeyen deger BOS: `0` yazmak "sifir gelir" ile "gelir bilinmiyor"u
+ * ayni gostermek olurdu.
+ */
 export function buildCostDashboardCsv(data: CostDashboardResponse): string {
   const header = [
     'plate_number',
     'distance_km',
     'fuel',
     'service',
+    'pending_service',
     'fines',
+    'disputed_fines',
     'total',
     'cost_per_km',
-    'revenue',
+    'estimated_revenue',
+    'actual_revenue',
     'margin',
     'change_percent',
     'data_quality',
@@ -395,11 +436,14 @@ export function buildCostDashboardCsv(data: CostDashboardResponse): string {
         row.distanceKm ?? '',
         row.fuel,
         row.service,
+        row.pendingService,
         row.fines,
+        row.disputedFines,
         row.total,
         // Mesafe yoksa BOS — `0` yazmak "bedava" demek olurdu.
         row.costPerKm ?? '',
-        row.revenue ?? '',
+        row.estimatedRevenue ?? '',
+        row.actualRevenue ?? '',
         row.margin ?? '',
         row.changePercent ?? '',
         row.dataQuality.join('|'),
@@ -410,12 +454,47 @@ export function buildCostDashboardCsv(data: CostDashboardResponse): string {
     );
   }
 
+  // Toplama GIRMEYEN tutarlar ayri blokta: satirlara karistirmak, onlari
+  // maliyetmis gibi toplanabilir kilardi.
+  lines.push('');
+  lines.push('excluded_from_totals,amount,count,currency');
+  lines.push(
+    [
+      'pending_service',
+      data.excludedFromTotals.pendingService,
+      String(data.excludedFromTotals.pendingServiceCount),
+      data.baseCurrency,
+    ]
+      .map((cell) => escapeCsvCell(cell))
+      .join(','),
+  );
+  lines.push(
+    [
+      'disputed_fines',
+      data.excludedFromTotals.disputedFines,
+      String(data.excludedFromTotals.disputedFineCount),
+      data.baseCurrency,
+    ]
+      .map((cell) => escapeCsvCell(cell))
+      .join(','),
+  );
+  lines.push(
+    [
+      'pending_fuel_receipts',
+      '',
+      String(data.excludedFromTotals.pendingReceiptCount),
+      data.baseCurrency,
+    ]
+      .map((cell) => escapeCsvCell(cell))
+      .join(','),
+  );
+
   if (data.unconvertedByCurrency.length > 0) {
     lines.push('');
-    lines.push('unconverted_currency,unconverted_fuel_amount,unconverted_entry_count');
+    lines.push('unconverted_currency,unconverted_amount,unconverted_entry_count');
     for (const entry of data.unconvertedByCurrency) {
       lines.push(
-        [entry.currency, entry.fuelAmount, String(entry.entryCount)]
+        [entry.currency, entry.amount, String(entry.entryCount)]
           .map((cell) => escapeCsvCell(cell))
           .join(','),
       );

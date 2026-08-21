@@ -29,17 +29,62 @@ export const AUTOMATION_ROLES: UserRole[] = ['admin', 'boss'];
 export const ADMIN_ONLY_ROLES: UserRole[] = ['admin'];
 export const CSV_IMPORT_ROLES: UserRole[] = ['admin', 'office'];
 
+/**
+ * Office'ten GIZLENEN alan adlari.
+ *
+ * Maskeleme ISTEMCIDE DEGIL SUNUCUDA: alan office'e hic gonderilmiyor.
+ * Listeye Faz 18B'de eklenen adlar, tahmin/gerceklesen ayrimiyla dogan YENI
+ * alanlar. Yeni bir parasal alan eklendiginde buraya YAZILMAZSA office o
+ * tutari gorur — ve bunu kimse fark etmez, cunku eksik maskeleme hata
+ * vermez. `permissions.spec.ts` bu yuzden alan adlarini tek tek sinar.
+ */
 const SENSITIVE_FINANCIAL_KEYS = new Set([
   'revenueAnalytics',
   'chartAnalytics',
+  'costAnalytics',
   'dailyRevenue',
   'monthlyRevenue',
   'todayRevenue',
   'weeklyRevenue',
-  'monthlyRevenue',
   'revenueByCompany',
   'revenue',
   'expectedRevenue',
+  // --- Faz 18B: tahmin / gerceklesen ayrimi ---
+  'estimatedRevenue',
+  'estimated_revenue',
+  'actualRevenue',
+  'actual_revenue',
+  'dailyEstimatedRevenue',
+  'monthlyEstimatedRevenue',
+  'dailyActualRevenue',
+  'monthlyActualRevenue',
+  'todayEstimatedRevenue',
+  'weeklyEstimatedRevenue',
+  'monthlyEstimatedRevenue',
+  'todayActualRevenue',
+  'weeklyActualRevenue',
+  'monthlyActualRevenue',
+  'lastWeekSameDayEstimatedRevenue',
+  'prevMonthToDateEstimatedRevenue',
+  'estimatedRevenueByCompany',
+  'totalEstimatedRevenue',
+  'totalActualRevenue',
+  // --- Faz 18B: toplama girmeyen gercek tutarlar ---
+  'excludedFromTotals',
+  'pendingService',
+  'pendingServiceCost',
+  'pending_service_cost',
+  'disputedFines',
+  'disputedFineCost',
+  'disputed_fine_cost',
+  'unconvertedByCurrency',
+  // --- gider ve marj ---
+  'margin',
+  'totalCost',
+  'total_cost',
+  'fineCost',
+  'fine_cost',
+  'composition',
   'amount',
   'defaultDailyRevenue',
   'default_daily_revenue',

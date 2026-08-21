@@ -1,11 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ServiceRecord } from '@prisma/client';
+import { Prisma, ServiceRecord, ServiceRecordApprovalStatus } from '@prisma/client';
 import { safeAuditLog } from '../audit/audit-helper';
 import { AuditService } from '../audit/audit.service';
+import { serviceRecordRecognition } from '../common/finance/recognition';
 import { parseCsv, pickField } from '../import/csv.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantCurrencyService } from '../common/utils/tenant-currency.service';
 import { CreateServiceRecordDto } from './dto/create-service-record.dto';
+import {
+  MIN_SERVICE_REJECTION_REASON,
+  ReviewServiceRecordDto,
+} from './dto/review-service-record.dto';
 import { UpdateServiceRecordDto } from './dto/update-service-record.dto';
 
 type ImportError = { row: number; message: string };
@@ -18,6 +23,7 @@ export type ServiceRecordImportResult = {
 type ServiceRecordWithRelations = ServiceRecord & {
   vehicle: { id: string; plateNumber: string };
   driver: { id: string; firstName: string; lastName: string } | null;
+  reviewedBy: { id: string; fullName: string } | null;
 };
 
 function toClient(row: ServiceRecordWithRelations) {
@@ -33,8 +39,20 @@ function toClient(row: ServiceRecordWithRelations) {
     vendor: row.vendor ?? undefined,
     repair_company: row.repairCompany,
     cost_amount: Number(row.costAmount.toString()),
+    currency: row.currency,
     mileage_km: row.mileageKm ?? null,
     notes: row.notes ?? undefined,
+    /**
+     * Muhasebe onayi (Faz 18B). `recognition_class` TURETILMIS: istemci
+     * "bu tutar toplama giriyor mu" sorusunu durum adlarindan yeniden
+     * cikarmiyor — sunucuyla ayni fonksiyondan okuyor.
+     */
+    approval_status: row.approvalStatus,
+    recognition_class: serviceRecordRecognition(row.approvalStatus),
+    reviewed_at: row.reviewedAt ? row.reviewedAt.toISOString() : null,
+    reviewed_by: row.reviewedBy?.fullName ?? null,
+    accounting_note: row.accountingNote ?? null,
+    rejection_reason: row.rejectionReason ?? null,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -43,6 +61,7 @@ function toClient(row: ServiceRecordWithRelations) {
 const recordInclude = {
   vehicle: { select: { id: true, plateNumber: true } },
   driver: { select: { id: true, firstName: true, lastName: true } },
+  reviewedBy: { select: { id: true, fullName: true } },
 } satisfies Prisma.ServiceRecordInclude;
 
 @Injectable()
@@ -53,10 +72,25 @@ export class ServiceRecordsService {
     private readonly tenantCurrency: TenantCurrencyService,
   ) {}
 
-  async list(query: { vehicle_id?: string; from?: string; to?: string; repair_company?: string }) {
+  async list(query: {
+    vehicle_id?: string;
+    from?: string;
+    to?: string;
+    repair_company?: string;
+    approval_status?: string;
+  }) {
     const where: Prisma.ServiceRecordWhereInput = {};
     if (query.vehicle_id) where.vehicleId = query.vehicle_id;
     if (query.repair_company) where.repairCompany = query.repair_company;
+    if (query.approval_status) {
+      // Bilinmeyen durum SESSIZCE YOK SAYILMIYOR: yanlis yazilmis bir filtre,
+      // filtresiz bir liste dondurup "hepsi onayli" izlenimi verirdi.
+      const parsed = query.approval_status as ServiceRecordApprovalStatus;
+      if (!Object.values(ServiceRecordApprovalStatus).includes(parsed)) {
+        throw new BadRequestException({ code: 'service_record_approval_status_invalid' });
+      }
+      where.approvalStatus = parsed;
+    }
     if (query.from || query.to) {
       const dateFilter: Prisma.DateTimeFilter = {};
       if (query.from) {
@@ -356,6 +390,60 @@ export class ServiceRecordsService {
       entityId: id,
       summary: 'Service record updated',
     });
+    return toClient(record);
+  }
+
+  /**
+   * MUHASEBE ONAYI / REDDI (Faz 18B).
+   *
+   * Onay AYRI BIR MALIYET SATIRI URETMIYOR: durum bu kaydin uzerinde duruyor
+   * ve maliyet sorgusu dogrudan onu filtreliyor — yakit fisindeki desenin
+   * aynisi. Ikinci bir "onaylanmis gider" tablosu, hangi satirin gercek
+   * oldugunu belirsiz birakirdi.
+   *
+   * KAYIT SILINMIYOR: reddedilen bir servis kaydi maliyetten cikar ama
+   * gecmiste durur. Silmek, "muhasebe neyi reddetti" sorusunun cevabini yok
+   * ederdi.
+   */
+  async review(id: string, dto: ReviewServiceRecordDto, actorUserId?: string) {
+    const before = await this.prisma.serviceRecord.findUnique({
+      where: { id },
+      select: { id: true, approvalStatus: true },
+    });
+    if (!before) throw new NotFoundException('Service record not found');
+
+    const reason = dto.reason?.trim() ?? '';
+    if (dto.decision === 'reject' && reason.length < MIN_SERVICE_REJECTION_REASON) {
+      // Ret nedeni ZORUNLU: kaydi giren kisi neyi duzeltecegini gormeli.
+      throw new BadRequestException({ code: 'service_record_rejection_reason_required' });
+    }
+
+    const approve = dto.decision === 'approve';
+    const record = await this.prisma.serviceRecord.update({
+      where: { id },
+      data: {
+        approvalStatus: approve
+          ? ServiceRecordApprovalStatus.approved
+          : ServiceRecordApprovalStatus.rejected,
+        reviewedById: actorUserId ?? null,
+        reviewedAt: new Date(),
+        accountingNote: dto.note?.trim() || null,
+        // Ret nedeni onayda TEMIZLENMIYOR: daha once neden reddedildigi,
+        // sonradan onaylansa bile okunabilir kalmali.
+        ...(approve ? {} : { rejectionReason: reason }),
+      },
+      include: recordInclude,
+    });
+
+    await safeAuditLog(this.auditService, {
+      actorUserId,
+      action: approve ? 'service_record.approved' : 'service_record.rejected',
+      entityType: 'service_record',
+      entityId: id,
+      summary: approve ? 'Service record approved' : 'Service record rejected',
+      metadata: { from_status: before.approvalStatus, to_status: record.approvalStatus },
+    });
+
     return toClient(record);
   }
 

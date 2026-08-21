@@ -28,6 +28,7 @@ import type {
   LeaveRequest,
   MorningCheckin,
   ServiceRecord,
+  ServiceRecordApprovalStatus,
   Reminder,
   Notification,
   Document,
@@ -1754,6 +1755,7 @@ export interface ServiceRecordListParams {
   from?: string;
   to?: string;
   repair_company?: string;
+  approval_status?: ServiceRecordApprovalStatus;
 }
 
 export const serviceRecordsApi = {
@@ -1795,6 +1797,15 @@ export const serviceRecordsApi = {
       >
     > & { vehicle_id?: string },
   ) => api.patch<ServiceRecord>(`/service-records/${id}`, data).then((r) => r.data),
+
+  /**
+   * Muhasebe onayi / reddi (Faz 18B).
+   *
+   * Ret icin `reason` ZORUNLU ve sunucu da bunu dogruluyor: iki tarafta da
+   * kontrol var cunku istemci kontrolu atlanabilir.
+   */
+  review: (id: string, body: { decision: 'approve' | 'reject'; reason?: string; note?: string }) =>
+    api.post<ServiceRecord>(`/service-records/${id}/review`, body).then((r) => r.data),
 
   remove: (id: string) =>
     api.delete<{ id: string; deleted: boolean }>(`/service-records/${id}`).then((r) => r.data),

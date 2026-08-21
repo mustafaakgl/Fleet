@@ -407,11 +407,19 @@ function tieBreak(left: RankableVehicle, right: RankableVehicle): number {
   return byPlate !== 0 ? byPlate : left.vehicleId.localeCompare(right.vehicleId);
 }
 
-/** Aracin verisindeki eksiklikler — arayuz bunu isaretliyor. */
+/**
+ * Aracin verisindeki eksiklikler — arayuz bunu isaretliyor.
+ *
+ * `no_revenue` bayragi IKIYE AYRILDI (Faz 18B): "gelir yok" tek basina
+ * anlamsizdi, cunku gorev tahmini ile kesilmis fatura ayni bayraga
+ * dusuyordu. Tahmini olan ama faturasi olmayan bir arac "gelirli" gorunuyor
+ * ve marji tahmin uzerinden hesaplaniyordu.
+ */
 export function dataQualityFlags(input: {
   distanceKm: Prisma.Decimal | null;
   total: Prisma.Decimal;
-  hasRevenue: boolean;
+  hasEstimatedRevenue: boolean;
+  hasActualRevenue: boolean;
 }): string[] {
   const flags: string[] = [];
   if (input.distanceKm === null || input.distanceKm.lessThanOrEqualTo(0)) {
@@ -420,8 +428,12 @@ export function dataQualityFlags(input: {
   if (input.total.isZero()) {
     flags.push('no_costs');
   }
-  if (!input.hasRevenue) {
-    flags.push('no_revenue');
+  if (!input.hasEstimatedRevenue) {
+    flags.push('no_estimated_revenue');
+  }
+  if (!input.hasActualRevenue) {
+    // Marj bu araclarda hesaplanMIYOR — bayrak, bos marj hucresinin NEDENI.
+    flags.push('no_actual_revenue');
   }
   return flags;
 }

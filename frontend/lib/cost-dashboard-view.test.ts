@@ -40,15 +40,20 @@ function response(overrides: Partial<CostDashboardResponse> = {}): CostDashboard
       costPerKm: metric('0.5000', '0.4000', '25.0'),
       distanceKm: metric('2400.000', '2500.000', '-4.0'),
       pendingReceiptCount: 2,
+      pendingServiceCost: '0.00',
+      pendingServiceCount: 0,
+      disputedFineCost: '0.00',
+      disputedFineCount: 0,
     },
     monthlySeries: [
-      { bucket: '2026-05', label: '2026-05', fuel: '0.00', service: '0.00', fines: '0.00', total: '0.00', revenue: null, distanceKm: null, costPerKm: null },
-      { bucket: '2026-06', label: '2026-06', fuel: '700.00', service: '400.00', fines: '100.00', total: '1200.00', revenue: '5000.00', distanceKm: '2400.000', costPerKm: '0.5000' },
+      { bucket: '2026-05', label: '2026-05', fuel: '0.00', service: '0.00', fines: '0.00', total: '0.00', pendingService: '0.00', disputedFines: '0.00', estimatedRevenue: null, actualRevenue: null, distanceKm: null, costPerKm: null },
+      { bucket: '2026-06', label: '2026-06', fuel: '700.00', service: '400.00', fines: '100.00', total: '1200.00', pendingService: '0.00', disputedFines: '0.00', estimatedRevenue: '5000.00', actualRevenue: '4200.00', distanceKm: '2400.000', costPerKm: '0.5000' },
     ],
     composition: { fuel: '700.00', service: '400.00', fines: '100.00', total: '1200.00' },
+    excludedFromTotals: { pendingService: '0.00', pendingServiceCount: 0, disputedFines: '0.00', disputedFineCount: 0, pendingReceiptCount: 2 },
     vehicleRanking: [
-      { vehicleId: 'v1', plateNumber: 'AA-1', displayName: 'MAN TGX', fuel: '700.00', service: '300.00', fines: '0.00', total: '1000.00', revenue: '4000.00', margin: '3000.00', distanceKm: '2000.000', costPerKm: '0.5000', previousTotal: '800.00', changePercent: '25.0', dataQuality: [] },
-      { vehicleId: 'v2', plateNumber: 'BB-2', displayName: null, fuel: '0.00', service: '100.00', fines: '100.00', total: '200.00', revenue: null, margin: null, distanceKm: null, costPerKm: null, previousTotal: '0.00', changePercent: null, dataQuality: ['no_distance'] },
+      { vehicleId: 'v1', plateNumber: 'AA-1', displayName: 'MAN TGX', fuel: '700.00', service: '300.00', fines: '0.00', total: '1000.00', pendingService: '0.00', disputedFines: '0.00', estimatedRevenue: '4000.00', actualRevenue: '4000.00', margin: '3000.00', distanceKm: '2000.000', costPerKm: '0.5000', previousTotal: '800.00', changePercent: '25.0', dataQuality: [] },
+      { vehicleId: 'v2', plateNumber: 'BB-2', displayName: null, fuel: '0.00', service: '100.00', fines: '100.00', total: '200.00', pendingService: '0.00', disputedFines: '0.00', estimatedRevenue: null, actualRevenue: null, margin: null, distanceKm: null, costPerKm: null, previousTotal: '0.00', changePercent: null, dataQuality: ['no_distance', 'no_actual_revenue'] },
     ],
     pagination: { page: 1, pageSize: 10, total: 2, totalPages: 1 },
     unconvertedByCurrency: [],
@@ -214,8 +219,8 @@ describe('error mapping', () => {
 
 describe('trend serisi', () => {
   const series = [
-    { bucket: '2026-07', label: '2026-07', fuel: '100.00', service: '50.00', fines: '10.00', total: '160.00', revenue: '900.00', distanceKm: '2000', costPerKm: '0.080' },
-    { bucket: '2026-08', label: '2026-08', fuel: '120.00', service: '0.00', fines: '0.00', total: '120.00', revenue: null, distanceKm: null, costPerKm: null },
+    { bucket: '2026-07', label: '2026-07', fuel: '100.00', service: '50.00', fines: '10.00', total: '160.00', pendingService: '0.00', disputedFines: '0.00', estimatedRevenue: '900.00', actualRevenue: '800.00', distanceKm: '2000', costPerKm: '0.080' },
+    { bucket: '2026-08', label: '2026-08', fuel: '120.00', service: '0.00', fines: '0.00', total: '120.00', pendingService: '0.00', disputedFines: '0.00', estimatedRevenue: null, actualRevenue: null, distanceKm: null, costPerKm: null },
   ];
 
   it('secilen olcutun degerlerini dondurur', () => {
@@ -311,7 +316,10 @@ describe('CSV disa aktarimi', () => {
             service: '0.00',
             fines: '0.00',
             total: '10.00',
-            revenue: null,
+            pendingService: '0.00',
+            disputedFines: '0.00',
+            estimatedRevenue: null,
+            actualRevenue: null,
             margin: null,
             distanceKm: null,
             costPerKm: null,
@@ -322,14 +330,15 @@ describe('CSV disa aktarimi', () => {
         ],
       }),
     );
+    const header = csv.split('\n')[0].split(',');
     const row = csv.split('\n')[1].split(',');
     // `0` yazmak "kilometresi bedava" demek olurdu.
-    expect(row[6]).toBe('');
+    expect(row[header.indexOf('cost_per_km')]).toBe('');
   });
 
   it('donusturulmemis tutarlari AYRI bir bolumde listeler', () => {
     const csv = buildCostDashboardCsv(
-      response({ unconvertedByCurrency: [{ currency: 'TRY', fuelAmount: '4200.00', entryCount: 2 }] }),
+      response({ unconvertedByCurrency: [{ currency: 'TRY', amount: '4200.00', entryCount: 2 }] }),
     );
     expect(csv).toContain('unconverted_currency');
     expect(csv).toContain('TRY');
@@ -341,5 +350,96 @@ describe('CSV disa aktarimi', () => {
 
   it('dosya adi secili donemi tasir', () => {
     expect(costDashboardCsvName(response())).toMatch(/^fahrzeugkosten-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/);
+  });
+});
+
+describe('Faz 18B — CSV ekranla ayni kurallari kullanir', () => {
+  const header = (csv: string) => csv.split('\n')[0].split(',');
+  const cell = (csv: string, column: string, line = 1) =>
+    csv.split('\n')[line].split(',')[header(csv).indexOf(column)];
+
+  it('TEK bir "revenue" sutunu YOKTUR; tahmin ve gercek AYRI', () => {
+    // Tek sutun, dosyayi acan kisinin hangisine baktigini bilmemesi demekti.
+    const csv = buildCostDashboardCsv(response());
+    expect(header(csv)).not.toContain('revenue');
+    expect(header(csv)).toContain('estimated_revenue');
+    expect(header(csv)).toContain('actual_revenue');
+    expect(cell(csv, 'estimated_revenue')).toBe('4000.00');
+    expect(cell(csv, 'actual_revenue')).toBe('4000.00');
+  });
+
+  it('onay bekleyen servis ve ihtilafli ceza AYRI sutunlarda', () => {
+    const csv = buildCostDashboardCsv(
+      response({
+        vehicleRanking: [
+          {
+            vehicleId: 'v1',
+            plateNumber: 'AA-1',
+            displayName: null,
+            fuel: '100.00',
+            service: '250.00',
+            fines: '60.00',
+            total: '410.00',
+            pendingService: '900.00',
+            disputedFines: '320.00',
+            estimatedRevenue: null,
+            actualRevenue: null,
+            margin: null,
+            distanceKm: '100.000',
+            costPerKm: '4.1000',
+            previousTotal: '0.00',
+            changePercent: null,
+            dataQuality: ['no_actual_revenue'],
+          },
+        ],
+      }),
+    );
+    expect(cell(csv, 'pending_service')).toBe('900.00');
+    expect(cell(csv, 'disputed_fines')).toBe('320.00');
+    // Toplam onlari ICERMIYOR: 100 + 250 + 60.
+    expect(cell(csv, 'total')).toBe('410.00');
+  });
+
+  it('olculemeyen gelir ve marj BOS kalir, sifir yazilmaz', () => {
+    const csv = buildCostDashboardCsv(response());
+    // Ikinci arac (v2) faturasiz.
+    expect(cell(csv, 'actual_revenue', 2)).toBe('');
+    expect(cell(csv, 'margin', 2)).toBe('');
+  });
+
+  it('toplama girmeyen tutarlari AYRI bir blokta yazar', () => {
+    const csv = buildCostDashboardCsv(
+      response({
+        excludedFromTotals: {
+          pendingService: '900.00',
+          pendingServiceCount: 2,
+          disputedFines: '320.00',
+          disputedFineCount: 1,
+          pendingReceiptCount: 3,
+        },
+      }),
+    );
+    expect(csv).toContain('excluded_from_totals,amount,count,currency');
+    expect(csv).toContain('pending_service,900.00,2,EUR');
+    expect(csv).toContain('disputed_fines,320.00,1,EUR');
+    // Satirlara karistirilsaydi maliyetmis gibi toplanabilirdi.
+    expect(csv.split('\n').indexOf('excluded_from_totals,amount,count,currency')).toBeGreaterThan(2);
+  });
+
+  it('bekleyen servis ve ihtilafli ceza ICGORU olarak yazilir', () => {
+    const insights = buildInsights(
+      response({
+        summary: {
+          ...response().summary,
+          pendingServiceCost: '900.00',
+          pendingServiceCount: 2,
+          disputedFineCost: '320.00',
+          disputedFineCount: 1,
+        },
+      }),
+    );
+    expect(insights.map((item) => item.key)).toEqual(
+      expect.arrayContaining(['pendingService', 'disputedFines']),
+    );
   });
 });

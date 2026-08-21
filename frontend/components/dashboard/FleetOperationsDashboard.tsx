@@ -332,14 +332,25 @@ export function FleetOperationsDashboard() {
     const lang = i18n.language;
 
     const vehiclesTrend = buildTrend(k.vehiclesInUse, k.vehiclesInUseLastWeek, 'dashboard.v2.trend.vsLastWeek');
+    /**
+     * KPI KARTLARI GERCEK CIROYU gosteriyor (Faz 18B).
+     *
+     * Onceden `todayRevenue`/`monthlyRevenue` okunuyordu ve o alanlar gorev
+     * TAHMINIYDI — pano, faturasi kesilmemis planlanan tutari "ciro" diye
+     * gosteriyordu. Tahmin alt satirda AYRI ve etiketli duruyor; iki rakam
+     * hicbir yerde toplanmiyor.
+     *
+     * Trend karsilastirmasi tahmine dayaniyor cunku gecmis donem icin
+     * sadece o var; karti okuyan kisi bunu alt satirdaki etiketten goruyor.
+     */
     const todayRevTrend = buildTrend(
-      rev?.todayRevenue ?? 0,
-      rev?.lastWeekSameDayRevenue,
+      rev?.todayEstimatedRevenue ?? 0,
+      rev?.lastWeekSameDayEstimatedRevenue,
       'dashboard.v2.trend.vsLastWeek',
     );
     const monthRevTrend = buildTrend(
-      rev?.monthlyRevenue ?? 0,
-      rev?.prevMonthToDateRevenue,
+      rev?.monthlyEstimatedRevenue ?? 0,
+      rev?.prevMonthToDateEstimatedRevenue,
       'dashboard.v2.trend.vsPrevMonth',
     );
 
@@ -402,19 +413,23 @@ export function FleetOperationsDashboard() {
       },
       {
         id: 'rev-today',
-        label: t('dashboard.v2.kpi.revenueToday'),
-        value: currency(rev?.todayRevenue ?? 0, lang),
-        sub: t('dashboard.v2.kpi.weekRevenue', { amount: currency(rev?.weeklyRevenue ?? 0, lang) }),
+        label: t('dashboard.v2.kpi.actualRevenueToday'),
+        value: currency(rev?.todayActualRevenue ?? 0, lang),
+        sub: t('dashboard.v2.kpi.estimatedToday', {
+          amount: currency(rev?.todayEstimatedRevenue ?? 0, lang),
+        }),
         subTone: 'neutral' as const,
         accent: 'neutral' as const,
         trend: todayRevTrend,
       },
       {
         id: 'rev-month',
-        label: t('dashboard.v2.kpi.revenueMonth'),
-        value: currency(rev?.monthlyRevenue ?? 0, lang),
-        sub: t('dashboard.v2.kpi.monthRunning'),
-        subTone: 'gut' as const,
+        label: t('dashboard.v2.kpi.actualRevenueMonth'),
+        value: currency(rev?.monthlyActualRevenue ?? 0, lang),
+        sub: t('dashboard.v2.kpi.estimatedMonth', {
+          amount: currency(rev?.monthlyEstimatedRevenue ?? 0, lang),
+        }),
+        subTone: 'neutral' as const,
         accent: 'neutral' as const,
         trend: monthRevTrend,
       },
@@ -427,7 +442,9 @@ export function FleetOperationsDashboard() {
     !onbDismissed &&
     onboarding.completed < onboarding.total;
 
-  const monthlyRevenue = summary?.chartAnalytics?.monthlyRevenue ?? [];
+  // Aylik cubuk grafik GERCEKLESEN ciroyu cizer; tahmin serisi altta metin
+  // olarak duruyor.
+  const monthlyRevenue = summary?.chartAnalytics?.monthlyActualRevenue ?? [];
   const monthlyAccidents = summary?.chartAnalytics?.monthlyAccidents ?? [];
   const totalCosts = summary?.costAnalytics?.totalCosts ?? [];
   const repairReasons = summary?.costAnalytics?.topRepairReasons ?? [];
@@ -748,18 +765,28 @@ export function FleetOperationsDashboard() {
               <div className="fdb-k-body">
                 <div className="fdb-umsatz-stat">
                   <div>
-                    <b>{currency(summary?.revenueAnalytics?.todayRevenue, i18n.language)}</b>
+                    <b>{currency(summary?.revenueAnalytics?.todayActualRevenue, i18n.language)}</b>
                     <span>{t('dashboard.revToday')}</span>
                   </div>
                   <div>
-                    <b>{currency(summary?.revenueAnalytics?.weeklyRevenue, i18n.language)}</b>
+                    <b>{currency(summary?.revenueAnalytics?.weeklyActualRevenue, i18n.language)}</b>
                     <span>{t('dashboard.revWeek')}</span>
                   </div>
                   <div>
-                    <b>{currency(summary?.revenueAnalytics?.monthlyRevenue, i18n.language)}</b>
+                    <b>{currency(summary?.revenueAnalytics?.monthlyActualRevenue, i18n.language)}</b>
                     <span>{t('dashboard.revMonth')}</span>
                   </div>
                 </div>
+                {/* TAHMIN AYRI SATIRDA: gerceklesen ciroyla ayni gruba
+                    konsaydi hangisinin ne oldugu okunamazdi. */}
+                <p className="text-xs text-slate-500">
+                  {t('dashboard.estimatedRevenueMonth', {
+                    amount: currency(
+                      summary?.revenueAnalytics?.monthlyEstimatedRevenue,
+                      i18n.language,
+                    ),
+                  })}
+                </p>
                 <div className="fdb-chart" aria-hidden="true">
                   {monthlyRevenue.map((point, index) => (
                     <div key={point.label} className="fdb-saeule">

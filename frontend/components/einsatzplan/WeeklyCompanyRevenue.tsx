@@ -96,9 +96,18 @@ export function WeeklyCompanyRevenue() {
   }, [from, to]);
 
   const companies = useMemo(() => data?.companies ?? [], [data]);
-  const totalRevenue = data?.totalRevenue ?? 0;
+  /**
+   * TAHMIN ve GERCEK AYRI (Faz 18B).
+   *
+   * `totalRevenue` diye tek bir alan yoktu artik: haftalik kapanis ekrani
+   * gorev planindaki fiyati kesilmis fatura gibi gosteriyordu. Ortalama da
+   * TAHMIN uzerinden hesaplaniyor cunku boleni gorev sayisi.
+   */
+  const totalEstimatedRevenue = data?.totalEstimatedRevenue ?? 0;
+  const totalActualRevenue = data?.totalActualRevenue ?? 0;
   const totalAssignments = data?.totalAssignments ?? 0;
-  const averagePerAssignment = totalAssignments > 0 ? totalRevenue / totalAssignments : 0;
+  const averagePerAssignment =
+    totalAssignments > 0 ? totalEstimatedRevenue / totalAssignments : 0;
 
   const dateRangeLabel = useMemo(() => {
     const formatter = new Intl.DateTimeFormat(i18n.language || 'de-DE', {
@@ -114,7 +123,8 @@ export function WeeklyCompanyRevenue() {
     () =>
       companies.slice(0, 8).map((row) => ({
         name: row.companyName.length > 16 ? `${row.companyName.slice(0, 15)}…` : row.companyName,
-        revenue: row.revenue,
+        estimatedRevenue: row.estimatedRevenue,
+        actualRevenue: row.actualRevenue,
       })),
     [companies],
   );
@@ -127,8 +137,11 @@ export function WeeklyCompanyRevenue() {
       companies.map((row) => ({
         [t('weeklyRevenue.colCompany')]: row.companyName,
         [t('weeklyRevenue.colAssignments')]: row.assignments,
-        [t('weeklyRevenue.colRevenue')]: row.revenue,
-        [t('weeklyRevenue.colMissingPrice')]: row.assignmentsWithoutRevenue,
+        // Disari aktarim EKRANLA AYNI kurallari kullanir: iki gelir sutunu
+        // ayri, hicbiri digerine dusmuyor.
+        [t('weeklyRevenue.colEstimatedRevenue')]: row.estimatedRevenue,
+        [t('weeklyRevenue.colActualRevenue')]: row.actualRevenue,
+        [t('weeklyRevenue.colMissingPrice')]: row.assignmentsWithoutEstimate,
       })),
     );
     XLSX.utils.book_append_sheet(workbook, sheet, 'Revenue');
@@ -185,15 +198,24 @@ export function WeeklyCompanyRevenue() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 border-b border-slate-200 p-3 sm:grid-cols-3">
-        <SummaryCell label={t('weeklyRevenue.totalRevenue')} value={currency(totalRevenue)} strong />
+      <div className="grid grid-cols-1 gap-3 border-b border-slate-200 p-3 sm:grid-cols-4">
+        <SummaryCell
+          label={t('weeklyRevenue.totalEstimatedRevenue')}
+          value={currency(totalEstimatedRevenue)}
+          strong
+        />
+        <SummaryCell
+          label={t('weeklyRevenue.totalActualRevenue')}
+          value={currency(totalActualRevenue)}
+          strong
+        />
         <SummaryCell label={t('weeklyRevenue.totalAssignments')} value={String(totalAssignments)} />
         <SummaryCell label={t('weeklyRevenue.averagePerAssignment')} value={currency(averagePerAssignment)} />
       </div>
 
-      {data && data.assignmentsWithoutRevenue > 0 ? (
+      {data && data.assignmentsWithoutEstimate > 0 ? (
         <p className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {t('weeklyRevenue.missingPriceHint', { count: data.assignmentsWithoutRevenue })}
+          {t('weeklyRevenue.missingPriceHint', { count: data.assignmentsWithoutEstimate })}
         </p>
       ) : null}
 
@@ -217,7 +239,12 @@ export function WeeklyCompanyRevenue() {
             <tr>
               <th className={FLEET_RAW_TH}>{t('weeklyRevenue.colCompany')}</th>
               <th className={cn(FLEET_RAW_TH, 'text-right')}>{t('weeklyRevenue.colAssignments')}</th>
-              <th className={cn(FLEET_RAW_TH, 'text-right')}>{t('weeklyRevenue.colRevenue')}</th>
+              <th className={cn(FLEET_RAW_TH, 'text-right')}>
+                {t('weeklyRevenue.colEstimatedRevenue')}
+              </th>
+              <th className={cn(FLEET_RAW_TH, 'text-right')}>
+                {t('weeklyRevenue.colActualRevenue')}
+              </th>
               <th className={cn(FLEET_RAW_TH, 'text-right')}>{t('weeklyRevenue.colShare')}</th>
             </tr>
           </thead>
@@ -245,9 +272,18 @@ export function WeeklyCompanyRevenue() {
                 <tr key={row.companyId} className={FLEET_RAW_TR}>
                   <td className={FLEET_RAW_TD_PRIMARY}>{row.companyName}</td>
                   <td className={cn(FLEET_RAW_TD, 'text-right')}>{row.assignments}</td>
-                  <td className={cn(FLEET_RAW_TD, 'text-right font-semibold')}>{currency(row.revenue)}</td>
+                  <td className={cn(FLEET_RAW_TD, 'text-right font-semibold')}>
+                    {currency(row.estimatedRevenue)}
+                  </td>
+                  <td className={cn(FLEET_RAW_TD, 'text-right font-semibold')}>
+                    {currency(row.actualRevenue)}
+                  </td>
                   <td className={cn(FLEET_RAW_TD, 'text-right text-slate-500')}>
-                    {totalRevenue > 0 ? `${Math.round((row.revenue / totalRevenue) * 100)}%` : '–'}
+                    {/* Pay TAHMIN uzerinden: iki farkli sinifi bolmek
+                        anlamsiz bir oran uretirdi. */}
+                    {totalEstimatedRevenue > 0
+                      ? `${Math.round((row.estimatedRevenue / totalEstimatedRevenue) * 100)}%`
+                      : '–'}
                   </td>
                 </tr>
               ))
@@ -259,7 +295,10 @@ export function WeeklyCompanyRevenue() {
                 <td className={cn(FLEET_RAW_TD, 'font-semibold text-slate-900')}>{t('weeklyRevenue.total')}</td>
                 <td className={cn(FLEET_RAW_TD, 'text-right font-semibold text-slate-900')}>{totalAssignments}</td>
                 <td className={cn(FLEET_RAW_TD, 'text-right font-semibold text-slate-900')}>
-                  {currency(totalRevenue)}
+                  {currency(totalEstimatedRevenue)}
+                </td>
+                <td className={cn(FLEET_RAW_TD, 'text-right font-semibold text-slate-900')}>
+                  {currency(totalActualRevenue)}
                 </td>
                 <td className={cn(FLEET_RAW_TD, 'text-right text-slate-500')}>100%</td>
               </tr>

@@ -458,17 +458,29 @@ export interface VehicleCostRow {
   brand: string;
   model: string;
   status: string;
+  /** YALNIZCA muhasebenin onayladigi servis kayitlari (Faz 18B). */
   service_cost: number;
   service_count: number;
+  /** Onay bekleyen servis — `total_cost` DISINDA. */
+  pending_service_cost: number;
+  pending_service_count: number;
+  /** Itiraz edilmemis cezalar. */
   fine_cost: number;
   fine_count: number;
+  /** Itiraz edilmis ceza — `total_cost` DISINDA, "ihtilafli" olarak ayri. */
+  disputed_fine_cost: number;
+  disputed_fine_count: number;
   /** YALNIZCA onaylanmis yakit fisleri (Faz 7). */
   fuel_cost: number;
   fuel_count: number;
   total_cost: number;
-  revenue: number;
+  /** TAHMIN — gorev planindan. `actual_revenue` ile TOPLANMAZ. */
+  estimated_revenue: number;
+  /** GERCEK — kesilmis faturadan. Fatura yoksa `null`, sifir DEGIL. */
+  actual_revenue: number | null;
   assignment_count: number;
-  margin: number;
+  /** GERCEK gelirden hesaplanir; fatura yoksa `null`. */
+  margin: number | null;
 }
 
 export interface VehicleCostsResponse {
@@ -485,17 +497,37 @@ export interface VehicleCostsResponse {
     service: { amount: string; currency: string };
     fines: { amount: string; currency: string };
     total: { amount: string; currency: string };
+    /** TAHMIN — `total` ile ayni kartta gosterilmez. */
+    estimatedRevenue: { amount: string; currency: string };
+    /** GERCEK — fatura yoksa `null`. */
+    actualRevenue: { amount: string; currency: string } | null;
   };
-  /** Temel para birimi disindaki onaylanmis fisler — toplama KATILMADI. */
-  unconvertedByCurrency: Array<{ currency: string; fuelAmount: string; entryCount: number }>;
+  /**
+   * Muhasebe toplaminin DISINDA kalan gercek tutarlar (Faz 18B).
+   * `totals.total`a EKLENMEZ.
+   */
+  excludedFromTotals: {
+    pendingService: { amount: string; currency: string };
+    pendingServiceCount: number;
+    disputedFines: { amount: string; currency: string };
+    disputedFineCount: number;
+    pendingReceiptCount: number;
+    actualRevenueWithoutVehicle: { amount: string; currency: string };
+    actualRevenueWithoutVehicleCount: number;
+  };
+  /** Temel para birimi disindaki parasal kayitlar — toplama KATILMADI. */
+  unconvertedByCurrency: Array<{ currency: string; amount: string; entryCount: number }>;
   fleet: {
     service_cost: number;
+    pending_service_cost: number;
     fine_cost: number;
+    disputed_fine_cost: number;
     /** YALNIZCA onaylanmis yakit fisleri. Bekleyenler dahil DEGIL. */
     fuel_cost: number;
     total_cost: number;
-    revenue: number;
-    margin: number;
+    estimated_revenue: number;
+    actual_revenue: number | null;
+    margin: number | null;
     avg_cost_per_vehicle: number;
   };
   vehicles: VehicleCostRow[];
@@ -1006,7 +1038,13 @@ export interface CostDashboardMonthPoint {
   service: string;
   fines: string;
   total: string;
-  revenue: string | null;
+  /** Toplama girmeyen siniflar AYRI alanlarda (Faz 18B). */
+  pendingService: string;
+  disputedFines: string;
+  /** TAHMIN — gorev planindan. */
+  estimatedRevenue: string | null;
+  /** GERCEK — kesilmis faturadan. */
+  actualRevenue: string | null;
   distanceKm: string | null;
   costPerKm: string | null;
 }
@@ -1019,13 +1057,17 @@ export interface CostDashboardVehicleRow {
   service: string;
   fines: string;
   total: string;
-  revenue: string | null;
+  pendingService: string;
+  disputedFines: string;
+  estimatedRevenue: string | null;
+  actualRevenue: string | null;
+  /** GERCEK gelirden; fatura yoksa `null`. */
   margin: string | null;
   distanceKm: string | null;
   costPerKm: string | null;
   previousTotal: string;
   changePercent: string | null;
-  /** 'no_distance' | 'no_costs' | 'no_revenue' */
+  /** 'no_distance' | 'no_costs' | 'no_estimated_revenue' | 'no_actual_revenue' */
   dataQuality: string[];
 }
 
@@ -1038,18 +1080,35 @@ export interface CostDashboardResponse {
     fuelCost: MetricComparison;
     serviceCost: MetricComparison;
     fineCost: MetricComparison;
-    revenue: MetricComparison | null;
+    /** TAHMIN — gorev planindan. Muhasebe toplaminda DEGIL. */
+    estimatedRevenue: MetricComparison | null;
+    /** GERCEK — kesilmis faturalardan. */
+    actualRevenue: MetricComparison | null;
+    /** Marj GERCEK gelirden; fatura yoksa `null`. */
     margin: MetricComparison | null;
     costPerKm: MetricComparison | null;
     distanceKm: MetricComparison | null;
     /** Toplam maliyete DAHIL DEGIL — yalnizca adet. */
     pendingReceiptCount: number;
+    /** Toplama GIRMEYEN ama var olan tutarlar (Faz 18B). */
+    pendingServiceCost: string;
+    pendingServiceCount: number;
+    disputedFineCost: string;
+    disputedFineCount: number;
   };
   monthlySeries: CostDashboardMonthPoint[];
   composition: { fuel: string; service: string; fines: string; total: string };
+  /** Muhasebe toplaminin DISINDA kalan gercek tutarlar — `composition`a eklenmez. */
+  excludedFromTotals: {
+    pendingService: string;
+    pendingServiceCount: number;
+    disputedFines: string;
+    disputedFineCount: number;
+    pendingReceiptCount: number;
+  };
   vehicleRanking: CostDashboardVehicleRow[];
   pagination: { page: number; pageSize: number; total: number; totalPages: number };
-  unconvertedByCurrency: Array<{ currency: string; fuelAmount: string; entryCount: number }>;
+  unconvertedByCurrency: Array<{ currency: string; amount: string; entryCount: number }>;
   /** Maliyet/km HANGI arac kumesi uzerinden hesaplandi. */
   costPerKmCoverage: {
     includedVehicleCount: number;
@@ -1944,11 +2003,39 @@ export interface ServiceRecord {
   vendor?: string;
   repair_company: string;
   cost_amount: number;
+  currency?: string;
   mileage_km?: number | null;
   notes?: string;
+  /**
+   * MUHASEBE ONAYI (Faz 18B). Yalnizca `approved` kayitlar maliyet
+   * toplamlarina girer; `pending` ve `rejected` ayri sayilir.
+   */
+  approval_status?: ServiceRecordApprovalStatus;
+  /** Sunucudan gelen TURETILMIS sinif — istemci durum adlarindan cikarmaz. */
+  recognition_class?: RecognitionClass;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  accounting_note?: string | null;
+  rejection_reason?: string | null;
   created_at?: string;
   updated_at?: string;
 }
+
+/** Backend `ServiceRecordApprovalStatus` enum'uyla BIREBIR. */
+export type ServiceRecordApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+/**
+ * Bir parasal satirin muhasebe toplamina girip girmediginin TURETILMIS
+ * sinifi. Backend `RecognitionClass` ile BIREBIR — istemci bu karari
+ * yeniden vermiyor.
+ */
+export type RecognitionClass =
+  | 'forecast'
+  | 'pending_actual'
+  | 'approved_actual'
+  | 'disputed'
+  | 'reversed'
+  | 'rejected';
 
 // ─── Leave request (vacation/sick/...) ────────────────────────────────────
 
@@ -2101,17 +2188,29 @@ export interface DashboardDriverRiskRow {
   accidentCount: number;
 }
 
+/**
+ * TAHMIN ve GERCEKLESEN gelir AYRI alanlarda (Faz 18B).
+ *
+ * `todayRevenue` gibi tek bir "revenue" alani YOK ve olmayacak:
+ * `Assignment.expectedDailyRevenue` bir plan rakami, fatura ise hukuki bir
+ * kayit. Ikisini tek alanda tasimak, ekranin hangisini gosterdigini
+ * belirsiz birakirdi.
+ */
 export interface DashboardRevenueAnalytics {
-  todayRevenue?: number;
-  weeklyRevenue?: number;
-  monthlyRevenue?: number;
-  lastWeekSameDayRevenue?: number;
-  prevMonthToDateRevenue?: number;
-  revenueByCompany?: Array<{
+  baseCurrency?: string;
+  todayEstimatedRevenue?: number;
+  weeklyEstimatedRevenue?: number;
+  monthlyEstimatedRevenue?: number;
+  lastWeekSameDayEstimatedRevenue?: number;
+  prevMonthToDateEstimatedRevenue?: number;
+  todayActualRevenue?: number;
+  weeklyActualRevenue?: number;
+  monthlyActualRevenue?: number;
+  estimatedRevenueByCompany?: Array<{
     companyId: string;
     companyName: string;
     assignments: number;
-    revenue: number;
+    estimatedRevenue: number;
   }>;
 }
 
@@ -2119,16 +2218,19 @@ export interface DashboardRevenueByCompanyRow {
   companyId: string;
   companyName: string;
   assignments: number;
-  revenue: number;
-  assignmentsWithoutRevenue: number;
+  estimatedRevenue: number;
+  actualRevenue: number;
+  assignmentsWithoutEstimate: number;
 }
 
 export interface DashboardRevenueByCompany {
   from: string;
   to: string;
-  totalRevenue: number;
+  baseCurrency: string;
+  totalEstimatedRevenue: number;
+  totalActualRevenue: number;
   totalAssignments: number;
-  assignmentsWithoutRevenue: number;
+  assignmentsWithoutEstimate: number;
   companies: DashboardRevenueByCompanyRow[];
 }
 
@@ -2139,8 +2241,13 @@ export interface DashboardChartPoint {
 }
 
 export interface DashboardChartAnalytics {
-  dailyRevenue: DashboardChartPoint[];
-  monthlyRevenue: DashboardChartPoint[];
+  baseCurrency?: string;
+  /** TAHMIN serisi — gorev planindan. */
+  dailyEstimatedRevenue: DashboardChartPoint[];
+  monthlyEstimatedRevenue: DashboardChartPoint[];
+  /** GERCEK seri — kesilmis faturalardan. Ayri cizgi, ayri toplam. */
+  dailyActualRevenue: DashboardChartPoint[];
+  monthlyActualRevenue: DashboardChartPoint[];
   dailyAccidents: DashboardChartPoint[];
   monthlyAccidents: DashboardChartPoint[];
 }

@@ -130,11 +130,24 @@ export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolea
     maximumFractionDigits: 0,
   });
 
-  const dailyRevenue = summary?.chartAnalytics?.dailyRevenue ?? [];
-  const weekNow = dailyRevenue.slice(-7).reduce((acc, row) => acc + row.value, 0);
-  const weekPrev = dailyRevenue.slice(-14, -7).reduce((acc, row) => acc + row.value, 0);
+  /**
+   * GERCEKLESEN ciro cizgisi.
+   *
+   * Onceden `dailyRevenue` okunuyordu ve o seri gorev TAHMINIYDI: yonetim
+   * panosu, henuz faturasi kesilmemis planlanan tutari ciro diye
+   * gosteriyordu. Tahmin serisi ayri duruyor ve karsilastirma icin altta
+   * yaziliyor.
+   */
+  const dailyActualRevenue = summary?.chartAnalytics?.dailyActualRevenue ?? [];
+  const dailyEstimatedRevenue = summary?.chartAnalytics?.dailyEstimatedRevenue ?? [];
+  const weekNow = dailyActualRevenue.slice(-7).reduce((acc, row) => acc + row.value, 0);
+  const weekPrev = dailyActualRevenue.slice(-14, -7).reduce((acc, row) => acc + row.value, 0);
+  const estimatedLast30 = dailyEstimatedRevenue.reduce((acc, row) => acc + row.value, 0);
 
-  const companyTop = useMemo(() => (summary?.revenueAnalytics?.revenueByCompany ?? []).slice(0, 6), [summary]);
+  const companyTop = useMemo(
+    () => (summary?.revenueAnalytics?.estimatedRevenueByCompany ?? []).slice(0, 6),
+    [summary],
+  );
   const complianceItems = useMemo(() => {
     if (!summary) return [];
     const tuvUvv = summary.vehicleHealth.filter((row) => row.issue === 'tuv_expiring_30_days' || row.issue === 'sp_expiring_30_days').length;
@@ -243,7 +256,16 @@ export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolea
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-md border p-3">
                 <p className="text-slate-500">{t('dashboard.v3.scope.last30Days')}</p>
-                <p className="text-xl font-semibold">{currency.format(dailyRevenue.reduce((acc, row) => acc + row.value, 0))}</p>
+                <p className="text-xl font-semibold">
+                  {currency.format(dailyActualRevenue.reduce((acc, row) => acc + row.value, 0))}
+                </p>
+                {/* TAHMIN ayri satirda ve acikca etiketli — ayni rakama
+                    eklenmiyor. */}
+                <p className="text-xs text-slate-500">
+                  {t('dashboard.v3.revenue.estimatedCompare', {
+                    value: currency.format(estimatedLast30),
+                  })}
+                </p>
               </div>
               <div className="rounded-md border p-3">
                 <p className="text-slate-500">{t('dashboard.v3.revenue.weekCompare')}</p>
@@ -253,7 +275,7 @@ export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolea
             </div>
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dailyRevenue.slice(-30)}>
+                <LineChart data={dailyActualRevenue.slice(-30)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="label" hide />
                   <YAxis hide />
@@ -268,7 +290,10 @@ export function BossTrendDashboard({ hideHeader = false }: { hideHeader?: boolea
                   <XAxis type="number" hide />
                   <YAxis dataKey="companyName" type="category" width={110} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="revenue" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                  {/* Sirket kirilimi gorev planindan geliyor: TAHMIN.
+                      Alan adi bunu tasiyor ki grafik gerceklesen ciro diye
+                      okunmasin. */}
+                  <Bar dataKey="estimatedRevenue" fill="#94a3b8" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

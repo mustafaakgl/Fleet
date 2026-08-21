@@ -590,6 +590,10 @@ export function ExpenseHistoryPage() {
                       <MobileField label={t('serviceHistory.create.completionDate')} value={formatCompletionDateTime(row.date, i18n.language)} />
                       <MobileField label={t('serviceHistory.create.lineItemTask')} value={primaryTask} />
                       <MobileField label={t('serviceHistory.create.cost')} value={formatAmount(row.cost_amount, i18n.language)} />
+                      <MobileField
+                        label={t('serviceHistory.approval.title')}
+                        value={t(`serviceHistory.approval.status.${row.approval_status ?? 'pending'}`)}
+                      />
                     </dl>
                   </div>
                 </div>
@@ -760,6 +764,17 @@ export function ExpenseHistoryPage() {
                       </TableCell>
                       <TableCell className={cn(FLEET_TABLE_CELL, 'text-right whitespace-nowrap font-semibold text-slate-900')}>
                         {showAmounts ? formatAmount(row.cost_amount, i18n.language) : '—'}
+                        {/* ONAYLANMAMIS TUTAR HICBIR TOPLAMA GIRMEZ (Faz 18B).
+                            Rozet METIN: renk tek basina anlam tasimaz ve
+                            "neden toplam eksik" sorusu listede cevaplanmali. */}
+                        {showAmounts && (row.approval_status ?? 'pending') !== 'approved' ? (
+                          <span
+                            className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900"
+                            data-testid="service-approval-badge"
+                          >
+                            {t(`serviceHistory.approval.status.${row.approval_status ?? 'pending'}`)}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className={FLEET_TABLE_CELL}>
                         {labels.length > 0 ? (

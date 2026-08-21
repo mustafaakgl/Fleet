@@ -153,12 +153,24 @@ export function DashboardChartsClient({ analytics }: { analytics: DashboardChart
     <section className="space-y-3">
       <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{t('dashboard.chartsTitle')}</h2>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {/* TAHMIN ve GERCEK gelir AYRI GRAFIKLERDE (Faz 18B). Tek bir
+            "Ciro" grafigi, gorev planindaki fiyati kesilmis fatura gibi
+            gosteriyordu; basliklar artik hangisi oldugunu yaziyor. */}
         <FilterableChartCard
-          title={t('dashboard.chartRevenue')}
+          title={t('dashboard.chartEstimatedRevenue')}
           period={revenuePeriod}
           onPeriodChange={setRevenuePeriod}
-          dailyData={analytics.dailyRevenue}
-          monthlyData={analytics.monthlyRevenue}
+          dailyData={analytics.dailyEstimatedRevenue}
+          monthlyData={analytics.monthlyEstimatedRevenue}
+          valueFormatter={formatCurrency}
+          barColor="#94a3b8"
+        />
+        <FilterableChartCard
+          title={t('dashboard.chartActualRevenue')}
+          period={revenuePeriod}
+          onPeriodChange={setRevenuePeriod}
+          dailyData={analytics.dailyActualRevenue}
+          monthlyData={analytics.monthlyActualRevenue}
           valueFormatter={formatCurrency}
           barColor="#2563eb"
         />

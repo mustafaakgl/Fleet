@@ -4,6 +4,13 @@ import { AssignmentStatus,
 } from '@prisma/client';
 import { maskFinancialFields, type UserRole } from '../common/utils/permissions';
 import { effectiveFuelCostWhere } from '../fleet/fuel-receipts/core/effective-fuel-cost';
+import { ActualRevenueService } from '../common/finance/actual-revenue.service';
+import {
+  disputedFineWhere,
+  effectiveFineCostWhere,
+  effectiveServiceCostWhere,
+  pendingServiceCostWhere,
+} from '../common/finance/recognition';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenant/tenant-context';
 import {
@@ -32,7 +39,10 @@ function money(value: number): string {
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly actualRevenue: ActualRevenueService,
+  ) {}
 
   private normalizeDate(dateInput?: string | Date): Date {
     const date = dateInput ? new Date(dateInput) : new Date();
@@ -69,7 +79,14 @@ export class DashboardService {
   }
 
   /**
-   * Gorevin gelirini TEK kisitlama noktasindan gecirir.
+   * Gorevin TAHMINI gelirini TEK kisitlama noktasindan gecirir.
+   *
+   * ADI "TAHMINI" VE BU BIR DUZELTME (Faz 18B): `expectedDailyRevenue` bir
+   * planlama rakamidir — gorev acilirken yazilan gunluk fiyat. Fatura
+   * kesilene kadar hicbir hukuki kayit olusmaz, tutar degisebilir, gorev
+   * iptal olabilir. Fonksiyonun eski adi `assignmentRevenue` idi ve cagiran
+   * her yer bu sayiyi `revenue` diye topluyordu; yani tahmin ile gerceklesen
+   * ayni kartta birlesiyordu. Gercek gelir `ActualRevenueService`ten gelir.
    *
    * `baseCurrency` ZORUNLU bir parametre ve bilincli: bu dosya bes ayri yerde
    * gelir topluyor. Kural her cagri yerine ayri yazilsaydi, biri
@@ -82,7 +99,7 @@ export class DashboardService {
    * `100 EUR + 500 TRY = 600` anlamsizdir ve guvenilir bir kur altyapisi
    * olmadan donusturmek kur uydurmaktir.
    */
-  private assignmentRevenue(
+  private assignmentEstimatedRevenue(
     row: {
       expectedDailyRevenue?: unknown;
       currency?: string | null;
@@ -612,7 +629,7 @@ export class DashboardService {
       });
 
       return rows.reduce(
-        (sum: number, row: any) => sum + this.assignmentRevenue(row, baseCurrency),
+        (sum: number, row: any) => sum + this.assignmentEstimatedRevenue(row, baseCurrency),
         0,
       );
     };
@@ -633,7 +650,17 @@ export class DashboardService {
       Math.min(prevMonthStart.getTime() + elapsedMs, month.start.getTime()),
     );
 
-    const [todayRevenue, weeklyRevenue, monthlyRevenue, lastWeekSameDayRevenue, prevMonthToDateRevenue, dayRows] =
+    const [
+      todayEstimatedRevenue,
+      weeklyEstimatedRevenue,
+      monthlyEstimatedRevenue,
+      lastWeekSameDayEstimatedRevenue,
+      prevMonthToDateEstimatedRevenue,
+      dayRows,
+      todayActualRevenue,
+      weeklyActualRevenue,
+      monthlyActualRevenue,
+    ] =
       await Promise.all([
         sumByRange(day.start, day.end),
         sumByRange(week.start, week.end),
@@ -655,33 +682,56 @@ export class DashboardService {
             },
           },
         }),
+        // GERCEK gelir ayni araliklarda, ayni servisten. Tahmin ile
+        // gerceklesen AYRI alanlarda doner ve hicbir yerde toplanmaz.
+        this.actualRevenue.total(day.start, day.end, baseCurrency),
+        this.actualRevenue.total(week.start, week.end, baseCurrency),
+        this.actualRevenue.total(month.start, month.end, baseCurrency),
       ]);
 
-    const byCompanyMap = new Map<string, { companyId: string; companyName: string; assignments: number; revenue: number }>();
+    const byCompanyMap = new Map<
+      string,
+      { companyId: string; companyName: string; assignments: number; estimatedRevenue: number }
+    >();
     for (const row of dayRows) {
       const companyId = row.company.id;
-      const increment = this.assignmentRevenue(row, baseCurrency);
+      const increment = this.assignmentEstimatedRevenue(row, baseCurrency);
       const existing = byCompanyMap.get(companyId);
       if (existing) {
         existing.assignments += 1;
-        existing.revenue += increment;
+        existing.estimatedRevenue += increment;
       } else {
         byCompanyMap.set(companyId, {
           companyId,
           companyName: row.company.name,
           assignments: 1,
-          revenue: increment,
+          estimatedRevenue: increment,
         });
       }
     }
 
     return {
-      todayRevenue,
-      weeklyRevenue,
-      monthlyRevenue,
-      lastWeekSameDayRevenue,
-      prevMonthToDateRevenue,
-      revenueByCompany: Array.from(byCompanyMap.values()).sort((a, b) => b.revenue - a.revenue),
+      baseCurrency,
+      /**
+       * TAHMIN — gorev planindan (`Assignment.expectedDailyRevenue`).
+       *
+       * Alan adlari "estimated" tasiyor ve bu bir DUZELTME: eski adlari
+       * `todayRevenue`/`weeklyRevenue`/`monthlyRevenue` idi ve pano bunlari
+       * gerceklesen ciro gibi gosteriyordu. Fatura kesilene kadar bu rakam
+       * bir plandir.
+       */
+      todayEstimatedRevenue,
+      weeklyEstimatedRevenue,
+      monthlyEstimatedRevenue,
+      lastWeekSameDayEstimatedRevenue,
+      prevMonthToDateEstimatedRevenue,
+      /** GERCEK — kesilmis faturalardan. Tahminle TOPLANMAZ. */
+      todayActualRevenue,
+      weeklyActualRevenue,
+      monthlyActualRevenue,
+      estimatedRevenueByCompany: Array.from(byCompanyMap.values()).sort(
+        (a, b) => b.estimatedRevenue - a.estimatedRevenue,
+      ),
     };
   }
 
@@ -724,19 +774,22 @@ export class DashboardService {
       );
     }
 
-    const rows = await this.prisma.assignment.findMany({
-      where: {
-        workDate: { gte: start, lt: endExclusive },
-        status: { in: REVENUE_ASSIGNMENT_STATUSES },
-      },
-      select: {
-        expectedDailyRevenue: true,
-        currency: true,
-        company: {
-          select: { id: true, name: true, defaultDailyRevenue: true },
+    const [rows, actualRevenue] = await Promise.all([
+      this.prisma.assignment.findMany({
+        where: {
+          workDate: { gte: start, lt: endExclusive },
+          status: { in: REVENUE_ASSIGNMENT_STATUSES },
         },
-      },
-    });
+        select: {
+          expectedDailyRevenue: true,
+          currency: true,
+          company: {
+            select: { id: true, name: true, defaultDailyRevenue: true },
+          },
+        },
+      }),
+      this.actualRevenue.collect(start, endExclusive, baseCurrency),
+    ]);
 
     const byCompany = new Map<
       string,
@@ -744,46 +797,82 @@ export class DashboardService {
         companyId: string;
         companyName: string;
         assignments: number;
-        revenue: number;
-        assignmentsWithoutRevenue: number;
+        estimatedRevenue: number;
+        actualRevenue: number;
+        assignmentsWithoutEstimate: number;
       }
     >();
 
-    let totalRevenue = 0;
-    let assignmentsWithoutRevenue = 0;
+    let totalEstimatedRevenue = 0;
+    let assignmentsWithoutEstimate = 0;
 
     for (const row of rows) {
-      const revenue = this.assignmentRevenue(row, baseCurrency);
-      totalRevenue += revenue;
+      const revenue = this.assignmentEstimatedRevenue(row, baseCurrency);
+      totalEstimatedRevenue += revenue;
       if (revenue <= 0) {
-        assignmentsWithoutRevenue += 1;
+        assignmentsWithoutEstimate += 1;
       }
 
       const entry = byCompany.get(row.company.id);
       if (entry) {
         entry.assignments += 1;
-        entry.revenue += revenue;
+        entry.estimatedRevenue += revenue;
         if (revenue <= 0) {
-          entry.assignmentsWithoutRevenue += 1;
+          entry.assignmentsWithoutEstimate += 1;
         }
       } else {
         byCompany.set(row.company.id, {
           companyId: row.company.id,
           companyName: row.company.name,
           assignments: 1,
-          revenue,
-          assignmentsWithoutRevenue: revenue <= 0 ? 1 : 0,
+          estimatedRevenue: revenue,
+          actualRevenue: 0,
+          assignmentsWithoutEstimate: revenue <= 0 ? 1 : 0,
         });
       }
+    }
+
+    /**
+     * Faturasi olan ama o donemde GOREVI OLMAYAN sirket de listede gorunmeli.
+     *
+     * Aksi halde gerceklesen gelir sessizce kaybolurdu: haftalik kapanista
+     * "bu sirkete fatura kestik ama satiri yok" durumu tam da gorulmesi
+     * gereken sey.
+     */
+    let totalActualRevenue = 0;
+    for (const line of actualRevenue.rows) {
+      totalActualRevenue = Number((totalActualRevenue + line.amount).toFixed(2));
+      const entry = byCompany.get(line.companyId);
+      if (entry) {
+        entry.actualRevenue = Number((entry.actualRevenue + line.amount).toFixed(2));
+        continue;
+      }
+      byCompany.set(line.companyId, {
+        companyId: line.companyId,
+        // Ad yalnizca gorev satirlarindan geliyor; fatura-only sirkette
+        // BOS birakiliyor — uydurma bir ad yazmaktansa istemci kimlikten
+        // cozsun.
+        companyName: '',
+        assignments: 0,
+        estimatedRevenue: 0,
+        actualRevenue: line.amount,
+        assignmentsWithoutEstimate: 0,
+      });
     }
 
     return {
       from: this.toDateKey(start),
       to: this.toDateKey(lastDay),
-      totalRevenue,
+      baseCurrency,
+      /** TAHMIN — gorev planindan. `totalActualRevenue` ile TOPLANMAZ. */
+      totalEstimatedRevenue,
+      /** GERCEK — kesilmis faturalardan. */
+      totalActualRevenue,
       totalAssignments: rows.length,
-      assignmentsWithoutRevenue,
-      companies: Array.from(byCompany.values()).sort((a, b) => b.revenue - a.revenue),
+      assignmentsWithoutEstimate,
+      companies: Array.from(byCompany.values()).sort(
+        (a, b) => b.estimatedRevenue - a.estimatedRevenue,
+      ),
     };
   }
 
@@ -807,7 +896,7 @@ export class DashboardService {
     const db = this.prisma as any;
     const assignmentStatuses = ['planned', 'confirmed', 'in_progress', 'completed'];
 
-    const [assignments, accidents] = await Promise.all([
+    const [assignments, accidents, actualRevenue] = await Promise.all([
       db.assignment.findMany({
         where: {
           workDate: { gte: monthlyStart, lt: dayAfterEnd },
@@ -828,10 +917,15 @@ export class DashboardService {
         },
         select: { incidentDateTime: true },
       }),
+      // Maliyet panosuyla AYNI fatura kaynagi — grafik kendi kuralini
+      // uydurmuyor.
+      this.actualRevenue.collect(monthlyStart, dayAfterEnd, baseCurrency),
     ]);
 
-    const dailyRevenueMap = new Map(dailyKeys.map((key) => [key, 0]));
-    const monthlyRevenueMap = new Map(monthlyKeys.map((key) => [key, 0]));
+    const dailyEstimatedMap = new Map(dailyKeys.map((key) => [key, 0]));
+    const monthlyEstimatedMap = new Map(monthlyKeys.map((key) => [key, 0]));
+    const dailyActualMap = new Map(dailyKeys.map((key) => [key, 0]));
+    const monthlyActualMap = new Map(monthlyKeys.map((key) => [key, 0]));
     const dailyAccidentsMap = new Map(dailyKeys.map((key) => [key, 0]));
     const monthlyAccidentsMap = new Map(monthlyKeys.map((key) => [key, 0]));
 
@@ -839,12 +933,27 @@ export class DashboardService {
       const workDate = new Date(row.workDate);
       const dayKey = this.toDateKey(workDate);
       const monthKey = this.toMonthKey(workDate);
-      const revenue = this.assignmentRevenue(row, baseCurrency);
-      if (dailyRevenueMap.has(dayKey)) {
-        dailyRevenueMap.set(dayKey, (dailyRevenueMap.get(dayKey) ?? 0) + revenue);
+      const revenue = this.assignmentEstimatedRevenue(row, baseCurrency);
+      if (dailyEstimatedMap.has(dayKey)) {
+        dailyEstimatedMap.set(dayKey, (dailyEstimatedMap.get(dayKey) ?? 0) + revenue);
       }
-      if (monthlyRevenueMap.has(monthKey)) {
-        monthlyRevenueMap.set(monthKey, (monthlyRevenueMap.get(monthKey) ?? 0) + revenue);
+      if (monthlyEstimatedMap.has(monthKey)) {
+        monthlyEstimatedMap.set(monthKey, (monthlyEstimatedMap.get(monthKey) ?? 0) + revenue);
+      }
+    }
+
+    for (const row of actualRevenue.rows) {
+      const at = new Date(row.at);
+      const dayKey = this.toDateKey(at);
+      const monthKey = this.toMonthKey(at);
+      if (dailyActualMap.has(dayKey)) {
+        dailyActualMap.set(dayKey, Number(((dailyActualMap.get(dayKey) ?? 0) + row.amount).toFixed(2)));
+      }
+      if (monthlyActualMap.has(monthKey)) {
+        monthlyActualMap.set(
+          monthKey,
+          Number(((monthlyActualMap.get(monthKey) ?? 0) + row.amount).toFixed(2)),
+        );
       }
     }
 
@@ -864,8 +973,17 @@ export class DashboardService {
       keys.map((label) => ({ label, value: map.get(label) ?? 0 }));
 
     return {
-      dailyRevenue: toSeries(dailyKeys, dailyRevenueMap),
-      monthlyRevenue: toSeries(monthlyKeys, monthlyRevenueMap),
+      baseCurrency,
+      /**
+       * TAHMIN serisi — gorev planindan. Adinda "estimated" gecmesi bilincli:
+       * eski ad `dailyRevenue` idi ve grafik bunu gerceklesen gelir gibi
+       * gosteriyordu.
+       */
+      dailyEstimatedRevenue: toSeries(dailyKeys, dailyEstimatedMap),
+      monthlyEstimatedRevenue: toSeries(monthlyKeys, monthlyEstimatedMap),
+      /** GERCEK seri — kesilmis faturalardan. Ayri cizgi, ayri toplam. */
+      dailyActualRevenue: toSeries(dailyKeys, dailyActualMap),
+      monthlyActualRevenue: toSeries(monthlyKeys, monthlyActualMap),
       dailyAccidents: toSeries(dailyKeys, dailyAccidentsMap),
       monthlyAccidents: toSeries(monthlyKeys, monthlyAccidentsMap),
     };
@@ -1119,15 +1237,17 @@ export class DashboardService {
     const dayAfterEnd = new Date(end);
     dayAfterEnd.setDate(dayAfterEnd.getDate() + 1);
 
-    const db = this.prisma as any;
-    const records = await db.serviceRecord.findMany({
-      where: {
-        date: { gte: monthStart, lt: dayAfterEnd },
-      },
+    // Bu grafik de maliyet panosuyla AYNI kurali kullaniyor (Faz 18B):
+    // yalnizca ONAYLI servis kayitlari. Ayrica para birimi suzgeci EKLENDI —
+    // burada hic yoktu ve TRY tutarlar EUR grafigine sessizce giriyordu.
+    const baseCurrency = await this.baseCurrencyOf();
+    const records = await this.prisma.serviceRecord.findMany({
+      where: effectiveServiceCostWhere({ date: { gte: monthStart, lt: dayAfterEnd } }),
       select: {
         date: true,
         serviceType: true,
         costAmount: true,
+        currency: true,
       },
     });
 
@@ -1136,6 +1256,7 @@ export class DashboardService {
     const reasonCounts = new Map<string, { count: number; total: number }>();
 
     for (const row of records) {
+      if (!matchesBaseCurrency(row.currency, baseCurrency)) continue;
       const monthKey = this.toMonthKey(new Date(row.date));
       const cost = this.toCurrencyNumber(row.costAmount);
       const serviceType = String(row.serviceType ?? '').trim() || 'Unknown';
@@ -1175,6 +1296,8 @@ export class DashboardService {
       }));
 
     return {
+      /** Toplamlarin cinsi ACIKCA bildiriliyor; istemci tahmin etmiyor. */
+      baseCurrency,
       totalCosts: toSeries(totalByMonth),
       otherCosts: toSeries(otherByMonth),
       topRepairReasons,
@@ -1199,7 +1322,17 @@ export class DashboardService {
       : null;
     const baseCurrency = normalizeCurrency(tenant?.baseCurrency) ?? DEFAULT_BASE_CURRENCY;
 
-    const [vehicles, serviceRecords, fines, assignments, fuelEntries, pendingFuel] = await Promise.all([
+    const [
+      vehicles,
+      serviceRecords,
+      pendingServiceRecords,
+      fines,
+      disputedFines,
+      assignments,
+      fuelEntries,
+      pendingFuel,
+      actualRevenue,
+    ] = await Promise.all([
       this.prisma.vehicle.findMany({
         select: {
           id: true,
@@ -1211,12 +1344,26 @@ export class DashboardService {
         },
         orderBy: { plateNumber: 'asc' },
       }),
+      // SERVIS — yalnizca muhasebenin ONAYLADIGI kayitlar (Faz 18B). Yakitta
+      // Faz 7'den beri var olan kapi artik burada da: filtre
+      // `effectiveServiceCostWhere`den geliyor, elle yazilmiyor.
       this.prisma.serviceRecord.findMany({
-        where: { date: { gte: start, lt: dayAfterEnd } },
+        where: effectiveServiceCostWhere({ date: { gte: start, lt: dayAfterEnd } }),
         select: { vehicleId: true, costAmount: true, currency: true },
       }),
+      this.prisma.serviceRecord.findMany({
+        where: pendingServiceCostWhere({ date: { gte: start, lt: dayAfterEnd } }),
+        select: { vehicleId: true, costAmount: true, currency: true },
+      }),
+      // CEZA — itiraz edilmisler DISARIDA: tutari tartismali bir cezayi
+      // kesinlesmis gider gibi toplamak, geri alinabilecek parayi harcanmis
+      // gostermekti.
       this.prisma.fine.findMany({
-        where: { violationAt: { gte: start, lt: dayAfterEnd } },
+        where: effectiveFineCostWhere({ violationAt: { gte: start, lt: dayAfterEnd } }),
+        select: { vehicleId: true, amount: true, currency: true },
+      }),
+      this.prisma.fine.findMany({
+        where: disputedFineWhere({ violationAt: { gte: start, lt: dayAfterEnd } }),
         select: { vehicleId: true, amount: true, currency: true },
       }),
       this.prisma.assignment.findMany({
@@ -1256,57 +1403,124 @@ export class DashboardService {
           },
         },
       }),
+      // GERCEK gelir: maliyet panosuyla AYNI servis, ayni fatura filtresi.
+      this.actualRevenue.collect(start, dayAfterEnd, baseCurrency),
     ]);
 
     type Agg = {
+      /** YALNIZCA muhasebenin onayladigi servis kayitlari. */
       serviceCost: number;
       serviceCount: number;
+      /** Onay bekleyen servis: toplamda DEGIL, ayri gorunuyor. */
+      pendingServiceCost: number;
+      pendingServiceCount: number;
+      /** Itiraz edilmemis cezalar. */
       fineCost: number;
       fineCount: number;
+      /** Itiraz edilmis ceza: toplamda DEGIL, "ihtilafli" olarak ayri. */
+      disputedFineCost: number;
+      disputedFineCount: number;
       /** YALNIZCA base currency'deki onaylanmis yakit. */
       fuelCost: number;
       fuelCount: number;
-      revenue: number;
+      /** TAHMIN — gorev planindan. Gerceklesen gelir DEGIL. */
+      estimatedRevenue: number;
+      /** GERCEK — kesilmis fatura satirlarindan. */
+      actualRevenue: number;
+      hasActualRevenue: boolean;
       assignmentCount: number;
     };
+    const emptyAgg = (): Agg => ({
+      serviceCost: 0,
+      serviceCount: 0,
+      pendingServiceCost: 0,
+      pendingServiceCount: 0,
+      fineCost: 0,
+      fineCount: 0,
+      disputedFineCost: 0,
+      disputedFineCount: 0,
+      fuelCost: 0,
+      fuelCount: 0,
+      estimatedRevenue: 0,
+      actualRevenue: 0,
+      hasActualRevenue: false,
+      assignmentCount: 0,
+    });
     const byVehicle = new Map<string, Agg>();
     const aggFor = (vehicleId: string): Agg => {
       let agg = byVehicle.get(vehicleId);
       if (!agg) {
-        agg = {
-          serviceCost: 0,
-          serviceCount: 0,
-          fineCost: 0,
-          fineCount: 0,
-          fuelCost: 0,
-          fuelCount: 0,
-          revenue: 0,
-          assignmentCount: 0,
-        };
+        agg = emptyAgg();
         byVehicle.set(vehicleId, agg);
       }
       return agg;
     };
 
-    // Servis ve ceza da artik kendi para birimini tasiyor (Faz 7.1). Temel
-    // para birimi disindaki kayitlar toplama KATILMIYOR — Faz 7'de bu alanlar
-    // hic yoktu ve tutarlar ortuk EUR sayiliyordu.
+    /**
+     * Temel para birimi disindaki kayitlar — toplama KATILMIYOR ama artik
+     * SESSIZCE DUSMUYOR.
+     *
+     * Faz 7.1'de servis ve ceza icin `continue` yaziliyordu ve o kayitlar
+     * ekranda hicbir iz birakmiyordu: kullanici "toplam eksik" oldugunu
+     * anlayamiyordu. Kova artik yakit disindaki kaynaklari da sayiyor —
+     * maliyet panosuyla ayni davranis.
+     */
+    const unconvertedByCurrency = new Map<string, { amount: number; count: number }>();
+    const excludeUnconverted = (currency: string | null, amount: number): boolean => {
+      if (matchesBaseCurrency(currency, baseCurrency)) return false;
+      const code = normalizeCurrency(currency) ?? baseCurrency;
+      const bucket = unconvertedByCurrency.get(code) ?? { amount: 0, count: 0 };
+      bucket.amount = Number((bucket.amount + amount).toFixed(2));
+      bucket.count += 1;
+      unconvertedByCurrency.set(code, bucket);
+      return true;
+    };
+
     for (const row of serviceRecords) {
-      if (!matchesBaseCurrency(row.currency, baseCurrency)) continue;
+      if (excludeUnconverted(row.currency, this.toCurrencyNumber(row.costAmount))) continue;
       const agg = aggFor(row.vehicleId);
       agg.serviceCost += this.toCurrencyNumber(row.costAmount);
       agg.serviceCount += 1;
     }
+    for (const row of pendingServiceRecords) {
+      if (excludeUnconverted(row.currency, this.toCurrencyNumber(row.costAmount))) continue;
+      const agg = aggFor(row.vehicleId);
+      agg.pendingServiceCost += this.toCurrencyNumber(row.costAmount);
+      agg.pendingServiceCount += 1;
+    }
     for (const row of fines) {
-      if (!matchesBaseCurrency(row.currency, baseCurrency)) continue;
+      if (excludeUnconverted(row.currency, this.toCurrencyNumber(row.amount))) continue;
       const agg = aggFor(row.vehicleId);
       agg.fineCost += this.toCurrencyNumber(row.amount);
       agg.fineCount += 1;
     }
+    for (const row of disputedFines) {
+      if (excludeUnconverted(row.currency, this.toCurrencyNumber(row.amount))) continue;
+      const agg = aggFor(row.vehicleId);
+      agg.disputedFineCost += this.toCurrencyNumber(row.amount);
+      agg.disputedFineCount += 1;
+    }
     for (const row of assignments) {
       const agg = aggFor(row.vehicleId);
-      agg.revenue += this.assignmentRevenue(row, baseCurrency);
       agg.assignmentCount += 1;
+      // Tutar `assignmentEstimatedRevenue` ile AYNI kurala gore cozuluyor
+      // (sifir tahmin firma varsayilanina duser). Iki ayri cozum yazsaydik
+      // toplanan tutar ile "toplanmadi" diye raporlanan tutar birbirini
+      // tutmazdi.
+      const expected = this.toCurrencyNumber(row.expectedDailyRevenue);
+      const estimated =
+        expected > 0 ? expected : this.toCurrencyNumber(row.company?.defaultDailyRevenue);
+      if (excludeUnconverted(row.currency, estimated)) continue;
+      agg.estimatedRevenue += estimated;
+    }
+    // Bir goreve baglanamayan fatura satiri (elle eklenmis satir, fiyat
+    // listesi kalemi) filo toplamina girer, ARACA yazilmaz: rastgele bir
+    // araca yazmak o aracin marjini bozardi.
+    for (const row of actualRevenue.rows) {
+      if (row.vehicleId === null) continue;
+      const agg = aggFor(row.vehicleId);
+      agg.actualRevenue = Number((agg.actualRevenue + row.amount).toFixed(2));
+      agg.hasActualRevenue = true;
     }
 
     // --- YAKIT: para birimi guvenligi ---
@@ -1316,37 +1530,28 @@ export class DashboardService {
     // gostermekten cok daha kotu. Onlar ayri kirilimda GERCEK para birimiyle
     // "donusturulmemis" olarak raporlaniyor — silinmiyorlar. Kur UYDURULMUYOR
     // ve canli doviz servisi bu fazda da eklenmiyor.
-    const unconvertedByCurrency = new Map<string, { amount: number; count: number }>();
     for (const row of fuelEntries) {
       const amount = this.toCurrencyNumber(row.totalCost);
-      const currency = normalizeCurrency(row.currency) ?? baseCurrency;
-
-      if (!matchesBaseCurrency(currency, baseCurrency)) {
-        const bucket = unconvertedByCurrency.get(currency) ?? { amount: 0, count: 0 };
-        bucket.amount += amount;
-        bucket.count += 1;
-        unconvertedByCurrency.set(currency, bucket);
-        continue;
-      }
+      if (excludeUnconverted(row.currency, amount)) continue;
 
       const agg = aggFor(row.vehicleId);
       agg.fuelCost += amount;
       agg.fuelCount += 1;
     }
 
+    // Fatura tarafinda toplanamayanlar da AYNI listeye giriyor: ekranda tek
+    // bir "toplanmadi" kirilimi olsun.
+    for (const entry of actualRevenue.unconvertedByCurrency) {
+      const bucket = unconvertedByCurrency.get(entry.currency) ?? { amount: 0, count: 0 };
+      bucket.amount = Number((bucket.amount + entry.amount).toFixed(2));
+      bucket.count += entry.count;
+      unconvertedByCurrency.set(entry.currency, bucket);
+    }
+
     const rows = vehicles.map((vehicle) => {
-      const agg = byVehicle.get(vehicle.id) ?? {
-        serviceCost: 0,
-        serviceCount: 0,
-        fineCost: 0,
-        fineCount: 0,
-        fuelCost: 0,
-        fuelCount: 0,
-        revenue: 0,
-        assignmentCount: 0,
-      };
-      // Yakit artik toplamin PARCASI. Yalnizca `approved` kayitlar geldigi
-      // icin bekleyen fisler bu rakami degistirmiyor.
+      const agg = byVehicle.get(vehicle.id) ?? emptyAgg();
+      // TOPLAM YALNIZCA ONAYLI GERCEK GIDER: bekleyen yakit fisi, onaylanmamis
+      // servis kaydi ve itiraz edilmis ceza bu rakamin DISINDA.
       const totalCost = agg.serviceCost + agg.fineCost + agg.fuelCost;
       return {
         vehicle_id: vehicle.id,
@@ -1357,14 +1562,28 @@ export class DashboardService {
         status: vehicle.status,
         service_cost: agg.serviceCost,
         service_count: agg.serviceCount,
+        pending_service_cost: agg.pendingServiceCost,
+        pending_service_count: agg.pendingServiceCount,
         fine_cost: agg.fineCost,
         fine_count: agg.fineCount,
+        disputed_fine_cost: agg.disputedFineCost,
+        disputed_fine_count: agg.disputedFineCount,
         fuel_cost: agg.fuelCost,
         fuel_count: agg.fuelCount,
         total_cost: totalCost,
-        revenue: agg.revenue,
+        /** TAHMIN — gorev planindan. `actual_revenue` ile TOPLANMAZ. */
+        estimated_revenue: agg.estimatedRevenue,
+        /** GERCEK — faturadan. Fatura yoksa `null`, sifir DEGIL. */
+        actual_revenue: agg.hasActualRevenue ? agg.actualRevenue : null,
         assignment_count: agg.assignmentCount,
-        margin: agg.revenue - totalCost,
+        /**
+         * Marj GERCEK gelirden hesaplaniyor. Fatura yoksa `null`: tahmini
+         * gelirden marj uretmek, planlanan fiyati kazanilmis gibi
+         * gostermekti.
+         */
+        margin: agg.hasActualRevenue
+          ? Number((agg.actualRevenue - totalCost).toFixed(2))
+          : null,
       };
     });
 
@@ -1373,18 +1592,43 @@ export class DashboardService {
     const totals = rows.reduce(
       (acc, row) => ({
         service_cost: acc.service_cost + row.service_cost,
+        pending_service_cost: acc.pending_service_cost + row.pending_service_cost,
         fine_cost: acc.fine_cost + row.fine_cost,
+        disputed_fine_cost: acc.disputed_fine_cost + row.disputed_fine_cost,
         fuel_cost: acc.fuel_cost + row.fuel_cost,
         total_cost: acc.total_cost + row.total_cost,
-        revenue: acc.revenue + row.revenue,
+        estimated_revenue: acc.estimated_revenue + row.estimated_revenue,
       }),
-      { service_cost: 0, fine_cost: 0, fuel_cost: 0, total_cost: 0, revenue: 0 },
+      {
+        service_cost: 0,
+        pending_service_cost: 0,
+        fine_cost: 0,
+        disputed_fine_cost: 0,
+        fuel_cost: 0,
+        total_cost: 0,
+        estimated_revenue: 0,
+      },
     );
+    /**
+     * FILO GERCEK GELIRI arac satirlarindan TOPLANMIYOR.
+     *
+     * Bir goreve baglanmayan fatura satirlari araca yazilamiyor; satirlari
+     * toplamak o tutarlari kaybederdi. Filo rakami dogrudan fatura
+     * kaynagindan geliyor.
+     */
+    const fleetActualRevenue = Number(
+      actualRevenue.rows.reduce((sum, row) => sum + row.amount, 0).toFixed(2),
+    );
+    const hasFleetActualRevenue = actualRevenue.rows.length > 0;
+
     // Turetilmis alanlar AYRI: `any` bir akumulatora sonradan alan eklemek,
     // tip guvenligini kaybetmenin en sik yoluydu.
     const fleet = {
       ...totals,
-      margin: totals.revenue - totals.total_cost,
+      actual_revenue: hasFleetActualRevenue ? fleetActualRevenue : null,
+      margin: hasFleetActualRevenue
+        ? Number((fleetActualRevenue - totals.total_cost).toFixed(2))
+        : null,
       avg_cost_per_vehicle: rows.length > 0 ? totals.total_cost / rows.length : 0,
     };
 
@@ -1409,16 +1653,44 @@ export class DashboardService {
         service: { amount: money(totals.service_cost), currency: baseCurrency },
         fines: { amount: money(totals.fine_cost), currency: baseCurrency },
         total: { amount: money(totals.total_cost), currency: baseCurrency },
+        /** TAHMIN — `total` ile ayni kartta gosterilmez. */
+        estimatedRevenue: { amount: money(totals.estimated_revenue), currency: baseCurrency },
+        /** GERCEK — fatura yoksa `null`, sifir DEGIL. */
+        actualRevenue: hasFleetActualRevenue
+          ? { amount: money(fleetActualRevenue), currency: baseCurrency }
+          : null,
       },
       /**
-       * Temel para birimi DISINDAKI onaylanmis fisler. Toplama KATILMADILAR ve
+       * Muhasebe toplaminin DISINDA kalan gercek tutarlar (Faz 18B).
+       *
+       * Sifir gostermek yerine gercek rakami ayri vermek, "gorunmeyen ne var"
+       * sorusunu cevaplanabilir kiliyor. Bunlar `totals.total`a EKLENMEZ.
+       */
+      excludedFromTotals: {
+        pendingService: { amount: money(totals.pending_service_cost), currency: baseCurrency },
+        pendingServiceCount: rows.reduce((sum, row) => sum + row.pending_service_count, 0),
+        disputedFines: { amount: money(totals.disputed_fine_cost), currency: baseCurrency },
+        disputedFineCount: rows.reduce((sum, row) => sum + row.disputed_fine_count, 0),
+        pendingReceiptCount: pendingFuel,
+        /** Araca baglanamayan fatura geliri — filo toplaminda, arac satirinda DEGIL. */
+        actualRevenueWithoutVehicle: {
+          amount: money(actualRevenue.withoutVehicleAmount),
+          currency: baseCurrency,
+        },
+        actualRevenueWithoutVehicleCount: actualRevenue.withoutVehicleCount,
+      },
+      /**
+       * Temel para birimi DISINDAKI parasal kayitlar. Toplama KATILMADILAR ve
        * SILINMEDILER; gercek para birimleriyle burada duruyorlar. Guvenilir bir
        * FX altyapisi olmadan donusturmek kur uydurmak olurdu.
+       *
+       * `fuelAmount` adi `amount` oldu: alan yalnizca yakit diye
+       * adlandirilmisti ama servis, ceza ve gelir de ayni kovaya giriyor.
        */
       unconvertedByCurrency: [...unconvertedByCurrency.entries()]
         .map(([currency, bucket]) => ({
           currency,
-          fuelAmount: money(bucket.amount),
+          amount: money(bucket.amount),
           entryCount: bucket.count,
         }))
         .sort((left, right) => left.currency.localeCompare(right.currency)),

@@ -64,7 +64,10 @@ function month(bucket: string, over: Partial<CostDashboardResponse['monthlySerie
     service: '50.00',
     fines: '10.00',
     total: '160.00',
-    revenue: '900.00',
+    pendingService: '0.00',
+    disputedFines: '0.00',
+    estimatedRevenue: '900.00',
+    actualRevenue: '700.00',
     distanceKm: '2000',
     costPerKm: '0.080',
     ...over,
@@ -84,7 +87,10 @@ function vehicle(
     service: '300.00',
     fines: '60.00',
     total: '960.00',
-    revenue: '5400.00',
+    pendingService: '0.00',
+    disputedFines: '0.00',
+    estimatedRevenue: '5400.00',
+    actualRevenue: '5400.00',
     margin: '4440.00',
     distanceKm: '12000',
     costPerKm: '0.080',
@@ -105,14 +111,26 @@ function response(over: Partial<CostDashboardResponse> = {}): CostDashboardRespo
       fuelCost: metric('1200.00', '1000.00', '20.00'),
       serviceCost: metric('600.00', '500.00', '20.00'),
       fineCost: metric('120.00', '100.00', '20.00'),
-      revenue: metric('10800.00', '9000.00', '20.00'),
+      estimatedRevenue: metric('10800.00', '9000.00', '20.00'),
+      actualRevenue: metric('10800.00', '9000.00', '20.00'),
       margin: metric('8880.00', '7400.00', '20.00'),
       costPerKm: metric('0.080', '0.070', '14.29'),
       distanceKm: metric('24000', '22000', '9.09'),
       pendingReceiptCount: 3,
+      pendingServiceCost: '0.00',
+      pendingServiceCount: 0,
+      disputedFineCost: '0.00',
+      disputedFineCount: 0,
     },
     monthlySeries: [month('2026-07'), month('2026-08')],
     composition: { fuel: '1200.00', service: '600.00', fines: '120.00', total: '1920.00' },
+    excludedFromTotals: {
+      pendingService: '0.00',
+      pendingServiceCount: 0,
+      disputedFines: '0.00',
+      disputedFineCount: 0,
+      pendingReceiptCount: 3,
+    },
     vehicleRanking: [vehicle('v-1', 'DU-AB 123'), vehicle('v-2', 'DU-CD 456')],
     pagination: { page: 1, pageSize: 25, total: 2, totalPages: 1 },
     unconvertedByCurrency: [],
@@ -244,16 +262,17 @@ describe('CostDashboard', () => {
   it('donusturulmemis tutar varsa toplama katilmadigini yazar', async () => {
     await renderDashboard(
       response({
-        unconvertedByCurrency: [{ currency: 'TRY', fuelAmount: '4200.00', entryCount: 2 }],
+        unconvertedByCurrency: [{ currency: 'TRY', amount: '4200.00', entryCount: 2 }],
       }),
     );
     expect(screen.getByTestId('unconverted-note').textContent).toContain('TRY');
   });
 
-  it('arac tablosunda 12 sutun vardir', async () => {
+  it('arac tablosunda 13 sutun vardir', async () => {
+    // Faz 18B: tek "Umsatz" sutunu YERINE tahmini + gercek gelir.
     await renderDashboard();
     const header = within(screen.getByTestId('vehicle-table')).getAllByRole('row')[0];
-    expect(within(header).getAllByRole('columnheader')).toHaveLength(12);
+    expect(within(header).getAllByRole('columnheader')).toHaveLength(13);
   });
 
   it('arac satirinda tutarlari temel para birimiyle gosterir', async () => {
@@ -518,5 +537,73 @@ describe('CostDashboard', () => {
     expect(screen.getByTestId('vehicle-table').parentElement?.parentElement?.textContent).toContain(
       'costs.dashboard.table.pagination',
     );
+  });
+});
+
+describe('Faz 18B — tahmin ile gerceklesen ayrimi', () => {
+  it('gelir TEK kartta degil, TAHMIN ve GERCEK olarak AYRI kartlarda', async () => {
+    await renderDashboard();
+    // Iki ayri KPI karti; tek bir "Umsatz" karti YOK.
+    expect(screen.getByTestId('kpi-estimatedRevenue')).toBeTruthy();
+    expect(screen.getByTestId('kpi-actualRevenue')).toBeTruthy();
+    expect(screen.queryByTestId('kpi-revenue')).toBeNull();
+  });
+
+  it('kartlar sinifi METIN olarak yazar — renk tek basina anlam tasimaz', async () => {
+    // i18n bu testte anahtari aynen dondurdugu icin ROZETIN KENDISI degil,
+    // dogru rozetin secildigi olculuyor.
+    await renderDashboard();
+    expect(screen.getByTestId('kpi-estimatedRevenue').textContent).toContain(
+      'costs.dashboard.recognition.forecast',
+    );
+    expect(screen.getByTestId('kpi-actualRevenue').textContent).toContain(
+      'costs.dashboard.recognition.approved_actual',
+    );
+  });
+
+  it('faturasi olmayan filoda GERCEK gelir ve marj SIFIR gosterilmez', async () => {
+    await renderDashboard(
+      response({
+        summary: { ...response().summary, actualRevenue: null, margin: null },
+      }),
+    );
+    // Sifir "gelir yok" diye okunurdu; dogru cevap "olculemedi".
+    expect(screen.getByTestId('kpi-actualRevenue').textContent).toContain(
+      'costs.dashboard.unknownValue',
+    );
+    expect(screen.getByTestId('kpi-margin').textContent).toContain(
+      'costs.dashboard.unknownValue',
+    );
+  });
+
+  it('toplama girmeyen tutarlari AYRI bir kartta gosterir', async () => {
+    await renderDashboard(
+      response({
+        summary: {
+          ...response().summary,
+          pendingServiceCost: '900.00',
+          pendingServiceCount: 2,
+          disputedFineCost: '320.00',
+          disputedFineCount: 1,
+        },
+      }),
+    );
+    const card = screen.getByTestId('kpi-excluded');
+    expect(card.textContent).toContain('900');
+    expect(card.textContent).toContain('320');
+  });
+
+  it('arac satirinda faturasi olmayan marj hucresi SEBEBINI yazar', async () => {
+    await renderDashboard(
+      response({
+        vehicleRanking: [vehicle('v-1', 'DU-AB 123', { actualRevenue: null, margin: null })],
+      }),
+    );
+    const table = screen.getByTestId('vehicle-table');
+    // Bos hucre ya da `—` DEGIL: ikisi de "sifir" diye okunurdu.
+    expect(table.textContent).toContain('costs.dashboard.marginUnknown');
+    expect(table.textContent).toContain('costs.dashboard.unknownValue');
+    // TAHMIN yerinde duruyor: gercek gelirin yoklugu onu silmiyor.
+    expect(table.textContent).toContain('5.400,00');
   });
 });

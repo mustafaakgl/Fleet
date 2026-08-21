@@ -25,11 +25,13 @@ import { RequiresWrite } from '../common/decorators/requires-write.decorator';
 import {
   canViewFinancialFields,
   CSV_IMPORT_ROLES,
+  FINANCIAL_ROLES,
   maskFinancialFields,
   OPERATIONAL_ROLES,
 } from '../common/utils/permissions';
 import { ServiceRecordsService } from './service-records.service';
 import { CreateServiceRecordDto } from './dto/create-service-record.dto';
+import { ReviewServiceRecordDto } from './dto/review-service-record.dto';
 import { UpdateServiceRecordDto } from './dto/update-service-record.dto';
 
 @Controller('service-records')
@@ -44,10 +46,11 @@ export class ServiceRecordsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('repair_company') repair_company?: string,
+    @Query('approval_status') approval_status?: string,
     @CurrentUser('role') role?: string,
   ) {
     return this.serviceRecords
-      .list({ vehicle_id, from, to, repair_company })
+      .list({ vehicle_id, from, to, repair_company, approval_status })
       .then((data) => maskFinancialFields(data, role));
   }
 
@@ -100,6 +103,27 @@ export class ServiceRecordsController {
       throw new ForbiddenException('You do not have permission to update service cost');
     }
     return this.serviceRecords.update(id, dto, actorUserId).then((data) => maskFinancialFields(data, role));
+  }
+
+  /**
+   * Muhasebe onayi / reddi (Faz 18B).
+   *
+   * `FINANCIAL_ROLES`: office BILINCLI OLARAK DISARIDA. Office servis kaydi
+   * acabilir ama tutarini gormedigi bir gideri muhasebe toplamina sokamaz.
+   */
+  @Post(':id/review')
+  @Roles(...FINANCIAL_ROLES)
+  @RequiresWrite('accounting')
+  @HttpCode(HttpStatus.OK)
+  review(
+    @Param('id') id: string,
+    @Body() dto: ReviewServiceRecordDto,
+    @CurrentUser('role') role?: string,
+    @CurrentUser('id') actorUserId?: string,
+  ) {
+    return this.serviceRecords
+      .review(id, dto, actorUserId)
+      .then((data) => maskFinancialFields(data, role));
   }
 
   @Delete(':id')

@@ -604,6 +604,24 @@ enum FineStatus {
   abgeschlossen
 }
 
+/// Servis kaydinin MUHASEBE onay durumu (Faz 18B).
+///
+/// NEDEN AYRI BIR ALAN VE NEDEN `pending` VARSAYILAN: bu alan eklenene kadar
+/// her `ServiceRecord` ortulu olarak "onayli gercek gider" sayiliyordu —
+/// Ordivan'dan insan onayiyla gelen de, birinin elle yazdigi da. Ikisi ayirt
+/// edilemedigi icin maliyet panosu dogrulanmamis tutarlari kesinmis gibi
+/// topluyordu.
+///
+/// Var olan satirlar `pending` olarak aciliyor ve BILINCLI OLARAK geriye
+/// donuk onaylanMIYOR: toplu bir `UPDATE ... SET 'approved'`, hic yapilmamis
+/// bir muhasebe onayini yapilmis gibi gostermek olurdu. Satirlar kaybolmuyor;
+/// "onay bekliyor" olarak AYRI sayiliyorlar.
+enum ServiceRecordApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
 enum MessageTranslationStatus {
   not_requested
   pending
@@ -1262,6 +1280,7 @@ model User {
   createdSlotInvitations          DeliverySlotInvitation[]      @relation("DeliverySlotInvitationCreatedBy")
   dispatchOverrideDeclarations    DispatchOverrideDeclaration[] @relation("DispatchOverrideDeclaredBy")
   reversedFuelEntries             FleetFuelEntryReversal[]      @relation("FuelEntryReversedBy")
+  reviewedServiceRecords          ServiceRecord[]               @relation("ServiceRecordReviewedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -3353,6 +3372,21 @@ model ServiceRecord {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  /// --- Muhasebe onayi (Faz 18B) ---
+  /// Yakit fisindeki desenin AYNISI, yeni bir gider tablosu DEGIL: onay bu
+  /// kaydin uzerinde duruyor ve maliyet sorgusu dogrudan onu filtreliyor.
+  /// Paralel bir "onayli gider" tablosu, hangi satirin gercek oldugunu
+  /// belirsiz birakirdi.
+  approvalStatus  ServiceRecordApprovalStatus @default(pending)
+  reviewedById    String?
+  reviewedBy      User?                       @relation("ServiceRecordReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  /// Son inceleme ani — onay ya da ret.
+  reviewedAt      DateTime?
+  /// Muhasebenin opsiyonel notu. HTML olarak RENDER EDILMEZ.
+  accountingNote  String?
+  /// Ret nedeni — zorunlu ve okunabilir. Yeniden onayda SILINMIYOR.
+  rejectionReason String?
+
   vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   driver        Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
   linkedDefects Defect[]
@@ -3365,6 +3399,8 @@ model ServiceRecord {
   @@index([vehicleId, date])
   @@index([driverId, date])
   @@index([repairCompany])
+  /// Muhasebe kuyrugunun canonical sorgusu: kiraci + onay durumu + tarih.
+  @@index([tenantId, approvalStatus, date])
 }
 
 model Conversation {
@@ -5961,6 +5997,7 @@ model DispatchProposal {
   /**
    * /**
    * /**
+   * /**
    * AJANIN CIKTISI — SONRADAN BAGLANIR.
    * NULLABLE cunku bu kayit uretim TALEBI olarak dogar; `AutomationProposal`
    * ancak worker isi tamamlayinca olusur. `@unique` NULL'lari birbirinden
@@ -6026,13 +6063,11 @@ model DispatchProposal {
 
   /**
    * PLANIN AIT OLDUGU IS GUNU (Faz 17g).
-   *
    * `computedAt` ILE AYNI SEY DEGIL ve karistirmak agir bir hataydi: onay
    * servisi is gununu `computedAt`ten TURETIYORDU, yani Carsamba gunu
    * planlanan bir Cuma turu CARSAMBA'ya yazilirdi. Cakisma kontrolu de yanlis
    * gune bakardi — "arac musait" denip aslinda dolu oldugu bir gune gorev
    * acilabilirdi.
-   *
    * Talep edilen gun artik SAKLANIYOR ve onay o gunu kullaniyor.
    */
   workDate DateTime
@@ -6055,9 +6090,9 @@ model DispatchProposal {
   resultTourId String? @unique
   resultTour   Tour?   @relation("TourFromDispatchProposal", fields: [resultTourId], references: [id], onDelete: SetNull)
 
-  decidedById     String?
-  decidedBy       User?     @relation("DispatchProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  decidedAt       DateTime?
+  decidedById            String?
+  decidedBy              User?     @relation("DispatchProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt              DateTime?
   /**
    * KARAR TEKRAR ANAHTARI (Faz 17f).
    * Ag tekrari ya da cift tiklama IKINCI BIR KARAR uretmesin diye istemcinin
@@ -6073,9 +6108,9 @@ model DispatchProposal {
    */
   decisionIdempotencyKey String?
   /// Red sebebi — reddederken ZORUNLU.
-  rejectionReason String?
+  rejectionReason        String?
   /// Dispatcher'in aciklamasi. HTML olarak RENDER EDILMEZ.
-  decisionNote    String?
+  decisionNote           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -6302,7 +6337,6 @@ model DeliverySlotInvitation {
 
 /**
  * SLOT OTURUMU — TIKLANABILIR LINK ICIN (Faz 17g).
- *
  * NEDEN VAR: davet linki token'i URL FRAGMENT'inda tasiyor
  * (`/public/delivery-slot#token=...`). Fragment sunucuya HIC gitmez, ama
  * sayfada JavaScript'e acilir. Sayfa onu BIR KEZ bu uca gonderip yerine
@@ -6310,15 +6344,12 @@ model DeliverySlotInvitation {
  * Boylece token; URL'de, gecmiste, `Referer` basliginda ve hata loglarinda
  * KALMIYOR. Token'i her istekte tasisaydik, her istek yeni bir sizma
  * firsatiydi.
- *
  * NEDEN DB'DE, NEDEN IMZALI COOKIE DEGIL: imzali bir cookie GERI ALINAMAZ —
  * calinmis bir cookie suresi dolana kadar gecerli kalirdi ve "oturumu kapat"
  * bir sey ifade etmezdi. Satir burada oldugu icin `revokedAt` damgasi ANINDA
  * etkili.
- *
  * TOKEN DUZ METIN SAKLANMAZ: yalnizca SHA-256 ozeti — `RefreshToken`,
  * `OrdivanConnector` ve `DeliverySlotInvitation` ile AYNI desen.
- *
  * OTURUM DAVETTEN DAHA FAZLA YETKI VERMEZ: her istekte davet YENIDEN
  * okunuyor ve yeniden degerlendiriliyor. Davet iptal edilir, suresi dolar ya
  * da siparis revize edilirse acik oturum da o anda ise yaramaz hale gelir.

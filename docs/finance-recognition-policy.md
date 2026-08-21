@@ -156,14 +156,37 @@ yoksa UI **`unknown`** gostermeli — sifir ya da tahmin DEGIL.
 
 ## 6. Acik kararlar
 
-| # | Karar | Neden acik |
+| # | Karar | Durum |
 |---|---|---|
-| AK-1 | `ServiceRecord` onay akisi eklensin mi, yoksa ayri `SupplierInvoice` mi | Ordivan zaten `ServiceRecord` uretiyor; ikinci model tekrar riski |
-| AK-2 | `Fine.widerspruch` maliyetten cikarilsin mi | Muhasebe tercihi; pilot sirkete sorulmali |
-| AK-3 | `ServiceRecord.currency` `@default("EUR")` kaldirilsin mi | Sessiz varsayim; `Assignment.currency` varsayilansiz |
-| AK-4 | FX destegi Faz 18 kapsaminda mi | Yoksa base disi tutarlar UI'da acikca "toplanmadi" denmeli |
-| AK-5 | POD/CMR belge turu gelen kutusuna acilsin mi | `assessBilling` bunu bekliyor; bugun acikca kapali |
-| AK-6 | `accounting_exported` kilit mi yoksa etiket mi | Ihracattan sonra duzeltme politikasi |
+| AK-1 | `ServiceRecord` onay akisi eklensin mi, yoksa ayri `SupplierInvoice` mi | **KAPANDI (Faz 18B)** — `ServiceRecord` genisletildi; `SupplierInvoice` ACILMADI |
+| AK-2 | `Fine.widerspruch` maliyetten cikarilsin mi | **KAPANDI (Faz 18B)** — cikarildi, "ihtilafli" olarak ayri gosteriliyor |
+| AK-3 | `ServiceRecord.currency` `@default("EUR")` kaldirilsin mi | ACIK — sessiz varsayim duruyor; `Assignment.currency` varsayilansiz |
+| AK-4 | FX destegi Faz 18 kapsaminda mi | **KAPANDI (Faz 18B)** — kapsam DISI; base disi tutarlar her ekranda "toplanmadi" diye gorunuyor |
+| AK-5 | POD/CMR belge turu gelen kutusuna acilsin mi | ACIK — `assessBilling` bunu bekliyor; bugun acikca kapali |
+| AK-6 | `accounting_exported` kilit mi yoksa etiket mi | ACIK — ihracattan sonra duzeltme politikasi |
+
+## 6.1 Faz 18B'de uygulananlar (KOD)
+
+Bu belge Faz 18A'da bir ONERIYDI. Asagidakiler artik kodda:
+
+| Kural | Nerede |
+|---|---|
+| `RecognitionClass` TURETILMIS fonksiyon ciktisi, kolon degil | `backend/src/common/finance/recognition.ts` |
+| Servis: yalnizca `approved` maliyete girer | `effectiveServiceCostWhere` |
+| Servis: onay bekleyen AYRI sayilir, toplamda degil | `pendingServiceCostWhere` |
+| Ceza: `widerspruch` gercek maliyette DEGIL | `effectiveFineCostWhere` / `disputedFineWhere` |
+| Gelir: tahmin (`Assignment`) ile gerceklesen (`Invoice`) AYRI | `ActualRevenueService` + `estimatedRevenue`/`actualRevenue` alanlari |
+| Marj yalnizca GERCEK gelirden; fatura yoksa `unknown` | `cost-dashboard.service.ts`, `dashboard.service.ts` |
+| Farkli para birimleri toplanmaz ve SESSIZCE dusmez | `unconvertedByCurrency` (yakit + servis + ceza + gelir) |
+| Office finansal alan gormez | `SENSITIVE_FINANCIAL_KEYS` + `@Roles(...FINANCIAL_ROLES)` |
+
+**Migration:** `20260821120000_faz18b_service_record_approval` — additive.
+Var olan `ServiceRecord` satirlari `pending` acildi ve GERIYE DONUK
+ONAYLANMADI: imzasi, tarihi ve sorumlusu olmayan bir onay, onay degildir.
+Bu satirlar kaybolmuyor — "onay bekliyor" olarak tutarlariyla raporlaniyor.
+
+**Yapilmayanlar (bilincli):** paralel maliyet/fatura modeli YOK, e-fatura
+uclari ve `/finance/*` ekranlari (Faz 18C) BU FAZDA ACILMADI.
 
 ## 7. Pilot sirketten gereken acik girdiler
 

@@ -24,6 +24,7 @@ import {
   uploadServiceRecordFiles,
   type ServiceRecordDocumentType,
 } from '@/components/expense-history/ServiceRecordFileUpload';
+import { ServiceRecordApprovalPanel } from '@/components/expense-history/ServiceRecordApprovalPanel';
 import { documentsApi, driversApi, serviceRecordsApi, vehiclesApi } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { documentHasFile, openAuthenticatedDocument } from '@/lib/file-access';
@@ -372,6 +373,17 @@ export function ExpenseEntryDetailPage({ entryId }: { entryId: string }) {
         </div>
 
         <div className="px-4 py-6 sm:px-6">
+          {/* MUHASEBE ONAYI (Faz 18B): onaylanmayan servis maliyeti hicbir
+              toplama girmez. Karar burada veriliyor cunku kaydin zaten
+              acildigi yer burasi. */}
+          <div className="mb-4">
+            <ServiceRecordApprovalPanel
+              record={record}
+              role={user?.role ?? 'customer'}
+              onReviewed={(updated) => setRecord(updated)}
+            />
+          </div>
+
           <div className="rounded-xl border border-slate-200 bg-white">
             <div className="px-5 pb-2">
               <h2 className="border-b border-slate-200 px-0 pb-4 pt-5 text-sm font-semibold uppercase tracking-wide text-slate-500">

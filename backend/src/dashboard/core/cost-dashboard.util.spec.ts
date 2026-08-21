@@ -262,22 +262,47 @@ describe('vehicle ranking', () => {
 });
 
 describe('data quality flags', () => {
+  const withRevenue = { hasEstimatedRevenue: true, hasActualRevenue: true };
+
   it('flags a vehicle without distance', () => {
-    const flags = dataQualityFlags({ distanceKm: null, total: d(100), hasRevenue: true });
+    const flags = dataQualityFlags({ distanceKm: null, total: d(100), ...withRevenue });
     assert.ok(flags.includes('no_distance'));
     assert.equal(flags.includes('no_costs'), false);
   });
 
   it('flags a vehicle without any cost', () => {
-    const flags = dataQualityFlags({ distanceKm: d(100), total: d(0), hasRevenue: true });
+    const flags = dataQualityFlags({ distanceKm: d(100), total: d(0), ...withRevenue });
     assert.ok(flags.includes('no_costs'));
   });
 
   it('reports a clean vehicle with no flags', () => {
     assert.deepEqual(
-      dataQualityFlags({ distanceKm: d(1000), total: d(500), hasRevenue: true }),
+      dataQualityFlags({ distanceKm: d(1000), total: d(500), ...withRevenue }),
       [],
     );
+  });
+
+  it('TAHMINI ve GERCEK geliri AYRI bayrakliyor (Faz 18B)', () => {
+    /**
+     * Tek bir `no_revenue` bayragi vardi ve tahmini olan ama faturasi
+     * olmayan arac "gelirli" sayiliyordu — marj da tahmin uzerinden
+     * hesaplaniyordu.
+     */
+    const onlyEstimate = dataQualityFlags({
+      distanceKm: d(1000),
+      total: d(500),
+      hasEstimatedRevenue: true,
+      hasActualRevenue: false,
+    });
+    assert.deepEqual(onlyEstimate, ['no_actual_revenue']);
+
+    const neither = dataQualityFlags({
+      distanceKm: d(1000),
+      total: d(500),
+      hasEstimatedRevenue: false,
+      hasActualRevenue: false,
+    });
+    assert.deepEqual(neither, ['no_estimated_revenue', 'no_actual_revenue']);
   });
 });
 

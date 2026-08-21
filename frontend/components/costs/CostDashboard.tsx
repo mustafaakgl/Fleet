@@ -225,13 +225,39 @@ export function CostDashboard() {
   const periodFrom = data.period.from.slice(0, 10);
   const periodTo = data.period.to.slice(0, 10);
 
-  const kpis: Array<{ key: string; metric: MetricComparison | null; polarity: MetricPolarity }> = [
+  const kpis: Array<{
+    key: string;
+    metric: MetricComparison | null;
+    polarity: MetricPolarity;
+    recognition?: 'forecast' | 'approved_actual';
+  }> = [
     { key: 'totalCost', metric: data.summary.totalCost, polarity: 'cost' },
     { key: 'fuelCost', metric: data.summary.fuelCost, polarity: 'cost' },
     { key: 'serviceCost', metric: data.summary.serviceCost, polarity: 'cost' },
     { key: 'fineCost', metric: data.summary.fineCost, polarity: 'cost' },
-    { key: 'revenue', metric: data.summary.revenue, polarity: 'income' },
-    { key: 'margin', metric: data.summary.margin, polarity: 'income' },
+    /**
+     * TAHMIN ve GERCEK gelir AYRI KARTLARDA ve bu pazarlik disi: tek bir
+     * "Gelir" karti, gorev planindaki fiyati kesilmis fatura gibi
+     * gosteriyordu. Kartlarin altinda sinif METIN olarak yaziyor.
+     */
+    {
+      key: 'estimatedRevenue',
+      metric: data.summary.estimatedRevenue,
+      polarity: 'income',
+      recognition: 'forecast',
+    },
+    {
+      key: 'actualRevenue',
+      metric: data.summary.actualRevenue,
+      polarity: 'income',
+      recognition: 'approved_actual',
+    },
+    {
+      key: 'margin',
+      metric: data.summary.margin,
+      polarity: 'income',
+      recognition: 'approved_actual',
+    },
   ];
 
   return (
@@ -262,7 +288,7 @@ export function CostDashboard() {
 
       {/* KPI kartlari */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="kpi-row">
-        {kpis.map(({ key, metric, polarity }) => (
+        {kpis.map(({ key, metric, polarity, recognition }) => (
           <KpiCard
             key={key}
             labelKey={`costs.dashboard.kpi.${key}`}
@@ -270,6 +296,7 @@ export function CostDashboard() {
             polarity={polarity}
             currency={currency}
             locale={locale}
+            recognition={recognition}
           />
         ))}
 
@@ -315,6 +342,47 @@ export function CostDashboard() {
             <p className="text-2xl font-bold">{data.summary.pendingReceiptCount}</p>
             <p className="text-xs text-muted-foreground">
               {t('costs.dashboard.pendingNotIncluded')}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/**
+         * TOPLAMA GIRMEYEN GERCEK TUTARLAR.
+         *
+         * Ayri bir kart, cunku bunlar "maliyet" degil "henuz maliyet degil".
+         * Kompozisyona ya da toplam kartina karistirmak, onaylanmamis bir
+         * tutari onaylanmis gibi gosterirdi. Sifir yazip gecmek ise
+         * gorunmez yapardi.
+         */}
+        <Card data-testid="kpi-excluded">
+          <CardContent className="p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('costs.dashboard.excludedTitle')}
+            </p>
+            <dl className="mt-1 space-y-0.5 text-xs">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">
+                  {t('costs.dashboard.excluded.pendingService', {
+                    count: data.summary.pendingServiceCount,
+                  })}
+                </dt>
+                <dd className="tabular-nums">
+                  {formatMoney(data.summary.pendingServiceCost, currency, locale)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">
+                  {t('costs.dashboard.excluded.disputedFines', {
+                    count: data.summary.disputedFineCount,
+                  })}
+                </dt>
+                <dd className="tabular-nums">
+                  {formatMoney(data.summary.disputedFineCost, currency, locale)}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('costs.dashboard.excludedNotIncluded')}
             </p>
           </CardContent>
         </Card>
@@ -534,7 +602,12 @@ export function CostDashboard() {
                   <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.category.fines')}</th>
                   <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.totalCost')}</th>
                   <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.costPerKm')}</th>
-                  <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.revenue')}</th>
+                  <th scope="col" className="py-2 pr-3 text-right">
+                    {t('costs.dashboard.kpi.estimatedRevenue')}
+                  </th>
+                  <th scope="col" className="py-2 pr-3 text-right">
+                    {t('costs.dashboard.kpi.actualRevenue')}
+                  </th>
                   <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.kpi.margin')}</th>
                   <th scope="col" className="py-2 pr-3 text-right">{t('costs.dashboard.table.change')}</th>
                   <th scope="col" className="py-2 pr-3">{t('costs.dashboard.table.drilldown')}</th>
@@ -599,10 +672,34 @@ export function CostDashboard() {
                           )}
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums">
-                          {row.revenue === null ? '—' : formatMoney(row.revenue, currency, locale)}
+                          {row.estimatedRevenue === null ? (
+                            <span className="text-xs text-muted-foreground">
+                              {t('costs.dashboard.unknownValue')}
+                            </span>
+                          ) : (
+                            formatMoney(row.estimatedRevenue, currency, locale)
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums">
-                          {row.margin === null ? '—' : formatMoney(row.margin, currency, locale)}
+                          {/* Fatura yoksa `unknown` — tire ya da sifir DEGIL:
+                              ikisi de "gelir yok" diye okunurdu, oysa dogru
+                              cevap "olculemedi". */}
+                          {row.actualRevenue === null ? (
+                            <span className="text-xs text-muted-foreground">
+                              {t('costs.dashboard.unknownValue')}
+                            </span>
+                          ) : (
+                            formatMoney(row.actualRevenue, currency, locale)
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {row.margin === null ? (
+                            <span className="text-xs text-muted-foreground">
+                              {t('costs.dashboard.marginUnknown')}
+                            </span>
+                          ) : (
+                            formatMoney(row.margin, currency, locale)
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums">
                           {/* Onceki donem sifirsa yuzde UYDURULMUYOR. */}
@@ -666,7 +763,7 @@ export function CostDashboard() {
           {t('costs.dashboard.unconvertedNote', {
             base: data.baseCurrency,
             list: data.unconvertedByCurrency
-              .map((entry) => `${entry.fuelAmount} ${entry.currency} (${entry.entryCount})`)
+              .map((entry) => `${entry.amount} ${entry.currency} (${entry.entryCount})`)
               .join(', '),
           })}
         </p>
@@ -848,18 +945,28 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * KPI karti.
+ *
+ * `recognition` ROZETI zorunlu bir parametre degil ama gelir kartlarinda
+ * VERILIYOR: "Gelir" yazan iki karti birbirinden ayiran sey renk ya da
+ * siralama olamaz. Rozet METIN — renk korlugu, yazdirma ve ekran okuyucu
+ * icin tek guvenilir yol.
+ */
 function KpiCard({
   labelKey,
   metric,
   polarity,
   currency,
   locale,
+  recognition,
 }: {
   labelKey: string;
   metric: MetricComparison | null;
   polarity: MetricPolarity;
   currency: string;
   locale: string;
+  recognition?: 'forecast' | 'approved_actual';
 }) {
   const { t } = useTranslation();
   const direction = trendDirection(metric);
@@ -875,8 +982,21 @@ function KpiCard({
           {t(labelKey)}
         </p>
         <p className="text-2xl font-bold">
-          {metric ? formatMoney(metric.current, currency, locale) : '—'}
+          {/* Olculemeyen deger: tire DEGIL, acikca "bilinmiyor". Tire
+              "sifir" diye okunur. */}
+          {metric ? (
+            formatMoney(metric.current, currency, locale)
+          ) : (
+            <span className="text-base font-medium text-muted-foreground">
+              {t('costs.dashboard.unknownValue')}
+            </span>
+          )}
         </p>
+        {recognition ? (
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {t(`costs.dashboard.recognition.${recognition}`)}
+          </p>
+        ) : null}
         {metric ? (
           <p
             className={cn(
